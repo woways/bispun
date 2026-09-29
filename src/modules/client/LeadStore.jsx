@@ -158,6 +158,31 @@ function downloadCsv(filename, headers, rows) {
   );
 }
 
+function normalizeManualLeadPhone(value) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
+  }
+
+  return digits;
+}
+
+function isValidManualLeadPhone(value) {
+  return /^[6-9]\d{9}$/.test(normalizeManualLeadPhone(value));
+}
+
+function isValidManualLeadName(value) {
+  const name = String(value ?? "").trim();
+
+  return (
+    name.length >= 2 &&
+    /\p{L}/u.test(name) &&
+    /^[\p{L}\s.'’-]+$/u.test(name)
+  );
+}
+
+
 function Field({
   label,
   required = false,
@@ -207,6 +232,11 @@ function IndividualLeadModal({
     useState("");
 
   const [
+    fieldErrors,
+    setFieldErrors,
+  ] = useState({});
+
+  const [
     customFields,
     setCustomFields,
   ] = useState([]);
@@ -245,6 +275,13 @@ function IndividualLeadModal({
         ...current,
         [field]:
           value,
+      })
+    );
+
+    setFieldErrors(
+      (current) => ({
+        ...current,
+        [field]: "",
       })
     );
   }
@@ -334,6 +371,25 @@ function IndividualLeadModal({
   ) {
     event.preventDefault();
 
+    const nextFieldErrors = {};
+
+    if (!isValidManualLeadName(form.name)) {
+      nextFieldErrors.name =
+        "Use letters, spaces, apostrophes, periods or hyphens only.";
+    }
+
+    if (!isValidManualLeadPhone(form.phone)) {
+      nextFieldErrors.phone =
+        "Enter a valid 10-digit Indian mobile number.";
+    }
+
+    setFieldErrors(nextFieldErrors);
+
+    if (Object.keys(nextFieldErrors).length) {
+      setError("Please correct the highlighted fields.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -348,6 +404,8 @@ function IndividualLeadModal({
             body:
               JSON.stringify({
                 ...form,
+                name: form.name.trim(),
+                phone: normalizeManualLeadPhone(form.phone),
                 customFields:
                   customFieldValues,
               }),
@@ -433,9 +491,20 @@ function IndividualLeadModal({
                     event.target.value
                   )
                 }
-                className="form-input"
+                className={`form-input ${
+                  fieldErrors.name
+                    ? "border-rose-300 focus:border-rose-400"
+                    : ""
+                }`}
                 placeholder="Student / Lead name"
+                aria-invalid={Boolean(fieldErrors.name)}
               />
+
+              {fieldErrors.name && (
+                <div className="mt-1 text-xs font-medium text-rose-600">
+                  {fieldErrors.name}
+                </div>
+              )}
             </Field>
 
             <Field
@@ -455,9 +524,22 @@ function IndividualLeadModal({
                     event.target.value
                   )
                 }
-                className="form-input"
+                inputMode="numeric"
+                autoComplete="tel"
+                className={`form-input ${
+                  fieldErrors.phone
+                    ? "border-rose-300 focus:border-rose-400"
+                    : ""
+                }`}
                 placeholder="9876543210"
+                aria-invalid={Boolean(fieldErrors.phone)}
               />
+
+              {fieldErrors.phone && (
+                <div className="mt-1 text-xs font-medium text-rose-600">
+                  {fieldErrors.phone}
+                </div>
+              )}
             </Field>
 
             <Field label="Email">
