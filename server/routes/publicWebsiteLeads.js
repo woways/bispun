@@ -31,6 +31,16 @@ function normalizeIndianPhone(value) {
   return "";
 }
 
+function isValidPersonName(value) {
+  const name = String(value || "").trim();
+
+  return (
+    name.length >= 2 &&
+    /\p{L}/u.test(name) &&
+    /^[\p{L}\s.'’]+$/u.test(name)
+  );
+}
+
 function getEmailDomain(value) {
   return String(value || "")
     .trim()
@@ -91,8 +101,11 @@ router.post("/", async (req, res) => {
       fields.sessionId = "Invalid lead session";
     }
 
-    if (fullName.length < 2) {
+    if (!fullName) {
       fields.fullName = "Enter your name";
+    } else if (!isValidPersonName(fullName)) {
+      fields.fullName =
+        "Use letters, spaces, apostrophes and periods only";
     }
 
     if (!EMAIL_RE.test(email)) {
