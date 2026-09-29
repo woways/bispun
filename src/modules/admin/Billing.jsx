@@ -628,6 +628,9 @@ export default function Billing() {
                   Cycle
                 </th>
                 <th className="px-4 py-3 text-left">
+                  Discount
+                </th>
+                <th className="px-4 py-3 text-left">
                   Amount
                 </th>
                 <th className="px-4 py-3 text-left">
@@ -663,8 +666,25 @@ export default function Billing() {
                       Annual
                     </td>
 
+                    <td className="px-4 py-3 text-slate-600">
+                      {Number(payment.discountAmount || 0) > 0 ? (
+                        <span className="text-rose-600">
+                          − {formatMoney(payment.discountAmount)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3 font-medium">
                       {formatMoney(payment.amount)}
+                      {Number(payment.discountAmount || 0) > 0 && (
+                        <div className="text-[11px] font-normal text-slate-400 line-through">
+                          {formatMoney(
+                            payment.listPrice || payment.amount
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="px-4 py-3">

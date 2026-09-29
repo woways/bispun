@@ -2524,8 +2524,26 @@ function BillingTab({
             <InfoRow label="Plan" value={billing.plan?.name || "—"} />
             <InfoRow label="Billing Cycle" value="Annual" />
             <InfoRow
-              label="Subscription Amount"
-              value={formatMoney(billing.amount)}
+              label="Original Price"
+              value={formatMoney(
+                billing.listPrice ??
+                  billing.plan?.yearlyPrice ??
+                  billing.amount
+              )}
+            />
+            <InfoRow
+              label="Discount"
+              value={
+                Number(billing.discountAmount || 0) > 0
+                  ? `− ${formatMoney(billing.discountAmount)}`
+                  : "No discount"
+              }
+            />
+            <InfoRow
+              label="Total Payable"
+              value={formatMoney(
+                billing.finalAmount ?? billing.amount
+              )}
             />
             <InfoRow label="Start Date" value={formatDate(billing.startDate)} />
             <InfoRow label="Created" value={formatDate(billing.createdAt)} />

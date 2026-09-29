@@ -14,6 +14,18 @@ async function getAdminActor(req) {
 }
 
 
+// Compute list price, clamped discount (rupees, never negative, never
+// more than the list price) and the final amount the client actually pays.
+function computePricing(yearlyPrice, rawDiscount) {
+  const listPrice = Number(yearlyPrice) || 0;
+  let discount = Number(rawDiscount);
+  if (!Number.isFinite(discount) || discount < 0) discount = 0;
+  if (discount > listPrice) discount = listPrice;
+  discount = Math.round(discount * 100) / 100;
+  const finalAmount = Math.round((listPrice - discount) * 100) / 100;
+  return { listPrice, discount, finalAmount };
+}
+
 function formatClient(company) {
   const activeSubscription =
     company.subscriptions?.find(
@@ -67,6 +79,20 @@ function formatClient(company) {
       : 0,
 
     subscriptionAmount: activeSubscription?.amount
+      ? Number(activeSubscription.amount)
+      : 0,
+
+    // Discount breakdown: listPrice (before discount), discountAmount,
+    // and finalAmount (= subscriptionAmount, what the client pays).
+    listPrice: activeSubscription?.listPrice
+      ? Number(activeSubscription.listPrice)
+      : activeSubscription?.plan?.yearlyPrice
+      ? Number(activeSubscription.plan.yearlyPrice)
+      : 0,
+    discountAmount: activeSubscription?.discountAmount
+      ? Number(activeSubscription.discountAmount)
+      : 0,
+    finalAmount: activeSubscription?.amount
       ? Number(activeSubscription.amount)
       : 0,
 
@@ -262,6 +288,7 @@ router.post("/", async (req, res) => {
       subdomain,
       primaryColor,
       planKey,
+      discountAmount: rawDiscountAmount,
       adminName,
       adminEmail,
       adminPassword,
@@ -420,7 +447,13 @@ router.post("/", async (req, res) => {
 
     const startDate = new Date();
     const renewalDate = addMonths(startDate, 12);
-    const subscriptionAmount = plan.yearlyPrice;
+
+    // Apply the Super Admin's manual discount (rupees). "No discount" = 0.
+    const {
+      listPrice: subscriptionListPrice,
+      discount: subscriptionDiscount,
+      finalAmount: subscriptionAmount,
+    } = computePricing(plan.yearlyPrice, rawDiscountAmount);
 
     const company = await prisma.$transaction(
       async (tx) => {
@@ -520,6 +553,8 @@ router.post("/", async (req, res) => {
 
             renewalDate,
 
+            listPrice: subscriptionListPrice,
+            discountAmount: subscriptionDiscount,
             amount: subscriptionAmount,
           },
         });
@@ -687,7 +722,13 @@ router.patch("/:id/subscription", async (req, res) => {
     }
 
     const renewalDate = addMonths(renewalBase, 12);
-    const subscriptionAmount = plan.yearlyPrice;
+
+    // Apply the Super Admin's manual discount (rupees) on renewal too.
+    const {
+      listPrice: subscriptionListPrice,
+      discount: subscriptionDiscount,
+      finalAmount: subscriptionAmount,
+    } = computePricing(plan.yearlyPrice, req.body?.discountAmount);
 
     const updatedSubscription =
       await prisma.$transaction(async (tx) => {
@@ -703,6 +744,8 @@ router.patch("/:id/subscription", async (req, res) => {
               billingCycle,
               renewalDate,
               endDate: null,
+              listPrice: subscriptionListPrice,
+              discountAmount: subscriptionDiscount,
               amount: subscriptionAmount,
             },
 
@@ -778,6 +821,16 @@ router.patch("/:id/subscription", async (req, res) => {
         endDate:
           updatedSubscription.endDate,
         amount: updatedSubscription.amount
+          ? Number(updatedSubscription.amount)
+          : 0,
+
+        listPrice: updatedSubscription.listPrice
+          ? Number(updatedSubscription.listPrice)
+          : Number(plan.yearlyPrice || 0),
+        discountAmount: updatedSubscription.discountAmount
+          ? Number(updatedSubscription.discountAmount)
+          : 0,
+        finalAmount: updatedSubscription.amount
           ? Number(updatedSubscription.amount)
           : 0,
 

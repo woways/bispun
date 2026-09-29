@@ -58,6 +58,30 @@ function formatBilling(
             )
           : 0,
 
+      // Discount breakdown for the subscription details view.
+      listPrice:
+        subscription.listPrice
+          ? Number(
+              subscription.listPrice
+            )
+          : subscription.plan?.yearlyPrice
+          ? Number(
+              subscription.plan.yearlyPrice
+            )
+          : 0,
+      discountAmount:
+        subscription.discountAmount
+          ? Number(
+              subscription.discountAmount
+            )
+          : 0,
+      finalAmount:
+        subscription.amount
+          ? Number(
+              subscription.amount
+            )
+          : 0,
+
       plan: {
         id:
           subscription.plan.id,

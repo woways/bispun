@@ -142,6 +142,7 @@ function OnboardClientModal({
     primaryColor: "indigo",
     planKey: "basic",
     billingCycle: "YEARLY",
+    discountAmount: "",
     adminName: "",
     adminEmail: "",
     adminPassword: "",
@@ -512,6 +513,126 @@ function OnboardClientModal({
                       Annual only
                     </div>
                   </div>
+
+                  {/* Discount (₹) — Super Admin can give a manual discount.
+                      "No discount" = 0. Total is shown live and can never be
+                      negative; the server re-validates the same rules. */}
+                  {(() => {
+                    const selectedPlan =
+                      plans.find(
+                        (plan) =>
+                          plan.key ===
+                          form.planKey
+                      ) || null;
+
+                    const listPrice = Number(
+                      selectedPlan?.yearlyPrice || 0
+                    );
+
+                    let discount = Number(
+                      form.discountAmount
+                    );
+                    if (
+                      !Number.isFinite(discount) ||
+                      discount < 0
+                    )
+                      discount = 0;
+                    if (discount > listPrice)
+                      discount = listPrice;
+
+                    const total = Math.max(
+                      listPrice - discount,
+                      0
+                    );
+
+                    return (
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                          <div className="max-w-xs">
+                            <label className="block text-xs font-medium text-slate-600 mb-1">
+                              Discount (₹)
+                            </label>
+
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={
+                                form.discountAmount
+                              }
+                              onChange={(e) => {
+                                // Keep digits only; empty box = no discount.
+                                const digits =
+                                  e.target.value.replace(
+                                    /\D/g,
+                                    ""
+                                  );
+
+                                if (digits === "") {
+                                  updateField(
+                                    "discountAmount",
+                                    ""
+                                  );
+                                  return;
+                                }
+
+                                let next =
+                                  Number(digits);
+                                if (
+                                  next > listPrice
+                                )
+                                  next = listPrice;
+
+                                updateField(
+                                  "discountAmount",
+                                  next
+                                );
+                              }}
+                              placeholder="No discount"
+                              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none"
+                            />
+
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              Enter 0 for no discount.
+                              Cannot exceed the plan
+                              price.
+                            </p>
+                          </div>
+
+                          <div className="text-right text-sm min-w-[180px]">
+                            <div className="flex items-center justify-between gap-6 text-slate-500">
+                              <span>Plan price</span>
+                              <span>
+                                ₹
+                                {listPrice.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-6 text-slate-500 mt-1">
+                              <span>Discount</span>
+                              <span className="text-rose-600">
+                                −₹
+                                {discount.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-6 mt-2 pt-2 border-t border-slate-200 font-semibold text-slate-900">
+                              <span>Total payable</span>
+                              <span>
+                                ₹
+                                {total.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </section>

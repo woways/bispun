@@ -4441,6 +4441,40 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             : "—"}
                         </div>
                       )}
+
+                      {billingData.subscription &&
+                        Number(
+                          billingData.subscription
+                            .discountAmount || 0
+                        ) > 0 && (
+                          <div className="mt-2 text-xs text-slate-600">
+                            <span className="text-slate-400 line-through">
+                              ₹
+                              {Number(
+                                billingData.subscription
+                                  .listPrice || 0
+                              ).toLocaleString("en-IN")}
+                            </span>{" "}
+                            <span className="text-rose-600 font-medium">
+                              (− ₹
+                              {Number(
+                                billingData.subscription
+                                  .discountAmount || 0
+                              ).toLocaleString("en-IN")}
+                              )
+                            </span>{" "}
+                            <span className="font-bold text-slate-900">
+                              You pay ₹
+                              {Number(
+                                billingData.subscription
+                                  .finalAmount ||
+                                  billingData.subscription
+                                    .amount ||
+                                  0
+                              ).toLocaleString("en-IN")}
+                            </span>
+                          </div>
+                        )}
                     </div>
 
                     {billingData.subscription && (
@@ -4963,18 +4997,43 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                         <div className="text-sm font-bold text-slate-950">
                           ₹{Number(
-                            receiptData.amount || 0
+                            receiptData.listPrice ??
+                              receiptData.amount ??
+                              0
                           ).toLocaleString("en-IN")}
                         </div>
                       </div>
 
                       <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/60">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Subtotal</span>
+                          <span className="text-slate-500">Original Price</span>
                           <span className="font-semibold text-slate-800">
                             ₹{Number(
-                              receiptData.amount || 0
+                              receiptData.listPrice ??
+                                receiptData.amount ??
+                                0
                             ).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Discount</span>
+                          <span
+                            className={`font-semibold ${
+                              Number(
+                                receiptData.discountAmount || 0
+                              ) > 0
+                                ? "text-rose-600"
+                                : "text-slate-500"
+                            }`}
+                          >
+                            {Number(
+                              receiptData.discountAmount || 0
+                            ) > 0
+                              ? `− ₹${Number(
+                                  receiptData.discountAmount
+                                ).toLocaleString("en-IN")}`
+                              : "No discount"}
                           </span>
                         </div>
 
@@ -4991,7 +5050,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           </span>
                           <span className="text-[19px] font-black tracking-tight text-slate-950">
                             ₹{Number(
-                              receiptData.amount || 0
+                              receiptData.finalAmount ??
+                                receiptData.amount ??
+                                0
                             ).toLocaleString("en-IN")}
                           </span>
                         </div>
