@@ -511,7 +511,7 @@ export default function Modules() {
 
           <p className="text-sm text-slate-500 mt-1">
             Manage the global
-            ConsulBuzz module catalogue.
+            Bispun module catalogue.
           </p>
         </div>
 

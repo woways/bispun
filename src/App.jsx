@@ -370,7 +370,7 @@ function ClientRoute({
           setMessage(
             error.data
               ?.message ||
-              "ConsulBuzz is temporarily under maintenance."
+              "Bispun is temporarily under maintenance."
           );
 
           setStatus(

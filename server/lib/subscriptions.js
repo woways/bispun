@@ -106,6 +106,10 @@ export async function finalizeCapturedPayment({
                 "ACTIVE",
               billingCycle:
                 existing.billingCycle,
+              listPrice:
+                existing.listPrice,
+              discountAmount:
+                existing.discountAmount,
               amount:
                 existing.amount,
               startDate:
@@ -129,6 +133,10 @@ export async function finalizeCapturedPayment({
                 "ACTIVE",
               billingCycle:
                 existing.billingCycle,
+              listPrice:
+                existing.listPrice,
+              discountAmount:
+                existing.discountAmount,
               amount:
                 existing.amount,
               startDate:

@@ -410,7 +410,12 @@ model Subscription {
   renewalDate DateTime?
   endDate     DateTime?
 
-  amount Decimal? @db.Decimal(12, 2)
+  // Pricing breakdown. listPrice = plan price before discount,
+  // discountAmount = flat rupee discount set by Super Admin,
+  // amount = final amount the client pays (listPrice - discountAmount).
+  listPrice      Decimal? @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  amount         Decimal? @db.Decimal(12, 2)
 
   company  Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   plan     Plan                 @relation(fields: [planId], references: [id])
@@ -443,8 +448,11 @@ model PaymentTransaction {
 
   billingCycle BillingCycle @default(YEARLY)
 
-  amount   Decimal @db.Decimal(12, 2)
-  currency String  @default("INR")
+  // Pricing breakdown for the invoice/receipt. amount = final amount charged.
+  listPrice      Decimal? @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @db.Decimal(12, 2)
+  amount         Decimal  @db.Decimal(12, 2)
+  currency       String   @default("INR")
 
   providerOrderId   String  @unique
   providerPaymentId String? @unique

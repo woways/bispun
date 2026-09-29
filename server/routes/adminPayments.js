@@ -154,6 +154,17 @@ router.get("/", async (req, res) => {
           amount: Number(
             payment.amount
           ),
+          listPrice:
+            payment.listPrice
+              ? Number(payment.listPrice)
+              : Number(payment.amount),
+          discountAmount:
+            payment.discountAmount
+              ? Number(payment.discountAmount)
+              : 0,
+          finalAmount: Number(
+            payment.amount
+          ),
           currency:
             payment.currency,
           providerOrderId:

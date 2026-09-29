@@ -637,7 +637,7 @@ router.post(
             success:
               false,
             message:
-              "Your company account is currently unavailable. Please contact ConsulBuzz support.",
+              "Your company account is currently unavailable. Please contact Bispun support.",
           });
       }
 

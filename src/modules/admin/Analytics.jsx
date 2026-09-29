@@ -217,7 +217,7 @@ export default function Analytics() {
 
           <p className="text-xs text-slate-500 mt-1 mb-4">
             New and cumulative
-            ConsulBuzz clients over
+            Bispun clients over
             the last 12 months.
           </p>
 
@@ -557,7 +557,7 @@ export default function Analytics() {
 
         <div className="text-xs text-slate-500 mt-1">
           These analytics use
-          ConsulBuzz account,
+          Bispun account,
           subscription and aggregate
           usage information only.
           Individual client leads,

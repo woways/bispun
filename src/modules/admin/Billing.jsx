@@ -256,7 +256,7 @@ export default function Billing() {
           </div>
 
           <p className="text-sm text-slate-500 mt-1">
-            ConsulBuzz SaaS
+            Bispun SaaS
             subscriptions across all
             client companies.
           </p>
@@ -363,7 +363,7 @@ export default function Billing() {
 
         <div className="text-xs text-slate-500 mt-1">
           This page contains only
-          ConsulBuzz subscription
+          Bispun subscription
           billing. It does not expose
           client admissions revenue,
           expenses, incentives, profit,
@@ -610,7 +610,7 @@ export default function Billing() {
           </div>
 
           <div className="text-xs text-slate-500 mt-0.5">
-            Recent ConsulBuzz subscription payment attempts and successful captures.
+            Recent Bispun subscription payment attempts and successful captures.
           </div>
         </div>
 
@@ -626,6 +626,9 @@ export default function Billing() {
                 </th>
                 <th className="px-4 py-3 text-left">
                   Cycle
+                </th>
+                <th className="px-4 py-3 text-left">
+                  Discount
                 </th>
                 <th className="px-4 py-3 text-left">
                   Amount
@@ -663,8 +666,25 @@ export default function Billing() {
                       Annual
                     </td>
 
+                    <td className="px-4 py-3 text-slate-600">
+                      {Number(payment.discountAmount || 0) > 0 ? (
+                        <span className="text-rose-600">
+                          − {formatMoney(payment.discountAmount)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3 font-medium">
                       {formatMoney(payment.amount)}
+                      {Number(payment.discountAmount || 0) > 0 && (
+                        <div className="text-[11px] font-normal text-slate-400 line-through">
+                          {formatMoney(
+                            payment.listPrice || payment.amount
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="px-4 py-3">

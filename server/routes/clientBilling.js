@@ -120,6 +120,17 @@ router.get("/", async (req, res) => {
               amount: Number(
                 subscription.amount || 0
               ),
+              listPrice: Number(
+                subscription.listPrice ||
+                  subscription.plan?.yearlyPrice ||
+                  0
+              ),
+              discountAmount: Number(
+                subscription.discountAmount || 0
+              ),
+              finalAmount: Number(
+                subscription.amount || 0
+              ),
               startDate:
                 subscription.startDate,
               renewalDate:
@@ -162,6 +173,17 @@ router.get("/", async (req, res) => {
           billingCycle:
             "YEARLY",
           amount: Number(
+            payment.amount
+          ),
+          listPrice: Number(
+            payment.listPrice ||
+              payment.plan?.yearlyPrice ||
+              payment.amount
+          ),
+          discountAmount: Number(
+            payment.discountAmount || 0
+          ),
+          finalAmount: Number(
             payment.amount
           ),
           currency:
@@ -245,18 +267,70 @@ router.post(
         });
       }
 
-      const amount =
+      const listPrice =
         paymentAmount(plan);
 
       if (
-        amount === null ||
+        listPrice === null ||
+        !Number.isFinite(listPrice) ||
+        listPrice <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Annual pricing is unavailable for this plan",
+        });
+      }
+
+      // Carry the discount the Super Admin set on this company's current
+      // subscription, but only while it still applies to the same plan.
+      const currentSubscription =
+        await prisma.subscription.findFirst({
+          where: {
+            companyId:
+              req.clientUser.companyId,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        });
+
+      let discountAmount = 0;
+      if (
+        currentSubscription &&
+        currentSubscription.planId ===
+          plan.id &&
+        currentSubscription.discountAmount
+      ) {
+        discountAmount =
+          Number(
+            currentSubscription.discountAmount
+          ) || 0;
+      }
+      if (discountAmount < 0)
+        discountAmount = 0;
+      if (discountAmount > listPrice)
+        discountAmount = listPrice;
+      discountAmount =
+        Math.round(
+          discountAmount * 100
+        ) / 100;
+
+      // Final amount actually charged = list price - discount.
+      const amount =
+        Math.round(
+          (listPrice - discountAmount) *
+            100
+        ) / 100;
+
+      if (
         !Number.isFinite(amount) ||
         amount <= 0
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Annual pricing is unavailable for this plan",
+            "Payable amount is invalid after discount",
         });
       }
 
@@ -302,6 +376,8 @@ router.post(
             provider: "RAZORPAY",
             status: "CREATED",
             billingCycle,
+            listPrice,
+            discountAmount,
             amount,
             currency: "INR",
             providerOrderId:
@@ -653,6 +729,19 @@ router.get(
           status:
             payment.status,
           amount:
+            Number(payment.amount),
+          // Invoice breakdown: original price, discount, and total paid.
+          listPrice:
+            Number(
+              payment.listPrice ||
+                payment.plan?.yearlyPrice ||
+                payment.amount
+            ),
+          discountAmount:
+            Number(
+              payment.discountAmount || 0
+            ),
+          finalAmount:
             Number(payment.amount),
           currency:
             payment.currency,

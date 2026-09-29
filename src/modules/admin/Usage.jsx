@@ -171,7 +171,7 @@ export default function Usage() {
 
           <p className="text-sm text-slate-500 mt-1">
             Account-level usage
-            across ConsulBuzz clients.
+            across Bispun clients.
             Only aggregate counts are
             displayed.
           </p>
@@ -306,7 +306,7 @@ export default function Usage() {
           This page shows only
           account-level counts required
           for SaaS usage management.
-          ConsulBuzz does not display
+          Bispun does not display
           lead identities, admission
           records, client revenue,
           expenses, incentives or other

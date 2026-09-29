@@ -2153,7 +2153,7 @@ export default function SettingsView({
             "integrations" && (
             <PlaceholderPanel
               title="Integrations"
-              description="Connect external tools and services to extend the ConsulBuzz workflow."
+              description="Connect external tools and services to extend the Bispun workflow."
               icon={Puzzle}
             />
           )}
