@@ -85,6 +85,17 @@ function formatRenewal(date) {
   );
 }
 
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+    String(value || "").trim()
+  );
+}
+
+function isValidPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15;
+}
+
 function Input({
   label,
   required,
@@ -197,8 +208,50 @@ function OnboardClientModal({
 
     if (saving) return;
 
-    setSaving(true);
     setError("");
+
+    const requiredFields = [
+      ["name", "Company name"],
+      ["business", "Business type"],
+      ["ownerName", "Owner name"],
+      ["email", "Company email"],
+      ["phone", "Phone"],
+      ["city", "City"],
+      ["adminName", "Admin name"],
+      ["adminEmail", "Admin email"],
+      ["adminPassword", "Temporary password"],
+    ];
+
+    const missingField = requiredFields.find(
+      ([field]) => !String(form[field] || "").trim()
+    );
+
+    if (missingField) {
+      setError(`${missingField[1]} is required`);
+      return;
+    }
+
+    if (!isValidEmail(form.email)) {
+      setError("Enter a valid company email");
+      return;
+    }
+
+    if (!isValidEmail(form.adminEmail)) {
+      setError("Enter a valid client admin email");
+      return;
+    }
+
+    if (!isValidPhone(form.phone)) {
+      setError("Enter a valid company phone number");
+      return;
+    }
+
+    if (String(form.adminPassword).length < 8) {
+      setError("Temporary password must be at least 8 characters");
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const data =
@@ -307,6 +360,7 @@ function OnboardClientModal({
 
                 <Input
                   label="Business Type"
+                  required
                   value={
                     form.business
                   }
@@ -321,6 +375,7 @@ function OnboardClientModal({
 
                 <Input
                   label="Owner Name"
+                  required
                   value={
                     form.ownerName
                   }
@@ -335,6 +390,7 @@ function OnboardClientModal({
 
                 <Input
                   label="Company Email"
+                  required
                   type="email"
                   value={form.email}
                   onChange={(e) =>
@@ -348,6 +404,8 @@ function OnboardClientModal({
 
                 <Input
                   label="Phone"
+                  required
+                  type="tel"
                   value={form.phone}
                   onChange={(e) =>
                     updateField(
@@ -360,6 +418,7 @@ function OnboardClientModal({
 
                 <Input
                   label="City"
+                  required
                   value={form.city}
                   onChange={(e) =>
                     updateField(
@@ -648,6 +707,10 @@ function OnboardClientModal({
                   First Client Admin
                 </h3>
               </div>
+
+              <p className="mb-3 text-[11px] leading-5 text-slate-500">
+                The company and admin email domains are checked before the client is created.
+              </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Input

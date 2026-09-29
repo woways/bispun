@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { resolveMx } from "node:dns/promises";
 
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
@@ -11,6 +12,44 @@ router.use(requireSuperAdmin);
 
 async function getAdminActor(req) {
   return prisma.user.findUnique({ where: { id: req.admin.userId }, select: { id: true, name: true, email: true } });
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
+    String(value || "").trim()
+  );
+}
+
+function isValidPhone(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 8 && digits.length <= 15;
+}
+
+function getEmailDomain(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .split("@")
+    .pop();
+}
+
+async function emailDomainCanReceiveMail(email) {
+  const domain = getEmailDomain(email);
+
+  try {
+    const records = await resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch (error) {
+    if (
+      ["ENOTFOUND", "ENODATA", "EFORMERR", "EBADNAME"].includes(
+        error?.code
+      )
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 
@@ -295,6 +334,13 @@ router.post("/", async (req, res) => {
     } = req.body || {};
 
     const companyName = String(name || "").trim();
+    const companyBusiness = String(business || "").trim();
+    const companyOwnerName = String(ownerName || "").trim();
+    const companyCity = String(city || "").trim();
+    const companyEmail = String(email || "")
+      .trim()
+      .toLowerCase();
+    const companyPhone = String(phone || "").trim();
 
     const clientAdminName = String(
       adminName || ""
@@ -325,6 +371,55 @@ router.post("/", async (req, res) => {
       });
     }
 
+    if (!companyBusiness) {
+      return res.status(400).json({
+        success: false,
+        message: "Business type is required",
+      });
+    }
+
+    if (!companyOwnerName) {
+      return res.status(400).json({
+        success: false,
+        message: "Owner name is required",
+      });
+    }
+
+    if (!companyEmail) {
+      return res.status(400).json({
+        success: false,
+        message: "Company email is required",
+      });
+    }
+
+    if (!isValidEmail(companyEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid company email",
+      });
+    }
+
+    if (!companyPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Company phone is required",
+      });
+    }
+
+    if (!isValidPhone(companyPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid company phone number",
+      });
+    }
+
+    if (!companyCity) {
+      return res.status(400).json({
+        success: false,
+        message: "City is required",
+      });
+    }
+
     if (!selectedPlanKey) {
       return res.status(400).json({
         success: false,
@@ -346,11 +441,53 @@ router.post("/", async (req, res) => {
       });
     }
 
+    if (!isValidEmail(clientAdminEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid client admin email",
+      });
+    }
+
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
         message:
           "Client admin password must be at least 8 characters",
+      });
+    }
+
+    let companyEmailDomainValid;
+    let adminEmailDomainValid;
+
+    try {
+      [companyEmailDomainValid, adminEmailDomainValid] =
+        await Promise.all([
+          emailDomainCanReceiveMail(companyEmail),
+          emailDomainCanReceiveMail(clientAdminEmail),
+        ]);
+    } catch (error) {
+      console.error("Email domain verification failed:", error);
+
+      return res.status(503).json({
+        success: false,
+        message:
+          "Unable to verify email domains right now. Please try again.",
+      });
+    }
+
+    if (!companyEmailDomainValid) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Company email domain could not be verified. Use an email domain that can receive mail.",
+      });
+    }
+
+    if (!adminEmailDomainValid) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Client admin email domain could not be verified. Use an email domain that can receive mail.",
       });
     }
 
@@ -471,27 +608,15 @@ router.post("/", async (req, res) => {
               shortName:
                 shortNameFromCompany(companyName),
 
-              business: business
-                ? String(business).trim()
-                : null,
+              business: companyBusiness,
 
-              ownerName: ownerName
-                ? String(ownerName).trim()
-                : null,
+              ownerName: companyOwnerName,
 
-              city: city
-                ? String(city).trim()
-                : null,
+              city: companyCity,
 
-              email: email
-                ? String(email)
-                    .trim()
-                    .toLowerCase()
-                : null,
+              email: companyEmail,
 
-              phone: phone
-                ? String(phone).trim()
-                : null,
+              phone: companyPhone,
 
               subdomain: cleanSubdomain,
 
