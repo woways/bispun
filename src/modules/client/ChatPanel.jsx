@@ -905,7 +905,7 @@ export default function ChatPanel({ currentUser }) {
       const data = await apiRequest("/api/client/google/meet", {
         method: "POST",
         body: JSON.stringify({
-          summary: "ConsulBuzz call",
+          summary: "Bispun call",
           startISO: new Date(now).toISOString(),
           endISO: new Date(now + 60 * 60 * 1000).toISOString(),
         }),

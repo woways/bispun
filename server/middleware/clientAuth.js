@@ -152,7 +152,7 @@ export async function requireClientUser(
           maintenance:
             true,
           message:
-            "ConsulBuzz is temporarily under maintenance. Please try again shortly.",
+            "Bispun is temporarily under maintenance. Please try again shortly.",
         });
     }
 

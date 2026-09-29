@@ -318,7 +318,7 @@ router.patch("/", async (req, res) => {
         entityId:
           settings.id,
         summary:
-          `${actor?.name || "Super Admin"} updated ConsulBuzz system settings.`,
+          `${actor?.name || "Super Admin"} updated Bispun system settings.`,
         metadata: {
           changedFields,
           maintenanceMode:

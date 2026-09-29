@@ -55,7 +55,7 @@ export async function createSupportTicketCreatedNotification({
     companyId,
     userId,
     title: "Support ticket submitted",
-    message: `${ticketNumber} · ${title} has been submitted successfully and is waiting for ConsulBuzz review.`,
+    message: `${ticketNumber} · ${title} has been submitted successfully and is waiting for Bispun review.`,
     type: "SUPPORT",
     actionModule: "help",
     actionLabel: "View support ticket",

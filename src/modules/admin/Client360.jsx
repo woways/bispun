@@ -1517,7 +1517,7 @@ function UsageTab({ clientId }) {
             <p className="text-xs text-slate-500 mt-1">
               Real usage information
               calculated from the
-              ConsulBuzz database for{" "}
+              Bispun database for{" "}
               {company?.name ||
                 "this client"}.
             </p>
@@ -2281,7 +2281,7 @@ function CustomizationTab({
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  ConsulBuzz Remarks
+                  Bispun Remarks
                 </label>
 
                 <textarea
@@ -2337,7 +2337,7 @@ function CustomizationTab({
         </div>
 
         <div className="text-xs text-slate-500 mt-1">
-          ConsulBuzz sees only the customization
+          Bispun sees only the customization
           request submitted by the client and the
           client's subscription context. This area
           does not expose their leads, admissions,
@@ -2468,7 +2468,7 @@ function BillingTab({
           No subscription found
         </div>
         <div className="text-xs text-slate-500 mt-1">
-          This client does not currently have a ConsulBuzz subscription.
+          This client does not currently have a Bispun subscription.
         </div>
       </div>
     );
@@ -2517,7 +2517,7 @@ function BillingTab({
             SaaS Billing Details
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            ConsulBuzz subscription information for {company?.name || "this client"}.
+            Bispun subscription information for {company?.name || "this client"}.
           </p>
 
           <div className="mt-5 space-y-3">
@@ -2643,7 +2643,7 @@ function BillingTab({
           Privacy boundary
         </div>
         <div className="text-xs text-slate-500 mt-1">
-          This Billing section manages only the ConsulBuzz SaaS subscription.
+          This Billing section manages only the Bispun SaaS subscription.
           It does not expose the client's admissions revenue, expenses,
           incentives or other private financial records.
         </div>

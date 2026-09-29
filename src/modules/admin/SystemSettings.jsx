@@ -120,7 +120,7 @@ export default function SystemSettings() {
       setForm({
         platformName:
           data.settings.platformName ||
-          "ConsulBuzz",
+          "Bispun",
 
         supportEmail:
           data.settings.supportEmail ||
@@ -636,7 +636,7 @@ export default function SystemSettings() {
 
         <div className="text-xs text-slate-500 mt-1">
           These settings belong to
-          ConsulBuzz itself. They do
+          Bispun itself. They do
           not expose or modify client
           CRM leads, admissions,
           revenue, expenses or other

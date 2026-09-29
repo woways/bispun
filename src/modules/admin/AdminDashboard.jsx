@@ -286,7 +286,7 @@ export default function AdminDashboard({
           </h1>
 
           <p className="mt-1 text-sm text-slate-500">
-            Real-time ConsulBuzz client, subscription, usage and support overview.
+            Real-time Bispun client, subscription, usage and support overview.
           </p>
         </div>
 

@@ -536,7 +536,7 @@ export default function Plans() {
     <div className="space-y-5">
       <SectionHeader
         title="Plans & Subscriptions"
-        subtitle="Control subscription pricing, plan availability and default module access across ConsulBuzz."
+        subtitle="Control subscription pricing, plan availability and default module access across Bispun."
         action={
           <button
             type="button"

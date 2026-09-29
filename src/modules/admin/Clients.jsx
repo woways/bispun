@@ -891,7 +891,7 @@ export default function Clients({
     <div className="space-y-5">
       <SectionHeader
         title="Clients"
-        subtitle="Manage client workspaces, subscriptions, access and account health across ConsulBuzz"
+        subtitle="Manage client workspaces, subscriptions, access and account health across Bispun"
         action={
           <button
             type="button"

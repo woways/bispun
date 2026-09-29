@@ -117,7 +117,7 @@ app.use("/api", apiLimiter);
 app.get("/", (req, res) =>
   res.json({
     success: true,
-    message: "ConsulBuzz API is running",
+    message: "Bispun API is running",
     requestId: req.requestId,
   })
 );
@@ -129,7 +129,7 @@ app.get("/api/health", async (req, res) => {
     return res.json({
       success: true,
       database: "connected",
-      message: "ConsulBuzz API and database are working",
+      message: "Bispun API and database are working",
       requestId: req.requestId,
     });
   } catch (error) {
@@ -222,7 +222,7 @@ const io = attachSocketServer(server, config);
 app.set("io", io);
 
 server.listen(config.port, () =>
-  console.log(`ConsulBuzz API running on http://localhost:${config.port}`)
+  console.log(`Bispun API running on http://localhost:${config.port}`)
 );
 
 async function shutdown(signal) {

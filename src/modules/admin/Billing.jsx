@@ -256,7 +256,7 @@ export default function Billing() {
           </div>
 
           <p className="text-sm text-slate-500 mt-1">
-            ConsulBuzz SaaS
+            Bispun SaaS
             subscriptions across all
             client companies.
           </p>
@@ -363,7 +363,7 @@ export default function Billing() {
 
         <div className="text-xs text-slate-500 mt-1">
           This page contains only
-          ConsulBuzz subscription
+          Bispun subscription
           billing. It does not expose
           client admissions revenue,
           expenses, incentives, profit,
@@ -610,7 +610,7 @@ export default function Billing() {
           </div>
 
           <div className="text-xs text-slate-500 mt-0.5">
-            Recent ConsulBuzz subscription payment attempts and successful captures.
+            Recent Bispun subscription payment attempts and successful captures.
           </div>
         </div>
 
