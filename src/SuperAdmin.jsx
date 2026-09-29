@@ -116,6 +116,30 @@ const MENU = [
 ];
 import bispunLogo from "./assets/bispun-logo.svg";
 
+const ADMIN_ALERT_READ_STORAGE_KEY = "bispun.superAdmin.readAlerts.v1";
+
+function loadReadAdminAlertKeys() {
+  try {
+    const value = window.localStorage.getItem(ADMIN_ALERT_READ_STORAGE_KEY);
+    const parsed = value ? JSON.parse(value) : [];
+    return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistReadAdminAlertKeys(keys) {
+  try {
+    window.localStorage.setItem(
+      ADMIN_ALERT_READ_STORAGE_KEY,
+      JSON.stringify(keys.slice(-200))
+    );
+  } catch {
+    // Notification read state is non-critical; keep the UI working
+    // even if storage is unavailable.
+  }
+}
+
 export default function SuperAdmin() {
   const nav =
     useNavigate();
@@ -147,6 +171,9 @@ export default function SuperAdmin() {
   const [adminClients, setAdminClients] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [adminAlerts, setAdminAlerts] = useState([]);
+  const [readAdminAlertKeys, setReadAdminAlertKeys] = useState(() =>
+    loadReadAdminAlertKeys()
+  );
   const [adminAlertsLoading, setAdminAlertsLoading] = useState(false);
   const [adminAlertsError, setAdminAlertsError] = useState("");
   const notificationRef = useRef(null);
@@ -207,6 +234,7 @@ export default function SuperAdmin() {
         .slice(0, 8)
         .map((ticket) => ({
           id: `support-${ticket.id}`,
+          readKey: `support-${ticket.id}-${ticket.status}-${ticket.updatedAt || ticket.createdAt || ""}`,
           kind: "support",
           title: ticket.typeLabel || "Support request",
           message: `${ticket.company?.name || "Client"} · ${ticket.title}`,
@@ -238,6 +266,7 @@ export default function SuperAdmin() {
         .slice(0, 6)
         .map((client) => ({
           id: `renewal-${client.id}`,
+          readKey: `renewal-${client.id}-${client.renewalDate || ""}`,
           kind: "renewal",
           title: "Subscription renewal",
           message: `${client.name} renews ${new Date(
@@ -259,6 +288,23 @@ export default function SuperAdmin() {
     } finally {
       setAdminAlertsLoading(false);
     }
+  }
+
+  function markAdminAlertRead(readKey) {
+    if (!readKey) return;
+
+    setReadAdminAlertKeys((current) => {
+      if (current.includes(readKey)) return current;
+
+      const next = [...current, readKey].slice(-200);
+      persistReadAdminAlertKeys(next);
+      return next;
+    });
+  }
+
+  function openAdminAlert(alert) {
+    markAdminAlertRead(alert.readKey);
+    alert.action();
   }
 
   useEffect(() => {
@@ -488,6 +534,10 @@ export default function SuperAdmin() {
       ].slice(0, 10)
     : [];
 
+  const unreadAdminAlerts = adminAlerts.filter(
+    (alert) => !readAdminAlertKeys.includes(alert.readKey)
+  );
+
   const currentLabel =
     selectedClient
       ? "Client 360"
@@ -598,9 +648,9 @@ export default function SuperAdmin() {
               >
                 <Bell size={17} />
 
-                {adminAlerts.length > 0 && (
+                {unreadAdminAlerts.length > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold leading-[17px] text-center ring-2 ring-white">
-                    {adminAlerts.length > 9 ? "9+" : adminAlerts.length}
+                    {unreadAdminAlerts.length > 9 ? "9+" : unreadAdminAlerts.length}
                   </span>
                 )}
               </button>
@@ -640,14 +690,31 @@ export default function SuperAdmin() {
                         <button
                           key={alert.id}
                           type="button"
-                          onClick={alert.action}
-                          className="w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50"
+                          onClick={() => openAdminAlert(alert)}
+                          className={`w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-slate-50 ${
+                            readAdminAlertKeys.includes(alert.readKey)
+                              ? "bg-white"
+                              : "bg-indigo-50/40"
+                          }`}
                         >
-                          <div className="text-xs font-bold text-slate-900">
-                            {alert.title}
-                          </div>
-                          <div className="mt-1 text-[11px] leading-5 text-slate-500">
-                            {alert.message}
+                          <div className="flex items-start gap-2">
+                            {!readAdminAlertKeys.includes(alert.readKey) && (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-indigo-500" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className={`text-xs font-bold ${
+                                  readAdminAlertKeys.includes(alert.readKey)
+                                    ? "text-slate-700"
+                                    : "text-slate-950"
+                                }`}
+                              >
+                                {alert.title}
+                              </div>
+                              <div className="mt-1 text-[11px] leading-5 text-slate-500">
+                                {alert.message}
+                              </div>
+                            </div>
                           </div>
                         </button>
                       ))

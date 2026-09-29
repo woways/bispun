@@ -442,6 +442,75 @@ function ClientRoute({
   );
 }
 
+function AdminGuestRoute({
+  children,
+}) {
+  const [
+    status,
+    setStatus,
+  ] =
+    useState(
+      "checking"
+    );
+
+  useEffect(() => {
+    let active =
+      true;
+
+    async function verifyAdminSession() {
+      try {
+        await apiRequest(
+          "/api/admin/auth/me"
+        );
+
+        if (active) {
+          setStatus(
+            "authenticated"
+          );
+        }
+      } catch {
+        if (active) {
+          setStatus(
+            "unauthenticated"
+          );
+        }
+      }
+    }
+
+    verifyAdminSession();
+
+    return () => {
+      active =
+        false;
+    };
+  }, []);
+
+  if (
+    status ===
+    "checking"
+  ) {
+    return (
+      <DashboardLoadingScreen
+        admin
+      />
+    );
+  }
+
+  if (
+    status ===
+    "authenticated"
+  ) {
+    return (
+      <Navigate
+        to="/admin"
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
 function AdminRoute({
   children,
 }) {
@@ -544,7 +613,9 @@ export default function App() {
         <Route
           path="/admin/login"
           element={
-            <AdminLogin />
+            <AdminGuestRoute>
+              <AdminLogin />
+            </AdminGuestRoute>
           }
         />
 
