@@ -113,6 +113,47 @@ function formatDateTime(iso) {
   });
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Highlights "@Name" tokens in a message body when the name matches a known
+// group member. Returns a string (no mentions) or an array of React nodes.
+function renderBodyWithMentions(body, memberNames) {
+  const text = String(body || "");
+  const names = (Array.isArray(memberNames) ? memberNames : [])
+    .map((name) => String(name || "").trim())
+    .filter(Boolean)
+    .concat(["all", "everyone"])
+    .sort((a, b) => b.length - a.length);
+
+  if (!names.length || !text.includes("@")) return text;
+
+  const pattern = new RegExp("@(" + names.map(escapeRegExp).join("|") + ")", "g");
+  const nodes = [];
+  let lastIndex = 0;
+  let key = 0;
+  let match;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    nodes.push(
+      <span
+        key={`mention-${key++}`}
+        className="rounded bg-indigo-100 px-0.5 font-semibold text-indigo-700"
+      >
+        {match[0]}
+      </span>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
 const EMOJI_CATEGORIES = {
   Smileys: [
     "😀","😃","😄","😁","😆","😅","😂","🤣","🥲","☺️","😊","😇","🙂","🙃","😉","😌",
@@ -248,6 +289,8 @@ export default function ChatPanel({ currentUser }) {
   const [loadingThread, setLoadingThread] = useState(false);
   const [error, setError] = useState("");
   const [draft, setDraft] = useState("");
+  const [mention, setMention] = useState(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [composerEmojiCategory, setComposerEmojiCategory] = useState("Smileys");
   const [sending, setSending] = useState(false);
@@ -491,6 +534,7 @@ export default function ChatPanel({ currentUser }) {
   const socketRef = useRef(null);
   const threadEndRef = useRef(null);
   const threadScrollRef = useRef(null);
+  const composerRef = useRef(null);
   const activeIdRef = useRef(null);
 
   activeIdRef.current = activeId;
@@ -664,6 +708,79 @@ export default function ChatPanel({ currentUser }) {
 
   function insertEmoji(emoji) {
     setDraft((current) => current + emoji);
+  }
+
+  // --- @mention tagging (group chats) -------------------------------------
+  function handleDraftChange(e) {
+    const value = e.target.value;
+    setDraft(value);
+
+    if (!activeConversation?.isGroup) {
+      setMention(null);
+      return;
+    }
+
+    const caret = e.target.selectionStart ?? value.length;
+    const match = /(^|\s)@(\S*)$/.exec(value.slice(0, caret));
+    if (match) {
+      setMention({ query: match[2], start: caret - match[2].length - 1 });
+      setMentionIndex(0);
+    } else {
+      setMention(null);
+    }
+  }
+
+  function insertMention(member) {
+    if (!member || !mention) return;
+    const caret = composerRef.current?.selectionStart ?? draft.length;
+    const before = draft.slice(0, mention.start);
+    const after = draft.slice(caret);
+    const insert = `@${member.name} `;
+    const next = before + insert + after;
+
+    setDraft(next);
+    setMention(null);
+
+    const nextCaret = before.length + insert.length;
+    window.requestAnimationFrame(() => {
+      const el = composerRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(nextCaret, nextCaret);
+      }
+    });
+  }
+
+  function handleComposerKeyDown(e) {
+    if (mention && mentionCandidates.length) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionCandidates.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex(
+          (i) => (i - 1 + mentionCandidates.length) % mentionCandidates.length
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(mentionCandidates[mentionIndex] || mentionCandidates[0]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMention(null);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   }
 
   async function toggleFavorite(conv, e) {
@@ -987,6 +1104,7 @@ export default function ChatPanel({ currentUser }) {
         setSending(false);
         if (resp?.ok) {
           setDraft("");
+          setMention(null);
           setReplyTo(null);
           setMessages((current) => {
             if (current.some((m) => m.id === resp.message.id)) return current;
@@ -1066,6 +1184,29 @@ export default function ChatPanel({ currentUser }) {
     () => conversations.find((c) => c.id === activeId) || null,
     [conversations, activeId]
   );
+
+  const mentionCandidates = useMemo(() => {
+    if (!mention || !activeConversation?.isGroup) return [];
+    const q = mention.query.trim().toLowerCase();
+    const members = (activeConversation.members || []).filter(
+      (member) => member.id !== myId
+    );
+    const filtered = q
+      ? members.filter(
+          (member) =>
+            String(member.name || "").toLowerCase().includes(q) ||
+            String(member.email || "").toLowerCase().includes(q)
+        )
+      : members;
+
+    // "@all" tags the whole group — offer it when the query is empty or matches.
+    const everyone =
+      !q || "all".includes(q) || "everyone".includes(q)
+        ? [{ id: "__all__", name: "all", everyone: true }]
+        : [];
+
+    return [...everyone, ...filtered].slice(0, 6);
+  }, [mention, activeConversation, myId]);
 
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1411,7 +1552,14 @@ export default function ChatPanel({ currentUser }) {
                                   </button>
                                 </div>
                               ) : (
-                                <div className="whitespace-pre-wrap break-words">{m.body}</div>
+                                <div className="whitespace-pre-wrap break-words">
+                                  {renderBodyWithMentions(
+                                    m.body,
+                                    (activeConversation.members || []).map(
+                                      (mem) => mem.name
+                                    )
+                                  )}
+                                </div>
                               )}
 
                               <div className="mt-1.5 flex items-center justify-end gap-1 text-right text-[11px] text-neutral-400">
@@ -1784,14 +1932,66 @@ export default function ChatPanel({ currentUser }) {
                   </button>
                   <div className="mx-1 h-6 w-px self-center bg-slate-200" />
 
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    rows={1}
-                    placeholder="Type a message..."
-                    className="max-h-28 min-h-[36px] flex-1 resize-none bg-transparent px-2 py-2 text-[14px] font-medium text-slate-800 outline-none placeholder:text-slate-400"
-                  />
+                  <div className="relative flex-1">
+                    {mention && mentionCandidates.length > 0 && (
+                      <div className="absolute bottom-full left-0 z-30 mb-2 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_8px_28px_rgba(15,23,42,0.12)]">
+                        <div className="border-b border-slate-100 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                          Tag someone
+                        </div>
+                        <div className="max-h-52 overflow-y-auto py-1">
+                          {mentionCandidates.map((mem, idx) => (
+                            <button
+                              key={mem.id}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                insertMention(mem);
+                              }}
+                              onMouseEnter={() => setMentionIndex(idx)}
+                              className={`flex w-full items-center gap-2 px-3 py-2 text-left ${
+                                idx === mentionIndex ? "bg-indigo-50" : "hover:bg-slate-50"
+                              }`}
+                            >
+                              {mem.everyone ? (
+                                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
+                                  <Users size={14} />
+                                </span>
+                              ) : (
+                                <span
+                                  className={`flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-[11px] font-bold text-white ${avatarGradient(
+                                    mem.name
+                                  )}`}
+                                >
+                                  {mem.avatarUrl ? (
+                                    <img src={mem.avatarUrl} alt="" className="h-full w-full object-cover" />
+                                  ) : (
+                                    initialsOf(mem.name)
+                                  )}
+                                </span>
+                              )}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] font-semibold text-slate-800">
+                                  {mem.everyone ? "Everyone" : mem.name}
+                                </span>
+                                <span className="block truncate text-[11px] text-slate-400">
+                                  {mem.everyone ? "Notify the whole group · @all" : mem.email}
+                                </span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <textarea
+                      ref={composerRef}
+                      value={draft}
+                      onChange={handleDraftChange}
+                      onKeyDown={handleComposerKeyDown}
+                      rows={1}
+                      placeholder="Type a message..."
+                      className="max-h-28 min-h-[36px] w-full resize-none bg-transparent px-2 py-2 text-[14px] font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                    />
+                  </div>
                   <button type="button" onClick={sendMessage} disabled={sending || !draft.trim()} className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40" aria-label="Send">
                     {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   </button>

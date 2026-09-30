@@ -279,9 +279,11 @@ router.get("/dashboard", async (req, res) => {
     } = access;
 
     const leadWhere = { companyId };
+    // The Admissions KPI counts every admission record (including CANCELLED) so
+    // it matches the Admissions page total. Revenue/performance below filter out
+    // CANCELLED separately via `activeAdmissions`.
     const admissionWhere = {
       companyId,
-      status: { not: "CANCELLED" },
     };
 
     if (selectedYear) {
@@ -389,6 +391,12 @@ router.get("/dashboard", async (req, res) => {
       })
     );
 
+    // `admissions` now includes CANCELLED rows so the headline count matches the
+    // Admissions page. Money and counsellor credit must ignore cancelled deals.
+    const activeAdmissions = admissions.filter(
+      (admission) => admission.status !== "CANCELLED"
+    );
+
     const dateSourceLeads =
       currentUser.role === "CLIENT_ADMIN"
         ? allLeads
@@ -450,7 +458,7 @@ router.get("/dashboard", async (req, res) => {
     const directAdmissionContactKeys = new Set();
     let directAdmissionLeadCount = 0;
 
-    for (const admission of admissions) {
+    for (const admission of activeAdmissions) {
       if (admission.leadId) {
         admittedLeadIds.add(admission.leadId);
         continue;
@@ -499,12 +507,12 @@ router.get("/dashboard", async (req, res) => {
       ).length + directAdmissionLeadCount;
     const totalAdmissions = admissions.length;
 
-    const potentialRevenue = admissions.reduce(
+    const potentialRevenue = activeAdmissions.reduce(
       (sum, admission) =>
         sum + Number(admission.totalFee || 0),
       0
     );
-    const receivedAmount = admissions.reduce(
+    const receivedAmount = activeAdmissions.reduce(
       (sum, admission) =>
         sum + Number(admission.paidAmount || 0),
       0
@@ -561,7 +569,7 @@ router.get("/dashboard", async (req, res) => {
       currentUser.role === "CLIENT_ADMIN"
         ? months.map((month) => {
             const key = monthKey(month);
-            const monthAdmissions = admissions.filter(
+            const monthAdmissions = activeAdmissions.filter(
               (admission) =>
                 monthKey(
                   new Date(admission.admissionDate)
@@ -644,7 +652,7 @@ router.get("/dashboard", async (req, res) => {
       performance.leads += 1;
     }
 
-    for (const admission of admissions) {
+    for (const admission of activeAdmissions) {
       const performance = ensurePerformance({
         userId:
           recordUserId(
