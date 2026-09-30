@@ -426,10 +426,10 @@ export default function MyReferrals({ currentUser }) {
                     />
                   ))}
                 </div>
-                <div className="mt-1.5 flex justify-between text-[13px] font-semibold uppercase tracking-wide text-slate-400">
+                <div className="mt-1.5 flex justify-between gap-1 text-[11px] font-semibold uppercase tracking-tight text-slate-400">
                   {STAGE_ORDER.map((st, i) => (
                     <span key={st} className={i === r.lead.stageIndex && !r.lead.isLost ? "text-brand-600" : ""}>
-                      {STAGE_LABELS[st].slice(0, 8)}
+                      {STAGE_LABELS[st]}
                     </span>
                   ))}
                 </div>

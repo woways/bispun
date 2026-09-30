@@ -918,6 +918,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     const year = Number(newWorkspaceYear);
     if (!Number.isInteger(year) || year < 2000 || year > 2100) { setYearError("Enter a valid year between 2000 and 2100."); return; }
     if (availableYears.includes(year)) { setYearError(`${year} workspace already exists.`); return; }
+    // CA-005: confirm before creating, since a year workspace can't be removed.
+    if (!window.confirm(`Create a workspace for ${year}? It will be added to your period list and cannot be removed later.`)) { return; }
     setYearSaving(true);
     try {
       await apiRequest("/api/client/years", {
@@ -3775,7 +3777,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   </div>
 
                   <div className="min-w-0 overflow-visible">
-                    <div className="truncate text-[17px] font-black leading-tight tracking-[-0.02em] text-white">
+                    <div
+                      title={company?.brandName || company?.name || "Workspace"}
+                      className="line-clamp-2 break-words text-[17px] font-black leading-tight tracking-[-0.02em] text-white"
+                    >
                       {company?.brandName || company?.name || "Workspace"}
                     </div>
                     <div className="mt-0.5 truncate text-[8px] font-bold uppercase tracking-[0.18em] text-slate-500">
@@ -4342,7 +4347,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                 {notification.title}
                               </div>
 
-                              <div className="mt-1 text-[13px] leading-5 text-slate-500">
+                              <div className="mt-1 text-[13px] leading-5 text-slate-500 break-words">
                                 {notification.message}
                               </div>
                             </button>

@@ -149,6 +149,22 @@ router.patch("/me/achieved", async (req, res) => {
         .json({ success: false, message: "Invalid week for this month" });
     }
 
+    // CA-021: reject achieved values for a week that hasn't started yet.
+    const now = new Date();
+    const cy = now.getFullYear();
+    const cm = now.getMonth() + 1;
+    const weekStartDay = (week - 1) * 7 + 1;
+    const isFuture =
+      year > cy ||
+      (year === cy && month > cm) ||
+      (year === cy && month === cm && weekStartDay > now.getDate());
+    if (isFuture) {
+      return res.status(400).json({
+        success: false,
+        message: "You can't record achievements for a week that hasn't started.",
+      });
+    }
+
     const key = {
       companyId_ownerId_year_month: {
         companyId: req.clientUser.companyId,

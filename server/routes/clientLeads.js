@@ -2466,9 +2466,17 @@ router.get("/utm/analytics", async (req, res) => {
         campaignRow
       );
 
+      // CA-016: group by a case-insensitive key so "LinkedIn" and "linkedin"
+      // count as one platform in reports.
+      const sourceKeyNorm = String(
+        link.source || ""
+      )
+        .trim()
+        .toLowerCase();
+
       const sourceRow =
         sourceMap.get(
-          link.source
+          sourceKeyNorm
         ) || {
           source:
             link.source,
@@ -2487,13 +2495,19 @@ router.get("/utm/analytics", async (req, res) => {
         revenue;
 
       sourceMap.set(
-        link.source,
+        sourceKeyNorm,
         sourceRow
       );
 
+      const mediumKeyNorm = String(
+        link.medium || ""
+      )
+        .trim()
+        .toLowerCase();
+
       const mediumRow =
         mediumMap.get(
-          link.medium
+          mediumKeyNorm
         ) || {
           medium:
             link.medium,
@@ -2512,7 +2526,7 @@ router.get("/utm/analytics", async (req, res) => {
         revenue;
 
       mediumMap.set(
-        link.medium,
+        mediumKeyNorm,
         mediumRow
       );
     }

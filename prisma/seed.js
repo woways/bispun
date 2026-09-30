@@ -389,10 +389,11 @@ async function seedSuperAdmin() {
         SUPER_ADMIN_EMAIL,
     },
 
+    // Do NOT reset an existing admin's password on re-seed (RISK-001).
+    // passwordHash is set only when the user is first created.
     update: {
       name:
         "Bispun Super Admin",
-      passwordHash,
       role: "SUPER_ADMIN",
       active: true,
       companyId: null,
@@ -615,11 +616,10 @@ async function seedStudentMentor() {
         STUDENT_MENTOR_ADMIN_EMAIL,
     },
 
+    // Do NOT reset an existing user's password on re-seed (RISK-001).
     update: {
       name:
         "Student Mentor Admin",
-      passwordHash:
-        clientAdminPasswordHash,
       role: "CLIENT_ADMIN",
       active: true,
       companyId: company.id,

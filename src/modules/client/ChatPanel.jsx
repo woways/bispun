@@ -295,24 +295,39 @@ export default function ChatPanel({ currentUser }) {
     const gap = 8;
     const popoverWidth = 300;
     const estimatedHeight = message.deletedForEveryone ? 90 : mine ? 430 : 390;
-    const openBelow = rect.top < window.innerHeight * 0.5;
+
+    // CA-020: keep the menu inside the chat message area (above the input box),
+    // not just inside the viewport.
+    const c = threadScrollRef.current?.getBoundingClientRect();
+    const topBound = c ? c.top : 0;
+    const bottomBound = c ? c.bottom : window.innerHeight;
+    const leftBound = c ? c.left : 0;
+    const rightBound = c ? c.right : window.innerWidth;
+
+    const spaceBelow = bottomBound - rect.bottom - gap - viewportPadding;
+    const openBelow = spaceBelow >= Math.min(estimatedHeight, 200);
 
     let top = openBelow ? rect.bottom + gap : rect.top - estimatedHeight - gap;
     let left = mine ? rect.right - popoverWidth : rect.left;
 
     top = Math.max(
-      viewportPadding,
-      Math.min(top, window.innerHeight - estimatedHeight - viewportPadding)
+      topBound + viewportPadding,
+      Math.min(top, bottomBound - estimatedHeight - viewportPadding)
     );
     left = Math.max(
-      viewportPadding,
-      Math.min(left, window.innerWidth - popoverWidth - viewportPadding)
+      leftBound + viewportPadding,
+      Math.min(left, rightBound - popoverWidth - viewportPadding)
+    );
+
+    const maxHeight = Math.max(
+      160,
+      bottomBound - topBound - viewportPadding * 2
     );
 
     messageMenuAnchorRef.current = { rect, mine };
     setMessageReactionMoreId(null);
     setReactionCategory("Smileys");
-    setMessageMenuPosition({ top, left });
+    setMessageMenuPosition({ top, left, maxHeight });
     setMessageMenuId(message.id);
   }
 
@@ -328,25 +343,33 @@ export default function ChatPanel({ currentUser }) {
       const { rect, mine } = anchorData;
       const viewportPadding = 12;
       const gap = 8;
-      const openBelow = rect.top < window.innerHeight * 0.5;
+
+      const c = threadScrollRef.current?.getBoundingClientRect();
+      const topBound = c ? c.top : 0;
+      const bottomBound = c ? c.bottom : window.innerHeight;
+      const leftBound = c ? c.left : 0;
+      const rightBound = c ? c.right : window.innerWidth;
+
+      const spaceBelow = bottomBound - rect.bottom - gap - viewportPadding;
+      const openBelow = spaceBelow >= Math.min(menuRect.height, 200);
 
       let top = openBelow ? rect.bottom + gap : rect.top - menuRect.height - gap;
       let left = mine ? rect.right - menuRect.width : rect.left;
 
       top = Math.max(
-        viewportPadding,
-        Math.min(top, window.innerHeight - menuRect.height - viewportPadding)
+        topBound + viewportPadding,
+        Math.min(top, bottomBound - menuRect.height - viewportPadding)
       );
       left = Math.max(
-        viewportPadding,
-        Math.min(left, window.innerWidth - menuRect.width - viewportPadding)
+        leftBound + viewportPadding,
+        Math.min(left, rightBound - menuRect.width - viewportPadding)
       );
 
       setMessageMenuPosition((current) => {
         if (Math.abs(current.top - top) < 1 && Math.abs(current.left - left) < 1) {
           return current;
         }
-        return { top, left };
+        return { ...current, top, left };
       });
     });
 
@@ -467,6 +490,7 @@ export default function ChatPanel({ currentUser }) {
 
   const socketRef = useRef(null);
   const threadEndRef = useRef(null);
+  const threadScrollRef = useRef(null);
   const activeIdRef = useRef(null);
 
   activeIdRef.current = activeId;
@@ -1319,7 +1343,7 @@ export default function ChatPanel({ currentUser }) {
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-5 sm:px-5">
+              <div ref={threadScrollRef} className="min-h-0 flex-1 overflow-y-auto bg-white px-4 py-5 sm:px-5">
                 {loadingThread ? (
                   <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Loading messages...</div>
                 ) : messages.length === 0 ? (
@@ -1464,10 +1488,14 @@ export default function ChatPanel({ currentUser }) {
 
                                     <div
                                       ref={messageMenuPopoverRef}
-                                      className="fixed z-[9999] w-[300px] max-h-[calc(100vh-24px)] overflow-y-auto overscroll-contain"
+                                      className="fixed z-[9999] w-[300px] overflow-y-auto overscroll-contain"
                                       style={{
                                         top: `${messageMenuPosition.top}px`,
                                         left: `${messageMenuPosition.left}px`,
+                                        maxHeight: `${
+                                          messageMenuPosition.maxHeight ||
+                                          window.innerHeight - 24
+                                        }px`,
                                       }}
                                     >
                                       {!m.deletedForEveryone && (

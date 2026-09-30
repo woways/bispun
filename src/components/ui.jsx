@@ -248,6 +248,43 @@ export const UpgradeGate = ({
     );
   }
 
+  // CA-011: if the client is already on (or above) the required plan, this
+  // module was turned off by the admin — don't ask them to buy a plan they have.
+  const PLAN_RANK = {
+    basic: 1,
+    pro: 2,
+    advanced: 3,
+  };
+  const alreadyOnPlan =
+    (PLAN_RANK[safeCurrentPlan] || 0) >=
+    (PLAN_RANK[required] || 99);
+
+  if (alreadyOnPlan) {
+    return (
+      <div className="flex items-center justify-center min-h-[55vh]">
+        <div className="max-w-md text-center bg-white border border-slate-200 rounded-2xl p-8 shadow-[0_8px_28px_rgba(15,23,42,0.05)]">
+          <div className="w-12 h-12 mx-auto rounded-xl bg-slate-50 border border-slate-100 text-slate-500 flex items-center justify-center mb-4">
+            <Lock size={20} />
+          </div>
+
+          <div className="text-lg font-bold tracking-tight text-slate-950">
+            {moduleMeta.label} isn't enabled
+          </div>
+
+          <div className="text-sm text-slate-600 mt-2 leading-relaxed">
+            This module is part of your{" "}
+            <span className="font-semibold text-slate-800">
+              {PLANS[safeCurrentPlan].name}
+            </span>{" "}
+            plan but has been turned off for
+            your workspace. Contact your
+            administrator to enable it.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center justify-center min-h-[55vh]">
       <div className="max-w-md text-center bg-white border border-slate-200 rounded-2xl p-8 shadow-[0_8px_28px_rgba(15,23,42,0.05)]">

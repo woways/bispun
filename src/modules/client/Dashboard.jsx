@@ -1132,6 +1132,11 @@ export default function Dashboard({
                     </span>
                   </div>
 
+                  {(data.revenueTrend || []).some(
+                    (p) =>
+                      Number(p.potential) > 0 ||
+                      Number(p.received) > 0
+                  ) ? (
                   <ResponsiveContainer
                     width="100%"
                     height={280}
@@ -1214,6 +1219,11 @@ export default function Dashboard({
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-[280px] items-center justify-center text-[13px] text-slate-400">
+                      No revenue data yet.
+                    </div>
+                  )}
                 </section>
 
                 <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-5">
@@ -1445,6 +1455,7 @@ export default function Dashboard({
                           tickLine={false}
                           axisLine={false}
                           stroke="#94a3b8"
+                          allowDecimals={false}
                         />
                         <Tooltip
                           contentStyle={{

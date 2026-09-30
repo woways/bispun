@@ -224,31 +224,47 @@ function LeadModal({
             )}
 
             <div className="grid md:grid-cols-2 gap-4">
-              <Field
-                label="Lead Name"
-                required
-                value={form.name}
-                onChange={(value) =>
-                  update(
-                    "name",
-                    value
-                  )
-                }
-                placeholder="Student / customer name"
-              />
+              <div>
+                <Field
+                  label="Lead Name"
+                  required
+                  value={form.name}
+                  onChange={(value) =>
+                    update(
+                      "name",
+                      value
+                    )
+                  }
+                  placeholder="Student / customer name"
+                />
+                {form.name.trim().length > 0 &&
+                  form.name.trim().length < 2 && (
+                    <p className="mt-1 text-[13px] font-semibold text-rose-600">
+                      Name must be at least 2 characters.
+                    </p>
+                  )}
+              </div>
 
-              <Field
-                label="Phone"
-                required
-                value={form.phone}
-                onChange={(value) =>
-                  update(
-                    "phone",
-                    value
-                  )
-                }
-                placeholder="9876543210"
-              />
+              <div>
+                <Field
+                  label="Phone"
+                  required
+                  value={form.phone}
+                  onChange={(value) =>
+                    update(
+                      "phone",
+                      value
+                    )
+                  }
+                  placeholder="9876543210"
+                />
+                {form.phone.trim().length > 0 &&
+                  !isValidPhone(form.phone) && (
+                    <p className="mt-1 text-[13px] font-semibold text-rose-600">
+                      Enter a valid 10-digit phone number.
+                    </p>
+                  )}
+              </div>
 
               <Field
                 label="Email"
@@ -415,7 +431,11 @@ function LeadModal({
 
             <button
               type="submit"
-              disabled={saving}
+              disabled={
+                saving ||
+                form.name.trim().length < 2 ||
+                !isValidPhone(form.phone)
+              }
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-md text-[15px] inline-flex items-center gap-2"
             >
               {saving && (
@@ -437,12 +457,42 @@ function LeadModal({
 }
 
 
+// A valid link must start with http(s):// AND have a real host (so
+// "https:mccccccc.com" — missing the // — is rejected). Used for CA-013/014/015/017.
+function isValidHttpUrl(value) {
+  const v = String(value || "").trim();
+  if (!/^https?:\/\/.+/i.test(v)) return false;
+  try {
+    const u = new URL(v);
+    return (
+      (u.protocol === "http:" ||
+        u.protocol === "https:") &&
+      !!u.hostname &&
+      u.hostname.includes(".")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Accept a 10-digit Indian mobile, optionally with a 91/+91 prefix. CA-018.
+function isValidPhone(value) {
+  const d = String(value || "").replace(/\D/g, "");
+  return (
+    d.length === 10 ||
+    (d.length === 12 && d.startsWith("91"))
+  );
+}
+
 function buildTrackedUrl({
   url,
   campaign,
   source,
   medium,
 }) {
+  if (!isValidHttpUrl(url)) {
+    return "";
+  }
   try {
     const parsed = new URL(url);
 
@@ -1293,6 +1343,13 @@ export default function UTMLeads({
       return;
     }
 
+    if (!isValidHttpUrl(manualForm.url)) {
+      setManualError(
+        "UTM URL must be a full address starting with http:// or https://"
+      );
+      return;
+    }
+
     setManualSaving(true);
     setManualError("");
 
@@ -1483,17 +1540,19 @@ export default function UTMLeads({
     });
   }, [leads, links, leadSearch]);
 
-  const sourceOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          links
-            .map((link) => link.source)
-            .filter(Boolean)
-        )
-      ).sort(),
-    [links]
-  );
+  const sourceOptions = useMemo(() => {
+    // CA-016: one entry per platform regardless of case (LinkedIn == linkedin).
+    const seen = new Map();
+    links.forEach((link) => {
+      const raw = String(link.source || "").trim();
+      if (!raw) return;
+      const key = raw.toLowerCase();
+      if (!seen.has(key)) seen.set(key, raw);
+    });
+    return Array.from(seen.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [links]);
 
   const mediumOptions = useMemo(
     () =>
@@ -1691,15 +1750,23 @@ export default function UTMLeads({
           ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Field
-              label="Destination URL"
-              required
-              value={generateForm.url}
-              onChange={(value) =>
-                updateGenerate("url", value)
-              }
-              placeholder="https://studentmentor.co.in/"
-            />
+            <div>
+              <Field
+                label="Destination URL"
+                required
+                value={generateForm.url}
+                onChange={(value) =>
+                  updateGenerate("url", value)
+                }
+                placeholder="https://studentmentor.co.in/"
+              />
+              {generateForm.url.trim() &&
+                !isValidHttpUrl(generateForm.url) && (
+                  <p className="mt-1 text-[12px] font-semibold text-rose-600">
+                    Enter a full URL starting with http:// or https://
+                  </p>
+                )}
+            </div>
 
             <Field
               label="Campaign"
@@ -1732,15 +1799,22 @@ export default function UTMLeads({
               placeholder="social"
             />
 
-            <Field
-              label="Campaign Cost"
-              type="number"
-              value={generateForm.cost}
-              onChange={(value) =>
-                updateGenerate("cost", value)
-              }
-              placeholder="0"
-            />
+            <div>
+              <Field
+                label="Campaign Cost"
+                type="number"
+                value={generateForm.cost}
+                onChange={(value) =>
+                  updateGenerate("cost", value)
+                }
+                placeholder="0"
+              />
+              {Number(generateForm.cost) < 0 && (
+                <p className="mt-1 text-[12px] font-semibold text-rose-600">
+                  Cost can't be negative.
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
@@ -1760,7 +1834,8 @@ export default function UTMLeads({
               onClick={saveGenerate}
               disabled={
                 generateSaving ||
-                !generatedUrl
+                !generatedUrl ||
+                Number(generateForm.cost) < 0
               }
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
             >
@@ -1816,15 +1891,23 @@ export default function UTMLeads({
           ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Field
-              label="UTM URL"
-              required
-              value={manualForm.url}
-              onChange={(value) =>
-                updateManual("url", value)
-              }
-              placeholder="https://example.com/?utm_source=..."
-            />
+            <div>
+              <Field
+                label="UTM URL"
+                required
+                value={manualForm.url}
+                onChange={(value) =>
+                  updateManual("url", value)
+                }
+                placeholder="https://example.com/?utm_source=..."
+              />
+              {manualForm.url.trim() &&
+                !isValidHttpUrl(manualForm.url) && (
+                  <p className="mt-1 text-[12px] font-semibold text-rose-600">
+                    Enter a full URL starting with http:// or https://
+                  </p>
+                )}
+            </div>
 
             <Field
               label="Campaign"
@@ -1871,7 +1954,14 @@ export default function UTMLeads({
           <button
             type="button"
             onClick={saveManual}
-            disabled={manualSaving}
+            disabled={
+              manualSaving ||
+              !isValidHttpUrl(manualForm.url) ||
+              !manualForm.source.trim() ||
+              !manualForm.medium.trim() ||
+              !manualForm.campaign.trim() ||
+              Number(manualForm.cost) < 0
+            }
             className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
           >
             {manualSaving ? (
@@ -2065,7 +2155,9 @@ export default function UTMLeads({
                 </td>
 
                 <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
-                  ₹{Number(link.costPerLead || 0).toLocaleString("en-IN")}
+                  {link.leads
+                    ? `₹${Number(link.costPerLead || 0).toLocaleString("en-IN")}`
+                    : "—"}
                 </td>
 
                 <td className="px-4 py-3">

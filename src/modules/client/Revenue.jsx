@@ -131,6 +131,8 @@ function Field({
   required,
   type = "text",
   placeholder,
+  min,
+  max,
 }) {
   return (
     <div>
@@ -148,6 +150,8 @@ function Field({
         required={required}
         value={value}
         placeholder={placeholder}
+        min={min}
+        max={max}
         onChange={(event) =>
           onChange(
             event.target.value
@@ -415,6 +419,10 @@ function ExpenseModal({
                   label="Expense Date"
                   required
                   type="date"
+                  min="2000-01-01"
+                  max={new Date()
+                    .toISOString()
+                    .slice(0, 10)}
                   value={
                     form.expenseDate
                   }
@@ -829,6 +837,26 @@ function IncentiveModal({
           .slice(0, 10),
     });
 
+  // CA-028: incentives should be tied to real company staff, so offer a
+  // dropdown of users instead of a free-text field.
+  const [users, setUsers] =
+    useState([]);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest("/api/client/chat/users")
+      .then((data) => {
+        if (active)
+          setUsers(data.users || []);
+      })
+      .catch(() => {
+        if (active) setUsers([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   function update(
     field,
     value
@@ -902,20 +930,54 @@ function IncentiveModal({
               </div>
             )}
 
-            <Field
-              label="Employee / Counsellor"
-              required
-              value={
-                form.employeeName
-              }
-              onChange={(value) =>
-                update(
-                  "employeeName",
-                  value
-                )
-              }
-              placeholder="ABC Counsellor"
-            />
+            {users.length > 0 ? (
+              <div>
+                <label className="block text-[13px] font-medium text-slate-600 mb-1">
+                  Employee / Counsellor
+                  <span className="text-rose-500 ml-0.5">
+                    *
+                  </span>
+                </label>
+                <select
+                  required
+                  value={form.employeeName}
+                  onChange={(event) =>
+                    update(
+                      "employeeName",
+                      event.target.value
+                    )
+                  }
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+                >
+                  <option value="">
+                    Select an employee…
+                  </option>
+                  {users.map((u) => (
+                    <option
+                      key={u.id}
+                      value={u.name}
+                    >
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <Field
+                label="Employee / Counsellor"
+                required
+                value={
+                  form.employeeName
+                }
+                onChange={(value) =>
+                  update(
+                    "employeeName",
+                    value
+                  )
+                }
+                placeholder="ABC Counsellor"
+              />
+            )}
 
             <Field
               label="Title"
@@ -947,6 +1009,10 @@ function IncentiveModal({
               label="Incentive Date"
               required
               type="date"
+              min="2000-01-01"
+              max={new Date()
+                .toISOString()
+                .slice(0, 10)}
               value={
                 form.incentiveDate
               }
@@ -1189,21 +1255,26 @@ export default function Revenue({ selectedYear = "all" }) {
   const expenses =
     data.expenses || [];
 
+  // CA-029: merge categories that differ only by case (Marketing == marketing),
+  // keeping the first-seen spelling so the filter doesn't split one category.
   const expenseCategories =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            expenses
-              .map(
-                (expense) =>
-                  expense.category
-              )
-              .filter(Boolean)
-          )
-        ).sort(),
-      [expenses]
-    );
+    useMemo(() => {
+      const seen = new Map();
+      expenses.forEach((expense) => {
+        const raw = String(
+          expense.category || ""
+        ).trim();
+        if (!raw) return;
+        const key = raw.toLowerCase();
+        if (!seen.has(key)) seen.set(key, raw);
+      });
+      return Array.from(seen.values()).sort(
+        (a, b) =>
+          a.localeCompare(b, undefined, {
+            sensitivity: "base",
+          })
+      );
+    }, [expenses]);
 
   const filteredExpenses =
     useMemo(() => {
@@ -1226,8 +1297,12 @@ export default function Revenue({ selectedYear = "all" }) {
           if (
             expenseCategoryFilter !==
               "ALL" &&
-            expense.category !==
-              expenseCategoryFilter
+            String(expense.category || "")
+              .trim()
+              .toLowerCase() !==
+              String(expenseCategoryFilter || "")
+                .trim()
+                .toLowerCase()
           ) {
             return false;
           }

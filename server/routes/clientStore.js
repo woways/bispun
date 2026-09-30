@@ -103,14 +103,14 @@ const OCCASIONS = [
   {
     id: "independence-day",
     label: "Independence Day",
-    emoji: "🇮🇳",
+    emoji: "🏵️",
     date: "08-15",
     promo:
       "🇮🇳 Freedom to Learn! Celebrate Independence Day with {Company} — special scholarships and offers on all courses this week.",
     message:
       "🇮🇳 Happy Independence Day! {Company} salutes the spirit of freedom. Let's build a brighter, educated tomorrow together.",
     designs: [
-      { emoji: "🇮🇳", title: "Happy\nIndependence Day", gradient: "from-orange-400 to-green-600" },
+      { emoji: "🏵️", title: "Happy\nIndependence Day", gradient: "from-orange-400 to-green-600" },
       { emoji: "🕊️", title: "Freedom", gradient: "from-sky-400 to-indigo-600" },
       { emoji: "🎖️", title: "Proud\nNation", gradient: "from-amber-400 to-orange-600" },
       { emoji: "🌏", title: "Unity", gradient: "from-emerald-400 to-teal-600" },
@@ -177,7 +177,10 @@ async function companyName(companyId) {
     where: { id: companyId },
     select: { brandName: true, name: true },
   });
-  return company?.brandName || company?.name || "our team";
+  // CA-030: greetings sent to students should read the plain company name,
+  // not the internal "… CRM" brand label. Prefer name, and strip a trailing "CRM".
+  const raw = company?.name || company?.brandName || "our team";
+  return String(raw).replace(/\s*CRM$/i, "").trim() || "our team";
 }
 
 // GET /api/client/store/occasions  → list + today's spotlight

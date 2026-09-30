@@ -3841,7 +3841,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Admissions</div>
           <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">Overall Admissions</h1>
-          <p className="mt-1 text-[15px] text-slate-500">View all completed admissions across Domestic and International.</p>
+          <p className="mt-1 text-[15px] text-slate-500">View all admissions across Domestic and International.</p>
         </div>
         <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {[['ALL','All'],['DOMESTIC','Domestic'],['INTERNATIONAL','International']].map(([value,label]) => (
@@ -3860,12 +3860,12 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           {
             label: "Domestic Admissions",
             value: data.domestic.length,
-            detail: "Completed Domestic admissions",
+            detail: "All Domestic admissions",
           },
           {
             label: "International Admissions",
             value: data.international.length,
-            detail: "Completed International admissions",
+            detail: "All International admissions",
           },
         ].map((item) => (
           <div
@@ -3918,11 +3918,11 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             />
           </label>
           <label className="min-w-0">
-            <input type="date" aria-label="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} max={endDate || undefined} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+            <input type="date" aria-label="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} min="2000-01-01" max={endDate || new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">From date</span>
           </label>
           <label className="min-w-0">
-            <input type="date" aria-label="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || undefined} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+            <input type="date" aria-label="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || "2000-01-01"} max={new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">To date</span>
           </label>
           <label>

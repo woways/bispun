@@ -160,12 +160,71 @@ async function ensureBillingRenewalReminder(
         7 * 24 * 60 * 60 * 1000
     );
 
+  // Renewal too far in the future: nothing to show yet.
   if (
-    subscription.renewalDate <
-      now ||
     subscription.renewalDate >
-      sevenDays
+    sevenDays
   ) {
+    return;
+  }
+
+  const subMarker = `BILLING_RENEWAL:${subscription.id}:`;
+
+  // Renewal date has passed: the "approaching" reminder is now misleading.
+  // Remove any stale "approaching" notifications and raise an "overdue" one.
+  if (
+    subscription.renewalDate < now
+  ) {
+    await prisma.notification.deleteMany({
+      where: {
+        companyId,
+        userId,
+        title:
+          "Subscription renewal approaching",
+        message: {
+          contains: subMarker,
+        },
+      },
+    });
+
+    const overdueMarker = `BILLING_OVERDUE:${subscription.id}:${subscription.renewalDate
+      .toISOString()
+      .slice(0, 10)}`;
+
+    const overdueExists =
+      await prisma.notification.findFirst({
+        where: {
+          companyId,
+          userId,
+          message: {
+            contains: overdueMarker,
+          },
+        },
+        select: { id: true },
+      });
+
+    if (!overdueExists) {
+      await prisma.notification.create({
+        data: {
+          companyId,
+          userId,
+          title:
+            "Subscription renewal overdue",
+          message: `${subscription.plan.name} renewal was due on ${subscription.renewalDate.toLocaleDateString(
+            "en-IN",
+            {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            }
+          )}. Please renew to avoid interruption. ${overdueMarker}`,
+          type: "BILLING",
+          actionModule: "settings",
+          actionLabel: "Renew now",
+        },
+      });
+    }
+
     return;
   }
 
@@ -409,6 +468,16 @@ router.patch(
   }
 );
 
+// Remove internal dedup markers (e.g. "CALENDAR_REMINDER:abc",
+// "BILLING_RENEWAL:abc:2026-09-17") from user-facing notification text.
+function stripMarkers(text) {
+  if (!text) return text;
+  return String(text)
+    .replace(/\s*[A-Z][A-Z_]{2,}:[A-Za-z0-9:_-]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 router.get("/", async (req, res) => {
   try {
     await ensureDynamicNotifications(req);
@@ -444,7 +513,12 @@ router.get("/", async (req, res) => {
 
     return res.json({
       success: true,
-      notifications,
+      notifications: notifications.map(
+        (n) => ({
+          ...n,
+          message: stripMarkers(n.message),
+        })
+      ),
       unreadCount,
     });
   } catch (error) {

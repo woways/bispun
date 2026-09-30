@@ -2722,8 +2722,8 @@ export default function LeadStore({ selectedYear = "all" }) {
 
       <div className="space-y-3">
         <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex flex-col gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] xl:flex-row xl:items-center">
-          <div className="min-w-0 flex-1 overflow-x-auto">
-            <div className="flex min-w-max gap-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap gap-1">
               <button
                 type="button"
                 onClick={() =>
@@ -3083,6 +3083,10 @@ export default function LeadStore({ selectedYear = "all" }) {
                   value={
                     filters.dateFrom
                   }
+                  min="2000-01-01"
+                  max={new Date()
+                    .toISOString()
+                    .slice(0, 10)}
                   onChange={(
                     event
                   ) =>
@@ -3114,8 +3118,11 @@ export default function LeadStore({ selectedYear = "all" }) {
                   }
                   min={
                     filters.dateFrom ||
-                    undefined
+                    "2000-01-01"
                   }
+                  max={new Date()
+                    .toISOString()
+                    .slice(0, 10)}
                   onChange={(
                     event
                   ) =>

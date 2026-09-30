@@ -43,6 +43,19 @@ const QUARTER_TABS = [
   ["q4", "Q4 · Oct–Dec"],
 ];
 
+// CA-021: a week's "achieved" can only be entered once that week has started.
+function isFutureWeekCell(year, month, wnum) {
+  const now = new Date();
+  const cy = now.getFullYear();
+  if (year > cy) return true;
+  if (year < cy) return false;
+  const cm = now.getMonth() + 1;
+  if (month > cm) return true;
+  if (month < cm) return false;
+  // Current month: the week is in the future if its first day is after today.
+  return (wnum - 1) * 7 + 1 > now.getDate();
+}
+
 function initialsOf(name) {
   return String(name || "?").split(" ").filter(Boolean).slice(0, 2)
     .map((p) => p[0]).join("").toUpperCase();
@@ -132,6 +145,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
 
   /* ---- Actions --------------------------------------------------- */
   async function setAchieved(month, week, value) {
+    if (isFutureWeekCell(year, month, week)) return;
     const v = Math.max(0, value);
     try {
       const data = await apiRequest("/api/client/targets/me/achieved", {
@@ -596,6 +610,12 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                               type="text"
                               inputMode="numeric"
                               defaultValue={w.achieved}
+                              disabled={isFutureWeekCell(year, m.month, wnum)}
+                              title={
+                                isFutureWeekCell(year, m.month, wnum)
+                                  ? "This week hasn't started yet."
+                                  : undefined
+                              }
                               onInput={(e) => {
                                 e.target.value = e.target.value.replace(/[^0-9]/g, "");
                               }}
@@ -610,14 +630,22 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                                   e.target.value = String(w.achieved);
                                 }
                               }}
-                              className="w-10 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-center text-[12px] font-bold text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                              className="w-10 rounded-md border border-slate-200 bg-white px-1 py-0.5 text-center text-[12px] font-bold text-slate-900 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                             />
                           ) : (
                             <span className="text-[12px] font-bold text-slate-900">{w.achieved}</span>
                           )}
                         </td>
                         {/* Conv% */}
-                        <td className="px-1 py-2.5">{pctPill(w.percent)}</td>
+                        <td className="px-1 py-2.5">
+                          {w.target > 0 ? (
+                            pctPill(w.percent)
+                          ) : (
+                            <span className="text-[11px] font-bold text-slate-400">
+                              —
+                            </span>
+                          )}
+                        </td>
                       </Fragment>
                     );
                   })}
@@ -629,7 +657,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                         m.overallPercent >= 100 ? "text-brand-700" : "text-brand-700"
                       }`}
                     >
-                      {m.overallPercent}%
+                      {m.monthlyTarget > 0 ? `${m.overallPercent}%` : "—"}
                     </span>
                   </td>
                 </tr>
@@ -642,7 +670,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 return (
                   <tr className="border-t-2 border-slate-200 bg-slate-50/70">
                     <td className="px-2 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-700">
-                      Total year
+                      {quarter === "all"
+                        ? "Total year"
+                        : `Total ${quarter.toUpperCase()}`}
                     </td>
                     <td className="px-1.5 py-2.5 text-[13px] font-bold text-slate-900">{totalMonthly}</td>
                     {weekIdx.map((w) => (
@@ -654,7 +684,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                     ))}
                     <td className="border-l border-slate-100 bg-brand-100/50 px-1.5 py-2.5">
                       <span className={`text-[13px] font-bold ${totalPct >= 100 ? "text-brand-700" : "text-brand-700"}`}>
-                        {totalPct}%
+                        {totalMonthly > 0 ? `${totalPct}%` : "—"}
                       </span>
                     </td>
                   </tr>

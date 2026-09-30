@@ -725,6 +725,54 @@ router.post(
           },
         });
 
+      // CA-010: concurrent sessions are allowed, but alert the account when a
+      // new sign-in happens while another session is still active, so the user
+      // sees that a different tab/browser/device logged in with their account.
+      try {
+        const otherActiveSessions =
+          await prisma.clientSession.count({
+            where: {
+              userId: user.id,
+              revokedAt: null,
+              expiresAt: {
+                gt: new Date(),
+              },
+              id: {
+                not: clientSession.id,
+              },
+            },
+          });
+
+        if (otherActiveSessions > 0) {
+          const place = location?.city
+            ? ` from ${location.city}${
+                location.country
+                  ? ", " + location.country
+                  : ""
+              }`
+            : "";
+
+          await prisma.notification.create({
+            data: {
+              companyId: user.companyId,
+              userId: user.id,
+              title:
+                "New sign-in to your account",
+              message: `Your account was just signed in on ${device.deviceName}${place}. If this wasn't you, change your password and review your active sessions.`,
+              type: "USER",
+              actionModule: "settings",
+              actionLabel:
+                "Review sessions",
+            },
+          });
+        }
+      } catch (notifyError) {
+        console.error(
+          "Login notification failed:",
+          notifyError
+        );
+      }
+
       const token =
         jwt.sign(
           {
