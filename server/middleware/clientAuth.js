@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
+import {
+  normalizePageAccess,
+  fullPageAccess,
+} from "../lib/pageAccess.js";
 
 const COOKIE_NAME =
   "cb_client_token";
@@ -101,6 +105,9 @@ export async function requireClientUser(
             canManageRevenue: true,
             canManageLeads: true,
             canManageSupport: true,
+            canViewTeamTargets: true,
+            managerId: true,
+            pageAccess: true,
           },
         }),
 
@@ -196,8 +203,17 @@ export async function requireClientUser(
         user.companyId,
       role:
         user.role,
+      managerId:
+        user.managerId ?? null,
       sessionId:
         clientSession.id,
+
+      // Granular in-page scope. Admins get full access; everyone else uses their
+      // stored spec (null => empty scope beyond the page-level boolean flags).
+      pageAccess:
+        user.role === "CLIENT_ADMIN"
+          ? fullPageAccess()
+          : normalizePageAccess(user.pageAccess),
 
       permissions: {
         canManageUsers:

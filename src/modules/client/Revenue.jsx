@@ -1193,6 +1193,18 @@ export default function Revenue({ selectedYear = "all" }) {
   const [error, setError] =
     useState("");
 
+  // If access to the current section was removed, fall back to the first
+  // section the viewer is still allowed to open.
+  useEffect(() => {
+    const allowed = data.allowedSections;
+    if (allowed && !allowed[tab]) {
+      const first = ["overview", "expenses", "incentives"].find(
+        (s) => allowed[s]
+      );
+      if (first) setTab(first);
+    }
+  }, [data.allowedSections, tab]);
+
   const [
     showExpense,
     setShowExpense,
@@ -1739,7 +1751,13 @@ export default function Revenue({ selectedYear = "all" }) {
               ["overview", "Overview"],
               ["expenses", "Expenses"],
               ["incentives", "Incentives"],
-            ].map(([item, label]) => (
+            ]
+              .filter(
+                ([item]) =>
+                  !data.allowedSections ||
+                  data.allowedSections[item]
+              )
+              .map(([item, label]) => (
               <button
                 key={item}
                 type="button"

@@ -37,6 +37,10 @@ import {
 } from "../../lib/api";
 
 import { applyBrandTheme, BRAND_COLORS, BRAND_PALETTE, brandHex } from "../../lib/brandTheme";
+import PermissionTree, {
+  emptyPageAccess,
+  normalizeClientPageAccess,
+} from "../../components/client/PermissionTree";
 
 const QUICK_BRAND_COLOR_KEYS = [
   "indigo",
@@ -572,6 +576,7 @@ export default function SettingsView({
       canManageSupport: true,
       canViewTeamTargets: false,
     },
+    pageAccess: emptyPageAccess(),
   };
 
   const [
@@ -580,6 +585,10 @@ export default function SettingsView({
   ] = useState(
     emptyUserForm
   );
+
+  const [permissionTree, setPermissionTree] = useState(null);
+  const [actorPageAccess, setActorPageAccess] = useState(null);
+  const [permissionTreeLoading, setPermissionTreeLoading] = useState(false);
 
   const [
     leadSources,
@@ -1147,6 +1156,21 @@ export default function SettingsView({
     setUsersError("");
   }
 
+  async function loadPermissionTree() {
+    setPermissionTreeLoading(true);
+    try {
+      const data = await apiRequest("/api/client/users/permission-tree");
+      if (data?.success) {
+        setPermissionTree(data.tree);
+        setActorPageAccess(data.actorPageAccess || null);
+      }
+    } catch {
+      // Non-fatal: the tree just shows a loading/empty state.
+    } finally {
+      setPermissionTreeLoading(false);
+    }
+  }
+
   function openCreateUser() {
     setEditingUser(null);
     setUserForm(
@@ -1156,6 +1180,7 @@ export default function SettingsView({
     setUserModalError("");
     setUserFormErrors({});
     setUserModalOpen(true);
+    loadPermissionTree();
   }
 
   function openEditUser(user) {
@@ -1178,12 +1203,14 @@ export default function SettingsView({
         ...emptyUserForm.permissions,
         ...(user.permissions || {}),
       },
+      pageAccess: normalizeClientPageAccess(user.pageAccess),
     });
 
     setUsersError("");
     setUserModalError("");
     setUserFormErrors({});
     setUserModalOpen(true);
+    loadPermissionTree();
   }
 
   function setRole(selection) {
@@ -1285,6 +1312,8 @@ export default function SettingsView({
         active: userForm.active,
         permissions:
           userForm.permissions,
+        pageAccess:
+          userForm.pageAccess,
       };
 
       if (!editingUser) {
@@ -4400,9 +4429,6 @@ export default function SettingsView({
                     ["canManageUsers", "Manage Users"],
                     ["canManageSettings", "Manage Settings"],
                     ["canManageBilling", "Manage Billing"],
-                    ["canViewAnalytics", "View Analytics"],
-                    ["canManageAdmissions", "Manage Admissions"],
-                    ["canManageRevenue", "Manage Revenue"],
                     ["canManageLeads", "Manage Leads"],
                     ["canManageSupport", "Manage Support"],
                     ["canViewTeamTargets", "View Team Targets"],
@@ -4451,6 +4477,34 @@ export default function SettingsView({
                       </label>
                     )
                   )}
+                </div>
+
+                <div className="mt-4">
+                  <div className="text-[13px] font-semibold text-slate-700">
+                    Page access (Admissions, Finance, Insights)
+                  </div>
+                  <p className="mt-1 mb-2 text-[12px] leading-5 text-slate-500">
+                    Turn a page on, then expand it to grant access to specific
+                    streams, colleges, branches or sections. New colleges appear
+                    here automatically.
+                  </p>
+                  <PermissionTree
+                    pageAccess={userForm.pageAccess}
+                    onPageAccess={(next) =>
+                      setUserForm((current) => ({ ...current, pageAccess: next }))
+                    }
+                    permissions={userForm.permissions}
+                    onPermissions={(key, value) =>
+                      setUserForm((current) => ({
+                        ...current,
+                        permissions: { ...current.permissions, [key]: value },
+                      }))
+                    }
+                    tree={permissionTree}
+                    actorPageAccess={actorPageAccess}
+                    isAdminTarget={userForm.role === "CLIENT_ADMIN"}
+                    loading={permissionTreeLoading}
+                  />
                 </div>
               </div>
 

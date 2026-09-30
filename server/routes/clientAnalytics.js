@@ -5,6 +5,7 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import { insightsSectionAllowed } from "../lib/pageAccess.js";
 
 const router = Router();
 
@@ -1092,6 +1093,17 @@ router.get(
         })
       );
 
+      const canComparison = insightsSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "comparison"
+      );
+      const canOverview = insightsSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "overview"
+      );
+
       return res.json({
         success: true,
         selectedYear: requestedYear || "all",
@@ -1103,12 +1115,19 @@ router.get(
         monthlyActivity: primary.monthlyActivity,
         employeePerformance: primary.employeePerformance,
         topCampaigns: primary.topCampaigns,
-        comparison: {
-          primaryYear,
-          compareYear,
-          primary: primary.summary,
-          compare: comparison.summary,
-          monthly: monthlyComparison,
+        // Withhold the Comparison payload unless that section is granted.
+        comparison: canComparison
+          ? {
+              primaryYear,
+              compareYear,
+              primary: primary.summary,
+              compare: comparison.summary,
+              monthly: monthlyComparison,
+            }
+          : null,
+        allowedSections: {
+          overview: canOverview,
+          comparison: canComparison,
         },
       });
     } catch (error) {

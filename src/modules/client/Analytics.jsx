@@ -176,6 +176,15 @@ export default function Analytics({ selectedYear = "all" }) {
 
   const [analyticsTab, setAnalyticsTab] = useState("overview");
 
+  // Redirect off a section the viewer is no longer permitted to open.
+  useEffect(() => {
+    const allowed = data.allowedSections;
+    if (allowed && !allowed[analyticsTab]) {
+      const first = ["overview", "comparison"].find((s) => allowed[s]);
+      if (first) setAnalyticsTab(first);
+    }
+  }, [data.allowedSections, analyticsTab]);
+
   async function loadAnalytics() {
     setLoading(
       true
@@ -360,29 +369,33 @@ export default function Analytics({ selectedYear = "all" }) {
 
 
       <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        <button
-          type="button"
-          onClick={() => setAnalyticsTab("overview")}
-          className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
-            analyticsTab === "overview"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
-          }`}
-        >
-          Overview
-        </button>
+        {(!data.allowedSections || data.allowedSections.overview) && (
+          <button
+            type="button"
+            onClick={() => setAnalyticsTab("overview")}
+            className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
+              analyticsTab === "overview"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+            }`}
+          >
+            Overview
+          </button>
+        )}
 
-        <button
-          type="button"
-          onClick={() => setAnalyticsTab("comparison")}
-          className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
-            analyticsTab === "comparison"
-              ? "bg-indigo-600 text-white shadow-sm"
-              : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
-          }`}
-        >
-          Year Comparison
-        </button>
+        {(!data.allowedSections || data.allowedSections.comparison) && (
+          <button
+            type="button"
+            onClick={() => setAnalyticsTab("comparison")}
+            className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
+              analyticsTab === "comparison"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+            }`}
+          >
+            Year Comparison
+          </button>
+        )}
       </div>
 
       {loading ? (

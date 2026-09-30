@@ -260,6 +260,11 @@ model User {
   canManageSupport    Boolean @default(false)
   canViewTeamTargets  Boolean @default(false)
 
+  // Granular in-page access (admissions stream/college/branch scoping, finance
+  // & insights section toggles). Null / absent => governed purely by the legacy
+  // boolean flags above with full in-page access. See server/lib/pageAccess.js.
+  pageAccess Json?
+
   companyId String?
   company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

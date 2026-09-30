@@ -4,10 +4,56 @@ import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
 import { writeAuditLog } from "../lib/auditLog.js";
+import {
+  normalizePageAccess,
+  fullPageAccess,
+  clampPageAccessToActor,
+} from "../lib/pageAccess.js";
 
 const router = Router();
 
 router.use(requireClientUser);
+
+/* ------------------------------------------------------------------ *
+ * Manager reporting-hierarchy scoping.
+ * Admin manages everyone; a manager manages only the EMPLOYEEs beneath them
+ * in the managerId chain. Only an admin can edit another manager.
+ * ------------------------------------------------------------------ */
+async function reportsSubtreeIds(companyId, rootId) {
+  const rows = await prisma.user.findMany({
+    where: { companyId },
+    select: { id: true, managerId: true },
+  });
+  const childrenByManager = new Map();
+  for (const row of rows) {
+    if (!row.managerId) continue;
+    if (!childrenByManager.has(row.managerId)) childrenByManager.set(row.managerId, []);
+    childrenByManager.get(row.managerId).push(row.id);
+  }
+  const out = new Set();
+  const queue = [...(childrenByManager.get(rootId) || [])];
+  while (queue.length) {
+    const id = queue.shift();
+    if (out.has(id)) continue;
+    out.add(id);
+    for (const child of childrenByManager.get(id) || []) queue.push(child);
+  }
+  return out;
+}
+
+function actorAccessSpec(actor) {
+  return actor.role === "CLIENT_ADMIN"
+    ? fullPageAccess()
+    : normalizePageAccess(actor.pageAccess);
+}
+
+/** Can `actor` view/manage `target`? (target already guaranteed non-super.) */
+function canManageTarget(actor, target, subtreeIds) {
+  if (actor.id === target.id) return actor.role === "CLIENT_ADMIN";
+  if (actor.role === "CLIENT_ADMIN") return true;
+  // Managers: only EMPLOYEEs within their own reporting subtree.
+  return target.role === "EMPLOYEE" && subtreeIds.has(target.id);
+}
 
 const ALLOWED_ROLES = [
   "CLIENT_ADMIN",
@@ -250,6 +296,10 @@ function formatUser(user) {
         user.role === "CLIENT_ADMIN" ||
         user.canViewTeamTargets,
     },
+    pageAccess:
+      user.role === "CLIENT_ADMIN"
+        ? fullPageAccess()
+        : normalizePageAccess(user.pageAccess),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -326,6 +376,71 @@ router.get("/organization", async (req, res) => {
   } catch (error) {
     console.error("Load organization config failed:", error);
     return res.status(500).json({ success: false, message: "Unable to load departments and roles" });
+  }
+});
+
+/**
+ * Live permission tree for the Users & Roles editor:
+ *   Market -> Stream -> College(Partner) -> Branch, plus finance/insights sections.
+ * Colleges/branches are read live, so newly-added ones appear automatically.
+ * Returns the actor's own pageAccess so the UI can prevent a manager granting
+ * beyond their own scope (also clamped server-side on save).
+ */
+router.get("/permission-tree", async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+
+    const companyId = req.clientUser.companyId;
+
+    const streams = await prisma.admissionStream.findMany({
+      where: { companyId, active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: {
+        partners: {
+          where: { active: true },
+          orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+          include: {
+            branches: {
+              where: { active: true },
+              orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    const MARKET_LABELS = { DOMESTIC: "Domestic", INTERNATIONAL: "International" };
+    const markets = ["DOMESTIC", "INTERNATIONAL"].map((key) => ({
+      key,
+      label: MARKET_LABELS[key],
+      streams: streams
+        .filter((s) => s.market === key)
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          colleges: s.partners.map((p) => ({
+            id: p.id,
+            name: p.name,
+            branches: p.branches.map((b) => ({ id: b.id, name: b.name })),
+          })),
+        })),
+    }));
+
+    return res.json({
+      success: true,
+      tree: {
+        markets,
+        finance: { sections: ["overview", "expenses", "incentives"] },
+        insights: { sections: ["overview", "comparison"] },
+      },
+      actorPageAccess: actorAccessSpec(actor),
+      actorRole: actor.role,
+    });
+  } catch (error) {
+    console.error("Load permission tree failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to load permission tree" });
   }
 });
 
@@ -430,6 +545,16 @@ router.get("/", async (req, res) => {
       req.clientUser.companyId
     );
 
+    // Admin sees the whole company; a manager sees only their reporting subtree.
+    let idScope = null;
+    if (actor.role !== "CLIENT_ADMIN") {
+      const subtree = await reportsSubtreeIds(
+        req.clientUser.companyId,
+        actor.id
+      );
+      idScope = [...subtree];
+    }
+
     const users =
       await prisma.user.findMany({
         where: {
@@ -438,6 +563,7 @@ router.get("/", async (req, res) => {
           role: {
             not: "SUPER_ADMIN",
           },
+          ...(idScope ? { id: { in: idScope } } : {}),
         },
         include: {
           manager: { select: { name: true } },
@@ -533,10 +659,21 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Department is required and must be selected from the configured departments" });
     }
 
+    // A non-admin (manager) may only create EMPLOYEEs inside their own team.
+    if (actor.role !== "CLIENT_ADMIN" && role !== "EMPLOYEE") {
+      return res.status(403).json({
+        success: false,
+        message: "Only Client Admin can create managers or admins",
+      });
+    }
+
     // Employees report to a manager. Validate the assignment against the
     // company's active managers. (Managers/admins are not assigned upward.)
     let managerId = null;
-    if (role === "EMPLOYEE") {
+    if (actor.role !== "CLIENT_ADMIN") {
+      // Manager-created employees always report to that manager.
+      managerId = actor.id;
+    } else if (role === "EMPLOYEE") {
       const requestedManagerId = String(req.body?.managerId || "").trim();
       if (requestedManagerId) {
         const manager = await prisma.user.findFirst({
@@ -605,6 +742,23 @@ router.post("/", async (req, res) => {
           ])
         );
 
+    // A non-admin granter can never hand out a page they do not themselves hold.
+    if (actor.role !== "CLIENT_ADMIN") {
+      for (const key of PERMISSION_KEYS) {
+        if (permissions[key] && actor[key] !== true) permissions[key] = false;
+      }
+    }
+
+    // Granular in-page scope, clamped to the granter's own access.
+    const pageAccess =
+      role === "CLIENT_ADMIN"
+        ? fullPageAccess()
+        : clampPageAccessToActor(
+            req.body?.pageAccess,
+            actorAccessSpec(actor),
+            actor.role
+          );
+
     const roleCode = customRole?.code || ({ CLIENT_ADMIN: "ADM", MANAGER: "MGR", EMPLOYEE: "EMP" }[role] || "EMP");
     const employeeId = await generateEmployeeId(
       req.clientUser.companyId,
@@ -635,6 +789,7 @@ router.post("/", async (req, res) => {
           customRoleId: customRole?.id || null,
           customRoleName: customRole?.name || null,
           managerId,
+          pageAccess,
           ...permissions,
         },
       });
@@ -730,6 +885,28 @@ router.patch("/:id", async (req, res) => {
         message:
           "User not found",
       });
+    }
+
+    // Manager scoping: a non-admin may only edit EMPLOYEEs in their own subtree.
+    if (actor.role !== "CLIENT_ADMIN") {
+      const subtree = await reportsSubtreeIds(
+        req.clientUser.companyId,
+        actor.id
+      );
+      if (!canManageTarget(actor, target, subtree)) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "You can only manage employees in your own team. Ask a Client Admin to change access for managers.",
+        });
+      }
+      // Managers cannot change a user's role (promote/demote) or reassign them.
+      if (req.body.role !== undefined && String(req.body.role).toUpperCase() !== target.role) {
+        return res.status(403).json({
+          success: false,
+          message: "Only Client Admin can change a user's role",
+        });
+      }
     }
 
     const data = {};
@@ -887,8 +1064,7 @@ router.patch("/:id", async (req, res) => {
       req.body.role !== undefined ||
       req.body.customRoleId !== undefined
     ) {
-      Object.assign(
-        data,
+      const nextPerms =
         role === "CLIENT_ADMIN"
           ? defaultPermissions(role)
           : Object.fromEntries(
@@ -898,8 +1074,38 @@ router.patch("/:id", async (req, res) => {
                   ? req.body.permissions[key]
                   : customRole?.permissions?.[key] === true,
               ])
-            )
-      );
+            );
+
+      // A non-admin granter cannot exceed their own page-level access.
+      if (actor.role !== "CLIENT_ADMIN") {
+        for (const key of PERMISSION_KEYS) {
+          if (nextPerms[key] && actor[key] !== true) nextPerms[key] = false;
+        }
+      }
+
+      Object.assign(data, nextPerms);
+    }
+
+    // Granular in-page scope. Recompute when the client sends it, or when the
+    // role flips to/from admin (admin => full, non-admin => clamped spec).
+    if (
+      req.body.pageAccess !== undefined ||
+      req.body.role !== undefined ||
+      req.body.customRoleId !== undefined
+    ) {
+      if (role === "CLIENT_ADMIN") {
+        data.pageAccess = fullPageAccess();
+      } else {
+        const requested =
+          req.body.pageAccess !== undefined
+            ? req.body.pageAccess
+            : target.pageAccess;
+        data.pageAccess = clampPageAccessToActor(
+          requested,
+          actorAccessSpec(actor),
+          actor.role
+        );
+      }
     }
 
     const updated =
@@ -993,6 +1199,20 @@ router.patch(
           message:
             "User not found",
         });
+      }
+
+      if (actor.role !== "CLIENT_ADMIN") {
+        const subtree = await reportsSubtreeIds(
+          req.clientUser.companyId,
+          actor.id
+        );
+        if (!canManageTarget(actor, target, subtree)) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "You can only manage employees in your own team.",
+          });
+        }
       }
 
       const password = String(

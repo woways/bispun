@@ -6,6 +6,7 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import { financeSectionAllowed } from "../lib/pageAccess.js";
 
 const router = Router();
 
@@ -364,15 +365,42 @@ router.get("/", async (req, res) => {
 
       monthlyRevenue,
 
-      expenses:
-        expenses.map(
-          expenseResponse
-        ),
+      // Section-level access: withhold the Expenses / Incentives payloads when
+      // the viewer's finance access does not include those sections.
+      expenses: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "expenses"
+      )
+        ? expenses.map(expenseResponse)
+        : [],
 
-      incentives:
-        incentives.map(
-          incentiveResponse
+      incentives: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "incentives"
+      )
+        ? incentives.map(incentiveResponse)
+        : [],
+
+      // Advertise which sections the viewer may open (drives the UI tabs).
+      allowedSections: {
+        overview: financeSectionAllowed(
+          req.clientUser.pageAccess,
+          req.clientUser.role,
+          "overview"
         ),
+        expenses: financeSectionAllowed(
+          req.clientUser.pageAccess,
+          req.clientUser.role,
+          "expenses"
+        ),
+        incentives: financeSectionAllowed(
+          req.clientUser.pageAccess,
+          req.clientUser.role,
+          "incentives"
+        ),
+      },
     });
   } catch (error) {
     console.error(

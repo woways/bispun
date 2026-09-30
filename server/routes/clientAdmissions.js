@@ -7,8 +7,23 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import {
+  applyAdmissionScope,
+  resolveVisibleScope,
+  scopeAllowsStream,
+  scopeAllowsCollege,
+  scopeAllowsBranch,
+} from "../lib/pageAccess.js";
 
 const router = Router();
+
+/** Convenience: the current request's admissions scope inputs. */
+function reqScope(req) {
+  return {
+    pageAccess: req.clientUser?.pageAccess,
+    role: req.clientUser?.role,
+  };
+}
 
 function parseYear(value) {
   if (!value || value === "all") return null;
@@ -519,9 +534,29 @@ router.get("/streams", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
+    // Hide streams / colleges the viewer is not permitted to see.
+    const scope = await resolveVisibleScope(
+      prisma,
+      companyId,
+      req.clientUser.pageAccess,
+      req.clientUser.role
+    );
+    const visibleStreams = scope.all
+      ? streams
+      : streams
+          .map((s) => ({
+            ...s,
+            partners: (s.partners || []).filter((p) =>
+              scopeAllowsCollege(scope, p)
+            ),
+          }))
+          .filter(
+            (s) => scopeAllowsStream(scope, s) || (s.partners || []).length > 0
+          );
+
     return res.json({
       success: true,
-      streams: streams.map(streamMetrics),
+      streams: visibleStreams.map(streamMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission streams:", error);
@@ -793,9 +828,19 @@ router.get("/partners", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
+    const scope = await resolveVisibleScope(
+      prisma,
+      companyId,
+      req.clientUser.pageAccess,
+      req.clientUser.role
+    );
+    const visiblePartners = scope.all
+      ? partners
+      : partners.filter((p) => scopeAllowsCollege(scope, p));
+
     return res.json({
       success: true,
-      partners: partners.map(partnerMetrics),
+      partners: visiblePartners.map(partnerMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission partners:", error);
@@ -1180,10 +1225,23 @@ router.get(
           ],
         });
 
+      const scope =
+        await resolveVisibleScope(
+          prisma,
+          companyId,
+          req.clientUser.pageAccess,
+          req.clientUser.role
+        );
+      const visibleBranches = scope.all
+        ? branches
+        : branches.filter((b) =>
+            scopeAllowsBranch(scope, b, partner)
+          );
+
       return res.json({
         success: true,
         branches:
-          branches.map(
+          visibleBranches.map(
             branchMetrics
           ),
       });
@@ -2008,8 +2066,15 @@ router.get("/", async (req, res) => {
       };
     }
 
-    const admissions = await prisma.admission.findMany({
+    // Restrict to the viewer's granted markets/streams/colleges/branches.
+    const scopedWhere = applyAdmissionScope(
       where,
+      req.clientUser.pageAccess,
+      req.clientUser.role
+    );
+
+    const admissions = await prisma.admission.findMany({
+      where: scopedWhere,
       include: {
         partner: {
           select: {
