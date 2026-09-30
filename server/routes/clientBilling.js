@@ -15,6 +15,8 @@ import {
 
 const router = Router();
 
+const GST_RATE = 18;
+
 router.use(requireClientUser);
 
 function ensureClientAdmin(req, res) {
@@ -316,11 +318,21 @@ router.post(
           discountAmount * 100
         ) / 100;
 
-      // Final amount actually charged = list price - discount.
+      // GST is charged on the discounted subscription value.
+      const subtotal =
+        Math.round(
+          (listPrice - discountAmount) * 100
+        ) / 100;
+
+      const gstAmount =
+        Math.round(
+          subtotal * (GST_RATE / 100) * 100
+        ) / 100;
+
+      // Final amount actually charged = subtotal + 18% GST.
       const amount =
         Math.round(
-          (listPrice - discountAmount) *
-            100
+          (subtotal + gstAmount) * 100
         ) / 100;
 
       if (
@@ -609,6 +621,21 @@ router.post(
                   paidTransaction.status,
                 amount:
                   Number(paidTransaction.amount),
+                subtotal:
+                  Math.round(
+                    (Number(paidTransaction.listPrice || paidTransaction.amount) -
+                      Number(paidTransaction.discountAmount || 0)) * 100
+                  ) / 100,
+                gstRate: GST_RATE,
+                gstAmount:
+                  Math.max(
+                    0,
+                    Math.round(
+                      (Number(paidTransaction.amount) -
+                        (Number(paidTransaction.listPrice || paidTransaction.amount) -
+                          Number(paidTransaction.discountAmount || 0))) * 100
+                    ) / 100
+                  ),
                 currency:
                   paidTransaction.currency,
                 billingCycle:
@@ -740,6 +767,35 @@ router.get(
           discountAmount:
             Number(
               payment.discountAmount || 0
+            ),
+          subtotal:
+            Math.round(
+              (Number(
+                payment.listPrice ||
+                  payment.plan?.yearlyPrice ||
+                  payment.amount
+              ) - Number(payment.discountAmount || 0)) * 100
+            ) / 100,
+          gstRate:
+            Number(payment.amount) >
+            Number(
+              payment.listPrice ||
+                payment.plan?.yearlyPrice ||
+                payment.amount
+            ) - Number(payment.discountAmount || 0)
+              ? GST_RATE
+              : 0,
+          gstAmount:
+            Math.max(
+              0,
+              Math.round(
+                (Number(payment.amount) -
+                  (Number(
+                    payment.listPrice ||
+                      payment.plan?.yearlyPrice ||
+                      payment.amount
+                  ) - Number(payment.discountAmount || 0))) * 100
+              ) / 100
             ),
           finalAmount:
             Number(payment.amount),

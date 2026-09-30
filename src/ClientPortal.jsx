@@ -5043,9 +5043,23 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         </div>
 
                         <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Tax / GST</span>
-                          <span className="font-semibold text-slate-500">
-                            Not separately recorded
+                          <span className="text-slate-500">Subtotal</span>
+                          <span className="font-semibold text-slate-800">
+                            ₹{Number(
+                              receiptData.subtotal ??
+                                (Number(receiptData.listPrice ?? receiptData.amount ?? 0) -
+                                  Number(receiptData.discountAmount || 0))
+                            ).toLocaleString("en-IN")}
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center justify-between text-xs">
+                          <span className="text-slate-500">GST (18%)</span>
+                          <span className="font-semibold text-slate-800">
+                            ₹{Number(
+                              receiptData.gstAmount ??
+                                (Number(receiptData.subtotal ?? 0) * 0.18)
+                            ).toLocaleString("en-IN")}
                           </span>
                         </div>
 
@@ -5110,6 +5124,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         Bispun CRM
                         <br />
                         Subscription Receipt
+                        <br />
+                        <span className="font-semibold text-slate-600">WOWAYS PRIVATE LIMITED</span>
                       </div>
                     </div>
                   </div>
