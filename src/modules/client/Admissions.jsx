@@ -64,6 +64,28 @@ const STATUS_OPTIONS = [
   },
 ];
 
+const REVENUE_STATUS_OPTIONS = [
+  {
+    value: "BUFFER_ZONE",
+    label: "Buffer Zone",
+  },
+  {
+    value: "IN_BUCKET",
+    label: "In Bucket",
+  },
+];
+
+const AMOUNT_STATUS_OPTIONS = [
+  {
+    value: "PENDING",
+    label: "Pending",
+  },
+  {
+    value: "RECEIVED",
+    label: "Received",
+  },
+];
+
 const FAMILY = {
   blue: {
     strong:
@@ -213,6 +235,35 @@ function recommendedStreamColor(name) {
   ) return "purple";
 
   return "blue";
+}
+
+function recommendedBranchColor(name, index = 0) {
+  const value = String(name || "")
+    .trim()
+    .toLowerCase();
+
+  if (value.includes("mbbs") || value.includes("medical")) return "rose";
+  if (value.includes("bds") || value.includes("dental")) return "purple";
+  if (value.includes("pharma") || value.includes("pharmacy")) return "emerald";
+  if (value.includes("nursing") || value.includes("health")) return "cyan";
+  if (value.includes("cse") || value.includes("computer")) return "blue";
+  if (value.includes("ece") || value.includes("electronics")) return "indigo";
+  if (value.includes("mechanical")) return "orange";
+  if (value.includes("civil")) return "slate";
+  if (value.includes("mba") || value.includes("management")) return "amber";
+
+  const fallback = [
+    "blue",
+    "purple",
+    "emerald",
+    "amber",
+    "cyan",
+    "rose",
+    "indigo",
+    "slate",
+  ];
+
+  return fallback[index % fallback.length];
 }
 
 function streamIcon(name) {
@@ -1069,6 +1120,15 @@ function AdmissionModal({
     studentEmail:
       admission?.email ||
       "",
+    universityName:
+      admission?.universityName ||
+      "",
+    studentLocation:
+      admission?.studentLocation ||
+      "",
+    studentInterCollege:
+      admission?.studentInterCollege ||
+      "",
     counsellorName:
       admission
         ?.counsellorName ||
@@ -1083,7 +1143,14 @@ function AdmissionModal({
       admission?.total ??
       "",
     paidAmount:
+      admission?.receivedAmount ??
       admission?.paid ??
+      "",
+    revenueStatus:
+      admission?.revenueStatus ||
+      "BUFFER_ZONE",
+    amountStatus:
+      admission?.amountStatusKey ||
       "",
     status:
       admission?.statusKey ||
@@ -1398,6 +1465,67 @@ function AdmissionModal({
               />
             </Field>
 
+            <Field
+              label="University Name"
+              required
+            >
+              <input
+                required
+                value={
+                  form.universityName
+                }
+                onChange={(
+                  event
+                ) =>
+                  update(
+                    "universityName",
+                    event.target
+                      .value
+                  )
+                }
+                className="sm-input"
+                placeholder="Degree-granting university"
+              />
+            </Field>
+
+            <Field label="Student Location">
+              <input
+                value={
+                  form.studentLocation
+                }
+                onChange={(
+                  event
+                ) =>
+                  update(
+                    "studentLocation",
+                    event.target
+                      .value
+                  )
+                }
+                className="sm-input"
+                placeholder="City / District / State"
+              />
+            </Field>
+
+            <Field label="Student Inter College">
+              <input
+                value={
+                  form.studentInterCollege
+                }
+                onChange={(
+                  event
+                ) =>
+                  update(
+                    "studentInterCollege",
+                    event.target
+                      .value
+                  )
+                }
+                className="sm-input"
+                placeholder="Intermediate / previous college"
+              />
+            </Field>
+
             <Field label="Counsellor">
               <input
                 value={
@@ -1475,7 +1603,7 @@ function AdmissionModal({
             </Field>
 
             <Field
-              label="Total Fee"
+              label="Incentive Amount"
               required
             >
               <input
@@ -1499,7 +1627,7 @@ function AdmissionModal({
             </Field>
 
             <Field
-              label="Paid Amount"
+              label="Received Amount"
               required
             >
               <input
@@ -1519,6 +1647,69 @@ function AdmissionModal({
                   )
                 }
                 className="sm-input"
+              />
+            </Field>
+
+            <Field label="Buffer Status">
+              <select
+                value={form.revenueStatus}
+                onChange={(event) => {
+                  const value = event.target.value;
+
+                  setForm((current) => ({
+                    ...current,
+                    revenueStatus: value,
+                    amountStatus:
+                      value === "BUFFER_ZONE"
+                        ? ""
+                        : current.amountStatus || "PENDING",
+                  }));
+                }}
+                className="sm-input"
+              >
+                {REVENUE_STATUS_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Amount Status">
+              <select
+                value={form.amountStatus}
+                disabled={form.revenueStatus === "BUFFER_ZONE"}
+                onChange={(event) =>
+                  update(
+                    "amountStatus",
+                    event.target.value
+                  )
+                }
+                className="sm-input disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">
+                  {form.revenueStatus === "BUFFER_ZONE"
+                    ? "Not applicable in Buffer Zone"
+                    : "Select amount status"}
+                </option>
+
+                {AMOUNT_STATUS_OPTIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Pending Amount">
+              <input
+                readOnly
+                value={Math.max(
+                  Number(form.totalFee || 0) -
+                    Number(form.paidAmount || 0),
+                  0
+                )}
+                className="sm-input bg-slate-50 text-slate-500"
               />
             </Field>
 
@@ -1698,8 +1889,10 @@ function ImportModal({
                 : "Choose CSV or XLSX"}
             </div>
 
-            <div className="mt-1 text-[13px] text-slate-500">
-              Name is required. Course column is ignored because the selected branch is used.
+            <div className="mt-1 text-[13px] leading-5 text-slate-500">
+              Name is required. You can also import University Name, Student Location,
+              Student Inter College, Incentive Amount, Received Amount, Buffer Status
+              and Amount Status. The selected branch is used automatically.
             </div>
           </div>
         </label>
@@ -2140,7 +2333,12 @@ function AdmissionsManager({
             admission.name,
             admission.phone,
             admission.email,
+            admission.universityName,
+            admission.studentLocation,
+            admission.studentInterCollege,
             admission.counsellor,
+            admission.bufferStatus,
+            admission.amountStatus,
             admission.status,
             admission.branch?.name,
           ]
@@ -2210,6 +2408,11 @@ function AdmissionsManager({
           item.name,
           item.phone,
           item.email,
+          item.universityName,
+          item.studentLocation,
+          item.studentInterCollege,
+          item.bufferStatus,
+          item.amountStatus,
           item.partner?.stream?.name,
           item.college,
           item.branch?.name,
@@ -2438,18 +2641,23 @@ function AdmissionsManager({
 
   function exportAdmissions(rows, filename) {
     const headers = [
-      "Student",
-      "Phone",
+      "Student Name",
+      "Contact Number",
       "Email",
+      "University Name",
+      "Student Location",
+      "Student Inter College",
       "Stream",
       "College",
       "Branch",
-      "Paid",
-      "Total Fee",
-      "Pending",
-      "Status",
+      "Incentive Amount",
+      "Received Amount",
+      "Pending Amount",
+      "Date of Admission",
       "Counsellor",
-      "Admission Date",
+      "Buffer Status",
+      "Amount Status",
+      "Admission Status",
     ];
 
     const escape = (value) =>
@@ -2462,6 +2670,9 @@ function AdmissionsManager({
           admission.name,
           admission.phone,
           admission.email,
+          admission.universityName,
+          admission.studentLocation,
+          admission.studentInterCollege,
           admission.partner?.stream?.name ||
             selectedStream?.name,
           admission.college ||
@@ -2470,12 +2681,14 @@ function AdmissionsManager({
           admission.branch?.name ||
             admission.course ||
             selectedBranch?.name,
-          admission.paid,
-          admission.total,
-          admission.pending,
-          admission.status,
-          admission.counsellor,
+          admission.incentiveAmount ?? admission.total,
+          admission.receivedAmount ?? admission.paid,
+          admission.pendingAmount ?? admission.pending,
           admission.admissionDate,
+          admission.counsellor,
+          admission.bufferStatus,
+          admission.amountStatus,
+          admission.status,
         ]
           .map(escape)
           .join(",")
@@ -2561,7 +2774,7 @@ function AdmissionsManager({
             const gradient =
               gradientForColor(
                 stream.color ||
-                  "blue",
+                  recommendedStreamColor(stream.name),
                 index
               );
 
@@ -2736,15 +2949,15 @@ function AdmissionsManager({
           />
 
           <Stat
-            label="Received"
+            label="Received Amount"
             value={money(filteredAllSummary.received)}
-            detail="Fees received"
+            detail="Amount received"
           />
 
           <Stat
-            label="Pending"
+            label="Pending Amount"
             value={money(filteredAllSummary.pending)}
-            detail="Outstanding"
+            detail="Pending amount"
           />
         </div>
 
@@ -2840,73 +3053,188 @@ function AdmissionsManager({
           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <Table
               columns={[
-                "Student",
-                "Stream",
-                "College",
+                "S.No",
+                "Student Name",
+                "Contact Number",
+                "University Name",
                 "Branch",
-                "Paid",
-                "Pending",
-                "Status",
+                "Incentive Amount",
+                "Received Amount",
+                "Pending Amount",
+                "Date of Admission",
                 "Counsellor",
-                "Admission Date",
+                "Buffer Status",
+                "Amount Status",
+                "Actions",
               ]}
               empty="No admissions found"
-              rows={filteredAllAdmissions.map((admission) => (
+              rows={filteredAllAdmissions.map((admission, index) => (
                 <tr
                   key={admission.id}
                   className="hover:bg-slate-50/70"
                 >
+                  <td className="px-4 py-3 text-[13px] font-semibold text-slate-500">
+                    {index + 1}
+                  </td>
+
                   <td className="px-4 py-3">
-                    <div className="text-[15px] font-semibold text-slate-900">
+                    <div className="whitespace-nowrap text-[15px] font-semibold text-slate-900">
                       {admission.name}
                     </div>
-                    <div className="mt-0.5 text-[13px] text-slate-500">
-                      {admission.phone || "—"}
-                    </div>
+                    {(admission.studentLocation ||
+                      admission.studentInterCollege) ? (
+                      <div
+                        className="mt-0.5 max-w-[220px] truncate text-[12px] text-slate-400"
+                        title={[
+                          admission.studentLocation,
+                          admission.studentInterCollege,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      >
+                        {[
+                          admission.studentLocation,
+                          admission.studentInterCollege,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    ) : null}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
-                    {admission.partner?.stream?.name || "—"}
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                    {admission.phone || "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] text-slate-700">
-                    {admission.college ||
-                      admission.partner?.name ||
-                      "—"}
+                  <td
+                    className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[15px] text-slate-700"
+                    title={admission.universityName || ""}
+                  >
+                    {admission.universityName || "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] text-slate-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-700">
                     {admission.branch?.name ||
                       admission.course ||
                       "—"}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] font-semibold text-emerald-700">
-                    {money(admission.paid)}
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-800">
+                    {money(
+                      admission.incentiveAmount ??
+                        admission.total
+                    )}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] font-semibold text-amber-700">
-                    {money(admission.pending)}
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-emerald-700">
+                    {money(
+                      admission.receivedAmount ??
+                        admission.paid
+                    )}
                   </td>
 
-                  <td className="px-4 py-3">
-                    <Badge tone={statusTone(admission.status)}>
-                      {admission.status}
-                    </Badge>
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-amber-700">
+                    {money(
+                      admission.pendingAmount ??
+                        admission.pending
+                    )}
                   </td>
 
-                  <td className="px-4 py-3 text-[15px] text-slate-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-500">
+                    {formatDate(admission.admissionDate)}
+                  </td>
+
+                  <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
                     {admission.counsellor}
                   </td>
 
-                  <td className="px-4 py-3 text-[13px] text-slate-500">
-                    {formatDate(admission.admissionDate)}
+                  <td className="px-4 py-3">
+                    <Badge
+                      tone={
+                        admission.revenueStatus === "IN_BUCKET"
+                          ? "emerald"
+                          : "amber"
+                      }
+                    >
+                      {admission.bufferStatus || "Buffer Zone"}
+                    </Badge>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    {admission.revenueStatus === "BUFFER_ZONE" ? (
+                      <span className="text-[13px] text-slate-400">
+                        —
+                      </span>
+                    ) : (
+                      <Badge
+                        tone={
+                          admission.amountStatusKey === "RECEIVED"
+                            ? "emerald"
+                            : "amber"
+                        }
+                      >
+                        {admission.amountStatus || "Pending"}
+                      </Badge>
+                    )}
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      {admission.partner && admission.branch ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAdmissionModal({
+                              mode: "edit",
+                              admission,
+                            })
+                          }
+                          title="Edit admission"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-indigo-600"
+                        >
+                          <Pencil size={13} />
+                        </button>
+                      ) : null}
+
+                      <button
+                        type="button"
+                        onClick={() => deleteAdmission(admission)}
+                        title="Delete admission"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             />
           </div>
         )}
+
+        {admissionModal?.mode === "edit" &&
+        admissionModal.admission?.partner &&
+        admissionModal.admission?.branch ? (
+          <AdmissionModal
+            market={
+              admissionModal.admission.market ||
+              (activeMarket === "ALL" ? "DOMESTIC" : activeMarket)
+            }
+            partner={admissionModal.admission.partner}
+            branch={admissionModal.admission.branch}
+            admission={admissionModal.admission}
+            onClose={() => setAdmissionModal(null)}
+            onSaved={async () => {
+              setAdmissionModal(null);
+              setSuccess("Admission saved successfully");
+
+              await Promise.all([
+                loadAllAdmissions(),
+                loadStreams(),
+              ]);
+            }}
+          />
+        ) : null}
       </div>
     );
   }
@@ -3004,7 +3332,10 @@ function AdmissionsManager({
                   }
                   icon={Icon}
                   index={index}
-                  color={stream.color || "blue"}
+                  color={
+                    stream.color ||
+                    recommendedStreamColor(stream.name)
+                  }
                   openLabel={`Open ${stream.name}`}
                   onOpen={() => {
                     setSelectedStream(stream);
@@ -3132,9 +3463,9 @@ function AdmissionsManager({
           />
 
           <Stat
-            label="Received"
+            label="Received Amount"
             value={money(selectedStream.received)}
-            detail="Admission revenue"
+            detail="Received amount"
           />
         </div>
 
@@ -3178,7 +3509,7 @@ function AdmissionsManager({
 
                   <div className="rounded-xl bg-white/12 px-3 py-2.5">
                     <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Received
+                      Received Amount
                     </div>
                     <div className="mt-1 text-[15px] font-bold">
                       {money(partner.received)}
@@ -3298,15 +3629,15 @@ function AdmissionsManager({
           />
 
           <Stat
-            label="Received"
+            label="Received Amount"
             value={money(selectedPartner.received)}
-            detail="Fees received"
+            detail="Amount received"
           />
 
           <Stat
-            label="Pending"
+            label="Pending Amount"
             value={money(selectedPartner.pending)}
-            detail="Outstanding"
+            detail="Pending amount"
           />
         </div>
 
@@ -3324,7 +3655,7 @@ function AdmissionsManager({
               }
               icon={BookOpen}
               index={index + 2}
-              color={selectedStream.color || "blue"}
+              color={recommendedBranchColor(branch.name, index)}
               openLabel={`Open ${branch.name}`}
               onOpen={() => setSelectedBranch(branch)}
               onEdit={() =>
@@ -3338,7 +3669,7 @@ function AdmissionsManager({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl bg-white/12 px-3 py-2.5">
                     <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Received
+                      Received Amount
                     </div>
                     <div className="mt-1 text-[15px] font-bold">
                       {money(branch.received)}
@@ -3347,7 +3678,7 @@ function AdmissionsManager({
 
                   <div className="rounded-xl bg-white/12 px-3 py-2.5">
                     <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Pending
+                      Pending Amount
                     </div>
                     <div className="mt-1 text-[15px] font-bold">
                       {money(branch.pending)}
@@ -3486,15 +3817,15 @@ function AdmissionsManager({
         />
 
         <Stat
-          label="Received"
+          label="Received Amount"
           value={money(summary.received)}
-          detail="Fees received"
+          detail="Amount received"
         />
 
         <Stat
-          label="Pending"
+          label="Pending Amount"
           value={money(summary.pending)}
-          detail="Outstanding"
+          detail="Pending amount"
         />
       </div>
 
@@ -3572,60 +3903,128 @@ function AdmissionsManager({
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <Table
             columns={[
-              "Student",
+              "S.No",
+              "Student Name",
+              "Contact Number",
+              "University Name",
               "Branch",
-              "Paid",
-              "Total Fee",
-              "Pending",
-              "Status",
+              "Incentive Amount",
+              "Received Amount",
+              "Pending Amount",
+              "Date of Admission",
               "Counsellor",
-              "Date",
+              "Buffer Status",
+              "Amount Status",
               "Actions",
             ]}
             empty="No admissions in this branch"
-            rows={filtered.map((admission) => (
+            rows={filtered.map((admission, index) => (
               <tr
                 key={admission.id}
                 className="hover:bg-slate-50/70"
               >
-                <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
-                    {admission.name}
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-slate-500">
-                    {admission.phone || "—"}
-                  </div>
+                <td className="px-4 py-3 text-[13px] font-semibold text-slate-500">
+                  {index + 1}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
+                <td className="px-4 py-3">
+                  <div className="whitespace-nowrap text-[15px] font-semibold text-slate-900">
+                    {admission.name}
+                  </div>
+                  {(admission.studentLocation ||
+                    admission.studentInterCollege) ? (
+                    <div
+                      className="mt-0.5 max-w-[220px] truncate text-[12px] text-slate-400"
+                      title={[
+                        admission.studentLocation,
+                        admission.studentInterCollege,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    >
+                      {[
+                        admission.studentLocation,
+                        admission.studentInterCollege,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  ) : null}
+                </td>
+
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                  {admission.phone || "—"}
+                </td>
+
+                <td
+                  className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[15px] text-slate-700"
+                  title={admission.universityName || ""}
+                >
+                  {admission.universityName || "—"}
+                </td>
+
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-700">
                   {admission.branch?.name ||
                     admission.course}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-semibold text-emerald-700">
-                  {money(admission.paid)}
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-800">
+                  {money(
+                    admission.incentiveAmount ??
+                      admission.total
+                  )}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
-                  {money(admission.total)}
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-emerald-700">
+                  {money(
+                    admission.receivedAmount ??
+                      admission.paid
+                  )}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-semibold text-amber-700">
-                  {money(admission.pending)}
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-amber-700">
+                  {money(
+                    admission.pendingAmount ??
+                      admission.pending
+                  )}
                 </td>
 
-                <td className="px-4 py-3">
-                  <Badge tone={statusTone(admission.status)}>
-                    {admission.status}
-                  </Badge>
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-500">
+                  {formatDate(admission.admissionDate)}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
                   {admission.counsellor}
                 </td>
 
-                <td className="px-4 py-3 text-[13px] text-slate-500">
-                  {formatDate(admission.admissionDate)}
+                <td className="px-4 py-3">
+                  <Badge
+                    tone={
+                      admission.revenueStatus === "IN_BUCKET"
+                        ? "emerald"
+                        : "amber"
+                    }
+                  >
+                    {admission.bufferStatus || "Buffer Zone"}
+                  </Badge>
+                </td>
+
+                <td className="px-4 py-3">
+                  {admission.revenueStatus === "BUFFER_ZONE" ? (
+                    <span className="text-[13px] text-slate-400">
+                      —
+                    </span>
+                  ) : (
+                    <Badge
+                      tone={
+                        admission.amountStatusKey === "RECEIVED"
+                          ? "emerald"
+                          : "amber"
+                      }
+                    >
+                      {admission.amountStatus || "Pending"}
+                    </Badge>
+                  )}
                 </td>
 
                 <td className="px-4 py-3">
@@ -3638,7 +4037,8 @@ function AdmissionsManager({
                           admission,
                         })
                       }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50"
+                      title="Edit admission"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-indigo-600"
                     >
                       <Pencil size={13} />
                     </button>
@@ -3646,6 +4046,7 @@ function AdmissionsManager({
                     <button
                       type="button"
                       onClick={() => deleteAdmission(admission)}
+                      title="Delete admission"
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                     >
                       <Trash2 size={13} />

@@ -150,6 +150,7 @@ router.get("/", async (req, res) => {
           totalFee: true,
           paidAmount: true,
           admissionDate: true,
+          revenueStatus: true,
         },
 
         orderBy: {
@@ -216,6 +217,38 @@ router.get("/", async (req, res) => {
           receivedAmount,
         0
       );
+
+    const inBucketRevenue =
+      admissions
+        .filter(
+          (admission) =>
+            admission.revenueStatus ===
+            "IN_BUCKET"
+        )
+        .reduce(
+          (sum, admission) =>
+            sum +
+            Number(
+              admission.totalFee || 0
+            ),
+          0
+        );
+
+    const bufferRevenue =
+      admissions
+        .filter(
+          (admission) =>
+            admission.revenueStatus ===
+            "BUFFER_ZONE"
+        )
+        .reduce(
+          (sum, admission) =>
+            sum +
+            Number(
+              admission.totalFee || 0
+            ),
+          0
+        );
 
     const approvedExpenses =
       expenses
@@ -318,6 +351,8 @@ router.get("/", async (req, res) => {
 
       summary: {
         potentialRevenue,
+        inBucketRevenue,
+        bufferRevenue,
         receivedAmount,
         pendingAmount,
         approvedExpenses,
@@ -765,6 +800,213 @@ router.post(
 );
 
 /* =========================================================
+   EDIT EXPENSE
+   Existing approval status is preserved; approved records can be corrected.
+========================================================= */
+
+router.patch(
+  "/expenses/:id",
+  async (req, res) => {
+    try {
+      const companyId =
+        req.clientUser.companyId;
+
+      const expense =
+        await prisma.expense.findFirst({
+          where: {
+            id: req.params.id,
+            companyId,
+          },
+        });
+
+      if (!expense) {
+        return res.status(404).json({
+          success: false,
+          message: "Expense not found",
+        });
+      }
+
+      const {
+        title,
+        category,
+        description,
+        amount,
+        expenseDate,
+        paymentMode,
+        transactionRef,
+        vendorName,
+        invoiceNumber,
+        receiptUrl,
+      } = req.body || {};
+
+      const cleanTitle =
+        String(title || "").trim();
+      const cleanCategory =
+        String(category || "").trim();
+      const parsedAmount =
+        Number(amount || 0);
+
+      if (!cleanTitle) {
+        return res.status(400).json({
+          success: false,
+          message: "Expense title is required",
+        });
+      }
+
+      if (!cleanCategory) {
+        return res.status(400).json({
+          success: false,
+          message: "Expense category is required",
+        });
+      }
+
+      if (
+        !Number.isFinite(parsedAmount) ||
+        parsedAmount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Expense amount must be greater than zero",
+        });
+      }
+
+      const parsedExpenseDate =
+        parseOptionalDate(expenseDate);
+
+      if (!parsedExpenseDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid expense date",
+        });
+      }
+
+      if (receiptUrl) {
+        try {
+          const parsedReceiptUrl =
+            new URL(String(receiptUrl));
+
+          if (
+            !["http:", "https:"].includes(
+              parsedReceiptUrl.protocol
+            )
+          ) {
+            throw new Error("Invalid protocol");
+          }
+        } catch {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Receipt / proof URL must be a valid http or https URL",
+          });
+        }
+      }
+
+      const updated =
+        await prisma.expense.update({
+          where: {
+            id: expense.id,
+          },
+          data: {
+            title: cleanTitle,
+            category: cleanCategory,
+            description: description
+              ? String(description).trim()
+              : null,
+            amount: parsedAmount,
+            expenseDate: parsedExpenseDate,
+            paymentMode: paymentMode
+              ? String(paymentMode).trim()
+              : null,
+            transactionRef: transactionRef
+              ? String(transactionRef).trim()
+              : null,
+            vendorName: vendorName
+              ? String(vendorName).trim()
+              : null,
+            invoiceNumber: invoiceNumber
+              ? String(invoiceNumber).trim()
+              : null,
+            receiptUrl: receiptUrl
+              ? String(receiptUrl).trim()
+              : null,
+          },
+        });
+
+      return res.json({
+        success: true,
+        message: "Expense updated successfully",
+        expense: expenseResponse(updated),
+      });
+    } catch (error) {
+      console.error(
+        "Failed to update expense:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update expense",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   DELETE EXPENSE
+========================================================= */
+
+router.delete(
+  "/expenses/:id",
+  async (req, res) => {
+    try {
+      const companyId =
+        req.clientUser.companyId;
+
+      const expense =
+        await prisma.expense.findFirst({
+          where: {
+            id: req.params.id,
+            companyId,
+          },
+          select: {
+            id: true,
+            title: true,
+          },
+        });
+
+      if (!expense) {
+        return res.status(404).json({
+          success: false,
+          message: "Expense not found",
+        });
+      }
+
+      await prisma.expense.delete({
+        where: {
+          id: expense.id,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: `${expense.title} deleted successfully`,
+      });
+    } catch (error) {
+      console.error(
+        "Failed to delete expense:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to delete expense",
+      });
+    }
+  }
+);
+
+/* =========================================================
    UPDATE EXPENSE STATUS
 ========================================================= */
 
@@ -1035,6 +1277,207 @@ router.post(
           message:
             "Unable to create incentive",
         });
+    }
+  }
+);
+
+/* =========================================================
+   EDIT INCENTIVE
+   Existing approval/payment status is preserved.
+========================================================= */
+
+router.patch(
+  "/incentives/:id",
+  async (req, res) => {
+    try {
+      const companyId =
+        req.clientUser.companyId;
+
+      const existing =
+        await prisma.incentive.findFirst({
+          where: {
+            id: req.params.id,
+            companyId,
+          },
+        });
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: "Incentive not found",
+        });
+      }
+
+      const {
+        employeeName,
+        admissionId,
+        title,
+        description,
+        amount,
+        incentiveDate,
+      } = req.body || {};
+
+      const cleanEmployeeName =
+        String(employeeName || "").trim();
+      const parsedAmount =
+        Number(amount || 0);
+
+      if (!cleanEmployeeName) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee name is required",
+        });
+      }
+
+      if (
+        !Number.isFinite(parsedAmount) ||
+        parsedAmount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Incentive amount must be greater than zero",
+        });
+      }
+
+      let validAdmissionId =
+        existing.admissionId;
+
+      if (admissionId !== undefined) {
+        validAdmissionId = null;
+
+        if (admissionId) {
+          const admission =
+            await prisma.admission.findFirst({
+              where: {
+                id: String(admissionId),
+                companyId,
+              },
+              select: { id: true },
+            });
+
+          if (!admission) {
+            return res.status(400).json({
+              success: false,
+              message:
+                "Invalid admission for this company",
+            });
+          }
+
+          validAdmissionId =
+            admission.id;
+        }
+      }
+
+      const parsedIncentiveDate =
+        parseOptionalDate(incentiveDate);
+
+      if (!parsedIncentiveDate) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid incentive date",
+        });
+      }
+
+      const updated =
+        await prisma.incentive.update({
+          where: {
+            id: existing.id,
+          },
+          data: {
+            admissionId: validAdmissionId,
+            employeeName: cleanEmployeeName,
+            title: title
+              ? String(title).trim()
+              : null,
+            description: description
+              ? String(description).trim()
+              : null,
+            amount: parsedAmount,
+            incentiveDate:
+              parsedIncentiveDate,
+          },
+          include: {
+            admission: {
+              select: {
+                id: true,
+                studentName: true,
+                college: true,
+              },
+            },
+          },
+        });
+
+      return res.json({
+        success: true,
+        message: "Incentive updated successfully",
+        incentive: incentiveResponse(updated),
+      });
+    } catch (error) {
+      console.error(
+        "Failed to update incentive:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update incentive",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   DELETE INCENTIVE
+========================================================= */
+
+router.delete(
+  "/incentives/:id",
+  async (req, res) => {
+    try {
+      const companyId =
+        req.clientUser.companyId;
+
+      const incentive =
+        await prisma.incentive.findFirst({
+          where: {
+            id: req.params.id,
+            companyId,
+          },
+          select: {
+            id: true,
+            title: true,
+            employeeName: true,
+          },
+        });
+
+      if (!incentive) {
+        return res.status(404).json({
+          success: false,
+          message: "Incentive not found",
+        });
+      }
+
+      await prisma.incentive.delete({
+        where: {
+          id: incentive.id,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: "Incentive deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "Failed to delete incentive:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message: "Unable to delete incentive",
+      });
     }
   }
 );

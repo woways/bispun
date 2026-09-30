@@ -61,6 +61,16 @@ enum AdmissionStatus {
   CANCELLED
 }
 
+enum AdmissionRevenueStatus {
+  IN_BUCKET
+  BUFFER_ZONE
+}
+
+enum AdmissionAmountStatus {
+  RECEIVED
+  PENDING
+}
+
 enum WalkInStatus {
   NEW
   IN_PROGRESS
@@ -629,10 +639,13 @@ model Admission {
   // This lets cancellation/deletion restore the CRM lead correctly.
   leadStageBeforeAdmission LeadStage?
 
-  studentName     String
-  studentPhone    String?
-  studentAltPhone String?
-  studentEmail    String?
+  studentName         String
+  studentPhone        String?
+  studentAltPhone     String?
+  studentEmail        String?
+  universityName      String?
+  studentLocation     String?
+  studentInterCollege String?
 
   partnerId String?
   partner   AdmissionPartner? @relation(fields: [partnerId], references: [id], onDelete: SetNull)
@@ -646,8 +659,13 @@ model Admission {
 
   counsellorName String?
 
+  // Financial fields retain their database names for backwards compatibility.
+  // In the Bispun UI these are shown as Incentive Amount and Received Amount.
   totalFee   Decimal @default(0) @db.Decimal(14, 2)
   paidAmount Decimal @default(0) @db.Decimal(14, 2)
+
+  revenueStatus AdmissionRevenueStatus @default(BUFFER_ZONE)
+  amountStatus  AdmissionAmountStatus?
 
   status AdmissionStatus @default(ONGOING)
 
@@ -662,6 +680,8 @@ model Admission {
 
   @@index([companyId])
   @@index([companyId, status])
+  @@index([companyId, revenueStatus])
+  @@index([companyId, amountStatus])
   @@index([companyId, admissionDate])
   @@index([partnerId])
   @@index([companyId, partnerId])

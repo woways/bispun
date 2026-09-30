@@ -32,6 +32,9 @@ import {
   CheckCircle2,
   XCircle,
   Upload,
+  Pencil,
+  Trash2,
+  UserCheck,
 } from "lucide-react";
 
 import {
@@ -164,8 +167,9 @@ function Field({
 }
 
 function ExpenseModal({
+  expense = null,
   onClose,
-  onCreated,
+  onSaved,
 }) {
   const [saving, setSaving] =
     useState(false);
@@ -177,23 +181,30 @@ function ExpenseModal({
     useState(false);
 
   const [proofName, setProofName] =
-    useState("");
+    useState(
+      expense?.receiptUrl
+        ? "Existing proof document"
+        : ""
+    );
 
   const [form, setForm] =
     useState({
-      title: "",
-      category: "",
-      description: "",
-      amount: "",
-      expenseDate:
-        new Date()
-          .toISOString()
-          .slice(0, 10),
-      paymentMode: "",
-      transactionRef: "",
-      vendorName: "",
-      invoiceNumber: "",
-      receiptUrl: "",
+      title: expense?.title || "",
+      category: expense?.category || "",
+      description: expense?.description || "",
+      amount: expense?.amount ?? "",
+      expenseDate: expense?.expenseDate
+        ? new Date(expense.expenseDate)
+            .toISOString()
+            .slice(0, 10)
+        : new Date()
+            .toISOString()
+            .slice(0, 10),
+      paymentMode: expense?.paymentMode || "",
+      transactionRef: expense?.transactionRef || "",
+      vendorName: expense?.vendorName || "",
+      invoiceNumber: expense?.invoiceNumber || "",
+      receiptUrl: expense?.receiptUrl || "",
     });
 
   function update(
@@ -301,9 +312,13 @@ function ExpenseModal({
 
     try {
       await apiRequest(
-        "/api/client/revenue/expenses",
+        expense
+          ? `/api/client/revenue/expenses/${expense.id}`
+          : "/api/client/revenue/expenses",
         {
-          method: "POST",
+          method: expense
+            ? "PATCH"
+            : "POST",
 
           body: JSON.stringify({
             ...form,
@@ -315,11 +330,13 @@ function ExpenseModal({
         }
       );
 
-      onCreated();
+      onSaved();
     } catch (error) {
       setError(
         error?.data?.message ||
-          "Unable to create expense"
+          (expense
+            ? "Unable to update expense"
+            : "Unable to create expense")
       );
     } finally {
       setSaving(false);
@@ -336,11 +353,13 @@ function ExpenseModal({
             </div>
 
             <h2 className="mt-1 text-xl font-bold text-slate-950">
-              Add Expense
+              {expense ? "Edit Expense" : "Add Expense"}
             </h2>
 
             <p className="mt-1 text-[13px] text-slate-500">
-              Add expense details, payment information and receipt proof. New expenses remain pending until approved.
+              {expense
+                ? "Correct this expense while keeping its current approval status."
+                : "Add expense details, payment information and receipt proof. New expenses remain pending until approved."}
             </p>
           </div>
 
@@ -648,7 +667,11 @@ function ExpenseModal({
               )}
 
               {saving
-                ? "Creating..."
+                ? expense
+                  ? "Saving..."
+                  : "Creating..."
+                : expense
+                ? "Save Changes"
                 : "Add Expense"}
             </button>
           </div>
@@ -816,8 +839,9 @@ function ExpenseDetails({
 }
 
 function IncentiveModal({
+  incentive = null,
   onClose,
-  onCreated,
+  onSaved,
 }) {
   const [saving, setSaving] =
     useState(false);
@@ -827,14 +851,17 @@ function IncentiveModal({
 
   const [form, setForm] =
     useState({
-      employeeName: "",
-      title: "",
-      description: "",
-      amount: "",
-      incentiveDate:
-        new Date()
-          .toISOString()
-          .slice(0, 10),
+      employeeName: incentive?.employeeName || "",
+      title: incentive?.title || "",
+      description: incentive?.description || "",
+      amount: incentive?.amount ?? "",
+      incentiveDate: incentive?.incentiveDate
+        ? new Date(incentive.incentiveDate)
+            .toISOString()
+            .slice(0, 10)
+        : new Date()
+            .toISOString()
+            .slice(0, 10),
     });
 
   // CA-028: incentives should be tied to real company staff, so offer a
@@ -875,9 +902,13 @@ function IncentiveModal({
 
     try {
       await apiRequest(
-        "/api/client/revenue/incentives",
+        incentive
+          ? `/api/client/revenue/incentives/${incentive.id}`
+          : "/api/client/revenue/incentives",
         {
-          method: "POST",
+          method: incentive
+            ? "PATCH"
+            : "POST",
 
           body: JSON.stringify({
             ...form,
@@ -889,11 +920,13 @@ function IncentiveModal({
         }
       );
 
-      onCreated();
+      onSaved();
     } catch (error) {
       setError(
         error?.data?.message ||
-          "Unable to create incentive"
+          (incentive
+            ? "Unable to update incentive"
+            : "Unable to create incentive")
       );
     } finally {
       setSaving(false);
@@ -906,12 +939,13 @@ function IncentiveModal({
         <div className="px-6 py-5 border-b border-slate-200 flex justify-between">
           <div>
             <h2 className="font-semibold">
-              Add Incentive
+              {incentive ? "Edit Incentive" : "Add Incentive"}
             </h2>
 
             <p className="text-[13px] text-slate-500">
-              Incentive affects profit
-              only after approval.
+              {incentive
+                ? "Correct this incentive while keeping its current status."
+                : "Incentive affects profit only after approval."}
             </p>
           </div>
 
@@ -1059,7 +1093,11 @@ function IncentiveModal({
               className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-[13px] font-semibold shadow-sm"
             >
               {saving
-                ? "Creating..."
+                ? incentive
+                  ? "Saving..."
+                  : "Creating..."
+                : incentive
+                ? "Save Changes"
                 : "Add Incentive"}
             </button>
           </div>
@@ -1164,6 +1202,17 @@ export default function Revenue({ selectedYear = "all" }) {
     showIncentive,
     setShowIncentive,
   ] = useState(false);
+
+  const [
+    editingExpense,
+    setEditingExpense,
+  ] = useState(null);
+
+  const [
+    editingIncentive,
+    setEditingIncentive,
+  ] = useState(null);
+
   const [
     selectedExpense,
     setSelectedExpense,
@@ -1250,6 +1299,55 @@ export default function Revenue({ selectedYear = "all" }) {
     );
 
     await loadRevenue();
+  }
+
+  async function deleteExpense(expense) {
+    if (
+      !window.confirm(
+        `Delete ${expense.title}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiRequest(
+        `/api/client/revenue/expenses/${expense.id}`,
+        { method: "DELETE" }
+      );
+
+      setSelectedExpense(null);
+      await loadRevenue();
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to delete expense"
+      );
+    }
+  }
+
+  async function deleteIncentive(incentive) {
+    if (
+      !window.confirm(
+        `Delete ${incentive.title || "this incentive"}? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await apiRequest(
+        `/api/client/revenue/incentives/${incentive.id}`,
+        { method: "DELETE" }
+      );
+
+      await loadRevenue();
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to delete incentive"
+      );
+    }
   }
 
   const expenses =
@@ -1562,28 +1660,36 @@ export default function Revenue({ selectedYear = "all" }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
             <RevenueMetric
-              label="Potential Revenue"
+              label="Total Admissions"
+              value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
+              icon={UserCheck}
+              detail="Admissions included in revenue"
+              tone="slate"
+            />
+
+            <RevenueMetric
+              label="Total Potential Revenue"
               value={money(summary.potentialRevenue)}
               icon={TrendingUp}
-              detail="Total admission value"
+              detail="Total admission revenue value"
               tone="indigo"
             />
 
             <RevenueMetric
-              label="Received"
-              value={money(summary.receivedAmount)}
-              icon={DollarSign}
-              detail="Collections received"
+              label="In Bucket Revenue"
+              value={money(summary.inBucketRevenue)}
+              icon={CircleDollarSign}
+              detail="Admission value currently in bucket"
               tone="emerald"
             />
 
             <RevenueMetric
-              label="Pending"
-              value={money(summary.pendingAmount)}
+              label="Buffer Zone Revenue"
+              value={money(summary.bufferRevenue)}
               icon={Clock}
-              detail="Outstanding collections"
+              detail="Admission value currently in buffer zone"
               tone="amber"
             />
 
@@ -1596,10 +1702,34 @@ export default function Revenue({ selectedYear = "all" }) {
             />
 
             <RevenueMetric
+              label="Total Incentive Amount"
+              value={money(summary.totalIncentives)}
+              icon={Award}
+              detail="Approved and paid staff incentives"
+              tone="slate"
+            />
+
+            <RevenueMetric
+              label="Received Amount"
+              value={money(summary.receivedAmount)}
+              icon={DollarSign}
+              detail="Collections received"
+              tone="emerald"
+            />
+
+            <RevenueMetric
+              label="Pending Amount"
+              value={money(summary.pendingAmount)}
+              icon={Clock}
+              detail="Outstanding collections"
+              tone="amber"
+            />
+
+            <RevenueMetric
               label="Current Profit"
               value={money(summary.currentProfit)}
               icon={ArrowUpRight}
-              detail="Received less approved costs"
+              detail="Received less approved expenses and incentives"
               featured
             />
           </div>
@@ -2018,6 +2148,29 @@ export default function Revenue({ selectedYear = "all" }) {
                                   <Eye size={14} />
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingExpense(expense);
+                                    setShowExpense(true);
+                                  }}
+                                  className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center"
+                                  title="Edit expense"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    deleteExpense(expense)
+                                  }
+                                  className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                  title="Delete expense"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+
                                 {expense.status ===
                                   "PENDING" && (
                                   <>
@@ -2088,11 +2241,10 @@ export default function Revenue({ selectedYear = "all" }) {
             <div className="space-y-3">
               <div className="flex justify-end">
                 <button
-                  onClick={() =>
-                    setShowIncentive(
-                      true
-                    )
-                  }
+                  onClick={() => {
+                    setEditingIncentive(null);
+                    setShowIncentive(true);
+                  }}
                   className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
                 >
                   <Plus size={14} />
@@ -2170,62 +2322,80 @@ export default function Revenue({ selectedYear = "all" }) {
                           </td>
 
                           <td className="px-4 py-3">
-                            {incentive.status ===
-                              "PENDING" && (
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() =>
-                                    incentiveStatus(
-                                      incentive.id,
-                                      "APPROVED"
-                                    )
-                                  }
-                                  className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center"
-                                >
-                                  <Check
-                                    size={
-                                      16
-                                    }
-                                  />
-                                </button>
-
-                                <button
-                                  onClick={() =>
-                                    incentiveStatus(
-                                      incentive.id,
-                                      "REJECTED"
-                                    )
-                                  }
-                                  className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
-                                >
-                                  <Ban
-                                    size={
-                                      16
-                                    }
-                                  />
-                                </button>
-                              </div>
-                            )}
-
-                            {incentive.status ===
-                              "APPROVED" && (
+                            <div className="flex flex-wrap items-center gap-1">
                               <button
-                                onClick={() =>
-                                  incentiveStatus(
-                                    incentive.id,
-                                    "PAID"
-                                  )
-                                }
-                                className="h-8 px-2.5 text-[13px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded-lg inline-flex items-center gap-1.5"
+                                type="button"
+                                onClick={() => {
+                                  setEditingIncentive(incentive);
+                                  setShowIncentive(true);
+                                }}
+                                className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center"
+                                title="Edit incentive"
                               >
-                                <Wallet
-                                  size={
-                                    12
-                                  }
-                                />
-                                Mark Paid
+                                <Pencil size={14} />
                               </button>
-                            )}
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deleteIncentive(incentive)
+                                }
+                                className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                title="Delete incentive"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+
+                              {incentive.status ===
+                                "PENDING" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      incentiveStatus(
+                                        incentive.id,
+                                        "APPROVED"
+                                      )
+                                    }
+                                    className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center"
+                                    title="Approve"
+                                  >
+                                    <Check size={16} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      incentiveStatus(
+                                        incentive.id,
+                                        "REJECTED"
+                                      )
+                                    }
+                                    className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                    title="Reject"
+                                  >
+                                    <Ban size={16} />
+                                  </button>
+                                </>
+                              )}
+
+                              {incentive.status ===
+                                "APPROVED" && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    incentiveStatus(
+                                      incentive.id,
+                                      "PAID"
+                                    )
+                                  }
+                                  className="h-8 px-2.5 text-[13px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded-lg inline-flex items-center gap-1.5"
+                                >
+                                  <Wallet size={12} />
+                                  Mark Paid
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       )
@@ -2274,11 +2444,15 @@ export default function Revenue({ selectedYear = "all" }) {
 
       {showExpense && (
         <ExpenseModal
-          onClose={() =>
-            setShowExpense(false)
-          }
-          onCreated={async () => {
+          expense={editingExpense}
+          onClose={() => {
             setShowExpense(false);
+            setEditingExpense(null);
+          }}
+          onSaved={async () => {
+            setShowExpense(false);
+            setEditingExpense(null);
+            setSelectedExpense(null);
             await loadRevenue();
           }}
         />
@@ -2286,13 +2460,14 @@ export default function Revenue({ selectedYear = "all" }) {
 
       {showIncentive && (
         <IncentiveModal
-          onClose={() =>
-            setShowIncentive(false)
-          }
-          onCreated={async () => {
-            setShowIncentive(
-              false
-            );
+          incentive={editingIncentive}
+          onClose={() => {
+            setShowIncentive(false);
+            setEditingIncentive(null);
+          }}
+          onSaved={async () => {
+            setShowIncentive(false);
+            setEditingIncentive(null);
             await loadRevenue();
           }}
         />

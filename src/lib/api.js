@@ -19,8 +19,12 @@ export async function apiRequest(path, options = {}) {
     normalizedPath.startsWith("/api/client/auth/") ||
     normalizedPath.startsWith("/api/admin/auth/");
 
+  const isFormDataBody =
+    typeof FormData !== "undefined" &&
+    options.body instanceof FormData;
+
   const headers = {
-    ...(options.body
+    ...(options.body && !isFormDataBody
       ? { "Content-Type": "application/json" }
       : {}),
     ...(options.headers || {}),

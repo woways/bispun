@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useState,
@@ -24,7 +25,8 @@ import {
   SlidersHorizontal,
   Download,
   RotateCcw,
-  Gift,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 import {
@@ -64,6 +66,37 @@ const TYPES = [
     label: "Assigned",
   },
 ];
+
+const INDIVIDUAL_LEAD_TYPE = {
+  key: "individual",
+  api: "INDIVIDUAL",
+  label: "Individual Leads",
+};
+
+const ALL_LEAD_TYPES = [
+  INDIVIDUAL_LEAD_TYPE,
+  ...TYPES,
+];
+
+
+const INDIVIDUAL_COLUMN_OPTIONS = [
+  { key: "phone", label: "Phone" },
+  { key: "email", label: "Email" },
+  { key: "course", label: "Course" },
+  { key: "assignedTo", label: "Assigned To" },
+  { key: "status", label: "Status" },
+  { key: "created", label: "Created" },
+];
+
+const DEFAULT_INDIVIDUAL_COLUMNS = {
+  phone: true,
+  email: true,
+  course: true,
+  assignedTo: true,
+  status: true,
+  created: false,
+};
+
 
 function formatDate(
   value
@@ -218,6 +251,7 @@ function IndividualLeadModal({
   onClose,
   onSaved,
   lead = null,
+  defaultType = "INDIVIDUAL",
 }) {
   const [
     saving,
@@ -260,7 +294,7 @@ function IndividualLeadModal({
       phone: lead?.phone || "",
       email: lead?.email || "",
       course: lead?.course || "",
-      type: lead?.type || "EXTERNAL_DATA",
+      type: lead?.type || defaultType || "INDIVIDUAL",
       sourceName: lead?.sourceName || "",
       assignedToUserId: "",
       notes: lead?.notes || "",
@@ -431,13 +465,13 @@ function IndividualLeadModal({
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h2 className="text-[17px] font-semibold">
-              {lead ? "Edit Individual Lead" : "Add Individual Lead"}
+              {lead ? "Edit Lead" : "Add Lead"}
             </h2>
 
             <p className="text-[13px] text-slate-500 mt-1">
               {lead
                 ? "Update this lead and its custom field values."
-                : "Add one lead directly to the CRM without creating a spreadsheet."}
+                : "Add one lead directly to the selected Lead Store category."}
             </p>
           </div>
 
@@ -597,7 +631,7 @@ function IndividualLeadModal({
                 }
                 className="form-input"
               >
-                {TYPES.map(
+                {ALL_LEAD_TYPES.map(
                   (
                     type
                   ) => (
@@ -883,6 +917,7 @@ function UploadDatasetModal({
   assignees,
   onClose,
   onImported,
+  defaultType = "EXTERNAL_DATA",
 }) {
   const [
     file,
@@ -921,7 +956,7 @@ function UploadDatasetModal({
     useState({
       name: "",
       type:
-        "EXTERNAL_DATA",
+        defaultType || "EXTERNAL_DATA",
       sourceName:
         "",
       assignedToUserId:
@@ -1892,7 +1927,7 @@ export default function LeadStore({ selectedYear = "all" }) {
     setSub,
   ] =
     useState(
-      "external"
+      "individual"
     );
 
   const [
@@ -1948,6 +1983,72 @@ export default function LeadStore({ selectedYear = "all" }) {
       dateFrom: "",
       dateTo: "",
     });
+
+  const [
+    individualColumns,
+    setIndividualColumns,
+  ] = useState(
+    DEFAULT_INDIVIDUAL_COLUMNS
+  );
+
+  const [
+    individualDensity,
+    setIndividualDensity,
+  ] = useState(
+    "compact"
+  );
+
+  const [
+    expandedCustomFields,
+    setExpandedCustomFields,
+  ] = useState({});
+
+  const [
+    selectedLeadIds,
+    setSelectedLeadIds,
+  ] = useState([]);
+
+  const [
+    page,
+    setPage,
+  ] = useState(1);
+
+  const [
+    pageSize,
+    setPageSize,
+  ] = useState(25);
+
+  const [
+    bulkAssigneeId,
+    setBulkAssigneeId,
+  ] = useState("");
+
+  const [
+    bulkAssigning,
+    setBulkAssigning,
+  ] = useState(false);
+
+  function toggleIndividualColumn(
+    key
+  ) {
+    setIndividualColumns(
+      (current) => ({
+        ...current,
+        [key]: !current[key],
+      })
+    );
+  }
+
+  function toggleCustomFields(
+    leadId
+  ) {
+    setExpandedCustomFields(
+      (current) => ({
+        ...current,
+        [leadId]: !current[leadId],
+      })
+    );
+  }
 
   const [
     showIndividual,
@@ -2040,13 +2141,40 @@ export default function LeadStore({ selectedYear = "all" }) {
   const selectedType =
     useMemo(
       () =>
-        TYPES.find(
+        ALL_LEAD_TYPES.find(
           (type) =>
             type.key ===
             sub
         ) ||
-        null,
+        INDIVIDUAL_LEAD_TYPE,
       [sub]
+    );
+
+  const currentTypeLeads =
+    useMemo(
+      () =>
+        individualLeads.filter(
+          (lead) => {
+            const leadType =
+              String(
+                lead.type ||
+                  (lead.isManual
+                    ? "INDIVIDUAL"
+                    : "")
+              )
+                .trim()
+                .toUpperCase();
+
+            return (
+              leadType ===
+              selectedType.api
+            );
+          }
+        ),
+      [
+        individualLeads,
+        selectedType,
+      ]
     );
 
   const currentTypeDatasets =
@@ -2095,7 +2223,7 @@ export default function LeadStore({ selectedYear = "all" }) {
       () =>
         Array.from(
           new Set(
-            individualLeads
+            currentTypeLeads
               .map(
                 (lead) =>
                   lead.stage
@@ -2103,7 +2231,7 @@ export default function LeadStore({ selectedYear = "all" }) {
               .filter(Boolean)
           )
         ).sort(),
-      [individualLeads]
+      [currentTypeLeads]
     );
 
   const individualCourseOptions =
@@ -2111,7 +2239,7 @@ export default function LeadStore({ selectedYear = "all" }) {
       () =>
         Array.from(
           new Set(
-            individualLeads
+            currentTypeLeads
               .map(
                 (lead) =>
                   lead.course
@@ -2124,23 +2252,18 @@ export default function LeadStore({ selectedYear = "all" }) {
               String(b)
             )
         ),
-      [individualLeads]
+      [currentTypeLeads]
     );
 
   const sourceOptions =
     useMemo(
-      () => {
-        const rows =
-          sub === "individual"
-            ? individualLeads
-            : currentTypeDatasets;
-
-        return Array.from(
+      () =>
+        Array.from(
           new Set(
-            rows
+            currentTypeLeads
               .map(
-                (row) =>
-                  row.sourceName
+                (lead) =>
+                  lead.sourceName
               )
               .filter(Boolean)
           )
@@ -2149,13 +2272,8 @@ export default function LeadStore({ selectedYear = "all" }) {
             String(a).localeCompare(
               String(b)
             )
-        );
-      },
-      [
-        sub,
-        individualLeads,
-        currentTypeDatasets,
-      ]
+        ),
+      [currentTypeLeads]
     );
 
   const filteredIndividualLeads =
@@ -2166,7 +2284,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             search
           );
 
-        return individualLeads.filter(
+        return currentTypeLeads.filter(
           (lead) => {
             const searchMatches =
               !query ||
@@ -2245,7 +2363,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         );
       },
       [
-        individualLeads,
+        currentTypeLeads,
         search,
         filters,
         selectedAssigneeName,
@@ -2332,23 +2450,223 @@ export default function LeadStore({ selectedYear = "all" }) {
       filters.source,
       filters.dateFrom,
       filters.dateTo,
-      ...(sub === "individual"
-        ? [
-            filters.status,
-            filters.course,
-          ]
-        : []),
+      filters.status,
+      filters.course,
     ].filter(Boolean).length;
 
   const visibleCount =
-    sub === "individual"
-      ? filteredIndividualLeads.length
-      : filtered.length;
+    filteredIndividualLeads.length;
 
   const totalCurrentCount =
-    sub === "individual"
-      ? individualLeads.length
-      : currentTypeDatasets.length;
+    currentTypeLeads.length;
+
+  const leadTypeOptions =
+    useMemo(
+      () =>
+        ALL_LEAD_TYPES.map(
+          (type) => ({
+            key: type.key,
+            label: type.label,
+            count: individualLeads.filter(
+              (lead) =>
+                String(
+                  lead.type ||
+                    (lead.isManual
+                      ? "INDIVIDUAL"
+                      : "")
+                )
+                  .trim()
+                  .toUpperCase() ===
+                type.api
+            ).length,
+          })
+        ),
+      [individualLeads]
+    );
+
+
+  const visibleIndividualColumnCount =
+    3 +
+    INDIVIDUAL_COLUMN_OPTIONS.filter(
+      (column) => individualColumns[column.key]
+    ).length;
+
+  const individualCellPadding =
+    individualDensity === "compact"
+      ? "py-2"
+      : "py-3";
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredIndividualLeads.length /
+          pageSize
+      )
+    );
+
+  const currentPage =
+    Math.min(
+      page,
+      totalPages
+    );
+
+  const pageStart =
+    (currentPage - 1) *
+    pageSize;
+
+  const paginatedIndividualLeads =
+    filteredIndividualLeads.slice(
+      pageStart,
+      pageStart + pageSize
+    );
+
+  const pageLeadIds =
+    paginatedIndividualLeads.map(
+      (lead) => lead.id
+    );
+
+  const allPageSelected =
+    pageLeadIds.length > 0 &&
+    pageLeadIds.every(
+      (id) =>
+        selectedLeadIds.includes(
+          id
+        )
+    );
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedLeadIds([]);
+  }, [
+    sub,
+    selectedYear,
+    search,
+    filters.status,
+    filters.assignedToUserId,
+    filters.course,
+    filters.source,
+    filters.dateFrom,
+    filters.dateTo,
+    pageSize,
+  ]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  function toggleLeadSelection(
+    leadId
+  ) {
+    setSelectedLeadIds(
+      (current) =>
+        current.includes(leadId)
+          ? current.filter(
+              (id) =>
+                id !== leadId
+            )
+          : [
+              ...current,
+              leadId,
+            ]
+    );
+  }
+
+  function togglePageSelection() {
+    setSelectedLeadIds(
+      (current) => {
+        if (allPageSelected) {
+          return current.filter(
+            (id) =>
+              !pageLeadIds.includes(
+                id
+              )
+          );
+        }
+
+        return Array.from(
+          new Set([
+            ...current,
+            ...pageLeadIds,
+          ])
+        );
+      }
+    );
+  }
+
+  async function assignSelectedLeads() {
+    if (!selectedLeadIds.length) {
+      return;
+    }
+
+    if (!bulkAssigneeId) {
+      setError(
+        "Select a team member for bulk assignment."
+      );
+      return;
+    }
+
+    const assignee =
+      assignees.find(
+        (user) =>
+          user.id ===
+          bulkAssigneeId
+      );
+
+    if (!assignee) {
+      setError(
+        "Selected team member is invalid."
+      );
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Assign ${selectedLeadIds.length} selected lead${selectedLeadIds.length === 1 ? "" : "s"} to ${assignee.name}?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setBulkAssigning(true);
+    setError("");
+
+    try {
+      const data =
+        await apiRequest(
+          "/api/client/lead-store/manual/bulk-assign",
+          {
+            method:
+              "PATCH",
+            body:
+              JSON.stringify({
+                leadIds:
+                  selectedLeadIds,
+                assignedToUserId:
+                  bulkAssigneeId,
+              }),
+          }
+        );
+
+      setSuccessMessage(
+        data.message ||
+          `${selectedLeadIds.length} leads assigned successfully.`
+      );
+      setSelectedLeadIds([]);
+      setBulkAssigneeId("");
+      await loadIndividualLeads();
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to assign selected leads"
+      );
+    } finally {
+      setBulkAssigning(false);
+    }
+  }
 
   function clearFilters() {
     setFilters({
@@ -2370,119 +2688,46 @@ export default function LeadStore({ selectedYear = "all" }) {
           10
         );
 
-    if (
-      sub === "individual"
-    ) {
-      const rows =
-        filteredIndividualLeads.map(
-          (lead) => [
-            lead.name,
-            lead.phone,
-            lead.email,
-            lead.course,
-            lead.sourceName,
-            lead.assignedToName ||
-              "Unassigned",
-            lead.stage ||
-              "NEW",
-            formatDate(
-              lead.createdAt
-            ),
-            (lead.customFields || [])
-              .map(
-                (field) =>
-                  `${field.name}: ${field.value || "—"}`
-              )
-              .join(
-                " | "
-              ),
-          ]
-        );
-
-      downloadCsv(
-        `lead-store-individual-${selectedYear}-${dateStamp}.csv`,
-        [
-          "Name",
-          "Phone",
-          "Email",
-          "Course",
-          "Source",
-          "Assigned To",
-          "Status",
-          "Created",
-          "Custom Fields",
-        ],
-        rows
-      );
-
-      return;
-    }
-
     const rows =
-      filtered.map(
-        (dataset) => {
-          const conversion =
-            Number(
-              dataset.count ||
-                0
-            ) >
-            0
-              ? (
-                  (
-                    Number(
-                      dataset.converted ||
-                        0
-                    ) /
-                    Number(
-                      dataset.count ||
-                        0
-                    )
-                  ) *
-                  100
-                ).toFixed(
-                  1
-                )
-              : "0.0";
-
-          return [
-            dataset.name,
-            dataset.typeLabel ||
-              dataset.type,
-            dataset.sourceName,
-            dataset.sourceFileName,
-            dataset.count ||
-              0,
-            dataset.duplicateCount ||
-              0,
-            dataset.failedCount ||
-              0,
-            formatDate(
-              dataset.uploadedAt ||
-                dataset.createdAt
+      filteredIndividualLeads.map(
+        (lead) => [
+          lead.name,
+          lead.phone,
+          lead.email,
+          lead.course,
+          selectedType.label,
+          lead.sourceName,
+          lead.assignedToName ||
+            "Unassigned",
+          lead.stage ||
+            "NEW",
+          formatDate(
+            lead.createdAt
+          ),
+          (lead.customFields || [])
+            .map(
+              (field) =>
+                `${field.name}: ${field.value || "—"}`
+            )
+            .join(
+              " | "
             ),
-            dataset.assignedTo ||
-              "Unassigned",
-            dataset.converted ||
-              0,
-            `${conversion}%`,
-          ];
-        }
+        ]
       );
 
     downloadCsv(
       `lead-store-${sub}-${selectedYear}-${dateStamp}.csv`,
       [
-        "Dataset",
-        "Type",
+        "Name",
+        "Phone",
+        "Email",
+        "Course",
+        "Lead Type",
         "Source",
-        "Source File",
-        "Imported",
-        "Duplicates",
-        "Invalid",
-        "Uploaded",
         "Assigned To",
-        "Converted",
-        "Conversion",
+        "Status",
+        "Created",
+        "Custom Fields",
       ],
       rows
     );
@@ -2524,41 +2769,20 @@ export default function LeadStore({ selectedYear = "all" }) {
   }
 
   const totalLeads =
-    datasets.reduce(
-      (
-        sum,
-        dataset
-      ) =>
-        sum +
-        Number(
-          dataset.count ||
-            0
-        ),
-      0
-    );
+    individualLeads.length;
 
   const totalConverted =
-    datasets.reduce(
-      (
-        sum,
-        dataset
-      ) =>
-        sum +
-        Number(
-          dataset.converted ||
-            0
-        ),
-      0
-    );
+    individualLeads.filter(
+      (lead) =>
+        lead.stage ===
+        "ADMITTED"
+    ).length;
 
-  const assignedDatasets =
-    datasets.filter(
-      (
-        dataset
-      ) =>
+  const assignedLeads =
+    individualLeads.filter(
+      (lead) =>
         Boolean(
-          dataset
-            .assignedToUser
+          lead.assignedToName
         )
     ).length;
 
@@ -2701,7 +2925,7 @@ export default function LeadStore({ selectedYear = "all" }) {
           icon={
             UserCheck
           }
-          detail="Imported leads that reached Admitted"
+          detail="Lead Store leads that reached Admitted"
           tone="emerald"
         />
 
@@ -2715,148 +2939,145 @@ export default function LeadStore({ selectedYear = "all" }) {
           icon={
             Layers3
           }
-          detail={`${assignedDatasets} datasets currently assigned`}
+          detail={`${assignedLeads} leads currently assigned`}
           tone="amber"
         />
       </div>
 
       <div className="space-y-3">
-        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex flex-col gap-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] xl:flex-row xl:items-center">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap gap-1">
-              <button
-                type="button"
-                onClick={() =>
-                  setSub(
-                    "individual"
-                  )
+        <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center">
+            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0">
+              <span className="flex-shrink-0 border-r border-slate-100 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                Lead type
+              </span>
+
+              <select
+                value={sub}
+                onChange={(event) =>
+                  setSub(event.target.value)
                 }
-                className={`px-3 py-2 text-[13px] font-semibold border-b-2 whitespace-nowrap ${
-                  sub ===
-                  "individual"
-                    ? "border-indigo-600 text-indigo-600"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
+                aria-label="Lead type"
+                className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2 pr-8 text-[13px] font-semibold text-slate-700 focus:outline-none"
               >
-                Individual Leads
-              </button>
-
-              {TYPES.map(
-                (
-                  type
-                ) => (
-                  <button
-                    key={
-                      type.key
-                    }
-                    type="button"
-                    onClick={() =>
-                      setSub(
-                        type.key
-                      )
-                    }
-                    className={`px-3 py-2 text-[13px] font-semibold border-b-2 whitespace-nowrap ${
-                      sub ===
-                      type.key
-                        ? "border-indigo-600 text-indigo-600"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
+                {leadTypeOptions.map((type) => (
+                  <option
+                    key={type.key}
+                    value={type.key}
                   >
-                    {
-                      type.label
-                    }
-                  </button>
-                )
-              )}
-            </div>
-          </div>
+                    {type.label} ({type.count})
+                  </option>
+                ))}
+              </select>
 
-          <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center xl:w-auto">
-            <div className="relative w-full sm:min-w-[280px] xl:w-[320px]">
+              <ChevronDown
+                size={14}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+            </label>
+
+            <div className="relative min-w-0 flex-1">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
               <input
-                value={
-                  search
+                value={search}
+                onChange={(event) =>
+                  setSearch(event.target.value)
                 }
-                onChange={(
-                  event
-                ) =>
-                  setSearch(
-                    event
-                      .target
-                      .value
-                  )
-                }
-                placeholder={
-                  sub ===
-                  "individual"
-                    ? "Search name, phone, email or course..."
-                    : "Search dataset, source, file or assignee..."
-                }
-                className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                placeholder="Search name, phone, email or course..."
+                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
               />
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                setFiltersOpen(
-                  (current) =>
-                    !current
-                )
-              }
-              className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
-                filtersOpen ||
-                activeFilterCount >
-                  0
-                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              <SlidersHorizontal
-                size={14}
-              />
-              Filter
+            <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+              <button
+                type="button"
+                onClick={() =>
+                  setFiltersOpen(
+                    (current) => !current
+                  )
+                }
+                className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                  filtersOpen ||
+                  activeFilterCount > 0
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <SlidersHorizontal size={14} />
+                Filter
 
-              {activeFilterCount >
-                0 && (
-                <span className="min-w-5 h-5 px-1 rounded-full bg-indigo-600 text-white text-[11px] font-bold inline-flex items-center justify-center">
-                  {
-                    activeFilterCount
-                  }
-                </span>
-              )}
-            </button>
+                {activeFilterCount > 0 && (
+                  <span className="min-w-5 h-5 px-1 rounded-full bg-indigo-600 text-white text-[11px] font-bold inline-flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
 
-            <button
-              type="button"
-              onClick={
-                exportCurrentView
-              }
-              disabled={
-                visibleCount ===
-                0
-              }
-              className="h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 inline-flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Download
-                size={14}
-              />
-              Export CSV
-            </button>
+              <details className="relative">
+                  <summary className="h-9 cursor-pointer list-none px-3.5 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 inline-flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                    <Layers3 size={14} />
+                    View
+                  </summary>
+
+                  <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                    <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
+                    <div className="mt-2 space-y-1">
+                      {INDIVIDUAL_COLUMN_OPTIONS.map((column) => (
+                        <label key={column.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-slate-700 hover:bg-slate-50">
+                          <span>{column.label}</span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(individualColumns[column.key])}
+                            onChange={() => toggleIndividualColumn(column.key)}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Row density</div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        {[["compact", "Compact"], ["comfortable", "Comfortable"]].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setIndividualDensity(value)}
+                            className={`h-8 rounded-lg border text-[12px] font-semibold ${individualDensity === value ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <p className="mt-3 border-t border-slate-100 pt-3 text-[11px] leading-4 text-slate-400">
+                      Name and Actions stay pinned. Custom fields open from the lead name.
+                    </p>
+                  </div>
+                </details>
+
+              <button
+                type="button"
+                onClick={exportCurrentView}
+                disabled={visibleCount === 0}
+                className="h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 inline-flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Download size={14} />
+                Export CSV
+              </button>
+            </div>
           </div>
         </div>
 
         {filtersOpen && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              {sub ===
-                "individual" && (
-                <label className="block">
+              <label className="block">
                   <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
                     Status
                   </span>
@@ -2911,7 +3132,6 @@ export default function LeadStore({ selectedYear = "all" }) {
                     )}
                   </select>
                 </label>
-              )}
 
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
@@ -2968,9 +3188,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                 </select>
               </label>
 
-              {sub ===
-                "individual" && (
-                <label className="block">
+              <label className="block">
                   <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
                     Course
                   </span>
@@ -3020,7 +3238,6 @@ export default function LeadStore({ selectedYear = "all" }) {
                     )}
                   </select>
                 </label>
-              )}
 
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
@@ -3157,12 +3374,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                     totalCurrentCount
                   }
                 </span>{" "}
-                {
-                  sub ===
-                  "individual"
-                    ? "leads"
-                    : "datasets"
-                }
+                leads
               </div>
 
               <button
@@ -3204,6 +3416,84 @@ export default function LeadStore({ selectedYear = "all" }) {
         </div>
       )}
 
+      {selectedLeadIds.length > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
+            <span className="font-bold text-indigo-800">
+              {selectedLeadIds.length} selected
+            </span>
+
+            {filteredIndividualLeads.length > selectedLeadIds.length && (
+              <button
+                type="button"
+                onClick={() =>
+                  setSelectedLeadIds(
+                    filteredIndividualLeads.map(
+                      (lead) => lead.id
+                    )
+                  )
+                }
+                className="font-semibold text-indigo-700 hover:text-indigo-900"
+              >
+                Select all {filteredIndividualLeads.length} filtered leads
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedLeadIds([]);
+                setBulkAssigneeId("");
+              }}
+              className="font-semibold text-slate-500 hover:text-slate-700"
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              value={bulkAssigneeId}
+              onChange={(event) =>
+                setBulkAssigneeId(
+                  event.target.value
+                )
+              }
+              className="h-9 min-w-[210px] rounded-lg border border-indigo-200 bg-white px-3 text-[13px] font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="">
+                Assign to team member...
+              </option>
+
+              {assignees.map(
+                (user) => (
+                  <option
+                    key={user.id}
+                    value={user.id}
+                  >
+                    {user.name}
+                  </option>
+                )
+              )}
+            </select>
+
+            <button
+              type="button"
+              onClick={assignSelectedLeads}
+              disabled={
+                bulkAssigning ||
+                !bulkAssigneeId
+              }
+              className="h-9 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {bulkAssigning
+                ? "Assigning..."
+                : "Assign selected"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-xl p-14 flex justify-center gap-2 text-[15px] text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <Loader2
@@ -3211,101 +3501,329 @@ export default function LeadStore({ selectedYear = "all" }) {
             className="animate-spin"
           />
 
-          Loading datasets...
+          Loading leads...
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          {sub === "individual" ? (
-            <Table
-              columns={[
-                "Name",
-                "Phone",
-                "Email",
-                "Course",
-                "Custom Fields",
-                "Assigned To",
-                "Status",
-                "Created",
-                "Actions",
-              ]}
-              empty="No individual leads found"
-              rows={filteredIndividualLeads
-                .map((lead) => (
-                  <tr key={lead.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="px-4 py-2.5 text-[15px] font-semibold text-slate-900">{lead.name}</td>
-                    <td className="px-4 py-2.5 text-[15px] text-slate-600">{lead.phone || "—"}</td>
-                    <td className="px-4 py-2.5 text-[15px] text-slate-600">{lead.email || "—"}</td>
-                    <td className="px-4 py-2.5 text-[15px] text-slate-600">{lead.course || "—"}</td>
-                    <td className="px-4 py-2.5">
-                      {lead.customFields?.length ? (
-                        <div className="space-y-1">
-                          {lead.customFields.map((field) => (
-                            <div key={field.id} className="text-[12px] text-slate-600">
-                              <span className="font-semibold text-slate-700">{field.name}:</span> {field.value || "—"}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-[13px] text-slate-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-[15px] text-slate-600">{lead.assignedToName || "Unassigned"}</td>
-                    <td className="px-4 py-2.5"><Badge tone="slate">{lead.stage || "NEW"}</Badge></td>
-                    <td className="px-4 py-2.5 text-[13px] text-slate-500">{formatDate(lead.createdAt)}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingIndividual(lead);
-                            setShowIndividual(true);
-                          }}
-                          title="Edit lead"
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            try {
-                              await apiRequest("/api/client/referrals/tag", {
-                                method: "POST",
-                                body: JSON.stringify({ leadId: lead.id }),
-                              });
-                              setSuccessMessage(`${lead.name} tagged as your referral.`);
-                            } catch (error) {
-                              setError(error?.data?.message || "Unable to tag referral");
-                            }
-                          }}
-                          title="Tag as my referral"
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                        >
-                          <Gift size={14} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!window.confirm(`Delete ${lead.name}? This cannot be undone.`)) return;
-                            try {
-                              await apiRequest(`/api/client/lead-store/manual/${lead.id}`, { method: "DELETE" });
-                              setSuccessMessage(`${lead.name} deleted successfully.`);
-                              await loadIndividualLeads();
-                            } catch (error) {
-                              setError(error?.data?.message || "Unable to delete lead");
-                            }
-                          }}
-                          title="Delete lead"
-                          className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+          <div className="relative overflow-x-auto">
+            <table className="w-max min-w-full text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50/95">
+                <tr>
+                  <th className="sticky left-0 z-30 w-11 min-w-11 border-r border-slate-200 bg-slate-50/95 px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={togglePageSelection}
+                      aria-label="Select all leads on this page"
+                      className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </th>
+
+                  <th className="sticky left-11 z-20 min-w-[220px] max-w-[220px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Name
+                  </th>
+
+                  {individualColumns.phone && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Phone</th>}
+                  {individualColumns.email && <th className="min-w-[210px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Email</th>}
+                  {individualColumns.course && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Course</th>}
+                  {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
+                  {individualColumns.status && <th className="min-w-[110px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
+                  {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
+
+                  <th className="sticky right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-slate-100">
+                {filteredIndividualLeads.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={visibleIndividualColumnCount}
+                      className="py-12 text-center text-sm text-slate-500"
+                    >
+                      No {selectedType.label.toLowerCase()} found
                     </td>
                   </tr>
-                ))}
-            />
-          ) : (
+                ) : (
+                  paginatedIndividualLeads.map((lead) => {
+                    const customFields =
+                      Array.isArray(lead.customFields)
+                        ? lead.customFields
+                        : [];
+
+                    const customFieldsOpen =
+                      Boolean(
+                        expandedCustomFields[
+                          lead.id
+                        ]
+                      );
+
+                    const selected =
+                      selectedLeadIds.includes(
+                        lead.id
+                      );
+
+                    return (
+                      <Fragment key={lead.id}>
+                        <tr className={`group transition-colors ${selected ? "bg-indigo-50/50" : "hover:bg-slate-50/80"}`}>
+                          <td className={`sticky left-0 z-20 w-11 min-w-11 border-r border-slate-100 px-3 text-center ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() =>
+                                toggleLeadSelection(
+                                  lead.id
+                                )
+                              }
+                              aria-label={`Select ${lead.name}`}
+                              className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </td>
+
+                          <td className={`sticky left-11 z-10 min-w-[220px] max-w-[220px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                title={lead.name || ""}
+                                className="min-w-0 flex-1 truncate whitespace-nowrap text-[14px] font-semibold text-slate-900"
+                              >
+                                {lead.name}
+                              </span>
+
+                              {customFields.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    toggleCustomFields(
+                                      lead.id
+                                    )
+                                  }
+                                  title={
+                                    customFieldsOpen
+                                      ? "Hide custom fields"
+                                      : "Show custom fields"
+                                  }
+                                  aria-expanded={
+                                    customFieldsOpen
+                                  }
+                                  className="inline-flex h-7 flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-500 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                                >
+                                  {customFieldsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                  {customFields.length}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          {individualColumns.phone && <td title={lead.phone || ""} className={`min-w-[145px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>{lead.phone || "—"}</td>}
+                          {individualColumns.email && <td className={`min-w-[210px] max-w-[240px] px-4 ${individualCellPadding}`}><div title={lead.email || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.email || "—"}</div></td>}
+                          {individualColumns.course && <td className={`min-w-[145px] max-w-[170px] px-4 ${individualCellPadding}`}><div title={lead.course || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.course || "—"}</div></td>}
+                          {individualColumns.assignedTo && <td className={`min-w-[170px] max-w-[190px] px-4 ${individualCellPadding}`}><div title={lead.assignedToName || "Unassigned"} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.assignedToName || "Unassigned"}</div></td>}
+                          {individualColumns.status && <td className={`min-w-[110px] px-4 ${individualCellPadding} whitespace-nowrap`}><Badge tone="slate">{lead.stage || "NEW"}</Badge></td>}
+                          {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
+
+                          <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingIndividual(
+                                    lead
+                                  );
+                                  setShowIndividual(
+                                    true
+                                  );
+                                }}
+                                title="Edit lead"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                              >
+                                <Pencil size={14} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  if (!window.confirm(`Delete ${lead.name}? This cannot be undone.`)) return;
+
+                                  try {
+                                    await apiRequest(
+                                      `/api/client/lead-store/manual/${lead.id}`,
+                                      {
+                                        method:
+                                          "DELETE",
+                                      }
+                                    );
+
+                                    setSuccessMessage(
+                                      `${lead.name} deleted successfully.`
+                                    );
+
+                                    setSelectedLeadIds(
+                                      (current) =>
+                                        current.filter(
+                                          (id) =>
+                                            id !==
+                                            lead.id
+                                        )
+                                    );
+
+                                    await Promise.all([
+                                      loadIndividualLeads(),
+                                      loadDatasets(),
+                                    ]);
+                                  } catch (error) {
+                                    setError(
+                                      error?.data?.message ||
+                                        "Unable to delete lead"
+                                    );
+                                  }
+                                }}
+                                title="Delete lead"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {customFieldsOpen && (
+                          <tr className="bg-slate-50/70">
+                            <td
+                              colSpan={visibleIndividualColumnCount}
+                              className="px-4 py-3"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="mr-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                                  Custom fields
+                                </span>
+
+                                {customFields.map((field) => (
+                                  <span
+                                    key={field.id || field.key || field.name}
+                                    title={`${field.name}: ${field.value || "—"}`}
+                                    className="inline-flex max-w-[280px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] text-slate-600"
+                                  >
+                                    <span className="font-semibold text-slate-700">
+                                      {field.name}:
+                                    </span>
+                                    <span className="truncate whitespace-nowrap">
+                                      {field.value || "—"}
+                                    </span>
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-[12px] text-slate-500">
+              {filteredIndividualLeads.length > 0 ? (
+                <>
+                  Showing{" "}
+                  <span className="font-semibold text-slate-700">
+                    {pageStart + 1}
+                  </span>
+                  {" "}–{" "}
+                  <span className="font-semibold text-slate-700">
+                    {Math.min(pageStart + pageSize, filteredIndividualLeads.length)}
+                  </span>
+                  {" "}of{" "}
+                  <span className="font-semibold text-slate-700">
+                    {filteredIndividualLeads.length}
+                  </span>
+                  {" "}leads
+                </>
+              ) : (
+                "No leads to display"
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-500">
+                Rows
+                <select
+                  value={pageSize}
+                  onChange={(event) =>
+                    setPageSize(
+                      Number(
+                        event.target.value
+                      )
+                    )
+                  }
+                  className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none"
+                >
+                  {[10, 25, 50, 100].map(
+                    (size) => (
+                      <option
+                        key={size}
+                        value={size}
+                      >
+                        {size}
+                      </option>
+                    )
+                  )}
+                </select>
+              </label>
+
+              <span className="text-[12px] font-semibold text-slate-500">
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setPage(
+                    (current) =>
+                      Math.max(
+                        1,
+                        current - 1
+                      )
+                  )
+                }
+                disabled={currentPage <= 1}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setPage(
+                    (current) =>
+                      Math.min(
+                        totalPages,
+                        current + 1
+                      )
+                  )
+                }
+                disabled={
+                  currentPage >= totalPages
+                }
+                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
+          {sub !== "individual" && currentTypeDatasets.length > 0 && (
+            <details className="border-t border-slate-200">
+              <summary className="cursor-pointer list-none bg-white px-4 py-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+                Imported dataset batches ({currentTypeDatasets.length})
+              </summary>
+
+              <div className="overflow-x-auto border-t border-slate-100">
           <Table
             columns={[
               "Dataset",
@@ -3462,6 +3980,8 @@ export default function LeadStore({ selectedYear = "all" }) {
               }
             )}
           />
+              </div>
+            </details>
           )}
         </div>
       )}
@@ -3470,19 +3990,51 @@ export default function LeadStore({ selectedYear = "all" }) {
         <IndividualLeadModal
           assignees={assignees}
           lead={editingIndividual}
+          defaultType={
+            selectedType?.api ||
+            "INDIVIDUAL"
+          }
           onClose={() => {
             setShowIndividual(false);
             setEditingIndividual(null);
           }}
           onSaved={async (data) => {
-            const wasEditing = Boolean(editingIndividual);
+            const wasEditing =
+              Boolean(
+                editingIndividual
+              );
+
             setShowIndividual(false);
             setEditingIndividual(null);
             setSuccessMessage(
               `${data.lead.name} ${wasEditing ? "updated" : "added"} successfully.`
             );
-            setSub("individual");
-            await loadIndividualLeads();
+
+            const savedType =
+              String(
+                data.lead?.type ||
+                  selectedType?.api ||
+                  "INDIVIDUAL"
+              )
+                .trim()
+                .toUpperCase();
+
+            const targetType =
+              ALL_LEAD_TYPES.find(
+                (type) =>
+                  type.api ===
+                  savedType
+              );
+
+            setSub(
+              targetType?.key ||
+                "individual"
+            );
+
+            await Promise.all([
+              loadIndividualLeads(),
+              loadDatasets(),
+            ]);
           }}
         />
       )}
@@ -3491,6 +4043,12 @@ export default function LeadStore({ selectedYear = "all" }) {
         <UploadDatasetModal
           assignees={
             assignees
+          }
+          defaultType={
+            sub === "individual"
+              ? "EXTERNAL_DATA"
+              : selectedType?.api ||
+                "EXTERNAL_DATA"
           }
           onClose={() =>
             setShowUpload(
@@ -3508,7 +4066,31 @@ export default function LeadStore({ selectedYear = "all" }) {
               `${data.importSummary.imported} leads imported · ${data.importSummary.duplicates} duplicates skipped · ${data.importSummary.failed} invalid rows skipped`
             );
 
-            await loadDatasets();
+            const importedType =
+              String(
+                data.dataset?.type ||
+                  "EXTERNAL_DATA"
+              )
+                .trim()
+                .toUpperCase();
+
+            const targetType =
+              TYPES.find(
+                (type) =>
+                  type.api ===
+                  importedType
+              );
+
+            if (targetType) {
+              setSub(
+                targetType.key
+              );
+            }
+
+            await Promise.all([
+              loadDatasets(),
+              loadIndividualLeads(),
+            ]);
           }}
         />
       )}

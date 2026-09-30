@@ -94,6 +94,25 @@ function normalizeName(value) {
     .toLowerCase();
 }
 
+function normalizeContactPhone(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+function normalizeContactEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function contactKeys({ phone, email } = {}) {
+  const keys = [];
+  const normalizedPhone = normalizeContactPhone(phone);
+  const normalizedEmail = normalizeContactEmail(email);
+
+  if (normalizedPhone) keys.push(`phone:${normalizedPhone}`);
+  if (normalizedEmail) keys.push(`email:${normalizedEmail}`);
+
+  return keys;
+}
+
 function mapUserByName(users = []) {
   const map = new Map();
 
@@ -277,6 +296,8 @@ router.get("/dashboard", async (req, res) => {
           select: {
             id: true,
             name: true,
+            phone: true,
+            email: true,
             source: true,
             stage: true,
             campaign: true,
@@ -295,6 +316,8 @@ router.get("/dashboard", async (req, res) => {
             id: true,
             leadId: true,
             studentName: true,
+            studentPhone: true,
+            studentEmail: true,
             college: true,
             course: true,
             counsellorName: true,
@@ -405,13 +428,75 @@ router.get("/dashboard", async (req, res) => {
         )
       : incentives;
 
-    const totalLeads = leads.length;
+    // Dashboard lead KPIs use a unified customer count. An admission can be
+    // created directly without a Lead Store record, so those students must not
+    // disappear from Total Leads / Qualified Leads. At the same time, avoid
+    // double-counting admissions that are already linked to (or clearly match)
+    // an existing lead by phone/email.
+    const leadIdByContactKey = new Map();
+
+    for (const lead of leads) {
+      for (const key of contactKeys({
+        phone: lead.phone,
+        email: lead.email,
+      })) {
+        if (!leadIdByContactKey.has(key)) {
+          leadIdByContactKey.set(key, lead.id);
+        }
+      }
+    }
+
+    const admittedLeadIds = new Set();
+    const directAdmissionContactKeys = new Set();
+    let directAdmissionLeadCount = 0;
+
+    for (const admission of admissions) {
+      if (admission.leadId) {
+        admittedLeadIds.add(admission.leadId);
+        continue;
+      }
+
+      const keys = contactKeys({
+        phone: admission.studentPhone,
+        email: admission.studentEmail,
+      });
+
+      const matchedLeadId = keys
+        .map((key) => leadIdByContactKey.get(key))
+        .find(Boolean);
+
+      if (matchedLeadId) {
+        admittedLeadIds.add(matchedLeadId);
+        continue;
+      }
+
+      // Multiple admission rows for the same direct-entry student should still
+      // represent one lead in the dashboard KPI. When no contact information is
+      // available, the admission itself is the safest unique fallback.
+      const alreadyCounted =
+        keys.length > 0 &&
+        keys.some((key) => directAdmissionContactKeys.has(key));
+
+      if (alreadyCounted) continue;
+
+      if (keys.length > 0) {
+        keys.forEach((key) => directAdmissionContactKeys.add(key));
+      }
+
+      directAdmissionLeadCount += 1;
+    }
+
+    const totalLeads = leads.length + directAdmissionLeadCount;
     const newLeads = leads.filter(
       (lead) => lead.stage === "NEW"
     ).length;
-    const qualifiedLeads = leads.filter(
-      (lead) => lead.stage === "QUALIFIED"
-    ).length;
+    const qualifiedLeads =
+      leads.filter(
+        (lead) =>
+          lead.stage === "QUALIFIED" ||
+          lead.stage === "ADMITTED" ||
+          admittedLeadIds.has(lead.id)
+      ).length + directAdmissionLeadCount;
     const totalAdmissions = admissions.length;
 
     const potentialRevenue = admissions.reduce(

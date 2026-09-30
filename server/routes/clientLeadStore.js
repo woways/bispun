@@ -7,6 +7,7 @@ import {
 import multer from "multer";
 
 import ExcelJS from "exceljs";
+import { Readable } from "node:stream";
 
 
 
@@ -82,6 +83,10 @@ router.use(
 
 const TYPE_LABELS = {
 
+  INDIVIDUAL:
+
+    "Individual Leads",
+
   EXTERNAL_DATA:
 
     "External Data",
@@ -111,6 +116,18 @@ const VALID_TYPES =
   Object.keys(
 
     TYPE_LABELS
+
+  );
+
+
+
+const VALID_DATASET_TYPES =
+
+  VALID_TYPES.filter(
+
+    (type) =>
+
+      type !== "INDIVIDUAL"
 
   );
 
@@ -217,6 +234,32 @@ const upload =
   });
 
 
+
+function leadFileUpload(req, res, next) {
+  upload.single("file")(req, res, (error) => {
+    if (!error) {
+      next();
+      return;
+    }
+
+    let message = error?.message || "Unable to upload spreadsheet";
+
+    if (error instanceof multer.MulterError) {
+      if (error.code === "LIMIT_FILE_SIZE") {
+        message = "Lead file must be 5 MB or smaller";
+      } else if (error.code === "LIMIT_FILE_COUNT") {
+        message = "Upload one lead file at a time";
+      } else {
+        message = "Unable to read the uploaded lead file";
+      }
+    }
+
+    res.status(400).json({
+      success: false,
+      message,
+    });
+  });
+}
 
 const HEADER_ALIASES = {
 
@@ -943,9 +986,7 @@ async function parseSpreadsheet(
   ) {
 
     await workbook.csv.read(
-
-      file.buffer
-
+      Readable.from([file.buffer])
     );
 
   } else {
@@ -1836,7 +1877,7 @@ router.get(
 
         type &&
 
-        VALID_TYPES.includes(
+        VALID_DATASET_TYPES.includes(
 
           type
 
@@ -2292,8 +2333,6 @@ router.get(
 
         source: "LEAD_STORE",
 
-        campaign: "Individual Lead",
-
         ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
 
       };
@@ -2340,6 +2379,20 @@ router.get(
 
           },
 
+          leadDataset: {
+
+            select: {
+
+              id: true,
+
+              name: true,
+
+              type: true,
+
+            },
+
+          },
+
         },
 
         orderBy: { createdAt: "desc" },
@@ -2368,11 +2421,41 @@ router.get(
 
           stage: lead.stage,
 
-          type: lead.medium,
+          type:
+
+            lead.medium ||
+
+            (
+
+              lead.campaign === "Individual Lead"
+
+                ? "INDIVIDUAL"
+
+                : lead.leadDataset?.type ||
+
+                  null
+
+            ),
 
           assignedToName: lead.assignedToName,
 
           createdAt: lead.createdAt,
+
+          isManual:
+
+            lead.campaign === "Individual Lead",
+
+          datasetId:
+
+            lead.leadDataset?.id ||
+
+            null,
+
+          datasetName:
+
+            lead.leadDataset?.name ||
+
+            null,
 
           sourceName: (lead.notes || "")
 
@@ -2391,6 +2474,8 @@ router.get(
               !line.startsWith("Lead Store source: ") &&
 
               !line.startsWith("Lead Store type: ") &&
+
+              !line.startsWith("Imported from ") &&
 
               line !== "Added individually from Lead Store"
 
@@ -2438,6 +2523,284 @@ router.get(
 
 /* =========================================================
 
+   BULK ASSIGN LEADS
+
+========================================================= */
+
+
+
+router.patch(
+
+  "/manual/bulk-assign",
+
+  async (req, res) => {
+
+    try {
+
+      const companyId =
+
+        req.clientUser.companyId;
+
+
+
+      const leadIds =
+
+        Array.isArray(req.body?.leadIds)
+
+          ? Array.from(
+
+              new Set(
+
+                req.body.leadIds
+
+                  .map((value) =>
+
+                    String(value || "").trim()
+
+                  )
+
+                  .filter(Boolean)
+
+              )
+
+            )
+
+          : [];
+
+
+
+      const assignedToUserId =
+
+        cleanString(
+
+          req.body?.assignedToUserId
+
+        );
+
+
+
+      if (!leadIds.length) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Select at least one lead",
+
+          });
+
+      }
+
+
+
+      if (leadIds.length > 5000) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Bulk assignment supports up to 5000 leads at a time",
+
+          });
+
+      }
+
+
+
+      const assignee =
+
+        await getAssignee(
+
+          companyId,
+
+          assignedToUserId
+
+        );
+
+
+
+      if (!assignee) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Select a valid team member",
+
+          });
+
+      }
+
+
+
+      const eligible =
+
+        await prisma.lead.findMany({
+
+          where: {
+
+            companyId,
+
+            source:
+
+              "LEAD_STORE",
+
+            id: {
+
+              in: leadIds,
+
+            },
+
+          },
+
+          select: {
+
+            id: true,
+
+          },
+
+        });
+
+
+
+      const eligibleIds =
+
+        eligible.map(
+
+          (lead) => lead.id
+
+        );
+
+
+
+      if (!eligibleIds.length) {
+
+        return res
+
+          .status(404)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "No matching Lead Store leads were found",
+
+          });
+
+      }
+
+
+
+      const result =
+
+        await prisma.lead.updateMany({
+
+          where: {
+
+            companyId,
+
+            source:
+
+              "LEAD_STORE",
+
+            id: {
+
+              in: eligibleIds,
+
+            },
+
+          },
+
+          data: {
+
+            assignedToName:
+
+              assignee.name,
+
+          },
+
+        });
+
+
+
+      return res.json({
+
+        success: true,
+
+        assignedCount:
+
+          result.count,
+
+        assignee: {
+
+          id: assignee.id,
+
+          name: assignee.name,
+
+        },
+
+        message:
+
+          `${result.count} lead${result.count === 1 ? "" : "s"} assigned to ${assignee.name}`,
+
+      });
+
+    } catch (error) {
+
+      console.error(
+
+        "Failed to bulk assign Lead Store leads:",
+
+        error
+
+      );
+
+
+
+      return res
+
+        .status(500)
+
+        .json({
+
+          success: false,
+
+          message:
+
+            "Unable to assign selected leads",
+
+        });
+
+    }
+
+  }
+
+);
+
+
+
+/* =========================================================
+
    EDIT INDIVIDUAL LEAD
 
 ========================================================= */
@@ -2468,8 +2831,6 @@ router.patch(
 
           source: "LEAD_STORE",
 
-          campaign: "Individual Lead",
-
         },
 
       });
@@ -2493,7 +2854,15 @@ router.patch(
 
       const course = cleanString(req.body?.course);
 
-      const type = String(req.body?.type || existing.medium || "EXTERNAL_DATA").trim().toUpperCase();
+      const type = String(
+        req.body?.type ||
+          existing.medium ||
+          (
+            existing.campaign === "Individual Lead"
+              ? "INDIVIDUAL"
+              : "EXTERNAL_DATA"
+          )
+      ).trim().toUpperCase();
 
       const sourceName = cleanString(req.body?.sourceName);
 
@@ -2602,6 +2971,26 @@ router.patch(
 
 
 
+      const originMarker =
+
+        existing.campaign === "Individual Lead"
+
+          ? "Added individually from Lead Store"
+
+          : (existing.notes || "")
+
+              .split("\n")
+
+              .find((line) =>
+
+                line.startsWith("Imported from ")
+
+              ) ||
+
+            null;
+
+
+
       const updated = await prisma.$transaction(async (tx) => {
 
         const lead = await tx.lead.update({
@@ -2630,7 +3019,7 @@ router.patch(
 
               `Lead Store type: ${TYPE_LABELS[type] || type}`,
 
-              "Added individually from Lead Store",
+              originMarker,
 
             ].filter(Boolean).join("\n"),
 
@@ -2668,7 +3057,47 @@ router.patch(
 
 
 
-      return res.json({ success: true, message: "Lead updated successfully", lead: updated });
+      return res.json({
+
+        success: true,
+
+        message:
+
+          "Lead updated successfully",
+
+        lead: {
+
+          id: updated.id,
+
+          name: updated.name,
+
+          phone: updated.phone,
+
+          email: updated.email,
+
+          course: updated.course,
+
+          source: updated.source,
+
+          stage: updated.stage,
+
+          type:
+
+            updated.medium ||
+
+            "INDIVIDUAL",
+
+          assignedToName:
+
+            updated.assignedToName,
+
+          createdAt:
+
+            updated.createdAt,
+
+        },
+
+      });
 
     } catch (error) {
 
@@ -2716,11 +3145,17 @@ router.delete(
 
           source: "LEAD_STORE",
 
-          campaign: "Individual Lead",
-
         },
 
-        select: { id: true, name: true },
+        select: {
+
+          id: true,
+
+          name: true,
+
+          leadDatasetId: true,
+
+        },
 
       });
 
@@ -2734,11 +3169,85 @@ router.delete(
 
 
 
-      await prisma.lead.delete({ where: { id: leadId } });
+      await prisma.$transaction(
+
+        async (tx) => {
+
+          await tx.lead.delete({
+
+            where: {
+
+              id: leadId,
+
+            },
+
+          });
 
 
 
-      return res.json({ success: true, message: "Lead deleted successfully", lead });
+          if (lead.leadDatasetId) {
+
+            const remainingCount =
+
+              await tx.lead.count({
+
+                where: {
+
+                  companyId,
+
+                  leadDatasetId:
+
+                    lead.leadDatasetId,
+
+                },
+
+              });
+
+
+
+            await tx.leadDataset.update({
+
+              where: {
+
+                id:
+
+                  lead.leadDatasetId,
+
+              },
+
+              data: {
+
+                leadCount:
+
+                  remainingCount,
+
+                importedCount:
+
+                  remainingCount,
+
+              },
+
+            });
+
+          }
+
+        }
+
+      );
+
+
+
+      return res.json({
+
+        success: true,
+
+        message:
+
+          "Lead deleted successfully",
+
+        lead,
+
+      });
 
     } catch (error) {
 
@@ -2846,7 +3355,7 @@ router.post(
 
           req.body?.type ||
 
-            "EXTERNAL_DATA"
+            "INDIVIDUAL"
 
         )
 
@@ -3424,6 +3933,12 @@ router.post(
 
               lead.stage,
 
+            type:
+
+              lead.medium ||
+
+              "INDIVIDUAL",
+
             assignedToName:
 
               lead.assignedToName,
@@ -3482,11 +3997,7 @@ router.post(
 
   "/preview",
 
-  upload.single(
-
-    "file"
-
-  ),
+  leadFileUpload,
 
   async (
 
@@ -3728,11 +4239,7 @@ router.post(
 
   "/import",
 
-  upload.single(
-
-    "file"
-
-  ),
+  leadFileUpload,
 
   async (
 
@@ -3836,7 +4343,7 @@ router.post(
 
       if (
 
-        !VALID_TYPES.includes(
+        !VALID_DATASET_TYPES.includes(
 
           type
 
@@ -4536,7 +5043,7 @@ router.patch(
 
         if (
 
-          !VALID_TYPES.includes(
+          !VALID_DATASET_TYPES.includes(
 
             type
 

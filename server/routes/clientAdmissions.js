@@ -53,6 +53,19 @@ const STATUS_LABELS = {
   CANCELLED: "Cancelled",
 };
 
+const VALID_REVENUE_STATUSES = ["IN_BUCKET", "BUFFER_ZONE"];
+const VALID_AMOUNT_STATUSES = ["RECEIVED", "PENDING"];
+
+const REVENUE_STATUS_LABELS = {
+  IN_BUCKET: "In Bucket",
+  BUFFER_ZONE: "Buffer Zone",
+};
+
+const AMOUNT_STATUS_LABELS = {
+  RECEIVED: "Received",
+  PENDING: "Pending",
+};
+
 const MAX_IMPORT_ROWS = 2000;
 
 const upload = multer({
@@ -172,13 +185,28 @@ function formatAdmission(admission) {
     name: admission.studentName,
     phone: admission.studentPhone,
     email: admission.studentEmail,
+    universityName: admission.universityName || "",
+    studentLocation: admission.studentLocation || "",
+    studentInterCollege: admission.studentInterCollege || "",
     college: admission.college,
     course: admission.course,
     counsellor: admission.counsellorName || "Unassigned",
     counsellorName: admission.counsellorName,
+    // Database field names remain totalFee/paidAmount for backwards compatibility.
+    incentiveAmount: totalFee,
+    receivedAmount: paidAmount,
+    pendingAmount: Math.max(totalFee - paidAmount, 0),
     total: totalFee,
     paid: paidAmount,
     pending: Math.max(totalFee - paidAmount, 0),
+    revenueStatus: admission.revenueStatus || "BUFFER_ZONE",
+    bufferStatus:
+      REVENUE_STATUS_LABELS[admission.revenueStatus] ||
+      REVENUE_STATUS_LABELS.BUFFER_ZONE,
+    amountStatusKey: admission.amountStatus || null,
+    amountStatus: admission.amountStatus
+      ? AMOUNT_STATUS_LABELS[admission.amountStatus] || admission.amountStatus
+      : "—",
     status: STATUS_LABELS[admission.status] || admission.status,
     statusKey: admission.status,
     admissionDate: admission.admissionDate,
@@ -1466,14 +1494,19 @@ router.delete(
 
 const HEADER_ALIASES = {
   studentName: ["name", "student", "student name", "student_name", "lead name", "lead_name"],
-  studentPhone: ["phone", "mobile", "mobile number", "phone number", "contact"],
+  studentPhone: ["phone", "mobile", "mobile number", "phone number", "contact", "contact number"],
   studentEmail: ["email", "email id", "email address"],
-  course: ["course", "program", "programme", "interest"],
+  universityName: ["university", "university name", "university_name"],
+  studentLocation: ["student location", "location", "city", "student_location"],
+  studentInterCollege: ["student inter college", "inter college", "intermediate college", "student_inter_college"],
+  course: ["course", "program", "programme", "interest", "branch"],
   counsellorName: ["counsellor", "counselor", "counsellor name", "counselor name"],
-  totalFee: ["total fee", "total_fee", "fee", "amount"],
-  paidAmount: ["paid amount", "paid_amount", "paid", "received"],
+  totalFee: ["incentive amount", "incentive_amount", "total fee", "total_fee", "fee", "amount"],
+  paidAmount: ["received amount", "received_amount", "paid amount", "paid_amount", "paid", "received"],
+  revenueStatus: ["buffer status", "revenue status", "revenue_status", "bucket status"],
+  amountStatus: ["amount status", "amount_status", "payment status"],
   status: ["status", "admission status"],
-  admissionDate: ["admission date", "admission_date", "date"],
+  admissionDate: ["admission date", "admission_date", "date", "date of admission"],
   notes: ["notes", "remarks", "comments"],
 };
 
@@ -1493,7 +1526,8 @@ async function parseAdmissionFile(file) {
   const filename = String(file.originalname || "").toLowerCase();
 
   if (filename.endsWith(".csv")) {
-    await workbook.csv.read(file.buffer);
+    const { Readable } = await import("node:stream");
+    await workbook.csv.read(Readable.from(file.buffer));
   } else {
     await workbook.xlsx.load(file.buffer);
   }
@@ -1512,8 +1546,8 @@ async function parseAdmissionFile(file) {
     indexes[field] = headerIndex(headers, field);
   }
 
-  if (indexes.studentName < 0 || indexes.course < 0) {
-    throw new Error('Spreadsheet must contain "Name" and "Course" columns');
+  if (indexes.studentName < 0) {
+    throw new Error('Spreadsheet must contain a "Name" column');
   }
 
   const rows = [];
@@ -1528,9 +1562,20 @@ async function parseAdmissionFile(file) {
     const course = cleanOptional(valueAt("course"));
     const phone = cleanOptional(valueAt("studentPhone"));
     const email = cleanOptional(valueAt("studentEmail"));
+    const universityName = cleanOptional(valueAt("universityName"));
+    const studentLocation = cleanOptional(valueAt("studentLocation"));
+    const studentInterCollege = cleanOptional(valueAt("studentInterCollege"));
     const counsellorName = cleanOptional(valueAt("counsellorName"));
     const totalFee = parseMoney(valueAt("totalFee"), 0);
     const paidAmount = parseMoney(valueAt("paidAmount"), 0);
+    const rawRevenueStatus = String(valueAt("revenueStatus") || "BUFFER_ZONE")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_");
+    const rawAmountStatus = String(valueAt("amountStatus") || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "_");
     const rawStatus = String(valueAt("status") || "ONGOING").trim().toUpperCase().replace(/\s+/g, "_");
     const admissionDate = valueAt("admissionDate")
       ? parseDate(valueAt("admissionDate"), null)
@@ -1538,15 +1583,29 @@ async function parseAdmissionFile(file) {
 
     if (!studentName && !course && !phone && !email) continue;
 
+    const parsedRevenueStatus = VALID_REVENUE_STATUSES.includes(rawRevenueStatus)
+      ? rawRevenueStatus
+      : "BUFFER_ZONE";
+
     rows.push({
       rowNumber,
       studentName,
       studentPhone: phone,
       studentEmail: email ? email.toLowerCase() : null,
+      universityName,
+      studentLocation,
+      studentInterCollege,
       course,
       counsellorName,
       totalFee,
       paidAmount,
+      revenueStatus: parsedRevenueStatus,
+      amountStatus:
+        parsedRevenueStatus === "BUFFER_ZONE"
+          ? null
+          : VALID_AMOUNT_STATUSES.includes(rawAmountStatus)
+            ? rawAmountStatus
+            : "PENDING",
       status: VALID_STATUSES.includes(rawStatus) ? rawStatus : "ONGOING",
       admissionDate,
       notes: cleanOptional(valueAt("notes")),
@@ -1631,15 +1690,21 @@ router.post(
       await prisma.admission.createMany({
         data: valid.map((row) => ({
           companyId,
+          market: partner.market || "DOMESTIC",
           partnerId: partner.id,
           studentName: row.studentName,
           studentPhone: row.studentPhone,
           studentEmail: row.studentEmail,
+          universityName: row.universityName,
+          studentLocation: row.studentLocation,
+          studentInterCollege: row.studentInterCollege,
           college: partner.name,
           course: row.course,
           counsellorName: row.counsellorName,
           totalFee: row.totalFee,
           paidAmount: row.paidAmount,
+          revenueStatus: row.revenueStatus,
+          amountStatus: row.amountStatus,
           status: row.status,
           admissionDate: row.admissionDate,
           notes: row.notes,
@@ -1819,6 +1884,12 @@ router.post(
                 row.studentPhone,
               studentEmail:
                 row.studentEmail,
+              universityName:
+                row.universityName,
+              studentLocation:
+                row.studentLocation,
+              studentInterCollege:
+                row.studentInterCollege,
               college:
                 partner.name,
               course:
@@ -1829,6 +1900,10 @@ router.post(
                 row.totalFee,
               paidAmount:
                 row.paidAmount,
+              revenueStatus:
+                row.revenueStatus,
+              amountStatus:
+                row.amountStatus,
               status:
                 row.status,
               admissionDate:
@@ -2001,11 +2076,16 @@ router.post("/", async (req, res) => {
       studentName,
       studentPhone,
       studentEmail,
+      universityName,
+      studentLocation,
+      studentInterCollege,
       college,
       course,
       counsellorName,
       totalFee,
       paidAmount,
+      revenueStatus,
+      amountStatus,
       status,
       admissionDate,
       notes,
@@ -2055,6 +2135,9 @@ router.post("/", async (req, res) => {
     let cleanStudentName = String(studentName || "").trim();
     let cleanStudentPhone = cleanOptional(studentPhone);
     let cleanStudentEmail = cleanOptional(studentEmail)?.toLowerCase() || null;
+    const cleanUniversityName = cleanOptional(universityName);
+    const cleanStudentLocation = cleanOptional(studentLocation);
+    const cleanStudentInterCollege = cleanOptional(studentInterCollege);
     let cleanCourse =
       branch?.name ||
       String(course || "").trim();
@@ -2062,11 +2145,40 @@ router.post("/", async (req, res) => {
     let cleanCollege = partner?.name || String(college || "").trim();
 
     const statusKey = String(status || "ONGOING").trim().toUpperCase();
+    const revenueStatusKey = String(revenueStatus || "BUFFER_ZONE")
+      .trim()
+      .toUpperCase();
+    let amountStatusKey = cleanOptional(amountStatus)?.toUpperCase() || null;
     const parsedTotalFee = Number(totalFee || 0);
     const parsedPaidAmount = Number(paidAmount || 0);
 
     if (!cleanCollege) {
       return res.status(400).json({ success: false, message: "College is required" });
+    }
+
+    if (!cleanUniversityName) {
+      return res.status(400).json({
+        success: false,
+        message: "University name is required",
+      });
+    }
+
+    if (!VALID_REVENUE_STATUSES.includes(revenueStatusKey)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid buffer status",
+      });
+    }
+
+    if (revenueStatusKey === "BUFFER_ZONE") {
+      amountStatusKey = null;
+    } else if (!amountStatusKey) {
+      amountStatusKey = "PENDING";
+    } else if (!VALID_AMOUNT_STATUSES.includes(amountStatusKey)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount status",
+      });
     }
 
     if (partner && !branch) {
@@ -2076,13 +2188,13 @@ router.post("/", async (req, res) => {
       });
     }
     if (!Number.isFinite(parsedTotalFee) || parsedTotalFee < 0) {
-      return res.status(400).json({ success: false, message: "Total fee must be a valid amount" });
+      return res.status(400).json({ success: false, message: "Incentive amount must be a valid amount" });
     }
     if (!Number.isFinite(parsedPaidAmount) || parsedPaidAmount < 0) {
-      return res.status(400).json({ success: false, message: "Paid amount must be a valid amount" });
+      return res.status(400).json({ success: false, message: "Received amount must be a valid amount" });
     }
     if (parsedPaidAmount > parsedTotalFee) {
-      return res.status(400).json({ success: false, message: "Paid amount cannot exceed total fee" });
+      return res.status(400).json({ success: false, message: "Received amount cannot exceed incentive amount" });
     }
     if (!VALID_STATUSES.includes(statusKey)) {
       return res.status(400).json({ success: false, message: "Invalid admission status" });
@@ -2159,11 +2271,16 @@ router.post("/", async (req, res) => {
           studentName: cleanStudentName,
           studentPhone: cleanStudentPhone,
           studentEmail: cleanStudentEmail,
+          universityName: cleanUniversityName,
+          studentLocation: cleanStudentLocation,
+          studentInterCollege: cleanStudentInterCollege,
           college: resolvedPartner.name,
           course: cleanCourse,
           counsellorName: cleanCounsellor,
           totalFee: parsedTotalFee,
           paidAmount: parsedPaidAmount,
+          revenueStatus: revenueStatusKey,
+          amountStatus: amountStatusKey,
           status: statusKey,
           admissionDate: parsedAdmissionDate,
           notes: cleanOptional(notes),
@@ -2278,6 +2395,9 @@ router.patch("/:id", async (req, res) => {
       ["studentName", true],
       ["studentPhone", false],
       ["studentEmail", false],
+      ["universityName", true],
+      ["studentLocation", false],
+      ["studentInterCollege", false],
       ["counsellorName", false],
       ["notes", false],
     ];
@@ -2300,17 +2420,55 @@ router.patch("/:id", async (req, res) => {
       req.body?.paidAmount !== undefined ? Number(req.body.paidAmount) : Number(existing.paidAmount);
 
     if (!Number.isFinite(nextTotalFee) || nextTotalFee < 0) {
-      return res.status(400).json({ success: false, message: "Total fee must be a valid amount" });
+      return res.status(400).json({ success: false, message: "Incentive amount must be a valid amount" });
     }
     if (!Number.isFinite(nextPaidAmount) || nextPaidAmount < 0) {
-      return res.status(400).json({ success: false, message: "Paid amount must be a valid amount" });
+      return res.status(400).json({ success: false, message: "Received amount must be a valid amount" });
     }
     if (nextPaidAmount > nextTotalFee) {
-      return res.status(400).json({ success: false, message: "Paid amount cannot exceed total fee" });
+      return res.status(400).json({ success: false, message: "Received amount cannot exceed incentive amount" });
     }
 
     if (req.body?.totalFee !== undefined) data.totalFee = nextTotalFee;
     if (req.body?.paidAmount !== undefined) data.paidAmount = nextPaidAmount;
+
+    let nextRevenueStatus =
+      req.body?.revenueStatus !== undefined
+        ? String(req.body.revenueStatus || "").trim().toUpperCase()
+        : existing.revenueStatus || "BUFFER_ZONE";
+
+    if (!VALID_REVENUE_STATUSES.includes(nextRevenueStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid buffer status",
+      });
+    }
+
+    let nextAmountStatus =
+      req.body?.amountStatus !== undefined
+        ? cleanOptional(req.body.amountStatus)?.toUpperCase() || null
+        : existing.amountStatus || null;
+
+    if (nextRevenueStatus === "BUFFER_ZONE") {
+      nextAmountStatus = null;
+    } else if (!nextAmountStatus) {
+      nextAmountStatus = "PENDING";
+    } else if (!VALID_AMOUNT_STATUSES.includes(nextAmountStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid amount status",
+      });
+    }
+
+    if (req.body?.revenueStatus !== undefined) {
+      data.revenueStatus = nextRevenueStatus;
+    }
+    if (
+      req.body?.amountStatus !== undefined ||
+      req.body?.revenueStatus !== undefined
+    ) {
+      data.amountStatus = nextAmountStatus;
+    }
 
     let nextStatus = existing.status;
     if (req.body?.status !== undefined) {
