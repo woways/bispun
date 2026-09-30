@@ -118,6 +118,48 @@ function getAccent(
 }
 
 
+function validateLogoValue(value) {
+  const logo = String(value || "").trim();
+
+  if (!logo) return "";
+  if (/^data:image\/(png|jpeg|webp|svg\+xml);/i.test(logo)) return "";
+
+  try {
+    const parsed = new URL(logo);
+    if (!["http:", "https:"].includes(parsed.protocol) || !parsed.hostname) {
+      return "Enter a valid HTTP/HTTPS image URL.";
+    }
+  } catch {
+    return "Enter a valid HTTP/HTTPS image URL.";
+  }
+
+  return "";
+}
+
+function verifyRemoteLogoImage(value) {
+  const logo = String(value || "").trim();
+  if (!logo || logo.startsWith("data:image/")) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    const timeout = window.setTimeout(() => {
+      image.onload = null;
+      image.onerror = null;
+      resolve(false);
+    }, 7000);
+
+    image.onload = () => {
+      window.clearTimeout(timeout);
+      resolve(true);
+    };
+    image.onerror = () => {
+      window.clearTimeout(timeout);
+      resolve(false);
+    };
+    image.src = logo;
+  });
+}
+
 function Field({
   label,
   value,
@@ -210,8 +252,13 @@ export default function SettingsView({
   });
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleNotice, setGoogleNotice] = useState("");
+  const [googleStatusLoading, setGoogleStatusLoading] = useState(true);
+  const [googleStatusError, setGoogleStatusError] = useState("");
 
   async function loadGoogleStatus() {
+    setGoogleStatusLoading(true);
+    setGoogleStatusError("");
+
     try {
       const data = await apiRequest("/api/client/google/status");
       setGoogleStatus({
@@ -221,6 +268,9 @@ export default function SettingsView({
       });
     } catch (error) {
       console.error("Unable to load Google status:", error);
+      setGoogleStatusError("Unable to check Google Meet status");
+    } finally {
+      setGoogleStatusLoading(false);
     }
   }
 
@@ -357,6 +407,7 @@ export default function SettingsView({
   ] = useState(
     tenant?.logoUrl || ""
   );
+  const [logoUrlError, setLogoUrlError] = useState("");
 
   const [
     notificationPreferences,
@@ -435,6 +486,16 @@ export default function SettingsView({
     usersError,
     setUsersError,
   ] = useState("");
+
+  const [
+    userModalError,
+    setUserModalError,
+  ] = useState("");
+
+  const [
+    userFormErrors,
+    setUserFormErrors,
+  ] = useState({});
 
   const [organization, setOrganization] = useState({ departments: [], roles: [] });
   const [organizationLoading, setOrganizationLoading] = useState(false);
@@ -533,6 +594,11 @@ export default function SettingsView({
   const [
     sourcesError,
     setSourcesError,
+  ] = useState("");
+
+  const [
+    sourceModalError,
+    setSourceModalError,
   ] = useState("");
 
   const [
@@ -721,9 +787,9 @@ export default function SettingsView({
         )
       );
 
-      setLogoPreview(
-        workspace.logoUrl || ""
-      );
+      const loadedLogoError = validateLogoValue(workspace.logoUrl || "");
+      setLogoUrlError(loadedLogoError);
+      setLogoPreview(loadedLogoError ? "" : workspace.logoUrl || "");
     } catch (error) {
       setWorkspaceSettingsError(
         error?.data?.message ||
@@ -739,9 +805,27 @@ export default function SettingsView({
   }, []);
 
   async function saveWorkspaceSettings() {
-    setWorkspaceSettingsSaving(true);
     setWorkspaceSettingsError("");
     setWorkspaceSettingsMessage("");
+
+    const logoValidationError = validateLogoValue(form.logoUrl);
+    if (logoValidationError) {
+      setLogoUrlError(logoValidationError);
+      setLogoPreview("");
+      setWorkspaceSettingsError(logoValidationError);
+      return;
+    }
+
+    if (form.logoUrl && !(await verifyRemoteLogoImage(form.logoUrl))) {
+      const message = "Unable to load an image from this logo URL.";
+      setLogoUrlError(message);
+      setLogoPreview("");
+      setWorkspaceSettingsError(message);
+      return;
+    }
+
+    setLogoUrlError("");
+    setWorkspaceSettingsSaving(true);
 
     try {
       const data =
@@ -810,6 +894,7 @@ export default function SettingsView({
       setLogoPreview(
         workspace.logoUrl || ""
       );
+      setLogoUrlError("");
 
       setWorkspaceSettingsMessage(
         data.message ||
@@ -842,6 +927,7 @@ export default function SettingsView({
     }
 
     setWorkspaceSettingsError("");
+    setLogoUrlError("");
 
     if (
       ![
@@ -886,6 +972,7 @@ export default function SettingsView({
       );
 
       setLogoPreview(value);
+      setLogoUrlError("");
     };
 
     reader.onerror = () => {
@@ -906,6 +993,7 @@ export default function SettingsView({
     );
 
     setLogoPreview("");
+    setLogoUrlError("");
   }
 
   async function loadOrganization() {
@@ -1051,12 +1139,22 @@ export default function SettingsView({
     };
   }
 
+  function closeUserModal() {
+    setUserModalOpen(false);
+    setEditingUser(null);
+    setUserModalError("");
+    setUserFormErrors({});
+    setUsersError("");
+  }
+
   function openCreateUser() {
     setEditingUser(null);
     setUserForm(
       emptyUserForm
     );
     setUsersError("");
+    setUserModalError("");
+    setUserFormErrors({});
     setUserModalOpen(true);
   }
 
@@ -1083,6 +1181,8 @@ export default function SettingsView({
     });
 
     setUsersError("");
+    setUserModalError("");
+    setUserFormErrors({});
     setUserModalOpen(true);
   }
 
@@ -1093,8 +1193,10 @@ export default function SettingsView({
 
     const role = customRole?.baseRole || selection;
     const rolePermissions = customRole?.permissions || roleDefaults(role);
-    const department = organization.departments.find((item) => item.name === userForm.department);
 
+    // Least-privilege rule: changing a department must never silently elevate
+    // a user's access. Defaults come from the selected role/custom role only.
+    // An admin can still deliberately customise individual permissions below.
     setUserForm((current) => ({
       ...current,
       role,
@@ -1102,33 +1204,70 @@ export default function SettingsView({
       permissions: Object.fromEntries(
         Object.keys(current.permissions).map((key) => [
           key,
-          rolePermissions?.[key] === true || department?.permissions?.[key] === true,
+          rolePermissions?.[key] === true,
         ])
       ),
     }));
+  }
+
+  function updateUserField(field, value) {
+    setUserForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setUserFormErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+
+    setUserModalError("");
   }
 
   function setUserDepartment(name) {
-    const department = organization.departments.find((item) => item.name === name);
-    const customRole = userForm.customRoleId
-      ? organization.roles.find((item) => item.id === userForm.customRoleId)
-      : null;
-    const rolePermissions = customRole?.permissions || roleDefaults(userForm.role);
-    setUserForm((current) => ({
-      ...current,
-      department: name,
-      permissions: Object.fromEntries(
-        Object.keys(current.permissions).map((key) => [
-          key,
-          rolePermissions?.[key] === true || department?.permissions?.[key] === true,
-        ])
-      ),
-    }));
+    updateUserField("department", name);
   }
 
   async function saveUser() {
+    const nextErrors = {};
+    const name = String(userForm.name || "").trim();
+    const email = String(userForm.email || "").trim();
+    const password = String(userForm.password || "");
+
+    if (!name) {
+      nextErrors.name = "Name is required.";
+    }
+
+    if (!email) {
+      nextErrors.email = "Email is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      nextErrors.email = "Enter a valid email address.";
+    }
+
+    if (!userForm.department) {
+      nextErrors.department = "Department is required.";
+    }
+
+    if (!editingUser) {
+      if (!password) {
+        nextErrors.password = "Temporary password is required.";
+      } else if (password.length < 8) {
+        nextErrors.password = "Temporary password must be at least 8 characters.";
+      }
+    }
+
+    if (Object.keys(nextErrors).length) {
+      setUserFormErrors(nextErrors);
+      setUserModalError("Please correct the highlighted fields.");
+      return;
+    }
+
     setUserSaving(true);
     setUsersError("");
+    setUserModalError("");
+    setUserFormErrors({});
 
     try {
       const payload = {
@@ -1191,10 +1330,9 @@ export default function SettingsView({
           ? "User updated successfully"
           : "User added successfully"
       );
-      setUserModalOpen(false);
-      setEditingUser(null);
+      closeUserModal();
     } catch (error) {
-      setUsersError(
+      setUserModalError(
         error?.data?.message ||
           "Unable to save user"
       );
@@ -1302,12 +1440,19 @@ export default function SettingsView({
     }
   }, [tab]);
 
+  function closeSourceModal() {
+    setSourceModalOpen(false);
+    setEditingSource(null);
+    setSourceModalError("");
+  }
+
   function openCreateSource() {
     setEditingSource(null);
     setSourceForm(
       emptySourceForm
     );
     setSourcesError("");
+    setSourceModalError("");
     setSourceModalOpen(true);
   }
 
@@ -1328,12 +1473,13 @@ export default function SettingsView({
         source.sortOrder ?? 100,
     });
     setSourcesError("");
+    setSourceModalError("");
     setSourceModalOpen(true);
   }
 
   async function saveLeadSource() {
     setSourceSaving(true);
-    setSourcesError("");
+    setSourceModalError("");
 
     try {
       const data =
@@ -1387,10 +1533,9 @@ export default function SettingsView({
           ? "Lead source updated successfully"
           : "Lead source added successfully"
       );
-      setSourceModalOpen(false);
-      setEditingSource(null);
+      closeSourceModal();
     } catch (error) {
-      setSourcesError(
+      setSourceModalError(
         error?.data?.message ||
           "Unable to save lead source"
       );
@@ -1896,9 +2041,21 @@ export default function SettingsView({
       return "—";
     }
 
-    return new Date(
-      value
-    ).toLocaleString();
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+
+    return date.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
   }
 
   function auditActionLabel(
@@ -2530,6 +2687,10 @@ export default function SettingsView({
                       <img
                         src={logoPreview}
                         alt="Company logo preview"
+                        onError={() => {
+                          setLogoPreview("");
+                          setLogoUrlError("Unable to load an image from this logo URL.");
+                        }}
                         className="max-h-20 max-w-[220px] object-contain"
                       />
                     </div>
@@ -2544,23 +2705,31 @@ export default function SettingsView({
                       value={
                         form.logoUrl
                       }
+                      type="url"
                       onChange={(
                         event
                       ) => {
-                        const value =
-                          event.target.value;
+                        const value = event.target.value;
+                        const validationError = validateLogoValue(value);
 
-                        update(
-                          "logoUrl",
-                          value
-                        );
+                        update("logoUrl", value);
+                        setLogoUrlError(validationError);
 
-                        setLogoPreview(
-                          value
-                        );
+                        if (!value.trim()) {
+                          setLogoPreview("");
+                        } else if (!validationError) {
+                          setLogoPreview(value.trim());
+                        } else {
+                          setLogoPreview("");
+                        }
                       }}
                       placeholder="https://example.com/logo.png"
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                      aria-invalid={!!logoUrlError}
+                      className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                        logoUrlError
+                          ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+                          : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
+                      }`}
                     />
 
                     <label className="h-10 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2 cursor-pointer">
@@ -2577,6 +2746,12 @@ export default function SettingsView({
                       />
                     </label>
                   </div>
+
+                  {logoUrlError && (
+                    <div className="text-[12px] font-medium text-rose-600">
+                      {logoUrlError}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between gap-3">
                     <div className="text-[13px] text-slate-400">
@@ -2649,11 +2824,14 @@ export default function SettingsView({
                 })}
               </div>
 
-              {usersError && (
-                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
-                  {usersError}
-                </div>
-              )}
+              {usersError &&
+                !userModalOpen &&
+                !organizationModal &&
+                !resetPasswordUser && (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
+                    {usersError}
+                  </div>
+                )}
 
               {usersManagementTab === "users" && (
                 <div className="space-y-4">
@@ -2990,7 +3168,7 @@ export default function SettingsView({
                 </button>
               </div>
 
-              {sourcesError && (
+              {sourcesError && !sourceModalOpen && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg p-3 text-[13px]">
                   {sourcesError}
                 </div>
@@ -3866,7 +4044,9 @@ export default function SettingsView({
                               colSpan={4}
                               className="py-14 text-center text-[15px] text-slate-500"
                             >
-                              No activity logs found yet. Make a company or user-management change, then refresh this page.
+                              {auditSearch.trim() || auditEntityFilter
+                                ? "No activity matches your search or selected filter."
+                                : "No activity has been recorded yet."}
                             </td>
                           </tr>
                         )}
@@ -3917,7 +4097,16 @@ export default function SettingsView({
                   </div>
 
                   <div className="flex-shrink-0">
-                    {!googleStatus.configured ? (
+                    {googleStatusLoading ? (
+                      <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-500">
+                        <Loader2 size={14} className="animate-spin" />
+                        Checking status...
+                      </span>
+                    ) : googleStatusError ? (
+                      <span className="text-[12px] font-semibold text-rose-600">
+                        {googleStatusError}
+                      </span>
+                    ) : !googleStatus.configured ? (
                       <span className="text-[12px] font-semibold text-amber-600">
                         Not set up on the server yet
                       </span>
@@ -3991,9 +4180,7 @@ export default function SettingsView({
 
               <button
                 type="button"
-                onClick={() =>
-                  setUserModalOpen(false)
-                }
+                onClick={closeUserModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
                 <X size={16} />
@@ -4001,25 +4188,37 @@ export default function SettingsView({
             </div>
 
             <div className="p-5 space-y-5">
+              {userModalError && (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
+                  {userModalError}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {[
-                  ["name", "Name", "text"],
-                  ["email", "Email", "email"],
-                  ["phone", "Phone", "text"],
-                  ["jobTitle", "Job Title", "text"],
+                  ["name", "Name", "text", true],
+                  ["email", "Email", "email", true],
+                  ["phone", "Phone", "text", false],
+                  ["jobTitle", "Job Title", "text", false],
                 ].map(
                   ([
                     key,
                     label,
                     type,
+                    required,
                   ]) => (
                     <div key={key}>
                       <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">
                         {label}
+                        {required && (
+                          <span className="text-rose-500 ml-0.5">*</span>
+                        )}
                       </label>
 
                       <input
                         type={type}
+                        required={required}
+                        aria-invalid={Boolean(userFormErrors[key])}
                         value={
                           userForm[
                             key
@@ -4028,19 +4227,23 @@ export default function SettingsView({
                         onChange={(
                           event
                         ) =>
-                          setUserForm(
-                            (
-                              current
-                            ) => ({
-                              ...current,
-                              [key]:
-                                event.target
-                                  .value,
-                            })
+                          updateUserField(
+                            key,
+                            event.target.value
                           )
                         }
-                        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                        className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                          userFormErrors[key]
+                            ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
+                            : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
+                        }`}
                       />
+
+                      {userFormErrors[key] && (
+                        <p className="mt-1 text-[12px] text-rose-600">
+                          {userFormErrors[key]}
+                        </p>
+                      )}
                     </div>
                   )
                 )}
@@ -4052,39 +4255,62 @@ export default function SettingsView({
 
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Department <span className="text-rose-500">*</span></label>
-                  <select required value={userForm.department} onChange={(event) => setUserDepartment(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
+                  <select
+                    required
+                    aria-invalid={Boolean(userFormErrors.department)}
+                    value={userForm.department}
+                    onChange={(event) => setUserDepartment(event.target.value)}
+                    className={`w-full h-10 px-3 border rounded-lg bg-white text-[15px] ${
+                      userFormErrors.department
+                        ? "border-rose-300 focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
+                        : "border-slate-200"
+                    }`}
+                  >
                     <option value="">Select department</option>
                     {organization.departments.map((department) => <option key={department.id} value={department.name}>{department.name} ({department.code})</option>)}
                   </select>
+                  {userFormErrors.department && (
+                    <p className="mt-1 text-[12px] text-rose-600">
+                      {userFormErrors.department}
+                    </p>
+                  )}
                 </div>
 
                 {!editingUser && (
                   <div>
                     <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">
                       Temporary Password
+                      <span className="text-rose-500 ml-0.5">*</span>
                     </label>
 
                     <input
                       type="password"
+                      required
+                      minLength={8}
+                      aria-invalid={Boolean(userFormErrors.password)}
                       value={
                         userForm.password
                       }
                       onChange={(
                         event
                       ) =>
-                        setUserForm(
-                          (
-                            current
-                          ) => ({
-                            ...current,
-                            password:
-                              event.target
-                                .value,
-                          })
+                        updateUserField(
+                          "password",
+                          event.target.value
                         )
                       }
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                      className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                        userFormErrors.password
+                          ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
+                          : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
+                      }`}
                     />
+
+                    {userFormErrors.password && (
+                      <p className="mt-1 text-[12px] text-rose-600">
+                        {userFormErrors.password}
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -4165,6 +4391,9 @@ export default function SettingsView({
                 <div className="text-[13px] font-semibold text-slate-700">
                   Permissions
                 </div>
+                <p className="mt-1 text-[12px] leading-5 text-slate-500">
+                  Defaults follow the selected role. Choosing a department does not automatically grant extra access.
+                </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
                   {[
@@ -4254,9 +4483,7 @@ export default function SettingsView({
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    setUserModalOpen(false)
-                  }
+                  onClick={closeUserModal}
                   className="h-9 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel
@@ -4393,9 +4620,7 @@ export default function SettingsView({
 
               <button
                 type="button"
-                onClick={() =>
-                  setSourceModalOpen(false)
-                }
+                onClick={closeSourceModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
                 <X size={16} />
@@ -4572,18 +4797,16 @@ export default function SettingsView({
                 </label>
               </div>
 
-              {sourcesError && (
+              {sourceModalError && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg p-3 text-[13px]">
-                  {sourcesError}
+                  {sourceModalError}
                 </div>
               )}
 
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() =>
-                    setSourceModalOpen(false)
-                  }
+                  onClick={closeSourceModal}
                   className="h-9 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   Cancel

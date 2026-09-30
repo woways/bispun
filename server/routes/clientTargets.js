@@ -14,6 +14,34 @@ router.use(requireClientUser);
 const LAUNCH_YEAR = 2026;
 const LAUNCH_MONTH = 9; // September
 
+const DEFAULT_DEPARTMENT_NAMES = ["Admin", "Sales"];
+
+async function loadConfiguredDepartmentMap(companyId) {
+  const settings = await prisma.companySettings.findUnique({
+    where: { companyId },
+    select: { organizationConfig: true },
+  });
+
+  const configured = Array.isArray(settings?.organizationConfig?.departments)
+    ? settings.organizationConfig.departments
+    : [];
+
+  const names = [
+    ...DEFAULT_DEPARTMENT_NAMES,
+    ...configured
+      .map((item) => String(item?.name || "").trim())
+      .filter(Boolean),
+  ];
+
+  return new Map(names.map((name) => [name.toLowerCase(), name]));
+}
+
+function canonicalDepartmentName(departmentMap, value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  return departmentMap.get(raw.toLowerCase()) || null;
+}
+
 function startMonthFor(year) {
   return 1;
 }
@@ -346,13 +374,17 @@ router.get("/team", async (req, res) => {
         jobTitle: true,
         department: true,
         role: true,
+        customRoleName: true,
       },
       orderBy: { name: "asc" },
     });
 
-    const rows = await prisma.monthlyTarget.findMany({
-      where: { companyId: req.clientUser.companyId, year },
-    });
+    const [rows, departmentMap] = await Promise.all([
+      prisma.monthlyTarget.findMany({
+        where: { companyId: req.clientUser.companyId, year },
+      }),
+      loadConfiguredDepartmentMap(req.clientUser.companyId),
+    ]);
 
     const byOwner = new Map();
     rows.forEach((r) => {
@@ -377,8 +409,15 @@ router.get("/team", async (req, res) => {
         name: u.name,
         email: u.email,
         jobTitle: u.jobTitle,
-        department: u.department,
+        department: canonicalDepartmentName(departmentMap, u.department),
         role: u.role,
+        roleLabel:
+          String(u.customRoleName || "").trim() ||
+          (u.role === "CLIENT_ADMIN"
+            ? "Client Admin"
+            : u.role === "MANAGER"
+              ? "Manager"
+              : "Employee"),
         managerId: null,
         managerName: null,
         yearAveragePercent: avg,
@@ -492,16 +531,27 @@ router.get("/all", async (req, res) => {
         active: true,
         ...(access.managerScope ? { id: access.managerScope } : {}),
       },
-      select: { id: true, name: true, email: true, jobTitle: true, department: true, role: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        jobTitle: true,
+        department: true,
+        role: true,
+        customRoleName: true,
+      },
       orderBy: { name: "asc" },
     });
 
-    const rows = await prisma.monthlyTarget.findMany({
-      where: {
-        companyId: req.clientUser.companyId,
-        year: { in: years },
-      },
-    });
+    const [rows, departmentMap] = await Promise.all([
+      prisma.monthlyTarget.findMany({
+        where: {
+          companyId: req.clientUser.companyId,
+          year: { in: years },
+        },
+      }),
+      loadConfiguredDepartmentMap(req.clientUser.companyId),
+    ]);
 
     // Index rows by owner+year+month.
     const key = (o, y, m) => `${o}|${y}|${m}`;
@@ -520,8 +570,15 @@ router.get("/all", async (req, res) => {
         name: u.name,
         email: u.email,
         jobTitle: u.jobTitle,
-        department: u.department,
+        department: canonicalDepartmentName(departmentMap, u.department),
         role: u.role,
+        roleLabel:
+          String(u.customRoleName || "").trim() ||
+          (u.role === "CLIENT_ADMIN"
+            ? "Client Admin"
+            : u.role === "MANAGER"
+              ? "Manager"
+              : "Employee"),
         months,
       };
     });

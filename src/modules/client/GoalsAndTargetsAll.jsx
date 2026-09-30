@@ -158,7 +158,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
       emp.months.forEach((m) => {
         const row = [
           emp.name,
-          emp.department || ROLE_LABELS[emp.role] || "",
+          emp.department || emp.roleLabel || ROLE_LABELS[emp.role] || "",
           MONTH_NAMES[m.month - 1],
           m.year,
           m.monthlyTarget ?? "",
@@ -359,7 +359,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
                             <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-600 text-[12px] font-bold text-white">{initialsOf(emp.name)}</span>
                             <div className="min-w-0">
                               <div className="truncate text-[12px] font-bold text-slate-900">{emp.name}</div>
-                              <div className="truncate text-[13px] text-slate-400">{emp.department || ROLE_LABELS[emp.role] || ""}</div>
+                              <div className="truncate text-[13px] text-slate-400">{emp.department || emp.roleLabel || ROLE_LABELS[emp.role] || ""}</div>
                             </div>
                           </div>
                         </td>

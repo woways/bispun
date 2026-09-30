@@ -113,6 +113,17 @@ async function loadOrganizationConfig(companyId) {
   return normalizeOrganizationConfig(settings?.organizationConfig);
 }
 
+function canonicalDepartmentName(organization, value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  const match = organization.departments.find(
+    (item) => item.name.toLowerCase() === raw.toLowerCase()
+  );
+
+  return match?.name || null;
+}
+
 async function saveOrganizationConfig(companyId, config) {
   const customDepartments = config.departments
     .filter((item) => !item.system)
@@ -415,6 +426,10 @@ router.get("/", async (req, res) => {
 
     if (!actor) return;
 
+    const organization = await loadOrganizationConfig(
+      req.clientUser.companyId
+    );
+
     const users =
       await prisma.user.findMany({
         where: {
@@ -435,8 +450,12 @@ router.get("/", async (req, res) => {
 
     return res.json({
       success: true,
-      users:
-        users.map(formatUser),
+      users: users.map((user) =>
+        formatUser({
+          ...user,
+          department: canonicalDepartmentName(organization, user.department),
+        })
+      ),
     });
   } catch (error) {
     console.error(
@@ -571,13 +590,10 @@ router.post("/", async (req, res) => {
     const permissionDefaults = customRole
       ? customRole.permissions
       : defaultPermissions(role);
-    const departmentPermissions = department.permissions || {};
-    const mergedDefaults = Object.fromEntries(
-      PERMISSION_KEYS.map((key) => [
-        key,
-        permissionDefaults[key] === true || departmentPermissions[key] === true,
-      ])
-    );
+
+    // Department membership must not silently elevate access. Role/custom-role
+    // defaults are the baseline; individual permissions are only changed when
+    // the Client Admin explicitly sends a boolean choice for that permission.
     const permissions = role === "CLIENT_ADMIN"
       ? defaultPermissions(role)
       : Object.fromEntries(
@@ -585,7 +601,7 @@ router.post("/", async (req, res) => {
             key,
             typeof req.body?.permissions?.[key] === "boolean"
               ? req.body.permissions[key]
-              : mergedDefaults[key],
+              : permissionDefaults[key] === true,
           ])
         );
 

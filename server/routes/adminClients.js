@@ -25,6 +25,23 @@ function isValidPhone(value) {
   return digits.length >= 8 && digits.length <= 15;
 }
 
+const LEGACY_SUBDOMAIN_SUFFIX = ".consulbuzz.com";
+const BISPUN_SUBDOMAIN_SUFFIX = ".bispun.com";
+
+function normalizeBispunSubdomain(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
+
+  if (normalized.endsWith(LEGACY_SUBDOMAIN_SUFFIX)) {
+    return `${normalized.slice(0, -LEGACY_SUBDOMAIN_SUFFIX.length)}${BISPUN_SUBDOMAIN_SUFFIX}`;
+  }
+
+  return normalized;
+}
+
 function getEmailDomain(email) {
   return String(email || "")
     .trim()
@@ -95,7 +112,7 @@ function formatClient(company) {
     primaryColor:
       company.settings?.primaryColor ||
       company.primaryColor,
-    subdomain: company.subdomain,
+    subdomain: normalizeBispunSubdomain(company.subdomain),
 
     status: company.status.toLowerCase(),
 
@@ -548,10 +565,8 @@ router.post("/", async (req, res) => {
     }
 
     const cleanSubdomain = subdomain
-      ? String(subdomain)
-          .trim()
-          .toLowerCase()
-      : `${slug}.consulbuzz.com`;
+      ? normalizeBispunSubdomain(subdomain)
+      : `${slug}.bispun.com`;
 
     const existingSubdomain =
       await prisma.company.findUnique({

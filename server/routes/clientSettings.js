@@ -36,6 +36,23 @@ function isValidPrimaryColor(value) {
   );
 }
 
+function isValidLogoValue(value) {
+  const logo = String(value || "").trim();
+
+  if (!logo) return true;
+
+  if (/^data:image\/(png|jpeg|webp|svg\+xml);/i.test(logo)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(logo);
+    return ["http:", "https:"].includes(parsed.protocol) && Boolean(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 
 async function getActor(req) {
   return prisma.user.findUnique({
@@ -70,12 +87,21 @@ async function canManageSettings(req) {
   return actor;
 }
 
+const LEGACY_SUBDOMAIN_SUFFIX = ".consulbuzz.com";
+const BISPUN_SUBDOMAIN_SUFFIX = ".bispun.com";
+
 function normalizeSubdomain(value) {
-  return String(value || "")
+  const normalized = String(value || "")
     .trim()
     .toLowerCase()
     .replace(/^https?:\/\//, "")
     .replace(/\/.*$/, "");
+
+  if (normalized.endsWith(LEGACY_SUBDOMAIN_SUFFIX)) {
+    return `${normalized.slice(0, -LEGACY_SUBDOMAIN_SUFFIX.length)}${BISPUN_SUBDOMAIN_SUFFIX}`;
+  }
+
+  return normalized;
 }
 
 function shortNameFromCompany(name) {
@@ -103,8 +129,10 @@ function formatWorkspace(company) {
       "",
 
     subdomain:
-      company.subdomain ||
-      "",
+      normalizeSubdomain(
+        company.subdomain ||
+        ""
+      ),
 
     portalName:
       company.settings
@@ -307,19 +335,11 @@ router.patch("/", async (req, res) => {
       });
     }
 
-    if (
-      logoUrl &&
-      !logoUrl.startsWith(
-        "data:image/"
-      ) &&
-      !/^https?:\/\//i.test(
-        logoUrl
-      )
-    ) {
+    if (!isValidLogoValue(logoUrl)) {
       return res.status(400).json({
         success: false,
         message:
-          "Logo must be an uploaded image or a valid HTTP/HTTPS URL",
+          "Logo must be an uploaded PNG, JPG, WEBP or SVG image, or a valid HTTP/HTTPS image URL",
       });
     }
 

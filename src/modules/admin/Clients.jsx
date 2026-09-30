@@ -440,7 +440,7 @@ function OnboardClientModal({
                       e.target.value
                     )
                   }
-                  placeholder="abc.consulbuzz.com"
+                  placeholder="abc.bispun.com"
                 />
 
                 <div>

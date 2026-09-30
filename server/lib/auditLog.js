@@ -1,23 +1,58 @@
 import prisma from "./prisma.js";
 
-function clientIp(req) {
-  const forwarded =
-    req.headers?.["x-forwarded-for"];
-
-  if (typeof forwarded === "string") {
-    return (
-      forwarded
-        .split(",")[0]
-        ?.trim() ||
-      null
-    );
+function normalizeClientIp(value) {
+  if (Array.isArray(value)) {
+    value = value[0];
   }
 
-  return (
-    req.ip ||
-    req.socket?.remoteAddress ||
-    null
-  );
+  let ip = String(value || "")
+    .split(",")[0]
+    .trim()
+    .replace(/^for=/i, "")
+    .replace(/^["']|["']$/g, "")
+    .replace(/^::ffff:/, "");
+
+  if (ip.startsWith("[") && ip.includes("]")) {
+    ip = ip.slice(1, ip.indexOf("]"));
+  }
+
+  if (ip.includes("%")) {
+    ip = ip.split("%")[0];
+  }
+
+  if (
+    !ip ||
+    ip === "::1" ||
+    ip === "127.0.0.1" ||
+    ip.toLowerCase() === "localhost"
+  ) {
+    return null;
+  }
+
+  return ip.slice(0, 120);
+}
+
+function clientIp(req) {
+  const headers = req?.headers || {};
+
+  const candidates = [
+    headers["cf-connecting-ip"],
+    headers["true-client-ip"],
+    headers["x-real-ip"],
+    headers["x-forwarded-for"],
+    req?.ip,
+    req?.socket?.remoteAddress,
+  ];
+
+  for (const candidate of candidates) {
+    const ip = normalizeClientIp(candidate);
+
+    if (ip) {
+      return ip;
+    }
+  }
+
+  return null;
 }
 
 export async function writeAuditLog({

@@ -68,6 +68,15 @@ const VALID_NEW_TYPES = [
   "CALL_TO_RM",
 ];
 
+function countLetters(value) {
+  return (String(value || "").match(/\p{L}/gu) || []).length;
+}
+
+function isMeaningfulSupportText(value, minLength, minLetters) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  return text.length >= minLength && countLetters(text) >= minLetters;
+}
+
 const VALID_PRIORITIES = Object.keys(PRIORITY_LABELS);
 const VALID_DISCUSSION_CATEGORIES = Object.keys(
   DISCUSSION_CATEGORIES
@@ -303,6 +312,23 @@ router.post("/", async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Description is required",
+      });
+    }
+
+    if (!isMeaningfulSupportText(cleanTitle, 4, 2)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          typeKey === "CALL_TO_RM"
+            ? "Discussion topic must contain meaningful text, including letters"
+            : "Ticket title must contain meaningful text, including letters",
+      });
+    }
+
+    if (!isMeaningfulSupportText(cleanDescription, 10, 3)) {
+      return res.status(400).json({
+        success: false,
+        message: "Description must contain meaningful text, including letters",
       });
     }
 

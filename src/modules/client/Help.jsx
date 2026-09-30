@@ -142,6 +142,20 @@ function todayInputValue() {
   return local.toISOString().slice(0, 10);
 }
 
+function countLetters(value) {
+  return (String(value || "").match(/\p{L}/gu) || []).length;
+}
+
+function validateSupportText(value, { minLength, minLetters, label }) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+
+  if (text.length < minLength || countLetters(text) < minLetters) {
+    return `${label} must contain meaningful text, including letters.`;
+  }
+
+  return "";
+}
+
 const PRIORITIES = [
   {
     value:
@@ -351,6 +365,8 @@ function NewTicketModal({
     setError,
   ] = useState("");
 
+  const [fieldErrors, setFieldErrors] = useState({});
+
   const availableTypes =
     useMemo(
       () =>
@@ -419,6 +435,13 @@ function NewTicketModal({
           value,
       })
     );
+
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
   }
 
   async function submit(
@@ -432,11 +455,33 @@ function NewTicketModal({
       return;
     }
 
+    setError("");
+
+    const nextFieldErrors = {};
+    const titleError = validateSupportText(form.title, {
+      minLength: 4,
+      minLetters: 2,
+      label: form.type === "CALL_TO_RM" ? "Discussion topic" : "Ticket title",
+    });
+    const descriptionError = validateSupportText(form.description, {
+      minLength: 10,
+      minLetters: 3,
+      label: "Description",
+    });
+
+    if (titleError) nextFieldErrors.title = titleError;
+    if (descriptionError) nextFieldErrors.description = descriptionError;
+
+    setFieldErrors(nextFieldErrors);
+
+    if (Object.keys(nextFieldErrors).length) {
+      setError("Please enter a meaningful title and description.");
+      return;
+    }
+
     setSaving(
       true
     );
-
-    setError("");
 
     try {
       await apiRequest(
@@ -623,8 +668,18 @@ function NewTicketModal({
                   )
                 }
                 placeholder={form.type === "CALL_TO_RM" ? "What would you like to discuss?" : "Describe your request briefly"}
-                className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                aria-invalid={!!fieldErrors.title}
+                className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                  fieldErrors.title
+                    ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+                    : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
+                }`}
               />
+              {fieldErrors.title && (
+                <p className="mt-1 text-[12px] font-medium text-rose-600">
+                  {fieldErrors.title}
+                </p>
+              )}
             </div>
 
             {form.type === "CALL_TO_RM" && (
@@ -831,8 +886,18 @@ function NewTicketModal({
                     ? "Explain your subscription, invoice, renewal or payment issue..."
                     : "Explain what is not working and what you expected to happen..."
                 }
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                aria-invalid={!!fieldErrors.description}
+                className={`w-full px-3 py-2.5 border rounded-lg text-[15px] resize-none focus:outline-none focus:ring-2 ${
+                  fieldErrors.description
+                    ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+                    : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
+                }`}
               />
+              {fieldErrors.description && (
+                <p className="mt-1 text-[12px] font-medium text-rose-600">
+                  {fieldErrors.description}
+                </p>
+              )}
             </div>
           </div>
 

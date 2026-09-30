@@ -728,7 +728,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
               </span>
             )}
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-              {ROLE_LABELS[person.role] || person.role}
+              {person.roleLabel || ROLE_LABELS[person.role] || person.role}
             </span>
           </div>
           <div className="truncate text-[12px] text-slate-500">

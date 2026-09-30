@@ -658,6 +658,7 @@ export default function Analytics({ selectedYear = "all" }) {
                       <YAxis
                         axisLine={false}
                         tickLine={false}
+                        allowDecimals={false}
                         tick={{ fontSize: 11, fill: "#64748b" }}
                       />
                       <Tooltip />
@@ -1174,6 +1175,9 @@ export default function Analytics({ selectedYear = "all" }) {
                         false
                       }
                       tickLine={
+                        false
+                      }
+                      allowDecimals={
                         false
                       }
                       tick={{
