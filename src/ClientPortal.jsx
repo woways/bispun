@@ -4528,9 +4528,18 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           billingPlan.yearlyPrice !== null &&
                           billingPlan.yearlyPrice !== undefined;
 
+                        const planKey =
+                          String(billingPlan.key || "").toLowerCase();
+
+                        const isProPlan = planKey === "pro";
+                        const proOfferPrice = 29500;
+                        const proListPrice = 54000;
+
                         const selectedPrice =
                           yearlyAvailable
-                            ? Number(billingPlan.yearlyPrice || 0)
+                            ? isProPlan
+                              ? proOfferPrice
+                              : Number(billingPlan.yearlyPrice || 0)
                             : 0;
 
                         const planDescriptions = {
@@ -4568,9 +4577,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             "Priority assistance",
                           ],
                         };
-
-                        const planKey =
-                          String(billingPlan.key || "").toLowerCase();
 
                         const description =
                           planDescriptions[planKey] ||
@@ -4635,6 +4641,17 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-6">
+                                {isProPlan && yearlyAvailable && (
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
+                                      ₹{proListPrice.toLocaleString("en-IN")}/year
+                                    </span>
+                                    <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
+                                      ~45% OFF
+                                    </span>
+                                  </div>
+                                )}
+
                                 <div className="flex items-end gap-1.5">
                                   <div
                                     className={`text-[32px] font-black tracking-[-0.05em] ${
@@ -4657,7 +4674,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
                                 </div>
 
-
+                                {isProPlan && yearlyAvailable && (
+                                  <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
+                                    Promotional annual price
+                                  </div>
+                                )}
                               </div>
 
                               <div

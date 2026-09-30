@@ -56,7 +56,17 @@ function safeEqualHex(a, b) {
   }
 }
 
+const PRO_PROMO_PRICE = 29500;
+
 function paymentAmount(plan) {
+  const planKey = String(plan?.key || "").toLowerCase();
+
+  // Promotional Pro offer: keep the stored yearly price as the list price
+  // (₹54,000), but charge ₹29,500 for new Pro subscription payments.
+  if (planKey === "pro") {
+    return PRO_PROMO_PRICE;
+  }
+
   return plan.yearlyPrice !== null &&
     plan.yearlyPrice !== undefined
     ? Number(plan.yearlyPrice)

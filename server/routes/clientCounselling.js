@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -289,25 +290,46 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid follow-up date" });
     }
 
-    const session = await prisma.counsellingSession.create({
-      data: {
+    const session = await prisma.$transaction(async (tx) => {
+      const studentPhone = cleanOptional(req.body?.studentPhone);
+      const studentEmail = cleanOptional(req.body?.studentEmail)?.toLowerCase() || null;
+      const course = cleanOptional(req.body?.course);
+      const counsellorName = cleanOptional(req.body?.counsellorName);
+      const remarks = cleanOptional(req.body?.notes ?? req.body?.remarks);
+
+      const lead = await ensureAdmissionsLead(tx, {
         companyId,
-        market,
-        studentName,
-        studentPhone: cleanOptional(req.body?.studentPhone),
-        studentAltPhone: cleanOptional(req.body?.alternatePhone ?? req.body?.studentAltPhone),
-        studentEmail: cleanOptional(req.body?.studentEmail)?.toLowerCase() || null,
-        course: cleanOptional(req.body?.course),
-        counsellorName: cleanOptional(req.body?.counsellorName),
-        mode: String(req.body?.mode || "IN_PERSON").trim().toUpperCase(),
-        meetingLink: cleanOptional(req.body?.meetingLink),
-        accompaniedBy: cleanOptional(req.body?.accompaniedBy),
-        scheduledAt,
-        status,
-        remarks: cleanOptional(req.body?.notes ?? req.body?.remarks),
-        followUpAt,
-        converted: req.body?.converted === true,
-      },
+        origin: "Counselling",
+        name: studentName,
+        phone: studentPhone,
+        email: studentEmail,
+        course,
+        assignedToName: counsellorName,
+        stage: "NEW",
+        extraNotes: remarks,
+      });
+
+      return tx.counsellingSession.create({
+        data: {
+          companyId,
+          market,
+          leadId: lead?.id || null,
+          studentName,
+          studentPhone,
+          studentAltPhone: cleanOptional(req.body?.alternatePhone ?? req.body?.studentAltPhone),
+          studentEmail,
+          course,
+          counsellorName,
+          mode: String(req.body?.mode || "IN_PERSON").trim().toUpperCase(),
+          meetingLink: cleanOptional(req.body?.meetingLink),
+          accompaniedBy: cleanOptional(req.body?.accompaniedBy),
+          scheduledAt,
+          status,
+          remarks,
+          followUpAt,
+          converted: req.body?.converted === true,
+        },
+      });
     });
 
     return res.status(201).json({

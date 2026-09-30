@@ -3625,65 +3625,60 @@ export default function LeadStore({ selectedYear = "all" }) {
 
                           <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingIndividual(
-                                    lead
-                                  );
-                                  setShowIndividual(
-                                    true
-                                  );
-                                }}
-                                title="Edit lead"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
-                              >
-                                <Pencil size={14} />
-                              </button>
+                              {lead.isAdmissionsSynced ? (
+                                <span
+                                  className="px-2 text-[11px] font-semibold text-slate-400"
+                                  title="This lead is managed from Admissions"
+                                >
+                                  Admissions
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingIndividual(lead);
+                                      setShowIndividual(true);
+                                    }}
+                                    title="Edit lead"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
 
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!window.confirm(`Delete ${lead.name}? This cannot be undone.`)) return;
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (!window.confirm(`Delete ${lead.name}? This cannot be undone.`)) return;
 
-                                  try {
-                                    await apiRequest(
-                                      `/api/client/lead-store/manual/${lead.id}`,
-                                      {
-                                        method:
-                                          "DELETE",
+                                      try {
+                                        await apiRequest(
+                                          `/api/client/lead-store/manual/${lead.id}`,
+                                          { method: "DELETE" }
+                                        );
+
+                                        setSuccessMessage(`${lead.name} deleted successfully.`);
+                                        setSelectedLeadIds((current) =>
+                                          current.filter((id) => id !== lead.id)
+                                        );
+
+                                        await Promise.all([
+                                          loadIndividualLeads(),
+                                          loadDatasets(),
+                                        ]);
+                                      } catch (error) {
+                                        setError(
+                                          error?.data?.message || "Unable to delete lead"
+                                        );
                                       }
-                                    );
-
-                                    setSuccessMessage(
-                                      `${lead.name} deleted successfully.`
-                                    );
-
-                                    setSelectedLeadIds(
-                                      (current) =>
-                                        current.filter(
-                                          (id) =>
-                                            id !==
-                                            lead.id
-                                        )
-                                    );
-
-                                    await Promise.all([
-                                      loadIndividualLeads(),
-                                      loadDatasets(),
-                                    ]);
-                                  } catch (error) {
-                                    setError(
-                                      error?.data?.message ||
-                                        "Unable to delete lead"
-                                    );
-                                  }
-                                }}
-                                title="Delete lead"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                                    }}
+                                    title="Delete lead"
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

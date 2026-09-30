@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -217,23 +218,47 @@ router.post("/", async (req, res) => {
     if (!VALID_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "Invalid walk-in status" });
     if (!arrivedAt) return res.status(400).json({ success: false, message: "Invalid arrival date" });
 
-    const walkIn = await prisma.walkIn.create({
-      data: {
+    const walkIn = await prisma.$transaction(async (tx) => {
+      const studentName = cleanOptional(req.body?.studentName);
+      const email = cleanOptional(req.body?.email)?.toLowerCase() || null;
+      const course = cleanOptional(req.body?.course);
+      const counsellorName = cleanOptional(req.body?.counsellorName);
+      const outcome = cleanOptional(req.body?.notes ?? req.body?.outcome);
+
+      const lead = await ensureAdmissionsLead(tx, {
         companyId,
-        market,
-        visitorName,
-        studentName: cleanOptional(req.body?.studentName),
+        origin: "Walk-in",
+        name: studentName || visitorName,
         phone,
-        alternatePhone: cleanOptional(req.body?.alternatePhone),
-        email: cleanOptional(req.body?.email)?.toLowerCase() || null,
-        course: cleanOptional(req.body?.course),
-        purpose,
-        accompaniedBy: cleanOptional(req.body?.accompaniedBy),
-        counsellorName: cleanOptional(req.body?.counsellorName),
-        outcome: cleanOptional(req.body?.notes ?? req.body?.outcome),
-        status,
-        arrivedAt,
-      },
+        email,
+        course,
+        assignedToName: counsellorName,
+        stage: "NEW",
+        extraNotes: [
+          `Walk-in purpose: ${purpose}`,
+          outcome ? `Walk-in notes: ${outcome}` : null,
+        ].filter(Boolean).join("\n"),
+      });
+
+      return tx.walkIn.create({
+        data: {
+          companyId,
+          market,
+          visitorName,
+          studentName,
+          phone,
+          alternatePhone: cleanOptional(req.body?.alternatePhone),
+          email,
+          course,
+          purpose,
+          accompaniedBy: cleanOptional(req.body?.accompaniedBy),
+          counsellorName,
+          outcome,
+          status,
+          arrivedAt,
+          convertedLeadId: lead?.id || null,
+        },
+      });
     });
 
     return res.status(201).json({ success: true, message: "Walk-in logged successfully", walkIn: formatWalkIn(walkIn) });
@@ -323,7 +348,34 @@ router.post("/:id/convert-to-lead", async (req, res) => {
     const walkIn = await prisma.walkIn.findFirst({ where: { id: req.params.id, companyId } });
 
     if (!walkIn) return res.status(404).json({ success: false, message: "Walk-in not found" });
-    if (walkIn.convertedLeadId) return res.status(409).json({ success: false, message: "This walk-in is already converted to a lead" });
+
+    if (walkIn.convertedLeadId) {
+      const lead = await prisma.$transaction(async (tx) => {
+        const existingLead = await tx.lead.findFirst({
+          where: { id: walkIn.convertedLeadId, companyId },
+        });
+
+        if (!existingLead) return null;
+
+        await tx.walkIn.update({
+          where: { id: walkIn.id },
+          data: {
+            status: "CONVERTED",
+            outcome: walkIn.outcome || "Converted to CRM lead",
+          },
+        });
+
+        return existingLead;
+      });
+
+      if (lead) {
+        return res.json({
+          success: true,
+          message: "Walk-in converted to lead successfully",
+          lead: { id: lead.id, name: lead.name, phone: lead.phone, stage: lead.stage },
+        });
+      }
+    }
 
     const lead = await prisma.$transaction(async (tx) => {
       await tx.leadSourceConfig.upsert({

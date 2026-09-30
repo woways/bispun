@@ -3,27 +3,13 @@ import multer from "multer";
 import ExcelJS from "exceljs";
 
 import prisma from "../lib/prisma.js";
+import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
 import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
-import {
-  applyAdmissionScope,
-  resolveVisibleScope,
-  scopeAllowsStream,
-  scopeAllowsCollege,
-  scopeAllowsBranch,
-} from "../lib/pageAccess.js";
 
 const router = Router();
-
-/** Convenience: the current request's admissions scope inputs. */
-function reqScope(req) {
-  return {
-    pageAccess: req.clientUser?.pageAccess,
-    role: req.clientUser?.role,
-  };
-}
 
 function parseYear(value) {
   if (!value || value === "all") return null;
@@ -534,29 +520,9 @@ router.get("/streams", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
-    // Hide streams / colleges the viewer is not permitted to see.
-    const scope = await resolveVisibleScope(
-      prisma,
-      companyId,
-      req.clientUser.pageAccess,
-      req.clientUser.role
-    );
-    const visibleStreams = scope.all
-      ? streams
-      : streams
-          .map((s) => ({
-            ...s,
-            partners: (s.partners || []).filter((p) =>
-              scopeAllowsCollege(scope, p)
-            ),
-          }))
-          .filter(
-            (s) => scopeAllowsStream(scope, s) || (s.partners || []).length > 0
-          );
-
     return res.json({
       success: true,
-      streams: visibleStreams.map(streamMetrics),
+      streams: streams.map(streamMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission streams:", error);
@@ -828,19 +794,9 @@ router.get("/partners", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
-    const scope = await resolveVisibleScope(
-      prisma,
-      companyId,
-      req.clientUser.pageAccess,
-      req.clientUser.role
-    );
-    const visiblePartners = scope.all
-      ? partners
-      : partners.filter((p) => scopeAllowsCollege(scope, p));
-
     return res.json({
       success: true,
-      partners: visiblePartners.map(partnerMetrics),
+      partners: partners.map(partnerMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission partners:", error);
@@ -1225,23 +1181,10 @@ router.get(
           ],
         });
 
-      const scope =
-        await resolveVisibleScope(
-          prisma,
-          companyId,
-          req.clientUser.pageAccess,
-          req.clientUser.role
-        );
-      const visibleBranches = scope.all
-        ? branches
-        : branches.filter((b) =>
-            scopeAllowsBranch(scope, b, partner)
-          );
-
       return res.json({
         success: true,
         branches:
-          visibleBranches.map(
+          branches.map(
             branchMetrics
           ),
       });
@@ -2066,15 +2009,8 @@ router.get("/", async (req, res) => {
       };
     }
 
-    // Restrict to the viewer's granted markets/streams/colleges/branches.
-    const scopedWhere = applyAdmissionScope(
-      where,
-      req.clientUser.pageAccess,
-      req.clientUser.role
-    );
-
     const admissions = await prisma.admission.findMany({
-      where: scopedWhere,
+      where,
       include: {
         partner: {
           select: {
@@ -2325,14 +2261,40 @@ router.post("/", async (req, res) => {
     }
 
     const admission = await prisma.$transaction(async (tx) => {
+      const admissionLead = selectedLead || await ensureAdmissionsLead(tx, {
+        companyId,
+        origin: "Direct Admission",
+        name: cleanStudentName,
+        phone: cleanStudentPhone,
+        email: cleanStudentEmail,
+        course: cleanCourse,
+        assignedToName: cleanCounsellor,
+        stage: statusKey === "CANCELLED" ? "NEW" : "ADMITTED",
+        extraNotes: cleanOptional(notes),
+      });
+
+      if (selectedLead) {
+        await ensureAdmissionsLead(tx, {
+          companyId,
+          origin: "Direct Admission",
+          name: selectedLead.name,
+          phone: selectedLead.phone,
+          email: selectedLead.email,
+          course: selectedLead.course || cleanCourse,
+          assignedToName: selectedLead.assignedToName || cleanCounsellor,
+          stage: selectedLead.stage,
+          extraNotes: cleanOptional(notes),
+        });
+      }
+
       const created = await tx.admission.create({
         data: {
           companyId,
           market: requestedMarket,
           partnerId: resolvedPartner.id,
           branchId: branch?.id || null,
-          leadId: selectedLead?.id || null,
-          leadStageBeforeAdmission: selectedLead?.stage || null,
+          leadId: admissionLead?.id || null,
+          leadStageBeforeAdmission: admissionLead?.stage || null,
           studentName: cleanStudentName,
           studentPhone: cleanStudentPhone,
           studentEmail: cleanStudentEmail,
@@ -2377,11 +2339,11 @@ router.post("/", async (req, res) => {
         },
       });
 
-      if (selectedLead) {
+      if (admissionLead) {
         await tx.lead.update({
-          where: { id: selectedLead.id },
+          where: { id: admissionLead.id },
           data: {
-            stage: statusKey === "CANCELLED" ? selectedLead.stage : "ADMITTED",
+            stage: statusKey === "CANCELLED" ? admissionLead.stage : "ADMITTED",
           },
         });
       }

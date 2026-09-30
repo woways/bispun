@@ -2331,7 +2331,10 @@ router.get(
 
         companyId,
 
-        source: "LEAD_STORE",
+        OR: [
+          { source: "LEAD_STORE" },
+          { notes: { contains: "Admissions origin:" } },
+        ],
 
         ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
 
@@ -2341,18 +2344,16 @@ router.get(
 
       if (search) {
 
-        where.OR = [
-
-          { name: { contains: search, mode: "insensitive" } },
-
-          { phone: { contains: search, mode: "insensitive" } },
-
-          { email: { contains: search, mode: "insensitive" } },
-
-          { course: { contains: search, mode: "insensitive" } },
-
-          { assignedToName: { contains: search, mode: "insensitive" } },
-
+        where.AND = [
+          {
+            OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { phone: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+              { course: { contains: search, mode: "insensitive" } },
+              { assignedToName: { contains: search, mode: "insensitive" } },
+            ],
+          },
         ];
 
       }
@@ -2423,19 +2424,21 @@ router.get(
 
           type:
 
-            lead.medium ||
+            String(lead.notes || "").includes("Admissions origin:")
+              ? "INDIVIDUAL"
+              : lead.medium ||
 
-            (
+                (
 
-              lead.campaign === "Individual Lead"
+                  lead.campaign === "Individual Lead"
 
-                ? "INDIVIDUAL"
+                    ? "INDIVIDUAL"
 
-                : lead.leadDataset?.type ||
+                    : lead.leadDataset?.type ||
 
-                  null
+                      null
 
-            ),
+                ),
 
           assignedToName: lead.assignedToName,
 
@@ -2444,6 +2447,8 @@ router.get(
           isManual:
 
             lead.campaign === "Individual Lead",
+          isAdmissionsSynced:
+            String(lead.notes || "").includes("Admissions origin:"),
 
           datasetId:
 
