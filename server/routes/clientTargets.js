@@ -362,10 +362,16 @@ router.get("/team", async (req, res) => {
       where: {
         companyId: req.clientUser.companyId,
         active: true,
-        // Current User schema does not contain managerId/reporting relations.
-        // Admin/permitted users see the company. Managers are safely scoped
-        // to their own row until reporting-manager mapping is added to Prisma.
-        ...(access.managerScope ? { id: access.managerScope } : {}),
+        // A manager sees their own row PLUS everyone who reports to them
+        // (User.managerId). Admins / permitted users see the whole company.
+        ...(access.managerScope
+          ? {
+              OR: [
+                { id: access.managerScope },
+                { managerId: access.managerScope },
+              ],
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -375,9 +381,33 @@ router.get("/team", async (req, res) => {
         department: true,
         role: true,
         customRoleName: true,
+        managerId: true,
       },
       orderBy: { name: "asc" },
     });
+
+    // Map manager ids -> names so each employee shows their manager.
+    const nameById = new Map(
+      users.map((u) => [u.id, u.name])
+    );
+    const managerNames = await prisma.user.findMany({
+      where: {
+        companyId: req.clientUser.companyId,
+        id: {
+          in: Array.from(
+            new Set(
+              users
+                .map((u) => u.managerId)
+                .filter(Boolean)
+            )
+          ),
+        },
+      },
+      select: { id: true, name: true },
+    });
+    managerNames.forEach((m) =>
+      nameById.set(m.id, m.name)
+    );
 
     const [rows, departmentMap] = await Promise.all([
       prisma.monthlyTarget.findMany({
@@ -418,8 +448,10 @@ router.get("/team", async (req, res) => {
             : u.role === "MANAGER"
               ? "Manager"
               : "Employee"),
-        managerId: null,
-        managerName: null,
+        managerId: u.managerId || null,
+        managerName: u.managerId
+          ? nameById.get(u.managerId) || null
+          : null,
         yearAveragePercent: avg,
         monthsWithData: monthOveralls.length,
       };
