@@ -151,7 +151,7 @@ export default function PermissionTree({
   ];
 
   // A granter can only assign what they hold (admin actor => everything).
-  const actorCoversAdmission = (node) => (actor ? admissionCovers(actor, node) : true);
+  const actorCoversAdmission = (node) => (actor ? admissionCovers(actor.admissions, node) : true);
   const actorHasFinance = (sec) => (actor ? actor.finance.all || actor.finance.sections.includes(sec) : true);
   const actorHasInsights = (sec) => (actor ? actor.insights.all || actor.insights.sections.includes(sec) : true);
 
