@@ -57,13 +57,14 @@ function safeEqualHex(a, b) {
 }
 
 const PRO_PROMO_PRICE = 29500;
+const PRO_PROMO_ENDS_AT = Date.parse("2026-11-10T23:59:59+05:30");
 
 function paymentAmount(plan) {
   const planKey = String(plan?.key || "").toLowerCase();
 
   // Promotional Pro offer: keep the stored yearly price as the list price
-  // (₹54,000), but charge ₹29,500 for new Pro subscription payments.
-  if (planKey === "pro") {
+  // (₹54,000), but charge ₹29,500 through Nov 10, 2026 (India time).
+  if (planKey === "pro" && Date.now() <= PRO_PROMO_ENDS_AT) {
     return PRO_PROMO_PRICE;
   }
 

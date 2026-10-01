@@ -4534,10 +4534,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         const isProPlan = planKey === "pro";
                         const proOfferPrice = 29500;
                         const proListPrice = 54000;
+                        const proOfferEndsAt = new Date("2026-11-10T23:59:59+05:30").getTime();
+                        const isProOfferActive =
+                          isProPlan && Date.now() <= proOfferEndsAt;
 
                         const selectedPrice =
                           yearlyAvailable
-                            ? isProPlan
+                            ? isProOfferActive
                               ? proOfferPrice
                               : Number(billingPlan.yearlyPrice || 0)
                             : 0;
@@ -4641,7 +4644,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-6">
-                                {isProPlan && yearlyAvailable && (
+                                {isProOfferActive && yearlyAvailable && (
                                   <div className="mb-2 flex flex-wrap items-center gap-2">
                                     <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
                                       ₹{proListPrice.toLocaleString("en-IN")}/year
@@ -4674,9 +4677,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
                                 </div>
 
-                                {isProPlan && yearlyAvailable && (
+                                {isProOfferActive && yearlyAvailable && (
                                   <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
-                                    Promotional annual price
+                                    Offer valid till Nov 10, 2026
                                   </div>
                                 )}
                               </div>
