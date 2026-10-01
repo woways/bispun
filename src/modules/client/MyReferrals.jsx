@@ -164,7 +164,7 @@ export default function MyReferrals({ currentUser }) {
     currentUser?.role === "CLIENT_ADMIN" ||
     currentUser?.permissions?.canViewTeamTargets === true;
 
-  const link = code ? `${window.location.origin}/r/${code}` : "";
+  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
 
   async function load() {
     setLoading(true);

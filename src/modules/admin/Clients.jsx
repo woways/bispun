@@ -157,6 +157,7 @@ function OnboardClientModal({
     adminName: "",
     adminEmail: "",
     adminPassword: "",
+    referralCode: "",
   });
 
   useEffect(() => {
@@ -570,6 +571,28 @@ function OnboardClientModal({
 
                     <div className="flex h-10 items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700">
                       Annual only
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Referral Code <span className="font-normal text-slate-400">(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={form.referralCode}
+                        onChange={(e) =>
+                          updateField(
+                            "referralCode",
+                            e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                          )
+                        }
+                        className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                        placeholder="Enter referrer code if applicable"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        When valid, this new paid CRM client is counted as a successful referral.
+                      </p>
                     </div>
                   </div>
 

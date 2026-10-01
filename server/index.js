@@ -28,6 +28,7 @@ import adminAnalyticsRoutes from "./routes/adminAnalytics.js";
 import adminPaymentsRoutes from "./routes/adminPayments.js";
 import adminAuditLogsRoutes from "./routes/adminAuditLogs.js";
 import adminWebsiteLeadsRoutes from "./routes/adminWebsiteLeads.js";
+import adminReferralsRoutes from "./routes/adminReferrals.js";
 import publicWebsiteLeadsRoutes from "./routes/publicWebsiteLeads.js";
 
 import clientAuthRoutes from "./routes/clientAuth.js";
@@ -158,6 +159,7 @@ app.use("/api/admin/system-settings", adminSystemSettingsRoutes);
 app.use("/api/admin/payments", adminPaymentsRoutes);
 app.use("/api/admin/audit-logs", adminAuditLogsRoutes);
 app.use("/api/admin/website-leads", adminWebsiteLeadsRoutes);
+app.use("/api/admin/referrals", adminReferralsRoutes);
 
 // Public marketing-site lead capture. This route is intentionally unauthenticated
 // but remains protected by the global API rate limiter and CORS allow-list.

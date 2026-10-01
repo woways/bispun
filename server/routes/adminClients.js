@@ -385,6 +385,7 @@ router.post("/", async (req, res) => {
       adminName,
       adminEmail,
       adminPassword,
+      referralCode: rawReferralCode,
     } = req.body || {};
 
     const companyName = String(name || "").trim();
@@ -417,6 +418,10 @@ router.post("/", async (req, res) => {
       .toLowerCase();
 
     const selectedBillingCycle = "YEARLY";
+
+    const referralCode = String(rawReferralCode || "")
+      .trim()
+      .toUpperCase();
 
     if (!companyName) {
       return res.status(400).json({
@@ -582,6 +587,21 @@ router.post("/", async (req, res) => {
         message:
           "A user with this admin email already exists",
       });
+    }
+
+    let referralReferrer = null;
+    if (referralCode) {
+      referralReferrer = await prisma.user.findUnique({
+        where: { referralCode },
+        select: { id: true, name: true, email: true, referralCode: true },
+      });
+
+      if (!referralReferrer) {
+        return res.status(400).json({
+          success: false,
+          message: "Referral code is invalid",
+        });
+      }
     }
 
     const plan = await prisma.plan.findUnique({
@@ -759,6 +779,18 @@ router.post("/", async (req, res) => {
           },
         });
 
+        if (referralReferrer) {
+          await tx.crmReferral.create({
+            data: {
+              referrerId: referralReferrer.id,
+              referredCompanyId: createdCompany.id,
+              referralCode: referralReferrer.referralCode,
+              status: "SUCCESSFUL",
+              qualifiedAt: new Date(),
+            },
+          });
+        }
+
         return createdCompany;
       }
     );
@@ -789,7 +821,7 @@ router.post("/", async (req, res) => {
       });
 
     const actor = await getAdminActor(req);
-    await writeSuperAdminAudit({ req, actor, action: "CLIENT_CREATED", entityType: "COMPANY", entityId: createdClient.id, companyId: createdClient.id, companyName: createdClient.name, summary: `${actor?.name || "Super Admin"} onboarded ${createdClient.name}.`, metadata: { plan: createdClient.subscriptions?.[0]?.plan?.key || null, billingCycle: createdClient.subscriptions?.[0]?.billingCycle || null, clientAdminEmail } });
+    await writeSuperAdminAudit({ req, actor, action: "CLIENT_CREATED", entityType: "COMPANY", entityId: createdClient.id, companyId: createdClient.id, companyName: createdClient.name, summary: `${actor?.name || "Super Admin"} onboarded ${createdClient.name}.`, metadata: { plan: createdClient.subscriptions?.[0]?.plan?.key || null, billingCycle: createdClient.subscriptions?.[0]?.billingCycle || null, clientAdminEmail, referralCode: referralReferrer?.referralCode || null } });
 
     return res.status(201).json({
       success: true,

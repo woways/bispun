@@ -32,6 +32,7 @@ import {
   Save,
   Loader2,
   UserPlus,
+  Gift,
 } from "lucide-react";
 
 import {
@@ -54,6 +55,7 @@ import Analytics from "./modules/admin/Analytics";
 import SystemSettings from "./modules/admin/SystemSettings";
 import ActivityLog from "./modules/admin/ActivityLog";
 import WebsiteLeads from "./modules/admin/WebsiteLeads";
+import Referrals from "./modules/admin/Referrals";
 
 const MENU = [
   {
@@ -70,6 +72,11 @@ const MENU = [
     key: "website-leads",
     label: "Website Leads",
     icon: UserPlus,
+  },
+  {
+    key: "referrals",
+    label: "Referrals",
+    icon: Gift,
   },
   {
     key: "plans",
@@ -439,6 +446,9 @@ export default function SuperAdmin() {
 
       case "website-leads":
         return <WebsiteLeads />;
+
+      case "referrals":
+        return <Referrals />;
 
       case "plans":
         return <Plans />;

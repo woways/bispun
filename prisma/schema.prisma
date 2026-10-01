@@ -177,6 +177,13 @@ enum WebsiteLeadStatus {
   LOST
 }
 
+enum ReferralPayoutStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}
+
 model Company {
   id           String  @id @default(cuid())
   name         String
@@ -227,6 +234,7 @@ model Company {
   targetTasks             TargetTask[]
   monthlyTargets          MonthlyTarget[]
   referrals               Referral[]
+  crmReferral             CrmReferral? @relation("ReferredCompany")
   storeAssets             StoreAsset[]
 }
 
@@ -299,6 +307,8 @@ model User {
   targetTasksAssigned    TargetTask[]                @relation("TargetAssigner")
   monthlyTargets         MonthlyTarget[]             @relation("MonthlyTargetOwner")
   referrals              Referral[]                  @relation("ReferralReferrer")
+  crmReferrals           CrmReferral[]               @relation("CrmReferralReferrer")
+  referralPayoutRequests ReferralPayoutRequest[]     @relation("ReferralPayoutReferrer")
   rmSupportTickets       SupportTicket[]             @relation("SupportTicketAssignedRM")
 
   @@unique([companyId, employeeId])
@@ -1445,6 +1455,47 @@ model Referral {
 
   @@index([companyId])
   @@index([referrerId])
+}
+
+
+model CrmReferral {
+  id String @id @default(cuid())
+
+  referrerId String
+  referrer   User @relation("CrmReferralReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  referredCompanyId String @unique
+  referredCompany   Company @relation("ReferredCompany", fields: [referredCompanyId], references: [id], onDelete: Cascade)
+
+  referralCode String
+  status       String   @default("SUCCESSFUL")
+  qualifiedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([referrerId, status])
+  @@index([referralCode])
+  @@index([createdAt])
+}
+
+model ReferralPayoutRequest {
+  id String @id @default(cuid())
+
+  referrerId String
+  referrer   User @relation("ReferralPayoutReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  amount Int
+  status ReferralPayoutStatus @default(PENDING)
+
+  paymentReference String?
+  adminNote       String?
+  requestedAt     DateTime @default(now())
+  processedAt     DateTime?
+  paidAt          DateTime?
+  updatedAt       DateTime @updatedAt
+
+  @@index([referrerId, status])
+  @@index([status, requestedAt])
 }
 
 model StoreAsset {

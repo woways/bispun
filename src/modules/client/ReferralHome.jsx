@@ -60,11 +60,11 @@ const FAQS = [
   ],
   [
     "When do I earn my reward?",
-    "Rewards unlock as your referral progresses through the stages. The exact amount depends on your tier.",
+    "Rewards unlock only when the referred customer joins or purchases Bispun CRM using your referral code. The amount depends on your current slab.",
   ],
   [
     "How much can I earn per referral?",
-    "Up to the highest tier amount per successful referral, depending on how many you've converted. Earnings are exclusive of applicable TDS.",
+    "1–5 successful CRM referrals earn ₹2,500 each, 6–10 earn ₹3,000 each, and 11+ earn ₹4,000 each. Your current slab rate applies to all successful referrals.",
   ],
   [
     "Where do I see my referrals?",
@@ -100,7 +100,7 @@ export default function ReferralHome({
   const [copied, setCopied] = useState("");
   const [openFaq, setOpenFaq] = useState(-1);
 
-  const link = code ? `${window.location.origin}/r/${code}` : "";
+  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
   const Step = HOW_STEPS[active];
 
   function copy(text, which) {
@@ -380,12 +380,12 @@ export default function ReferralHome({
               </span>
 
               <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[12px] font-semibold text-indigo-700">
-                1–2 conversions
+                1–5 successful
               </span>
             </div>
 
             <p className="mt-2 text-[13px] text-slate-600">
-              Base reward per referral
+              ₹2,500 per successful referral
             </p>
           </div>
 
@@ -396,12 +396,12 @@ export default function ReferralHome({
               </span>
 
               <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[12px] font-semibold text-indigo-700">
-                3–5 conversions
+                6–10 successful
               </span>
             </div>
 
             <p className="mt-2 text-[13px] text-slate-600">
-              Higher reward per referral
+              ₹3,000 per successful referral
             </p>
           </div>
 
@@ -412,18 +412,18 @@ export default function ReferralHome({
               </span>
 
               <span className="rounded-full border border-indigo-100 bg-white px-2.5 py-1 text-[12px] font-semibold text-indigo-700">
-                5+ conversions
+                11+ successful
               </span>
             </div>
 
             <p className="mt-2 text-[13px] text-slate-600">
-              Top reward per referral
+              ₹4,000 per successful referral
             </p>
           </div>
         </div>
 
         <p className="mt-4 text-[12px] leading-5 text-slate-500">
-          Reward amounts are configured by your company.
+          Example: 3 successful referrals = 3 × ₹2,500 = ₹7,500; 7 successful referrals = 7 × ₹3,000 = ₹21,000.
         </p>
       </section>
 
