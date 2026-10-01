@@ -4592,10 +4592,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         return (
                           <div
                             key={billingPlan.id}
-                            className={`relative overflow-hidden rounded-[22px] border transition-all duration-300 ${
+                            className={`relative flex h-full flex-col overflow-hidden rounded-[22px] border transition-all duration-300 ${
                               isPopular
                                 ? "border-brand-400 bg-brand-900 text-white shadow-brand-lg"
-                                : "border-slate-200 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
+                                : "border-slate-300 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] ring-1 ring-inset ring-slate-100 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
                             }`}
                           >
                             {isPopular && (
@@ -4606,7 +4606,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
                             )}
 
-                            <div className="p-5 sm:p-6">
+                            <div className="flex flex-1 flex-col p-5 sm:p-6">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
                                   <div
@@ -4715,7 +4715,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                 ))}
                               </div>
 
-                              <div className="mt-7">
+                              <div className="mt-auto pt-7">
                                 {isCurrent ? (
                                   <button
                                     type="button"
