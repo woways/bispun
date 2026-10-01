@@ -599,10 +599,17 @@ function OnboardClientModal({
                     if (discount > listPrice)
                       discount = listPrice;
 
-                    const total = Math.max(
+                    // GST (18%) is charged on the discounted subtotal and the
+                    // client is billed the grand total. Mirrors the server
+                    // (adminClients.computePricing / clientBilling GST_RATE).
+                    const subtotal = Math.max(
                       listPrice - discount,
                       0
                     );
+                    const gstAmount =
+                      Math.round(subtotal * 0.18 * 100) / 100;
+                    const total =
+                      Math.round((subtotal + gstAmount) * 100) / 100;
 
                     return (
                       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
@@ -673,6 +680,26 @@ function OnboardClientModal({
                               <span className="text-rose-600">
                                 −₹
                                 {discount.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-6 text-slate-500 mt-2 pt-2 border-t border-slate-200">
+                              <span>Subtotal</span>
+                              <span>
+                                ₹
+                                {subtotal.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-6 text-slate-500 mt-1">
+                              <span>GST (18%)</span>
+                              <span>
+                                +₹
+                                {gstAmount.toLocaleString(
                                   "en-IN"
                                 )}
                               </span>

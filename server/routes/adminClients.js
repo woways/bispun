@@ -70,16 +70,23 @@ async function emailDomainCanReceiveMail(email) {
 }
 
 
-// Compute list price, clamped discount (rupees, never negative, never
-// more than the list price) and the final amount the client actually pays.
+// GST charged on every subscription (percent). Kept in sync with
+// clientBilling.js GST_RATE so onboarding, renewal and receipts agree.
+const GST_RATE = 18;
+
+// Compute list price, clamped discount (rupees, never negative, never more than
+// the list price), the discounted subtotal, 18% GST on that subtotal, and the
+// final amount the client actually pays (= subtotal + GST, incl. tax).
 function computePricing(yearlyPrice, rawDiscount) {
   const listPrice = Number(yearlyPrice) || 0;
   let discount = Number(rawDiscount);
   if (!Number.isFinite(discount) || discount < 0) discount = 0;
   if (discount > listPrice) discount = listPrice;
   discount = Math.round(discount * 100) / 100;
-  const finalAmount = Math.round((listPrice - discount) * 100) / 100;
-  return { listPrice, discount, finalAmount };
+  const subtotal = Math.round((listPrice - discount) * 100) / 100;
+  const gstAmount = Math.round(subtotal * (GST_RATE / 100) * 100) / 100;
+  const finalAmount = Math.round((subtotal + gstAmount) * 100) / 100;
+  return { listPrice, discount, subtotal, gstRate: GST_RATE, gstAmount, finalAmount };
 }
 
 function formatClient(company) {
@@ -148,6 +155,36 @@ function formatClient(company) {
     discountAmount: activeSubscription?.discountAmount
       ? Number(activeSubscription.discountAmount)
       : 0,
+    // finalAmount = amount stored on the subscription = subtotal + 18% GST
+    // (the grand total the client is billed). subtotal / gstAmount are derived
+    // for display so admin billing can show the tax breakdown.
+    subtotal: (() => {
+      const lp = activeSubscription?.listPrice
+        ? Number(activeSubscription.listPrice)
+        : activeSubscription?.plan?.yearlyPrice
+        ? Number(activeSubscription.plan.yearlyPrice)
+        : 0;
+      const disc = activeSubscription?.discountAmount
+        ? Number(activeSubscription.discountAmount)
+        : 0;
+      return Math.max(0, Math.round((lp - disc) * 100) / 100);
+    })(),
+    gstRate: GST_RATE,
+    gstAmount: (() => {
+      const amt = activeSubscription?.amount
+        ? Number(activeSubscription.amount)
+        : 0;
+      const lp = activeSubscription?.listPrice
+        ? Number(activeSubscription.listPrice)
+        : activeSubscription?.plan?.yearlyPrice
+        ? Number(activeSubscription.plan.yearlyPrice)
+        : 0;
+      const disc = activeSubscription?.discountAmount
+        ? Number(activeSubscription.discountAmount)
+        : 0;
+      const sub = Math.max(0, Math.round((lp - disc) * 100) / 100);
+      return Math.max(0, Math.round((amt - sub) * 100) / 100);
+    })(),
     finalAmount: activeSubscription?.amount
       ? Number(activeSubscription.amount)
       : 0,
