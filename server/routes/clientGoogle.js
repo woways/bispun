@@ -9,6 +9,8 @@ import {
   exchangeCodeForTokens,
   encryptToken,
   createMeetEvent,
+  hasGmailSendScope,
+  sendGmailMessage,
 } from "../lib/google.js";
 
 const router = Router();
@@ -41,6 +43,7 @@ router.get("/status", requireClientUser, async (req, res) => {
         googleRefreshToken: true,
         googleEmail: true,
         googleConnectedAt: true,
+        googleScopes: true,
       },
     });
     return res.json({
@@ -49,6 +52,7 @@ router.get("/status", requireClientUser, async (req, res) => {
       connected: Boolean(user?.googleRefreshToken),
       email: user?.googleEmail || null,
       connectedAt: user?.googleConnectedAt || null,
+      gmailEnabled: hasGmailSendScope(user?.googleScopes || []),
     });
   } catch (error) {
     console.error("Google status failed:", error);
@@ -102,6 +106,7 @@ router.get("/callback", async (req, res) => {
         googleRefreshToken: encryptToken(tokens.refresh_token),
         googleEmail: parseIdTokenEmail(tokens.id_token),
         googleConnectedAt: new Date(),
+        googleScopes: String(tokens.scope || "").split(/\s+/).filter(Boolean),
       },
     });
 
@@ -146,6 +151,33 @@ router.post("/meet", requireClientUser, async (req, res) => {
   }
 });
 
+// Send a test email to the connected Gmail account.
+router.post("/test-email", requireClientUser, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.clientUser.userId },
+      select: { googleEmail: true },
+    });
+    if (!user?.googleEmail) {
+      return res.status(400).json({ success: false, message: "Connect Google first." });
+    }
+    await sendGmailMessage(req.clientUser.userId, {
+      to: user.googleEmail,
+      subject: "Bispun Gmail integration test",
+      text: "Your Gmail integration is working. You can now send emails to leads from Lead Store.",
+    });
+    return res.json({ success: true, message: `Test email sent to ${user.googleEmail}` });
+  } catch (error) {
+    console.error("Gmail test failed:", error?.message || error);
+    return res.status(400).json({
+      success: false,
+      message: /permission|scope/i.test(String(error?.message || ""))
+        ? "Reconnect Google in Settings → Integrations to grant Gmail permission."
+        : "Unable to send the Gmail test email.",
+    });
+  }
+});
+
 // Disconnect the logged-in user's Google account.
 router.post("/disconnect", requireClientUser, async (req, res) => {
   try {
@@ -155,6 +187,7 @@ router.post("/disconnect", requireClientUser, async (req, res) => {
         googleRefreshToken: null,
         googleEmail: null,
         googleConnectedAt: null,
+        googleScopes: [],
       },
     });
     return res.json({ success: true });

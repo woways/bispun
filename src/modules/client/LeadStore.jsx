@@ -27,6 +27,11 @@ import {
   RotateCcw,
   ChevronDown,
   ChevronRight,
+  Mail,
+  Send,
+  MessageCircle,
+  Smartphone,
+  History,
 } from "lucide-react";
 
 import {
@@ -2028,6 +2033,75 @@ export default function LeadStore({ selectedYear = "all" }) {
     setBulkAssigning,
   ] = useState(false);
 
+  const [messageComposerOpen, setMessageComposerOpen] = useState(false);
+  const [messageLeadIds, setMessageLeadIds] = useState([]);
+  const [communicationStatus, setCommunicationStatus] = useState(null);
+  const [communicationLoading, setCommunicationLoading] = useState(false);
+  const [communicationSending, setCommunicationSending] = useState(false);
+  const [communicationError, setCommunicationError] = useState("");
+  const [communicationResult, setCommunicationResult] = useState("");
+  const [communicationHistory, setCommunicationHistory] = useState([]);
+  const [emailForm, setEmailForm] = useState({
+    subject: "",
+    message: "Hi {{name}},\n\n",
+  });
+
+  async function openMessageComposer(leadIds) {
+    const ids = Array.isArray(leadIds) ? [...new Set(leadIds)] : [];
+    if (!ids.length) return;
+    setMessageLeadIds(ids);
+    setMessageComposerOpen(true);
+    setCommunicationLoading(true);
+    setCommunicationError("");
+    setCommunicationResult("");
+    try {
+      const status = await apiRequest("/api/client/communications/status");
+      setCommunicationStatus(status);
+      if (ids.length === 1) {
+        const history = await apiRequest(`/api/client/communications/history?leadId=${encodeURIComponent(ids[0])}&limit=10`);
+        setCommunicationHistory(history.logs || []);
+      } else {
+        setCommunicationHistory([]);
+      }
+    } catch (error) {
+      setCommunicationError(error?.data?.message || "Unable to load communication status");
+    } finally {
+      setCommunicationLoading(false);
+    }
+  }
+
+  async function sendSelectedEmail() {
+    if (!emailForm.subject.trim() || !emailForm.message.trim()) {
+      setCommunicationError("Enter both a subject and message.");
+      return;
+    }
+    setCommunicationSending(true);
+    setCommunicationError("");
+    setCommunicationResult("");
+    try {
+      const data = await apiRequest("/api/client/communications/email", {
+        method: "POST",
+        body: JSON.stringify({
+          leadIds: messageLeadIds,
+          subject: emailForm.subject,
+          message: emailForm.message,
+        }),
+      });
+      setCommunicationResult(data?.message || "Email sent successfully.");
+      setSuccessMessage(data?.message || "Email sent successfully.");
+      const status = await apiRequest("/api/client/communications/status");
+      setCommunicationStatus(status);
+      if (messageLeadIds.length === 1) {
+        const history = await apiRequest(`/api/client/communications/history?leadId=${encodeURIComponent(messageLeadIds[0])}&limit=10`);
+        setCommunicationHistory(history.logs || []);
+      }
+    } catch (error) {
+      setCommunicationError(error?.data?.message || "Unable to send email");
+    } finally {
+      setCommunicationSending(false);
+    }
+  }
+
   function toggleIndividualColumn(
     key
   ) {
@@ -3452,6 +3526,15 @@ export default function LeadStore({ selectedYear = "all" }) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => openMessageComposer(selectedLeadIds)}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              <Mail size={14} />
+              Send Message
+            </button>
+
             <select
               value={bulkAssigneeId}
               onChange={(event) =>
@@ -3625,6 +3708,15 @@ export default function LeadStore({ selectedYear = "all" }) {
 
                           <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openMessageComposer([lead.id])}
+                                title={lead.email ? `Email ${lead.name}` : "Lead has no email address"}
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${lead.email ? "text-indigo-600 hover:bg-indigo-50" : "text-slate-300 hover:bg-slate-50"}`}
+                              >
+                                <Mail size={14} />
+                              </button>
+
                               {lead.isAdmissionsSynced ? (
                                 <span
                                   className="px-2 text-[11px] font-semibold text-slate-400"
@@ -3978,6 +4070,95 @@ export default function LeadStore({ selectedYear = "all" }) {
               </div>
             </details>
           )}
+        </div>
+      )}
+
+      {messageComposerOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-[17px] font-bold text-slate-950">Send Message</div>
+                <div className="mt-1 text-[12px] text-slate-500">{messageLeadIds.length} lead{messageLeadIds.length === 1 ? "" : "s"} selected · Email is active now; WhatsApp and SMS can plug into this same flow later.</div>
+              </div>
+              <button type="button" onClick={() => setMessageComposerOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={16} /></button>
+            </div>
+
+            <div className="border-b border-slate-200 px-5 pt-4">
+              <div className="flex gap-2">
+                <button type="button" className="inline-flex items-center gap-2 rounded-t-xl border border-b-white border-indigo-200 bg-white px-4 py-2.5 text-[13px] font-bold text-indigo-700"><Mail size={14} /> Email</button>
+                <button type="button" disabled className="inline-flex items-center gap-2 rounded-t-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-semibold text-slate-400"><MessageCircle size={14} /> WhatsApp · Soon</button>
+                <button type="button" disabled className="inline-flex items-center gap-2 rounded-t-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-semibold text-slate-400"><Smartphone size={14} /> SMS · Soon</button>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5">
+              {communicationLoading ? (
+                <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-4 text-[13px] text-slate-500"><Loader2 size={15} className="animate-spin" /> Checking Gmail connection...</div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">From Gmail</div>
+                      <div className="mt-1 text-[14px] font-semibold text-slate-900">{communicationStatus?.gmail?.email || "No Gmail connected"}</div>
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <div className="text-[12px] font-semibold text-slate-500">Bispun-tracked emails today</div>
+                      <div className="mt-1 text-[14px] font-bold text-slate-900">{communicationStatus?.gmail?.sentToday ?? 0}</div>
+                    </div>
+                  </div>
+
+                  {!communicationStatus?.gmail?.enabled && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+                      Gmail sending is not ready. Go to Settings → Integrations and connect/reconnect Google to grant Gmail permission.
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Subject *</label>
+                    <input value={emailForm.subject} onChange={(e) => setEmailForm((c) => ({ ...c, subject: e.target.value }))} placeholder="Admission follow-up" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                      <label className="block text-[12px] font-semibold text-slate-600">Message *</label>
+                      <span className="text-[11px] text-slate-400">Use {{name}}, {{phone}}, {{email}}, {{course}}</span>
+                    </div>
+                    <textarea value={emailForm.message} onChange={(e) => setEmailForm((c) => ({ ...c, message: e.target.value }))} rows={10} className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] leading-6 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+                  </div>
+
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-[12px] leading-5 text-indigo-800">
+                    This sends one email per lead from the connected Gmail account. Leads without a valid email are skipped. For stability, one send action is limited to {communicationStatus?.maxPerRequest || 100} leads; Google still controls the account&apos;s actual daily sending limit.
+                  </div>
+
+                  {communicationError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-semibold text-rose-700">{communicationError}</div>}
+                  {communicationResult && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{communicationResult}</div>}
+
+                  {messageLeadIds.length === 1 && communicationHistory.length > 0 && (
+                    <div className="rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 text-[12px] font-bold text-slate-700"><History size={14} /> Communication History</div>
+                      <div className="max-h-44 divide-y divide-slate-100 overflow-y-auto">
+                        {communicationHistory.map((item) => (
+                          <div key={item.id} className="px-4 py-3">
+                            <div className="flex items-center justify-between gap-3"><span className="text-[12px] font-semibold text-slate-800">{item.subject || item.channel}</span><span className={`text-[11px] font-bold ${item.status === "SENT" ? "text-emerald-600" : "text-rose-600"}`}>{item.status}</span></div>
+                            <div className="mt-1 text-[11px] text-slate-400">{item.recipient} · {new Date(item.createdAt).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
+              <button type="button" onClick={() => setMessageComposerOpen(false)} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700">Cancel</button>
+              <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || !emailForm.message.trim()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                {communicationSending ? "Sending..." : `Send ${messageLeadIds.length > 1 ? `to ${messageLeadIds.length} leads` : "Email"}`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

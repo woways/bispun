@@ -18,6 +18,8 @@ import {
   Globe2,
   Mail,
   Smartphone,
+  MessageCircle,
+  Send,
   Plus,
   Pencil,
   KeyRound,
@@ -248,11 +250,12 @@ export default function SettingsView({
     "company"
   );
 
-  // ---- Google (Meet) integration state ----
+  // ---- Google Workspace (Meet + Gmail) integration state ----
   const [googleStatus, setGoogleStatus] = useState({
     configured: false,
     connected: false,
     email: null,
+    gmailEnabled: false,
   });
   const [googleBusy, setGoogleBusy] = useState(false);
   const [googleNotice, setGoogleNotice] = useState("");
@@ -269,10 +272,11 @@ export default function SettingsView({
         configured: !!data?.configured,
         connected: !!data?.connected,
         email: data?.email || null,
+        gmailEnabled: !!data?.gmailEnabled,
       });
     } catch (error) {
       console.error("Unable to load Google status:", error);
-      setGoogleStatusError("Unable to check Google Meet status");
+      setGoogleStatusError("Unable to check Google integration status");
     } finally {
       setGoogleStatusLoading(false);
     }
@@ -302,6 +306,19 @@ export default function SettingsView({
       await loadGoogleStatus();
     } catch (error) {
       setGoogleNotice(error?.data?.message || "Unable to disconnect.");
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  async function sendGoogleTestEmail() {
+    setGoogleBusy(true);
+    setGoogleNotice("");
+    try {
+      const data = await apiRequest("/api/client/google/test-email", { method: "POST" });
+      setGoogleNotice(data?.message || "Test email sent.");
+    } catch (error) {
+      setGoogleNotice(error?.data?.message || "Unable to send test email.");
     } finally {
       setGoogleBusy(false);
     }
@@ -4094,9 +4111,9 @@ export default function SettingsView({
           {tab === "integrations" && (
             <div className="p-6 space-y-5">
               <div>
-                <h3 className="text-[15px] font-bold text-slate-900">Integrations</h3>
+                <h3 className="text-[15px] font-bold text-slate-900">Communication Integrations</h3>
                 <p className="text-[13px] text-slate-500 mt-1">
-                  Connect your own accounts to unlock features across the CRM. Each person connects their own account.
+                  Connect your own communication accounts. Gmail is available now; WhatsApp and SMS are prepared for the next phase.
                 </p>
               </div>
 
@@ -4106,60 +4123,74 @@ export default function SettingsView({
                 </div>
               )}
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="grid gap-4 xl:grid-cols-3">
+                <div className="rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm xl:col-span-1">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
-                      <Globe2 size={20} />
+                    <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+                      <Mail size={20} />
                     </span>
-                    <div>
-                      <div className="text-[15px] font-bold text-slate-900">Google Meet</div>
-                      <div className="text-[13px] text-slate-500">
-                        Connect your Google account so scheduled meetings get a real Google Meet link on your calendar.
+                    <div className="min-w-0">
+                      <div className="text-[15px] font-bold text-slate-900">Gmail</div>
+                      <div className="mt-1 text-[13px] leading-5 text-slate-500">
+                        Send one-to-one or bulk emails to leads directly from Lead Store using your connected Google account.
                       </div>
-                      {googleStatus.connected && (
-                        <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[12px] font-semibold text-emerald-600">
-                          Connected{googleStatus.email ? ` · ${googleStatus.email}` : ""}
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  <div className="flex-shrink-0">
+                  <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-[12px] text-slate-600">
+                    {googleStatus.connected ? (
+                      <>
+                        <div className="font-semibold text-emerald-700">Connected · {googleStatus.email || "Google account"}</div>
+                        <div className="mt-1">Gmail sending: {googleStatus.gmailEnabled ? "Ready" : "Reconnect required"}</div>
+                      </>
+                    ) : (
+                      <div>Connect Google once to enable Gmail and Google Meet.</div>
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {googleStatusLoading ? (
-                      <span className="inline-flex items-center gap-2 text-[12px] font-semibold text-slate-500">
-                        <Loader2 size={14} className="animate-spin" />
-                        Checking status...
+                      <span className="inline-flex h-10 items-center gap-2 text-[12px] font-semibold text-slate-500">
+                        <Loader2 size={14} className="animate-spin" /> Checking...
                       </span>
                     ) : googleStatusError ? (
-                      <span className="text-[12px] font-semibold text-rose-600">
-                        {googleStatusError}
-                      </span>
+                      <span className="text-[12px] font-semibold text-rose-600">{googleStatusError}</span>
                     ) : !googleStatus.configured ? (
-                      <span className="text-[12px] font-semibold text-amber-600">
-                        Not set up on the server yet
-                      </span>
-                    ) : googleStatus.connected ? (
-                      <button
-                        type="button"
-                        onClick={disconnectGoogle}
-                        disabled={googleBusy}
-                        className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                      >
-                        {googleBusy ? "Working..." : "Disconnect"}
+                      <span className="text-[12px] font-semibold text-amber-600">Not set up on the server yet</span>
+                    ) : !googleStatus.connected || !googleStatus.gmailEnabled ? (
+                      <button type="button" onClick={connectGoogle} disabled={googleBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                        <Globe2 size={15} /> {googleBusy ? "Opening Google..." : googleStatus.connected ? "Reconnect Google" : "Connect Google"}
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={connectGoogle}
-                        disabled={googleBusy}
-                        className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-                      >
-                        {googleBusy ? "Opening Google..." : "Connect Google"}
-                      </button>
+                      <>
+                        <button type="button" onClick={sendGoogleTestEmail} disabled={googleBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                          <Send size={14} /> {googleBusy ? "Sending..." : "Send test email"}
+                        </button>
+                        <button type="button" onClick={disconnectGoogle} disabled={googleBusy} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Disconnect</button>
+                      </>
                     )}
                   </div>
                 </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200"><MessageCircle size={20} /></span>
+                    <div><div className="text-[15px] font-bold text-slate-900">WhatsApp</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Send approved WhatsApp messages and templates to leads.</p></div>
+                  </div>
+                  <span className="mt-4 inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">Coming Soon</span>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200"><Smartphone size={20} /></span>
+                    <div><div className="text-[15px] font-bold text-slate-900">SMS</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Send transactional and follow-up messages to lead phone numbers.</p></div>
+                  </div>
+                  <span className="mt-4 inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">Coming Soon</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
+                Gmail uses the connected user&apos;s own Google account and Google&apos;s sending rules. Bispun records sent/failed communication history, but Google controls the actual daily sending limit.
               </div>
             </div>
           )}

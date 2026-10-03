@@ -14,6 +14,7 @@ const SCOPES = [
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/calendar.events",
+  "https://www.googleapis.com/auth/gmail.send",
 ];
 
 export function isGoogleConfigured() {
@@ -119,4 +120,55 @@ export async function createMeetEvent(
     )?.uri ||
     null;
   return { meetLink, eventId: res.data.id, htmlLink: res.data.htmlLink };
+}
+export function hasGmailSendScope(scopes = []) {
+  return Array.isArray(scopes) &&
+    scopes.includes("https://www.googleapis.com/auth/gmail.send");
+}
+
+export async function getGmailForUser(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleRefreshToken: true, googleScopes: true, googleEmail: true },
+  });
+  if (!user?.googleRefreshToken) throw new Error("Google account not connected");
+  if (!hasGmailSendScope(user.googleScopes || [])) {
+    throw new Error("Gmail permission missing. Reconnect Google in Settings → Integrations.");
+  }
+  const refreshToken = decryptToken(user.googleRefreshToken);
+  if (!refreshToken) throw new Error("Google account not connected");
+  const oauth2 = createOAuthClient();
+  oauth2.setCredentials({ refresh_token: refreshToken });
+  return { gmail: google.gmail({ version: "v1", auth: oauth2 }), email: user.googleEmail || null };
+}
+
+function encodeHeader(value) {
+  return `=?UTF-8?B?${Buffer.from(String(value || ""), "utf8").toString("base64")}?=`;
+}
+
+function base64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+export async function sendGmailMessage(userId, { to, subject, text }) {
+  const { gmail, email } = await getGmailForUser(userId);
+  const body = Buffer.from(String(text || ""), "utf8").toString("base64");
+  const headers = [
+    `To: ${String(to || "").trim()}`,
+    email ? `From: ${email}` : null,
+    `Subject: ${encodeHeader(subject)}`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+  ].filter(Boolean);
+  const raw = base64Url(`${headers.join("\r\n")}\r\n\r\n${body}`);
+  const result = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw },
+  });
+  return { id: result.data.id || null, threadId: result.data.threadId || null, from: email };
 }
