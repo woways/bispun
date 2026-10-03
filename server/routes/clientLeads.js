@@ -30,6 +30,8 @@ const STAGE_LABELS = {
 
 const VALID_STAGES = Object.keys(STAGE_LABELS);
 
+const VALID_TEMPERATURES = ["HOT", "WARM", "COLD"];
+
 
 function parseYear(value) {
   if (!value || value === "all") return null;
@@ -92,6 +94,38 @@ const FALLBACK_SOURCE_LABELS = {
   OTHER: "Other",
 };
 
+const INTERNAL_MANAGED_SOURCE_CONFIGS = {
+  INTERNAL: {
+    name: "Internal Leads",
+    description: "Leads added manually or imported internally",
+    sortOrder: 50,
+  },
+  GOOGLE_FORM: {
+    name: "Google Form",
+    description: "Manually added or imported Google Form leads",
+    sortOrder: 10,
+  },
+  WEBSITE_FORM: {
+    name: "Website Form",
+    description: "Manually added or imported website form leads",
+    sortOrder: 20,
+  },
+  IM_LEADS: {
+    name: "IM Leads",
+    description: "Manually added or imported instant messaging leads",
+    sortOrder: 30,
+  },
+  DM_LEADS: {
+    name: "DM Leads",
+    description: "Manually added or imported direct message leads",
+    sortOrder: 40,
+  },
+};
+
+const INTERNAL_MANAGED_SOURCE_KEYS = Object.keys(
+  INTERNAL_MANAGED_SOURCE_CONFIGS
+);
+
 async function getSourceMap(
   companyId
 ) {
@@ -130,33 +164,49 @@ async function validateSource(
 }
 
 
-async function ensureInternalSource(
-  companyId
+async function ensureInternalManagedSource(
+  companyId,
+  sourceKey
 ) {
+  const config =
+    INTERNAL_MANAGED_SOURCE_CONFIGS[sourceKey];
+
+  if (!config) {
+    return null;
+  }
+
   return prisma.leadSourceConfig.upsert({
     where: {
       companyId_key: {
         companyId,
-        key: "INTERNAL",
+        key: sourceKey,
       },
     },
     update: {
-      name: "Internal Leads",
+      name: config.name,
       active: true,
       showInForms: true,
     },
     create: {
       companyId,
-      key: "INTERNAL",
-      name: "Internal Leads",
-      description:
-        "Leads added manually or imported internally",
+      key: sourceKey,
+      name: config.name,
+      description: config.description,
       active: true,
       showInForms: true,
       system: true,
-      sortOrder: 50,
+      sortOrder: config.sortOrder,
     },
   });
+}
+
+async function ensureInternalSource(
+  companyId
+) {
+  return ensureInternalManagedSource(
+    companyId,
+    "INTERNAL"
+  );
 }
 
 
@@ -351,6 +401,7 @@ function formatLead(lead, sourceMap = new Map()) {
 
     stage: STAGE_LABELS[lead.stage] || lead.stage,
     stageKey: lead.stage,
+    temperature: lead.temperature || "WARM",
 
     campaign: lead.campaign,
     medium: lead.medium,
@@ -424,6 +475,11 @@ router.get("/", async (req, res) => {
         .trim()
         .toUpperCase();
 
+    const temperature =
+      String(req.query.temperature || "")
+        .trim()
+        .toUpperCase();
+
     const search =
       String(req.query.search || "")
         .trim();
@@ -452,6 +508,13 @@ router.get("/", async (req, res) => {
       VALID_STAGES.includes(stage)
     ) {
       where.stage = stage;
+    }
+
+    if (
+      temperature &&
+      VALID_TEMPERATURES.includes(temperature)
+    ) {
+      where.temperature = temperature;
     }
 
     if (search) {
@@ -551,6 +614,7 @@ router.post("/", async (req, res) => {
       course,
       source,
       stage,
+      temperature,
       campaign,
       medium,
       assignedToName,
@@ -575,6 +639,11 @@ router.post("/", async (req, res) => {
         .trim()
         .toUpperCase();
 
+    const temperatureKey =
+      String(temperature || "WARM")
+        .trim()
+        .toUpperCase();
+
     if (!cleanName) {
       return res.status(400).json({
         success: false,
@@ -590,9 +659,10 @@ router.post("/", async (req, res) => {
     }
 
     const sourceConfig =
-      sourceKey === "INTERNAL"
-        ? await ensureInternalSource(
-            companyId
+      INTERNAL_MANAGED_SOURCE_KEYS.includes(sourceKey)
+        ? await ensureInternalManagedSource(
+            companyId,
+            sourceKey
           )
         : await validateSource(
             companyId,
@@ -613,6 +683,15 @@ router.post("/", async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Invalid lead stage",
+      });
+    }
+
+    if (
+      !VALID_TEMPERATURES.includes(temperatureKey)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid lead temperature",
       });
     }
 
@@ -678,6 +757,7 @@ router.post("/", async (req, res) => {
 
           source: sourceKey,
           stage: stageKey,
+          temperature: temperatureKey,
 
           campaign: campaign
             ? String(campaign).trim()
@@ -896,6 +976,22 @@ router.patch("/:id", async (req, res) => {
       }
 
       data.stage = stage;
+    }
+
+    if (req.body.temperature !== undefined) {
+      const temperature =
+        String(req.body.temperature)
+          .trim()
+          .toUpperCase();
+
+      if (!VALID_TEMPERATURES.includes(temperature)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid lead temperature",
+        });
+      }
+
+      data.temperature = temperature;
     }
 
     let preparedCustomFields = [];
@@ -1407,9 +1503,29 @@ router.post(
       const companyId =
         req.clientUser.companyId;
 
-      await ensureInternalSource(
-        companyId
-      );
+      const sourceKey = String(
+        req.body?.source || "INTERNAL"
+      )
+        .trim()
+        .toUpperCase();
+
+      if (
+        !INTERNAL_MANAGED_SOURCE_KEYS.includes(
+          sourceKey
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Choose Internal, Google Form, Website Form, IM Leads or DM Leads as the import source",
+        });
+      }
+
+      const sourceConfig =
+        await ensureInternalManagedSource(
+          companyId,
+          sourceKey
+        );
 
       const rows =
         await parseInternalLeadFile(
@@ -1420,7 +1536,7 @@ router.post(
         return res.status(400).json({
           success: false,
           message:
-            "No internal lead rows found",
+            "No lead rows found in the uploaded file",
         });
       }
 
@@ -1428,67 +1544,45 @@ router.post(
       let invalid = 0;
       let duplicates = 0;
 
-      const seenPhones =
-        new Set();
+      const seenPhones = new Set();
 
-      const phones =
-        rows
-          .map(
-            (row) =>
-              row.phone
-          )
-          .filter(Boolean);
+      const phones = rows
+        .map((row) => row.phone)
+        .filter(Boolean);
 
-      const existing =
-        phones.length
-          ? await prisma.lead.findMany({
-              where: {
-                companyId,
-                phone: {
-                  in: phones,
-                },
+      const existing = phones.length
+        ? await prisma.lead.findMany({
+            where: {
+              companyId,
+              phone: {
+                in: phones,
               },
-              select: {
-                phone: true,
-              },
-            })
-          : [];
+            },
+            select: {
+              phone: true,
+            },
+          })
+        : [];
 
-      const existingPhones =
-        new Set(
-          existing.map(
-            (item) =>
-              item.phone
-          )
-        );
+      const existingPhones = new Set(
+        existing.map((item) => item.phone)
+      );
 
-      for (
-        const row of rows
-      ) {
-        if (
-          !row.name ||
-          !row.phone
-        ) {
+      for (const row of rows) {
+        if (!row.name || !row.phone) {
           invalid += 1;
           continue;
         }
 
         if (
-          seenPhones.has(
-            row.phone
-          ) ||
-          existingPhones.has(
-            row.phone
-          )
+          seenPhones.has(row.phone) ||
+          existingPhones.has(row.phone)
         ) {
           duplicates += 1;
           continue;
         }
 
-        seenPhones.add(
-          row.phone
-        );
-
+        seenPhones.add(row.phone);
         valid.push(row);
       }
 
@@ -1496,7 +1590,7 @@ router.post(
         return res.status(400).json({
           success: false,
           message:
-            "No new valid internal leads were found",
+            "No new valid leads were found",
           importSummary: {
             imported: 0,
             duplicates,
@@ -1506,41 +1600,29 @@ router.post(
       }
 
       await prisma.lead.createMany({
-        data:
-          valid.map(
-            (row) => ({
-              companyId,
-              name:
-                row.name,
-              phone:
-                row.phone,
-              email:
-                row.email,
-              course:
-                row.course,
-              source:
-                "INTERNAL",
-              stage:
-                "NEW",
-              campaign:
-                row.campaign,
-              medium:
-                row.medium,
-              assignedToName:
-                row.assignedToName,
-              notes:
-                row.notes,
-            })
-          ),
+        data: valid.map((row) => ({
+          companyId,
+          name: row.name,
+          phone: row.phone,
+          email: row.email,
+          course: row.course,
+          source: sourceKey,
+          stage: "NEW",
+          temperature: "WARM",
+          campaign: row.campaign,
+          medium: row.medium,
+          assignedToName:
+            row.assignedToName,
+          notes: row.notes,
+        })),
       });
 
       return res.status(201).json({
         success: true,
-        message:
-          `${valid.length} internal leads imported`,
+        message: `${valid.length} ${sourceConfig?.name || "internal"} leads imported`,
+        source: sourceKey,
         importSummary: {
-          imported:
-            valid.length,
+          imported: valid.length,
           duplicates,
           invalid,
         },
@@ -1560,10 +1642,6 @@ router.post(
     }
   }
 );
-
-/* =========================================================
-   GET UTM LINKS
-========================================================= */
 
 router.get("/utm/links", async (req, res) => {
   try {

@@ -45,6 +45,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum LeadTemperature {
+  HOT
+  WARM
+  COLD
+}
+
 enum LeadStage {
   NEW
   CONTACTED
@@ -628,8 +634,9 @@ model Lead {
 
   course String?
 
-  source String
-  stage  LeadStage @default(NEW)
+  source      String
+  stage       LeadStage       @default(NEW)
+  temperature LeadTemperature @default(WARM)
 
   campaign String?
   medium   String?
@@ -655,6 +662,7 @@ model Lead {
   @@index([companyId])
   @@index([companyId, source])
   @@index([companyId, stage])
+  @@index([companyId, temperature])
   @@index([companyId, createdAt])
   @@index([utmLinkId])
   @@index([leadDatasetId])

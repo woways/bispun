@@ -2,6 +2,7 @@ import {
   Fragment,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -32,6 +33,8 @@ import {
   MessageCircle,
   Smartphone,
   History,
+  Copy,
+  PhoneCall,
 } from "lucide-react";
 
 import {
@@ -83,12 +86,25 @@ const ALL_LEAD_TYPES = [
   ...TYPES,
 ];
 
+const LEAD_TEMPERATURES = [
+  { value: "HOT", label: "Hot" },
+  { value: "WARM", label: "Warm" },
+  { value: "COLD", label: "Cold" },
+];
+
+function temperatureSelectClass(value) {
+  if (value === "HOT") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (value === "COLD") return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
 
 const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
   { key: "course", label: "Course" },
   { key: "assignedTo", label: "Assigned To" },
+  { key: "temperature", label: "Hot / Warm / Cold" },
   { key: "status", label: "Status" },
   { key: "created", label: "Created" },
 ];
@@ -98,6 +114,7 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   email: true,
   course: true,
   assignedTo: true,
+  temperature: true,
   status: true,
   created: false,
 };
@@ -221,6 +238,117 @@ function isValidManualLeadName(value) {
 }
 
 
+function PhoneAction({ phone, name, onCopied }) {
+  const [menu, setMenu] = useState(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menu) return undefined;
+
+    function closeMenu(event) {
+      if (event.key === "Escape") setMenu(null);
+    }
+
+    function closeOnOutsideClick(event) {
+      const target = event.target;
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setMenu(null);
+    }
+
+    function closeOnViewportChange() {
+      setMenu(null);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    window.addEventListener("keydown", closeMenu);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("resize", closeOnViewportChange);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      window.removeEventListener("keydown", closeMenu);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("resize", closeOnViewportChange);
+    };
+  }, [menu]);
+
+  if (!phone) return <span className="text-slate-400">—</span>;
+
+  async function copyNumber() {
+    try {
+      await navigator.clipboard.writeText(String(phone));
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = String(phone);
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+
+    setMenu(null);
+    onCopied?.(`${name || "Lead"} number copied.`);
+  }
+
+  function openMenu(event) {
+    if (menu) {
+      setMenu(null);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 178;
+    setMenu({
+      top: Math.min(rect.bottom + 6, window.innerHeight - 112),
+      left: Math.min(Math.max(8, rect.left), window.innerWidth - menuWidth - 8),
+    });
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={openMenu}
+        className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+        title="Copy or dial this number"
+      >
+        {phone}
+      </button>
+
+      {menu ? (
+        <div
+          ref={menuRef}
+          className="fixed z-[130] w-[178px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl"
+          style={{ top: menu.top, left: menu.left }}
+        >
+          <button
+            type="button"
+            onClick={copyNumber}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Copy size={14} />
+            Copy number
+          </button>
+          <a
+            href={`tel:${phone}`}
+            onClick={() => setMenu(null)}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+          >
+            <PhoneCall size={14} />
+            Dial number
+          </a>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+
 function Field({
   label,
   required = false,
@@ -299,6 +427,7 @@ function IndividualLeadModal({
       phone: lead?.phone || "",
       email: lead?.email || "",
       course: lead?.course || "",
+      temperature: lead?.temperature || "WARM",
       type: lead?.type || defaultType || "INDIVIDUAL",
       sourceName: lead?.sourceName || "",
       assignedToUserId: "",
@@ -654,6 +783,22 @@ function IndividualLeadModal({
                     </option>
                   )
                 )}
+              </select>
+            </Field>
+
+            <Field label="Lead Temperature" required>
+              <select
+                value={form.temperature}
+                onChange={(event) =>
+                  update("temperature", event.target.value)
+                }
+                className={`form-input font-semibold ${temperatureSelectClass(form.temperature)}`}
+              >
+                {LEAD_TEMPERATURES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
               </select>
             </Field>
 
@@ -1982,6 +2127,7 @@ export default function LeadStore({ selectedYear = "all" }) {
   ] =
     useState({
       status: "",
+      temperature: "",
       assignedToUserId: "",
       course: "",
       source: "",
@@ -2032,6 +2178,8 @@ export default function LeadStore({ selectedYear = "all" }) {
     bulkAssigning,
     setBulkAssigning,
   ] = useState(false);
+
+  const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
 
   const [messageComposerOpen, setMessageComposerOpen] = useState(false);
   const [messageLeadIds, setMessageLeadIds] = useState([]);
@@ -2413,6 +2561,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                 lead.assignedToName,
                 lead.sourceName,
                 lead.stage,
+                lead.temperature,
               ]
                 .filter(Boolean)
                 .some(
@@ -2428,6 +2577,10 @@ export default function LeadStore({ selectedYear = "all" }) {
               !filters.status ||
               lead.stage ===
                 filters.status;
+
+            const temperatureMatches =
+              !filters.temperature ||
+              (lead.temperature || "WARM") === filters.temperature;
 
             const assignedMatches =
               !filters.assignedToUserId ||
@@ -2471,6 +2624,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             return (
               searchMatches &&
               statusMatches &&
+              temperatureMatches &&
               assignedMatches &&
               courseMatches &&
               sourceMatches &&
@@ -2568,6 +2722,7 @@ export default function LeadStore({ selectedYear = "all" }) {
       filters.dateFrom,
       filters.dateTo,
       filters.status,
+      filters.temperature,
       filters.course,
     ].filter(Boolean).length;
 
@@ -2785,9 +2940,42 @@ export default function LeadStore({ selectedYear = "all" }) {
     }
   }
 
+  async function updateLeadTemperature(leadId, temperature) {
+    setTemperatureUpdatingId(leadId);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${leadId}/temperature`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ temperature }),
+        }
+      );
+
+      setIndividualLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? { ...lead, temperature: data?.lead?.temperature || temperature }
+            : lead
+        )
+      );
+
+      setSuccessMessage(data?.message || "Lead temperature updated.");
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to update lead temperature"
+      );
+    } finally {
+      setTemperatureUpdatingId("");
+    }
+  }
+
   function clearFilters() {
     setFilters({
       status: "",
+      temperature: "",
       assignedToUserId: "",
       course: "",
       source: "",
@@ -2816,6 +3004,8 @@ export default function LeadStore({ selectedYear = "all" }) {
           lead.sourceName,
           lead.assignedToName ||
             "Unassigned",
+          lead.temperature ||
+            "WARM",
           lead.stage ||
             "NEW",
           formatDate(
@@ -2842,6 +3032,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         "Lead Type",
         "Source",
         "Assigned To",
+        "Temperature",
         "Status",
         "Created",
         "Custom Fields",
@@ -3193,7 +3384,7 @@ export default function LeadStore({ selectedYear = "all" }) {
 
         {filtersOpen && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               <label className="block">
                   <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
                     Status
@@ -3249,6 +3440,30 @@ export default function LeadStore({ selectedYear = "all" }) {
                     )}
                   </select>
                 </label>
+
+              <label className="block">
+                <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
+                  Temperature
+                </span>
+
+                <select
+                  value={filters.temperature}
+                  onChange={(event) =>
+                    setFilters((current) => ({
+                      ...current,
+                      temperature: event.target.value,
+                    }))
+                  }
+                  className="form-input"
+                >
+                  <option value="">All temperatures</option>
+                  {LEAD_TEMPERATURES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
@@ -3653,6 +3868,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   {individualColumns.email && <th className="min-w-[210px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Email</th>}
                   {individualColumns.course && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Course</th>}
                   {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
+                  {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Temperature</th>}
                   {individualColumns.status && <th className="min-w-[110px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
                   {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
 
@@ -3742,10 +3958,37 @@ export default function LeadStore({ selectedYear = "all" }) {
                             </div>
                           </td>
 
-                          {individualColumns.phone && <td title={lead.phone || ""} className={`min-w-[145px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>{lead.phone || "—"}</td>}
+                          {individualColumns.phone && (
+                            <td className={`min-w-[145px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
+                              <PhoneAction
+                                phone={lead.phone}
+                                name={lead.name}
+                                onCopied={setSuccessMessage}
+                              />
+                            </td>
+                          )}
                           {individualColumns.email && <td className={`min-w-[210px] max-w-[240px] px-4 ${individualCellPadding}`}><div title={lead.email || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.email || "—"}</div></td>}
                           {individualColumns.course && <td className={`min-w-[145px] max-w-[170px] px-4 ${individualCellPadding}`}><div title={lead.course || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.course || "—"}</div></td>}
                           {individualColumns.assignedTo && <td className={`min-w-[170px] max-w-[190px] px-4 ${individualCellPadding}`}><div title={lead.assignedToName || "Unassigned"} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.assignedToName || "Unassigned"}</div></td>}
+                          {individualColumns.temperature && (
+                            <td className={`min-w-[125px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+                              <select
+                                value={lead.temperature || "WARM"}
+                                disabled={temperatureUpdatingId === lead.id}
+                                onChange={(event) =>
+                                  updateLeadTemperature(lead.id, event.target.value)
+                                }
+                                className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${temperatureSelectClass(lead.temperature || "WARM")}`}
+                                aria-label={`Temperature for ${lead.name}`}
+                              >
+                                {LEAD_TEMPERATURES.map((item) => (
+                                  <option key={item.value} value={item.value}>
+                                    {item.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          )}
                           {individualColumns.status && <td className={`min-w-[110px] px-4 ${individualCellPadding} whitespace-nowrap`}><Badge tone="slate">{lead.stage || "NEW"}</Badge></td>}
                           {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 

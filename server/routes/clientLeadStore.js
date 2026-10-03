@@ -120,6 +120,17 @@ const VALID_TYPES =
   );
 
 
+const VALID_TEMPERATURES = [
+
+  "HOT",
+
+  "WARM",
+
+  "COLD",
+
+];
+
+
 
 const VALID_DATASET_TYPES =
 
@@ -2422,6 +2433,8 @@ router.get(
 
           stage: lead.stage,
 
+          temperature: lead.temperature || "WARM",
+
           type:
 
             String(lead.notes || "").includes("Admissions origin:")
@@ -2859,6 +2872,10 @@ router.patch(
 
       const course = cleanString(req.body?.course);
 
+      const temperature = String(
+        req.body?.temperature || existing.temperature || "WARM"
+      ).trim().toUpperCase();
+
       const type = String(
         req.body?.type ||
           existing.medium ||
@@ -2909,6 +2926,10 @@ router.patch(
       }
 
       if (!VALID_TYPES.includes(type)) return res.status(400).json({ success: false, message: "Invalid lead type" });
+
+      if (!VALID_TEMPERATURES.includes(temperature)) {
+        return res.status(400).json({ success: false, message: "Invalid lead temperature" });
+      }
 
 
 
@@ -3012,6 +3033,8 @@ router.patch(
 
             course,
 
+            temperature,
+
             medium: type,
 
             assignedToName: assignee?.name || null,
@@ -3086,6 +3109,8 @@ router.patch(
 
           stage: updated.stage,
 
+          temperature: updated.temperature || "WARM",
+
           type:
 
             updated.medium ||
@@ -3114,6 +3139,68 @@ router.patch(
 
   }
 
+);
+
+
+
+/* =========================================================
+
+   UPDATE LEAD TEMPERATURE
+
+========================================================= */
+
+router.patch(
+  "/manual/:id/temperature",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const temperature = String(req.body?.temperature || "")
+        .trim()
+        .toUpperCase();
+
+      if (!VALID_TEMPERATURES.includes(temperature)) {
+        return res.status(400).json({
+          success: false,
+          message: "Temperature must be HOT, WARM or COLD",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          OR: [
+            { source: "LEAD_STORE" },
+            { notes: { contains: "Admissions origin:" } },
+          ],
+        },
+        select: { id: true, name: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({ success: false, message: "Lead not found" });
+      }
+
+      const updated = await prisma.lead.update({
+        where: { id: lead.id },
+        data: { temperature },
+        select: { id: true, temperature: true, updatedAt: true },
+      });
+
+      return res.json({
+        success: true,
+        message: `${lead.name} marked as ${temperature.toLowerCase()}`,
+        lead: updated,
+      });
+    } catch (error) {
+      console.error("Failed to update Lead Store temperature:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update lead temperature",
+      });
+    }
+  }
 );
 
 
@@ -3354,6 +3441,22 @@ router.post(
 
 
 
+      const temperature =
+
+        String(
+
+          req.body?.temperature ||
+
+            "WARM"
+
+        )
+
+          .trim()
+
+          .toUpperCase();
+
+
+
       const type =
 
         String(
@@ -3517,6 +3620,34 @@ router.post(
             message:
 
               "Invalid lead type",
+
+          });
+
+      }
+
+
+
+      if (
+
+        !VALID_TEMPERATURES.includes(
+
+          temperature
+
+        )
+
+      ) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Invalid lead temperature",
 
           });
 
@@ -3794,6 +3925,8 @@ router.post(
 
                   "NEW",
 
+                temperature,
+
                 campaign:
 
                   "Individual Lead",
@@ -3937,6 +4070,12 @@ router.post(
             stage:
 
               lead.stage,
+
+            temperature:
+
+              lead.temperature ||
+
+              "WARM",
 
             type:
 

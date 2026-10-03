@@ -1,12 +1,12 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import {
   Plus,
-  Layers,
   Link2,
   FileSpreadsheet,
   Globe,
@@ -33,6 +33,7 @@ import {
   Check,
   ChevronDown,
   Upload,
+  PhoneCall,
 } from "lucide-react";
 
 import {
@@ -71,6 +72,42 @@ const SOURCES = [
   },
 ];
 
+const INTERNAL_SOURCE_KEYS = [
+  "INTERNAL",
+  "GOOGLE_FORM",
+  "WEBSITE_FORM",
+  "IM_LEADS",
+  "DM_LEADS",
+];
+
+const INTERNAL_SOURCE_TABS = [
+  {
+    key: "INTERNAL",
+    label: "Internal Leads",
+    icon: Users,
+  },
+  {
+    key: "GOOGLE_FORM",
+    label: "Google Form",
+    icon: FileSpreadsheet,
+  },
+  {
+    key: "WEBSITE_FORM",
+    label: "Website Form",
+    icon: Globe,
+  },
+  {
+    key: "IM_LEADS",
+    label: "IM Leads",
+    icon: MessageSquare,
+  },
+  {
+    key: "DM_LEADS",
+    label: "DM Leads",
+    icon: Instagram,
+  },
+];
+
 const STAGES = [
   {
     value: "NEW",
@@ -97,6 +134,18 @@ const STAGES = [
     label: "Lost",
   },
 ];
+
+const LEAD_TEMPERATURES = [
+  { value: "HOT", label: "Hot" },
+  { value: "WARM", label: "Warm" },
+  { value: "COLD", label: "Cold" },
+];
+
+function temperatureClass(value) {
+  if (value === "HOT") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (value === "COLD") return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-amber-200 bg-amber-50 text-amber-700";
+}
 
 function formatDate(date) {
   if (!date) {
@@ -133,6 +182,7 @@ function LeadModal({
       course: "",
       source: defaultSource,
       stage: "NEW",
+      temperature: "WARM",
       campaign: "",
       medium: "",
       assignedToName: "",
@@ -358,6 +408,24 @@ function LeadModal({
                 </select>
               </div>
 
+              <div>
+                <label className="block text-[13px] font-medium text-slate-600 mb-1">
+                  Lead Temperature
+                </label>
+
+                <select
+                  value={form.temperature}
+                  onChange={(event) => update("temperature", event.target.value)}
+                  className={`w-full px-3 py-2 border rounded-md text-[15px] font-semibold ${temperatureClass(form.temperature)}`}
+                >
+                  {LEAD_TEMPERATURES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <Field
                 label="Campaign"
                 value={
@@ -448,6 +516,162 @@ function LeadModal({
               {saving
                 ? "Creating..."
                 : "Create Lead"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+
+function ImportInternalLeadsModal({
+  defaultSource = "INTERNAL",
+  onClose,
+  onImported,
+}) {
+  const safeDefaultSource = INTERNAL_SOURCE_KEYS.includes(defaultSource)
+    ? defaultSource
+    : "INTERNAL";
+
+  const [source, setSource] = useState(safeDefaultSource);
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+
+    if (!file) {
+      setError("Choose a CSV or XLSX file.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("source", source);
+
+      const data = await apiRequest(
+        "/api/client/leads/internal/import",
+        {
+          method: "POST",
+          body,
+        }
+      );
+
+      onImported(data, source);
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to import internal leads"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 className="text-[17px] font-semibold text-slate-900">
+              Import Internal Leads
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Upload CSV/XLSX and choose where these manually managed leads should appear.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        <form onSubmit={submit}>
+          <div className="space-y-4 p-5">
+            {error ? (
+              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-700">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                {error}
+              </div>
+            ) : null}
+
+            <div>
+              <label className="mb-1 block text-[13px] font-medium text-slate-600">
+                Lead Source
+              </label>
+              <select
+                value={source}
+                onChange={(event) => setSource(event.target.value)}
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              >
+                {SOURCES.filter((item) =>
+                  INTERNAL_SOURCE_KEYS.includes(item.value)
+                ).map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-[13px] font-medium text-slate-600">
+                Lead File
+              </label>
+              <label className="flex min-h-[110px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-5 text-center transition hover:border-indigo-300 hover:bg-indigo-50/30">
+                <input
+                  type="file"
+                  accept=".csv,.xlsx"
+                  className="hidden"
+                  disabled={saving}
+                  onChange={(event) =>
+                    setFile(event.target.files?.[0] || null)
+                  }
+                />
+                <div>
+                  <Upload size={22} className="mx-auto text-indigo-500" />
+                  <div className="mt-2 text-[14px] font-semibold text-slate-800">
+                    {file ? file.name : "Choose CSV or XLSX"}
+                  </div>
+                  <div className="mt-1 text-[12px] text-slate-500">
+                    Imported records are added as real CRM leads.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !file}
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Upload size={14} />
+              )}
+              {saving ? "Importing..." : "Import Leads"}
             </button>
           </div>
         </form>
@@ -1044,6 +1268,7 @@ function downloadSourceLeads(rows, filename = "leads.csv") {
     "Campaign",
     "Medium",
     "Stage",
+    "Temperature",
     "Assigned",
     "Created",
   ];
@@ -1063,6 +1288,7 @@ function downloadSourceLeads(rows, filename = "leads.csv") {
         lead.campaign,
         lead.medium,
         lead.stage,
+        lead.temperature || "WARM",
         lead.assigned,
         lead.createdAt,
       ]
@@ -1095,6 +1321,7 @@ function downloadUtmLeadDetails(rows) {
     "Campaign",
     "Medium",
     "Stage",
+    "Temperature",
     "Assigned",
     "Created",
   ];
@@ -1114,6 +1341,7 @@ function downloadUtmLeadDetails(rows) {
         lead.campaign,
         lead.medium,
         lead.stage,
+        lead.temperature || "WARM",
         lead.assigned,
         lead.createdAt,
       ]
@@ -1141,6 +1369,133 @@ function downloadUtmLeadDetails(rows) {
   URL.revokeObjectURL(url);
 }
 
+
+function PhoneAction({ phone, name }) {
+  const [menu, setMenu] = useState(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!menu) return undefined;
+
+    function closeOnOutsideClick(event) {
+      const target = event.target;
+
+      if (triggerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+
+      setMenu(null);
+    }
+
+    function closeOnEscape(event) {
+      if (event.key === "Escape") {
+        setMenu(null);
+      }
+    }
+
+    function closeOnViewportChange() {
+      setMenu(null);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    window.addEventListener("resize", closeOnViewportChange);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+      window.removeEventListener("resize", closeOnViewportChange);
+    };
+  }, [menu]);
+
+  if (!phone) {
+    return <span className="text-slate-400">—</span>;
+  }
+
+  function openMenu(event) {
+    if (menu) {
+      setMenu(null);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 178;
+
+    setMenu({
+      top: Math.min(rect.bottom + 6, window.innerHeight - 112),
+      left: Math.min(
+        Math.max(8, rect.left),
+        window.innerWidth - menuWidth - 8
+      ),
+    });
+  }
+
+  async function copyNumber() {
+    const value = String(phone);
+
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      input.remove();
+    }
+
+    setMenu(null);
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={openMenu}
+        className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+        title={`Copy or dial ${name || "lead"} number`}
+      >
+        {phone}
+      </button>
+
+      {menu ? (
+        <div
+          ref={menuRef}
+          className="fixed z-[130] w-[178px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl"
+          style={{
+            top: menu.top,
+            left: menu.left,
+          }}
+        >
+          <button
+            type="button"
+            onClick={copyNumber}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Copy size={14} />
+            Copy number
+          </button>
+
+          <a
+            href={`tel:${phone}`}
+            onClick={() => setMenu(null)}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+          >
+            <PhoneCall size={14} />
+            Dial number
+          </a>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+
 export default function UTMLeads({
   selectedYear = "all",
 }) {
@@ -1167,15 +1522,30 @@ export default function UTMLeads({
   const [showLinkModal, setShowLinkModal] = useState(false);
 
   const [leadSourceView, setLeadSourceView] =
-    useState("GOOGLE_FORM");
+    useState("INTERNAL");
 
   const [showInternalLeadModal, setShowInternalLeadModal] =
     useState(false);
 
-  const [importingInternal, setImportingInternal] =
+  const [showInternalImportModal, setShowInternalImportModal] =
     useState(false);
 
   const [internalImportMessage, setInternalImportMessage] =
+    useState("");
+
+  const [internalLeadSearch, setInternalLeadSearch] = useState("");
+  const [internalFiltersOpen, setInternalFiltersOpen] = useState(false);
+  const [internalFilters, setInternalFilters] = useState({
+    temperature: "",
+    stage: "",
+    assigned: "",
+    source: "",
+    course: "",
+    dateFrom: "",
+    dateTo: "",
+  });
+
+  const [temperatureUpdatingId, setTemperatureUpdatingId] =
     useState("");
 
   const [generateForm, setGenerateForm] = useState({
@@ -1252,6 +1622,30 @@ export default function UTMLeads({
   useEffect(() => {
     loadData();
   }, [selectedYear, sort]);
+
+  async function updateLeadTemperature(leadId, temperature) {
+    setTemperatureUpdatingId(leadId);
+    setError("");
+
+    try {
+      const data = await apiRequest(`/api/client/leads/${leadId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ temperature }),
+      });
+
+      setLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? { ...lead, temperature: data?.lead?.temperature || temperature }
+            : lead
+        )
+      );
+    } catch (error) {
+      setError(error?.data?.message || "Unable to update lead temperature");
+    } finally {
+      setTemperatureUpdatingId("");
+    }
+  }
 
   const generatedUrl = useMemo(
     () =>
@@ -1530,6 +1924,7 @@ export default function UTMLeads({
         lead.medium,
         lead.source,
         lead.stage,
+        lead.temperature,
       ]
         .filter(Boolean)
         .some((value) =>
@@ -1567,84 +1962,144 @@ export default function UTMLeads({
   );
 
 
-  const SOURCE_VIEWS = [
-    {
-      key: "GOOGLE_FORM",
-      label: "Google Form",
-      icon: FileSpreadsheet,
-    },
-    {
-      key: "WEBSITE_FORM",
-      label: "Website Form",
-      icon: Globe,
-    },
-    {
-      key: "IM_LEADS",
-      label: "IM Leads",
-      icon: MessageSquare,
-    },
-    {
-      key: "DM_LEADS",
-      label: "DM Leads",
-      icon: Instagram,
-    },
-    {
-      key: "INTERNAL",
-      label: "Internal Leads",
-      icon: Users,
-    },
-  ];
+  const internalGroupLeads = useMemo(
+    () =>
+      leads.filter((lead) =>
+        INTERNAL_SOURCE_KEYS.includes(lead.sourceKey)
+      ),
+    [leads]
+  );
+
+  const internalAssignedOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          internalGroupLeads
+            .map((lead) => lead.assigned)
+            .filter(
+              (value) => value && value !== "Unassigned"
+            )
+        )
+      ).sort(),
+    [internalGroupLeads]
+  );
+
+  const internalCourseOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          internalGroupLeads
+            .map((lead) => lead.course)
+            .filter(Boolean)
+        )
+      ).sort(),
+    [internalGroupLeads]
+  );
 
   const sourceViewLeads = useMemo(() => {
-    return leads.filter(
-      (lead) =>
-        lead.sourceKey ===
-        leadSourceView
-    );
+    const query = internalLeadSearch.trim().toLowerCase();
+
+    return internalGroupLeads.filter((lead) => {
+      if (lead.sourceKey !== leadSourceView) {
+        return false;
+      }
+
+      if (
+        internalFilters.source &&
+        lead.sourceKey !== internalFilters.source
+      ) {
+        return false;
+      }
+
+      if (
+        internalFilters.temperature &&
+        (lead.temperature || "WARM") !==
+          internalFilters.temperature
+      ) {
+        return false;
+      }
+
+      if (
+        internalFilters.stage &&
+        lead.stageKey !== internalFilters.stage
+      ) {
+        return false;
+      }
+
+      if (
+        internalFilters.assigned &&
+        lead.assigned !== internalFilters.assigned
+      ) {
+        return false;
+      }
+
+      if (
+        internalFilters.course &&
+        lead.course !== internalFilters.course
+      ) {
+        return false;
+      }
+
+      const createdAt = new Date(lead.createdAt);
+
+      if (
+        internalFilters.dateFrom &&
+        createdAt < new Date(`${internalFilters.dateFrom}T00:00:00`)
+      ) {
+        return false;
+      }
+
+      if (internalFilters.dateTo) {
+        const dateTo = new Date(
+          `${internalFilters.dateTo}T23:59:59.999`
+        );
+        if (createdAt > dateTo) {
+          return false;
+        }
+      }
+
+      if (!query) return true;
+
+      return [
+        lead.name,
+        lead.phone,
+        lead.email,
+        lead.course,
+        lead.source,
+        lead.campaign,
+        lead.medium,
+        lead.stage,
+        lead.temperature,
+        lead.assigned,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value).toLowerCase().includes(query)
+        );
+    });
   }, [
-    leads,
+    internalGroupLeads,
     leadSourceView,
+    internalLeadSearch,
+    internalFilters,
   ]);
 
-  async function importInternalLeads(file) {
-    if (!file) {
-      return;
-    }
+  const hasInternalFilters = Boolean(
+    internalLeadSearch.trim() ||
+      Object.values(internalFilters).some(Boolean)
+  );
 
-    setImportingInternal(true);
-    setInternalImportMessage("");
-    setError("");
-
-    try {
-      const body = new FormData();
-      body.append("file", file);
-
-      const data = await apiRequest(
-        "/api/client/leads/internal/import",
-        {
-          method: "POST",
-          body,
-        }
-      );
-
-      setInternalImportMessage(
-        `${data.importSummary?.imported || 0} imported · ${
-          data.importSummary?.duplicates || 0
-        } duplicates · ${
-          data.importSummary?.invalid || 0
-        } invalid skipped`
-      );
-
-      await loadData();
-      setLeadSourceView("INTERNAL");
-    } catch (error) {
-      setError(
-        error?.data?.message ||
-          "Unable to import internal leads"
-      );
-    } finally {
-      setImportingInternal(false);
-    }
+  function clearInternalFilters() {
+    setInternalLeadSearch("");
+    setInternalFilters({
+      temperature: "",
+      stage: "",
+      assigned: "",
+      source: "",
+      course: "",
+      dateFrom: "",
+      dateTo: "",
+    });
   }
 
   const summary = analytics.summary || {};
@@ -2209,40 +2664,56 @@ export default function UTMLeads({
       </section>
 
 
-      {/* Lead source views — restored from Student Mentor */}
+      {/* Internal lead sources */}
       <section className="space-y-3">
-        <div>
-          <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
-            Lead Sources
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
+              Lead Sources
+            </div>
+
+            <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] text-slate-950">
+              Internal Leads
+            </h2>
+
+            <p className="mt-1 text-[13px] text-slate-500">
+              Manage manually added or imported Internal, Google Form, Website Form, IM and DM leads in one place.
+            </p>
           </div>
 
-          <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] text-slate-950">
-            Lead Sources
-          </h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowInternalLeadModal(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700"
+            >
+              <Plus size={14} />
+              Add Lead
+            </button>
 
-          <p className="mt-1 text-[13px] text-slate-500">
-            Open Google Form, Website Form, IM Leads, DM Leads or Internal Leads.
-          </p>
+            <button
+              type="button"
+              onClick={() => setShowInternalImportModal(true)}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white hover:bg-slate-800"
+            >
+              <Upload size={14} />
+              Import Leads
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
-          {SOURCE_VIEWS.map((item) => {
+          {INTERNAL_SOURCE_TABS.map((item) => {
             const Icon = item.icon;
-            const count =
-              leads.filter(
-                (lead) =>
-                  lead.sourceKey === item.key
-              ).length;
+            const count = internalGroupLeads.filter(
+              (lead) => lead.sourceKey === item.key
+            ).length;
 
             return (
               <button
                 key={item.key}
                 type="button"
-                onClick={() =>
-                  setLeadSourceView(
-                    item.key
-                  )
-                }
+                onClick={() => setLeadSourceView(item.key)}
                 className={`inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-[13px] font-bold ${
                   leadSourceView === item.key
                     ? "bg-indigo-600 text-white"
@@ -2251,11 +2722,13 @@ export default function UTMLeads({
               >
                 <Icon size={14} />
                 {item.label}
-                <span className={`rounded-full px-2 py-0.5 text-[13px] ${
-                  leadSourceView === item.key
-                    ? "bg-white/15"
-                    : "bg-slate-100"
-                }`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[12px] ${
+                    leadSourceView === item.key
+                      ? "bg-white/15"
+                      : "bg-slate-100"
+                  }`}
+                >
                   {count}
                 </span>
               </button>
@@ -2264,139 +2737,324 @@ export default function UTMLeads({
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-[15px] font-bold text-slate-900">
-                  {SOURCE_VIEWS.find(
-                    (item) =>
-                      item.key === leadSourceView
-                  )?.label || "Lead Details"}
-                </div>
-
-                <div className="mt-1 text-[13px] text-slate-500">
-                  {sourceViewLeads.length} leads in this source.
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    downloadSourceLeads(
-                      sourceViewLeads,
-                      `${leadSourceView.toLowerCase()}-leads.csv`
-                    )
+          <div className="border-b border-slate-100 p-3">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <div className="relative min-w-0 flex-1">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
+                <input
+                  value={internalLeadSearch}
+                  onChange={(event) =>
+                    setInternalLeadSearch(event.target.value)
                   }
-                  disabled={!sourceViewLeads.length}
-                  className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  <Download size={13} />
-                  Export
-                </button>
-
-                {leadSourceView === "INTERNAL" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowInternalLeadModal(true)
-                      }
-                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-indigo-600 px-3 text-[13px] font-bold text-white hover:bg-indigo-700"
-                    >
-                      <Plus size={13} />
-                      Add Internal Lead
-                    </button>
-
-                    <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl bg-slate-950 px-3 text-[13px] font-bold text-white hover:bg-slate-800">
-                      <Upload size={13} />
-                      {importingInternal
-                        ? "Importing..."
-                        : "Import Leads"}
-
-                      <input
-                        type="file"
-                        accept=".csv,.xlsx"
-                        className="hidden"
-                        disabled={importingInternal}
-                        onChange={(event) => {
-                          const file =
-                            event.target.files?.[0];
-                          importInternalLeads(file);
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                  </>
-                ) : null}
+                  placeholder="Search name, phone, email, course, source, stage or assigned user..."
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+                />
               </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setInternalFiltersOpen((current) => !current)
+                }
+                className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-[13px] font-bold ${
+                  internalFiltersOpen ||
+                  Object.values(internalFilters).some(Boolean)
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <SlidersHorizontal size={14} />
+                Filter
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  downloadSourceLeads(
+                    sourceViewLeads,
+                    `${leadSourceView.toLowerCase()}-leads.csv`
+                  )
+                }
+                disabled={!sourceViewLeads.length}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Download size={14} />
+                Export
+              </button>
             </div>
 
-            {leadSourceView === "INTERNAL" &&
-            internalImportMessage ? (
-              <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">
-                {internalImportMessage}
+            {internalFiltersOpen ? (
+              <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    Temperature
+                  </label>
+                  <select
+                    value={internalFilters.temperature}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        temperature: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  >
+                    <option value="">All temperatures</option>
+                    {LEAD_TEMPERATURES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    Stage / Status
+                  </label>
+                  <select
+                    value={internalFilters.stage}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        stage: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  >
+                    <option value="">All stages</option>
+                    {STAGES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    Assigned To
+                  </label>
+                  <select
+                    value={internalFilters.assigned}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        assigned: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  >
+                    <option value="">All assignees</option>
+                    <option value="Unassigned">Unassigned</option>
+                    {internalAssignedOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    Source
+                  </label>
+                  <select
+                    value={internalFilters.source}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        source: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  >
+                    <option value="">All sources</option>
+                    {SOURCES.filter((item) =>
+                      INTERNAL_SOURCE_KEYS.includes(item.value)
+                    ).map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    Course
+                  </label>
+                  <select
+                    value={internalFilters.course}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        course: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  >
+                    <option value="">All courses</option>
+                    {internalCourseOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    From Date
+                  </label>
+                  <input
+                    type="date"
+                    value={internalFilters.dateFrom}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        dateFrom: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
+                    To Date
+                  </label>
+                  <input
+                    type="date"
+                    value={internalFilters.dateTo}
+                    onChange={(event) =>
+                      setInternalFilters((current) => ({
+                        ...current,
+                        dateTo: event.target.value,
+                      }))
+                    }
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={clearInternalFilters}
+                    disabled={!hasInternalFilters}
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
               </div>
             ) : null}
-
-            <Table
-              columns={[
-                "Lead",
-                "Course / Interest",
-                "Source",
-                "Campaign",
-                "Medium",
-                "Stage",
-                "Assigned",
-                "Created",
-              ]}
-              empty="No leads found in this source"
-              rows={sourceViewLeads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="hover:bg-slate-50/80"
-                >
-                  <td className="px-4 py-3">
-                    <div className="text-[15px] font-semibold text-slate-900">
-                      {lead.name}
-                    </div>
-                    <div className="mt-0.5 text-[13px] text-slate-500">
-                      {lead.phone}
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3 text-[15px] text-slate-700">
-                    {lead.course || "—"}
-                  </td>
-
-                  <td className="px-4 py-3 text-[15px] text-slate-600">
-                    {lead.source || "—"}
-                  </td>
-
-                  <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
-                    {lead.campaign || "—"}
-                  </td>
-
-                  <td className="px-4 py-3 text-[15px] text-slate-600">
-                    {lead.medium || "—"}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <Badge tone={stageTone(lead.stage)}>
-                      {lead.stage}
-                    </Badge>
-                  </td>
-
-                  <td className="px-4 py-3 text-[15px] text-slate-700">
-                    {lead.assigned || "Unassigned"}
-                  </td>
-
-                  <td className="px-4 py-3 text-[13px] text-slate-500">
-                    {formatDate(lead.createdAt)}
-                  </td>
-                </tr>
-              ))}
-            />
           </div>
+
+          {internalImportMessage ? (
+            <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">
+              {internalImportMessage}
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-[12px] text-slate-500">
+            <span>
+              Showing <strong className="text-slate-700">{sourceViewLeads.length}</strong> of {internalGroupLeads.length} internal leads
+            </span>
+            <span>
+              {INTERNAL_SOURCE_TABS.find(
+                (item) => item.key === leadSourceView
+              )?.label || "Internal Leads"}
+            </span>
+          </div>
+
+          <Table
+            columns={[
+              "Lead",
+              "Course / Interest",
+              "Source",
+              "Campaign",
+              "Medium",
+              "Stage",
+              "Temperature",
+              "Assigned",
+              "Created",
+            ]}
+            empty="No internal leads match the selected filters"
+            rows={sourceViewLeads.map((lead) => (
+              <tr key={lead.id} className="hover:bg-slate-50/80">
+                <td className="px-4 py-3">
+                  <div className="text-[15px] font-semibold text-slate-900">
+                    {lead.name}
+                  </div>
+                  <div className="mt-0.5 text-[13px] text-slate-500">
+                    <PhoneAction
+                      phone={lead.phone}
+                      name={lead.name}
+                    />
+                  </div>
+                  {lead.email ? (
+                    <div className="mt-0.5 text-[12px] text-slate-400">
+                      {lead.email}
+                    </div>
+                  ) : null}
+                </td>
+
+                <td className="px-4 py-3 text-[15px] text-slate-700">
+                  {lead.course || "—"}
+                </td>
+
+                <td className="px-4 py-3 text-[15px] text-slate-600">
+                  {lead.source || "—"}
+                </td>
+
+                <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
+                  {lead.campaign || "—"}
+                </td>
+
+                <td className="px-4 py-3 text-[15px] text-slate-600">
+                  {lead.medium || "—"}
+                </td>
+
+                <td className="px-4 py-3">
+                  <Badge tone={stageTone(lead.stageKey || lead.stage)}>
+                    {lead.stage}
+                  </Badge>
+                </td>
+
+                <td className="px-4 py-3">
+                  <select
+                    value={lead.temperature || "WARM"}
+                    disabled={temperatureUpdatingId === lead.id}
+                    onChange={(event) =>
+                      updateLeadTemperature(lead.id, event.target.value)
+                    }
+                    className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none disabled:opacity-60 ${temperatureClass(
+                      lead.temperature || "WARM"
+                    )}`}
+                  >
+                    {LEAD_TEMPERATURES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+
+                <td className="px-4 py-3 text-[15px] text-slate-700">
+                  {lead.assigned || "Unassigned"}
+                </td>
+
+                <td className="px-4 py-3 text-[13px] text-slate-500">
+                  {formatDate(lead.createdAt)}
+                </td>
+              </tr>
+            ))}
+          />
+        </div>
       </section>
 
 
@@ -2461,6 +3119,7 @@ export default function UTMLeads({
               "Campaign",
               "Medium",
               "Stage",
+              "Temperature",
               "Assigned",
               "Created",
             ]}
@@ -2476,7 +3135,10 @@ export default function UTMLeads({
                   </div>
 
                   <div className="mt-0.5 text-[13px] text-slate-500">
-                    {lead.phone}
+                    <PhoneAction
+                      phone={lead.phone}
+                      name={lead.name}
+                    />
                   </div>
                 </td>
 
@@ -2500,6 +3162,21 @@ export default function UTMLeads({
                   <Badge tone={stageTone(lead.stage)}>
                     {lead.stage}
                   </Badge>
+                </td>
+
+                <td className="px-4 py-3">
+                  <select
+                    value={lead.temperature || "WARM"}
+                    disabled={temperatureUpdatingId === lead.id}
+                    onChange={(event) => updateLeadTemperature(lead.id, event.target.value)}
+                    className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none disabled:opacity-60 ${temperatureClass(lead.temperature || "WARM")}`}
+                  >
+                    {LEAD_TEMPERATURES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
                 </td>
 
                 <td className="px-4 py-3 text-[15px] text-slate-700">
@@ -2625,14 +3302,33 @@ export default function UTMLeads({
 
       {showInternalLeadModal ? (
         <LeadModal
-          defaultSource="INTERNAL"
-          onClose={() =>
-            setShowInternalLeadModal(false)
-          }
-          onCreated={async () => {
+          defaultSource={leadSourceView}
+          onClose={() => setShowInternalLeadModal(false)}
+          onCreated={async (lead) => {
             setShowInternalLeadModal(false);
             await loadData();
-            setLeadSourceView("INTERNAL");
+            if (lead?.sourceKey && INTERNAL_SOURCE_KEYS.includes(lead.sourceKey)) {
+              setLeadSourceView(lead.sourceKey);
+            }
+          }}
+        />
+      ) : null}
+
+      {showInternalImportModal ? (
+        <ImportInternalLeadsModal
+          defaultSource={leadSourceView}
+          onClose={() => setShowInternalImportModal(false)}
+          onImported={async (data, source) => {
+            setShowInternalImportModal(false);
+            setInternalImportMessage(
+              `${data.importSummary?.imported || 0} imported · ${
+                data.importSummary?.duplicates || 0
+              } duplicates · ${
+                data.importSummary?.invalid || 0
+              } invalid skipped`
+            );
+            await loadData();
+            setLeadSourceView(source);
           }}
         />
       ) : null}
