@@ -2043,17 +2043,39 @@ export default function LeadStore({ selectedYear = "all" }) {
   const [communicationHistory, setCommunicationHistory] = useState([]);
   const [emailForm, setEmailForm] = useState({
     subject: "",
-    message: "Hi {{name}},\n\n",
+    message: "",
   });
+
+  function closeMessageComposer() {
+    setMessageComposerOpen(false);
+    setMessageLeadIds([]);
+    setCommunicationStatus(null);
+    setCommunicationLoading(false);
+    setCommunicationSending(false);
+    setCommunicationError("");
+    setCommunicationResult("");
+    setCommunicationHistory([]);
+    setEmailForm({
+      subject: "",
+      message: "",
+    });
+  }
 
   async function openMessageComposer(leadIds) {
     const ids = Array.isArray(leadIds) ? [...new Set(leadIds)] : [];
     if (!ids.length) return;
+
+    // Every new compose action must start clean.
+    setEmailForm({
+      subject: "",
+      message: "",
+    });
     setMessageLeadIds(ids);
     setMessageComposerOpen(true);
     setCommunicationLoading(true);
     setCommunicationError("");
     setCommunicationResult("");
+    setCommunicationHistory([]);
     try {
       const status = await apiRequest("/api/client/communications/status");
       setCommunicationStatus(status);
@@ -2087,8 +2109,29 @@ export default function LeadStore({ selectedYear = "all" }) {
           message: emailForm.message,
         }),
       });
-      setCommunicationResult(data?.message || "Email sent successfully.");
-      setSuccessMessage(data?.message || "Email sent successfully.");
+      const sentCount = Number(data?.sent || 0);
+
+      if (sentCount > 0) {
+        const successText =
+          data?.message ||
+          `${sentCount} email${sentCount === 1 ? "" : "s"} sent successfully.`;
+
+        setCommunicationResult(successText);
+        setSuccessMessage(successText);
+      } else {
+        const firstFailure =
+          Array.isArray(data?.failures) && data.failures.length
+            ? data.failures[0]?.reason
+            : "";
+
+        setCommunicationResult("");
+        setCommunicationError(
+          firstFailure
+            ? `No emails were sent. ${firstFailure}`
+            : "No emails were sent. Check that the selected lead has a valid email address and that Gmail is connected."
+        );
+      }
+
       const status = await apiRequest("/api/client/communications/status");
       setCommunicationStatus(status);
       if (messageLeadIds.length === 1) {
@@ -4081,7 +4124,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                 <div className="text-[17px] font-bold text-slate-950">Send Message</div>
                 <div className="mt-1 text-[12px] text-slate-500">{messageLeadIds.length} lead{messageLeadIds.length === 1 ? "" : "s"} selected · Email is active now; WhatsApp and SMS can plug into this same flow later.</div>
               </div>
-              <button type="button" onClick={() => setMessageComposerOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={16} /></button>
+              <button type="button" onClick={closeMessageComposer} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={16} /></button>
             </div>
 
             <div className="border-b border-slate-200 px-5 pt-4">
@@ -4122,7 +4165,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   <div>
                     <div className="mb-1.5 flex items-center justify-between gap-3">
                       <label className="block text-[12px] font-semibold text-slate-600">Message *</label>
-                      <span className="text-[11px] text-slate-400">Use {{name}}, {{phone}}, {{email}}, {{course}}</span>
+                      <span className="text-[11px] text-slate-400">Use {"{{name}}"}, {"{{phone}}"}, {"{{email}}"}, {"{{course}}"}</span>
                     </div>
                     <textarea value={emailForm.message} onChange={(e) => setEmailForm((c) => ({ ...c, message: e.target.value }))} rows={10} className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] leading-6 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
                   </div>
@@ -4152,7 +4195,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
-              <button type="button" onClick={() => setMessageComposerOpen(false)} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700">Cancel</button>
+              <button type="button" onClick={closeMessageComposer} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700">Cancel</button>
               <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || !emailForm.message.trim()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 {communicationSending ? "Sending..." : `Send ${messageLeadIds.length > 1 ? `to ${messageLeadIds.length} leads` : "Email"}`}
