@@ -402,6 +402,7 @@ router.post("/:id/convert-to-lead", async (req, res) => {
           course: walkIn.course,
           source: "OFFLINE",
           stage: "NEW",
+          leadStatus: "Fresh",
           assignedToName: walkIn.counsellorName,
           notes: [
             `Converted from walk-in: ${walkIn.purpose}`,

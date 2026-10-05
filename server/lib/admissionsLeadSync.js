@@ -97,6 +97,14 @@ export async function ensureAdmissionsLead(db, {
       course: cleanCourse,
       source: "OFFLINE",
       stage,
+      leadStatus:
+        stage === "ADMITTED"
+          ? "Admission Done"
+          : stage === "LOST"
+          ? "Lead Lost"
+          : stage === "CONTACTED"
+          ? "Call Initiated"
+          : "Fresh",
       campaign: `${origin} Lead`,
       medium: "INDIVIDUAL",
       assignedToName: cleanAssignee,

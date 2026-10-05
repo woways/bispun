@@ -54,6 +54,15 @@ const STATUS_LABELS = {
   CANCELLED: "Cancelled",
 };
 
+const LEAD_STAGE_TO_STATUS = {
+  NEW: "Fresh",
+  CONTACTED: "Call Initiated",
+  QUALIFIED: "Call Initiated",
+  COUNSELLING: "Call Initiated",
+  ADMITTED: "Admission Done",
+  LOST: "Lead Lost",
+};
+
 const VALID_REVENUE_STATUSES = ["IN_BUCKET", "BUFFER_ZONE"];
 const VALID_AMOUNT_STATUSES = ["RECEIVED", "PENDING"];
 
@@ -2344,6 +2353,9 @@ router.post("/", async (req, res) => {
           where: { id: admissionLead.id },
           data: {
             stage: statusKey === "CANCELLED" ? admissionLead.stage : "ADMITTED",
+            ...(statusKey === "CANCELLED"
+              ? {}
+              : { leadStatus: "Admission Done" }),
           },
         });
       }
@@ -2553,6 +2565,10 @@ router.patch("/:id", async (req, res) => {
               nextStatus === "CANCELLED"
                 ? existing.leadStageBeforeAdmission || "COUNSELLING"
                 : "ADMITTED",
+            leadStatus:
+              nextStatus === "CANCELLED"
+                ? LEAD_STAGE_TO_STATUS[existing.leadStageBeforeAdmission || "COUNSELLING"] || "Fresh"
+                : "Admission Done",
           },
         });
       }
@@ -2594,6 +2610,8 @@ router.delete("/:id", async (req, res) => {
           where: { id: existing.leadId },
           data: {
             stage: existing.leadStageBeforeAdmission || "COUNSELLING",
+            leadStatus:
+              LEAD_STAGE_TO_STATUS[existing.leadStageBeforeAdmission || "COUNSELLING"] || "Fresh",
           },
         });
       }

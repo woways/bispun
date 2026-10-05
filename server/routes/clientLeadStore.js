@@ -130,6 +130,49 @@ const VALID_TEMPERATURES = [
 
 ];
 
+const FIXED_LEAD_STATUSES = [
+  "Fresh",
+  "Call Initiated",
+  "Not Answering",
+  "Not Reachable",
+  "Lead Lost",
+  "Admission Done",
+];
+
+const STAGE_TO_LEAD_STATUS = {
+  NEW: "Fresh",
+  CONTACTED: "Call Initiated",
+  QUALIFIED: "Call Initiated",
+  COUNSELLING: "Call Initiated",
+  ADMITTED: "Admission Done",
+  LOST: "Lead Lost",
+};
+
+const LEAD_STATUS_TO_STAGE = {
+  Fresh: "NEW",
+  "Call Initiated": "CONTACTED",
+  "Not Answering": "CONTACTED",
+  "Not Reachable": "CONTACTED",
+  "Lead Lost": "LOST",
+  "Admission Done": "ADMITTED",
+};
+
+function cleanLeadStatus(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeLeadStatus(value) {
+  return cleanLeadStatus(value).toLowerCase();
+}
+
+function leadStatusFor(lead) {
+  return cleanLeadStatus(lead?.leadStatus) ||
+    STAGE_TO_LEAD_STATUS[lead?.stage] ||
+    "Fresh";
+}
+
 
 
 const VALID_DATASET_TYPES =
@@ -2434,6 +2477,7 @@ router.get(
           stage: lead.stage,
 
           temperature: lead.temperature || "WARM",
+          leadStatus: leadStatusFor(lead),
 
           type:
 
@@ -3110,6 +3154,7 @@ router.patch(
           stage: updated.stage,
 
           temperature: updated.temperature || "WARM",
+          leadStatus: leadStatusFor(updated),
 
           type:
 
@@ -3142,6 +3187,146 @@ router.patch(
 );
 
 
+
+/* =========================================================
+
+   LEAD STATUS OPTIONS + UPDATE
+
+========================================================= */
+
+router.get(
+  "/status-options",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const custom = await prisma.leadStatusOption.findMany({
+        where: { companyId },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, label: true },
+      });
+
+      return res.json({
+        success: true,
+        fixed: FIXED_LEAD_STATUSES,
+        custom: custom.map((item) => item.label),
+        options: [
+          ...FIXED_LEAD_STATUSES,
+          ...custom.map((item) => item.label),
+        ],
+      });
+    } catch (error) {
+      console.error("Failed to load Lead Store status options:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to load lead statuses",
+      });
+    }
+  }
+);
+
+router.patch(
+  "/manual/:id/status",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const status = cleanLeadStatus(req.body?.status);
+
+      if (!status) {
+        return res.status(400).json({
+          success: false,
+          message: "Choose or enter a lead status",
+        });
+      }
+
+      if (status.length > 50) {
+        return res.status(400).json({
+          success: false,
+          message: "Custom status can be up to 50 characters",
+        });
+      }
+
+      if (normalizeLeadStatus(status) === "other") {
+        return res.status(400).json({
+          success: false,
+          message: "Enter a custom status name instead of Other",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          OR: [
+            { source: "LEAD_STORE" },
+            { notes: { contains: "Admissions origin:" } },
+          ],
+        },
+        select: { id: true, name: true, stage: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      const fixedStatus = FIXED_LEAD_STATUSES.find(
+        (item) => normalizeLeadStatus(item) === normalizeLeadStatus(status)
+      );
+      const finalStatus = fixedStatus || status;
+
+      if (!fixedStatus) {
+        await prisma.leadStatusOption.upsert({
+          where: {
+            companyId_normalized: {
+              companyId,
+              normalized: normalizeLeadStatus(finalStatus),
+            },
+          },
+          update: { label: finalStatus },
+          create: {
+            companyId,
+            label: finalStatus,
+            normalized: normalizeLeadStatus(finalStatus),
+          },
+        });
+      }
+
+      const stage = LEAD_STATUS_TO_STAGE[finalStatus];
+      const updated = await prisma.lead.update({
+        where: { id: lead.id },
+        data: {
+          leadStatus: finalStatus,
+          ...(stage ? { stage } : {}),
+        },
+        select: {
+          id: true,
+          leadStatus: true,
+          stage: true,
+          updatedAt: true,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: `${lead.name} status changed to ${finalStatus}`,
+        lead: {
+          ...updated,
+          leadStatus: leadStatusFor(updated),
+        },
+        customStatus: fixedStatus ? null : finalStatus,
+      });
+    } catch (error) {
+      console.error("Failed to update Lead Store status:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update lead status",
+      });
+    }
+  }
+);
 
 /* =========================================================
 
@@ -3924,6 +4109,8 @@ router.post(
                 stage:
 
                   "NEW",
+                leadStatus:
+                  "Fresh",
 
                 temperature,
 
@@ -4076,6 +4263,8 @@ router.post(
               lead.temperature ||
 
               "WARM",
+            leadStatus:
+              leadStatusFor(lead),
 
             type:
 
@@ -4852,6 +5041,8 @@ router.post(
                     stage:
 
                       "NEW",
+                    leadStatus:
+                      "Fresh",
 
                     campaign:
 

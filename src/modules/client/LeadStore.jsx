@@ -92,6 +92,24 @@ const LEAD_TEMPERATURES = [
   { value: "COLD", label: "Cold" },
 ];
 
+const FIXED_LEAD_STATUSES = [
+  "Fresh",
+  "Call Initiated",
+  "Not Answering",
+  "Not Reachable",
+  "Lead Lost",
+  "Admission Done",
+];
+
+function statusSelectClass(value) {
+  if (value === "Admission Done") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value === "Lead Lost") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (value === "Not Answering" || value === "Not Reachable") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (value === "Call Initiated") return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  if (value === "Fresh") return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-violet-200 bg-violet-50 text-violet-700";
+}
+
 function temperatureSelectClass(value) {
   if (value === "HOT") return "border-rose-200 bg-rose-50 text-rose-700";
   if (value === "COLD") return "border-sky-200 bg-sky-50 text-sky-700";
@@ -104,7 +122,7 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "email", label: "Email" },
   { key: "course", label: "Course" },
   { key: "assignedTo", label: "Assigned To" },
-  { key: "temperature", label: "Hot / Warm / Cold" },
+  { key: "temperature", label: "Lead Type" },
   { key: "status", label: "Status" },
   { key: "created", label: "Created" },
 ];
@@ -345,6 +363,106 @@ function PhoneAction({ phone, name, onCopied }) {
         </div>
       ) : null}
     </>
+  );
+}
+
+
+function LeadStatusSelect({
+  lead,
+  options,
+  disabled,
+  onChangeStatus,
+}) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customStatus, setCustomStatus] = useState("");
+  const [savingCustom, setSavingCustom] = useState(false);
+  const currentStatus = lead.leadStatus || "Fresh";
+
+  async function handleSelect(event) {
+    const value = event.target.value;
+
+    if (value === "__OTHER__") {
+      setCustomStatus("");
+      setCustomOpen(true);
+      return;
+    }
+
+    await onChangeStatus(lead.id, value);
+  }
+
+  async function saveCustomStatus() {
+    const value = customStatus.trim().replace(/\s+/g, " ");
+    if (!value) return;
+
+    setSavingCustom(true);
+    try {
+      await onChangeStatus(lead.id, value, { custom: true });
+      setCustomOpen(false);
+      setCustomStatus("");
+    } finally {
+      setSavingCustom(false);
+    }
+  }
+
+  if (customOpen) {
+    return (
+      <div className="flex min-w-[235px] items-center gap-1.5">
+        <input
+          autoFocus
+          value={customStatus}
+          maxLength={50}
+          onChange={(event) => setCustomStatus(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              saveCustomStatus();
+            }
+            if (event.key === "Escape") {
+              setCustomOpen(false);
+              setCustomStatus("");
+            }
+          }}
+          placeholder="Enter custom status"
+          className="h-8 min-w-0 flex-1 rounded-lg border border-violet-200 bg-white px-2 text-[12px] font-medium text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+        />
+        <button
+          type="button"
+          onClick={saveCustomStatus}
+          disabled={savingCustom || !customStatus.trim()}
+          className="h-8 rounded-lg bg-violet-600 px-2.5 text-[11px] font-bold text-white hover:bg-violet-700 disabled:opacity-50"
+        >
+          {savingCustom ? "..." : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setCustomOpen(false);
+            setCustomStatus("");
+          }}
+          disabled={savingCustom}
+          className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-500 hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={currentStatus}
+      disabled={disabled}
+      onChange={handleSelect}
+      className={`h-8 min-w-[145px] rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${statusSelectClass(currentStatus)}`}
+      aria-label={`Status for ${lead.name}`}
+    >
+      {options.map((status) => (
+        <option key={status} value={status}>
+          {status}
+        </option>
+      ))}
+      <option value="__OTHER__">Other</option>
+    </select>
   );
 }
 
@@ -786,7 +904,7 @@ function IndividualLeadModal({
               </select>
             </Field>
 
-            <Field label="Lead Temperature" required>
+            <Field label="Lead Type (Hot / Warm / Cold)" required>
               <select
                 value={form.temperature}
                 onChange={(event) =>
@@ -2180,6 +2298,8 @@ export default function LeadStore({ selectedYear = "all" }) {
   ] = useState(false);
 
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
+  const [statusUpdatingId, setStatusUpdatingId] = useState("");
+  const [leadStatusOptions, setLeadStatusOptions] = useState(FIXED_LEAD_STATUSES);
 
   const [messageComposerOpen, setMessageComposerOpen] = useState(false);
   const [messageLeadIds, setMessageLeadIds] = useState([]);
@@ -2397,10 +2517,27 @@ export default function LeadStore({ selectedYear = "all" }) {
     }
   }
 
+  async function loadLeadStatusOptions() {
+    try {
+      const data = await apiRequest(
+        "/api/client/lead-store/status-options"
+      );
+      const options = Array.isArray(data?.options)
+        ? data.options
+        : FIXED_LEAD_STATUSES;
+      setLeadStatusOptions(
+        Array.from(new Set([...FIXED_LEAD_STATUSES, ...options]))
+      );
+    } catch {
+      setLeadStatusOptions(FIXED_LEAD_STATUSES);
+    }
+  }
+
   useEffect(() => {
     loadDatasets();
     loadIndividualLeads();
     loadAssignees();
+    loadLeadStatusOptions();
   }, [selectedYear]);
 
   const selectedType =
@@ -2487,16 +2624,15 @@ export default function LeadStore({ selectedYear = "all" }) {
     useMemo(
       () =>
         Array.from(
-          new Set(
-            currentTypeLeads
-              .map(
-                (lead) =>
-                  lead.stage
-              )
-              .filter(Boolean)
-          )
-        ).sort(),
-      [currentTypeLeads]
+          new Set([
+            ...FIXED_LEAD_STATUSES,
+            ...leadStatusOptions,
+            ...currentTypeLeads
+              .map((lead) => lead.leadStatus)
+              .filter(Boolean),
+          ])
+        ),
+      [leadStatusOptions, currentTypeLeads]
     );
 
   const individualCourseOptions =
@@ -2560,6 +2696,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                 lead.course,
                 lead.assignedToName,
                 lead.sourceName,
+                lead.leadStatus,
                 lead.stage,
                 lead.temperature,
               ]
@@ -2575,7 +2712,7 @@ export default function LeadStore({ selectedYear = "all" }) {
 
             const statusMatches =
               !filters.status ||
-              lead.stage ===
+              (lead.leadStatus || "Fresh") ===
                 filters.status;
 
             const temperatureMatches =
@@ -2972,6 +3109,56 @@ export default function LeadStore({ selectedYear = "all" }) {
     }
   }
 
+  async function updateLeadStatus(leadId, status, { custom = false } = {}) {
+    setStatusUpdatingId(leadId);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${leadId}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        }
+      );
+
+      const nextStatus = data?.lead?.leadStatus || status;
+      setIndividualLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                leadStatus: nextStatus,
+                stage: data?.lead?.stage || lead.stage,
+              }
+            : lead
+        )
+      );
+
+      if (custom || data?.customStatus) {
+        setLeadStatusOptions((current) =>
+          Array.from(
+            new Set([
+              ...FIXED_LEAD_STATUSES,
+              ...current,
+              nextStatus,
+            ])
+          )
+        );
+      }
+
+      setSuccessMessage(data?.message || "Lead status updated.");
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to update lead status"
+      );
+      throw error;
+    } finally {
+      setStatusUpdatingId("");
+    }
+  }
+
   function clearFilters() {
     setFilters({
       status: "",
@@ -3006,8 +3193,8 @@ export default function LeadStore({ selectedYear = "all" }) {
             "Unassigned",
           lead.temperature ||
             "WARM",
-          lead.stage ||
-            "NEW",
+          lead.leadStatus ||
+            "Fresh",
           formatDate(
             lead.createdAt
           ),
@@ -3032,7 +3219,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         "Lead Type",
         "Source",
         "Assigned To",
-        "Temperature",
+        "Lead Type",
         "Status",
         "Created",
         "Custom Fields",
@@ -3443,7 +3630,7 @@ export default function LeadStore({ selectedYear = "all" }) {
 
               <label className="block">
                 <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
-                  Temperature
+                  Lead Type
                 </span>
 
                 <select
@@ -3456,7 +3643,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   }
                   className="form-input"
                 >
-                  <option value="">All temperatures</option>
+                  <option value="">All lead types</option>
                   {LEAD_TEMPERATURES.map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}
@@ -3868,8 +4055,8 @@ export default function LeadStore({ selectedYear = "all" }) {
                   {individualColumns.email && <th className="min-w-[210px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Email</th>}
                   {individualColumns.course && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Course</th>}
                   {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
-                  {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Temperature</th>}
-                  {individualColumns.status && <th className="min-w-[110px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
+                  {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Type</th>}
+                  {individualColumns.status && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
                   {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
 
                   <th className="sticky right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -3979,7 +4166,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                                   updateLeadTemperature(lead.id, event.target.value)
                                 }
                                 className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${temperatureSelectClass(lead.temperature || "WARM")}`}
-                                aria-label={`Temperature for ${lead.name}`}
+                                aria-label={`Lead type for ${lead.name}`}
                               >
                                 {LEAD_TEMPERATURES.map((item) => (
                                   <option key={item.value} value={item.value}>
@@ -3989,7 +4176,16 @@ export default function LeadStore({ selectedYear = "all" }) {
                               </select>
                             </td>
                           )}
-                          {individualColumns.status && <td className={`min-w-[110px] px-4 ${individualCellPadding} whitespace-nowrap`}><Badge tone="slate">{lead.stage || "NEW"}</Badge></td>}
+                          {individualColumns.status && (
+                            <td className={`min-w-[170px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+                              <LeadStatusSelect
+                                lead={lead}
+                                options={individualStatusOptions}
+                                disabled={statusUpdatingId === lead.id}
+                                onChangeStatus={updateLeadStatus}
+                              />
+                            </td>
+                          )}
                           {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 
                           <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>

@@ -216,6 +216,7 @@ model Company {
   settings       CompanySettings?
 
   leads                   Lead[]
+  leadStatusOptions        LeadStatusOption[]
   utmLinks                UtmLink[]
   admissions              Admission[]
   expenses                Expense[]
@@ -622,6 +623,23 @@ model LeadSourceConfig {
   @@index([companyId, sortOrder])
 }
 
+
+model LeadStatusOption {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  label      String
+  normalized String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, normalized])
+  @@index([companyId, createdAt])
+}
+
 model Lead {
   id String @id @default(cuid())
 
@@ -637,6 +655,7 @@ model Lead {
   source      String
   stage       LeadStage       @default(NEW)
   temperature LeadTemperature @default(WARM)
+  leadStatus  String?
 
   campaign String?
   medium   String?

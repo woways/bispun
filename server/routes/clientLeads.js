@@ -32,6 +32,21 @@ const VALID_STAGES = Object.keys(STAGE_LABELS);
 
 const VALID_TEMPERATURES = ["HOT", "WARM", "COLD"];
 
+const STAGE_TO_LEAD_STATUS = {
+  NEW: "Fresh",
+  CONTACTED: "Call Initiated",
+  QUALIFIED: "Call Initiated",
+  COUNSELLING: "Call Initiated",
+  ADMITTED: "Admission Done",
+  LOST: "Lead Lost",
+};
+
+function leadStatusFor(lead) {
+  return String(lead?.leadStatus || "").trim() ||
+    STAGE_TO_LEAD_STATUS[lead?.stage] ||
+    "Fresh";
+}
+
 
 function parseYear(value) {
   if (!value || value === "all") return null;
@@ -402,6 +417,7 @@ function formatLead(lead, sourceMap = new Map()) {
     stage: STAGE_LABELS[lead.stage] || lead.stage,
     stageKey: lead.stage,
     temperature: lead.temperature || "WARM",
+    leadStatus: leadStatusFor(lead),
 
     campaign: lead.campaign,
     medium: lead.medium,
@@ -757,6 +773,7 @@ router.post("/", async (req, res) => {
 
           source: sourceKey,
           stage: stageKey,
+          leadStatus: STAGE_TO_LEAD_STATUS[stageKey] || "Fresh",
           temperature: temperatureKey,
 
           campaign: campaign
@@ -976,6 +993,7 @@ router.patch("/:id", async (req, res) => {
       }
 
       data.stage = stage;
+      data.leadStatus = STAGE_TO_LEAD_STATUS[stage] || data.leadStatus;
     }
 
     if (req.body.temperature !== undefined) {
@@ -1608,6 +1626,7 @@ router.post(
           course: row.course,
           source: sourceKey,
           stage: "NEW",
+          leadStatus: "Fresh",
           temperature: "WARM",
           campaign: row.campaign,
           medium: row.medium,
