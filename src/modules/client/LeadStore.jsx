@@ -35,6 +35,9 @@ import {
   History,
   Copy,
   PhoneCall,
+  Paperclip,
+  Link2,
+  FileText,
 } from "lucide-react";
 
 import {
@@ -2309,10 +2312,74 @@ export default function LeadStore({ selectedYear = "all" }) {
   const [communicationError, setCommunicationError] = useState("");
   const [communicationResult, setCommunicationResult] = useState("");
   const [communicationHistory, setCommunicationHistory] = useState([]);
+  const [emailAttachments, setEmailAttachments] = useState([]);
+  const emailAttachmentInputRef = useRef(null);
   const [emailForm, setEmailForm] = useState({
     subject: "",
     message: "",
+    driveLinks: "",
   });
+
+  function formatAttachmentSize(bytes) {
+    const size = Number(bytes || 0);
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  function handleEmailAttachments(event) {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!selected.length) return;
+
+    const allowedExtensions = new Set([
+      "jpg", "jpeg", "png", "gif", "webp", "pdf", "doc", "docx",
+      "xls", "xlsx", "csv", "ppt", "pptx", "txt", "zip",
+    ]);
+
+    const invalid = selected.find((file) => {
+      const extension = String(file.name || "").split(".").pop()?.toLowerCase();
+      return !allowedExtensions.has(extension);
+    });
+
+    if (invalid) {
+      setCommunicationError(
+        `Unsupported attachment: ${invalid.name}. Use images, PDF, Word, Excel, CSV, PowerPoint, TXT or ZIP files.`
+      );
+      return;
+    }
+
+    const merged = [...emailAttachments];
+    selected.forEach((file) => {
+      const duplicate = merged.some(
+        (item) =>
+          item.name === file.name &&
+          item.size === file.size &&
+          item.lastModified === file.lastModified
+      );
+      if (!duplicate) merged.push(file);
+    });
+
+    if (merged.length > 10) {
+      setCommunicationError("Attach a maximum of 10 files per email.");
+      return;
+    }
+
+    const totalBytes = merged.reduce((sum, file) => sum + Number(file.size || 0), 0);
+    if (totalBytes > 18 * 1024 * 1024) {
+      setCommunicationError(
+        "Attachments are too large. Keep all files together under 18 MB so Gmail can send them safely."
+      );
+      return;
+    }
+
+    setCommunicationError("");
+    setEmailAttachments(merged);
+  }
+
+  function removeEmailAttachment(index) {
+    setEmailAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
 
   function closeMessageComposer() {
     setMessageComposerOpen(false);
@@ -2323,9 +2390,11 @@ export default function LeadStore({ selectedYear = "all" }) {
     setCommunicationError("");
     setCommunicationResult("");
     setCommunicationHistory([]);
+    setEmailAttachments([]);
     setEmailForm({
       subject: "",
       message: "",
+      driveLinks: "",
     });
   }
 
@@ -2337,7 +2406,9 @@ export default function LeadStore({ selectedYear = "all" }) {
     setEmailForm({
       subject: "",
       message: "",
+      driveLinks: "",
     });
+    setEmailAttachments([]);
     setMessageLeadIds(ids);
     setMessageComposerOpen(true);
     setCommunicationLoading(true);
@@ -2361,21 +2432,34 @@ export default function LeadStore({ selectedYear = "all" }) {
   }
 
   async function sendSelectedEmail() {
-    if (!emailForm.subject.trim() || !emailForm.message.trim()) {
-      setCommunicationError("Enter both a subject and message.");
+    if (!emailForm.subject.trim()) {
+      setCommunicationError("Enter an email subject.");
       return;
     }
+
+    if (
+      !emailForm.message.trim() &&
+      !emailAttachments.length &&
+      !emailForm.driveLinks.trim()
+    ) {
+      setCommunicationError("Add a message, attachment or Google Drive link before sending.");
+      return;
+    }
+
     setCommunicationSending(true);
     setCommunicationError("");
     setCommunicationResult("");
     try {
+      const formData = new FormData();
+      formData.append("leadIds", JSON.stringify(messageLeadIds));
+      formData.append("subject", emailForm.subject);
+      formData.append("message", emailForm.message);
+      formData.append("driveLinks", emailForm.driveLinks);
+      emailAttachments.forEach((file) => formData.append("attachments", file, file.name));
+
       const data = await apiRequest("/api/client/communications/email", {
         method: "POST",
-        body: JSON.stringify({
-          leadIds: messageLeadIds,
-          subject: emailForm.subject,
-          message: emailForm.message,
-        }),
+        body: formData,
       });
       const sentCount = Number(data?.sent || 0);
 
@@ -4609,8 +4693,67 @@ export default function LeadStore({ selectedYear = "all" }) {
                     <textarea value={emailForm.message} onChange={(e) => setEmailForm((c) => ({ ...c, message: e.target.value }))} rows={10} className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] leading-6 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" />
                   </div>
 
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[12px] font-bold text-slate-700">Attachments</div>
+                        <div className="mt-0.5 text-[11px] text-slate-400">Images, PDF, Word, Excel, CSV, PowerPoint, TXT or ZIP · max 10 files · 18 MB total</div>
+                      </div>
+
+                      <input
+                        ref={emailAttachmentInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip"
+                        onChange={handleEmailAttachments}
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => emailAttachmentInputRef.current?.click()}
+                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                      >
+                        <Paperclip size={14} />
+                        Attach files
+                      </button>
+                    </div>
+
+                    {emailAttachments.length > 0 && (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {emailAttachments.map((file, index) => (
+                          <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                            <FileText size={15} className="shrink-0 text-indigo-500" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[12px] font-semibold text-slate-700">{file.name}</div>
+                              <div className="text-[10px] text-slate-400">{formatAttachmentSize(file.size)}</div>
+                            </div>
+                            <button type="button" onClick={() => removeEmailAttachment(index)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Remove attachment">
+                              <X size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="mb-1.5 flex items-center gap-2">
+                      <Link2 size={14} className="text-indigo-500" />
+                      <label className="text-[12px] font-semibold text-slate-600">Google Drive links <span className="font-normal text-slate-400">(optional)</span></label>
+                    </div>
+                    <textarea
+                      value={emailForm.driveLinks}
+                      onChange={(e) => setEmailForm((c) => ({ ...c, driveLinks: e.target.value }))}
+                      rows={2}
+                      placeholder="Paste a Google Drive or Google Docs link here. For multiple links, use one link per line."
+                      className="w-full resize-y rounded-xl border border-slate-200 px-3 py-2.5 text-[13px] leading-5 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <div className="mt-1 text-[11px] text-slate-400">The link is added to the email body. Make sure the Drive file sharing permission allows the recipient to open it.</div>
+                  </div>
+
                   <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-[12px] leading-5 text-indigo-800">
-                    This sends one email per lead from the connected Gmail account. Leads without a valid email are skipped. For stability, one send action is limited to {communicationStatus?.maxPerRequest || 100} leads; Google still controls the account&apos;s actual daily sending limit.
+                    This sends one email per lead from the connected Gmail account. The same selected attachments and Drive links are sent to every selected lead. Leads without a valid email are skipped. For stability, one send action is limited to {communicationStatus?.maxPerRequest || 100} leads; Google still controls the account&apos;s actual daily sending limit.
                   </div>
 
                   {communicationError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-semibold text-rose-700">{communicationError}</div>}
@@ -4635,7 +4778,7 @@ export default function LeadStore({ selectedYear = "all" }) {
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
               <button type="button" onClick={closeMessageComposer} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700">Cancel</button>
-              <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || !emailForm.message.trim()} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || (!emailForm.message.trim() && !emailAttachments.length && !emailForm.driveLinks.trim())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 {communicationSending ? "Sending..." : `Send ${messageLeadIds.length > 1 ? `to ${messageLeadIds.length} leads` : "Email"}`}
               </button>

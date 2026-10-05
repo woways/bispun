@@ -154,21 +154,84 @@ function base64Url(value) {
     .replace(/=+$/g, "");
 }
 
-export async function sendGmailMessage(userId, { to, subject, text }) {
+function wrapBase64(value) {
+  return String(value || "").match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+function safeAttachmentName(value) {
+  return String(value || "attachment")
+    .replace(/[\r\n]/g, " ")
+    .replace(/["\\]/g, "_")
+    .trim() || "attachment";
+}
+
+export async function sendGmailMessage(
+  userId,
+  { to, subject, text, attachments = [] }
+) {
   const { gmail, email } = await getGmailForUser(userId);
-  const body = Buffer.from(String(text || ""), "utf8").toString("base64");
   const headers = [
     `To: ${String(to || "").trim()}`,
     email ? `From: ${email}` : null,
     `Subject: ${encodeHeader(subject)}`,
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
   ].filter(Boolean);
-  const raw = base64Url(`${headers.join("\r\n")}\r\n\r\n${body}`);
+
+  let mimeMessage;
+
+  if (attachments.length) {
+    const boundary = `bispun_${crypto.randomBytes(16).toString("hex")}`;
+    headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+
+    const parts = [
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      wrapBase64(Buffer.from(String(text || ""), "utf8").toString("base64")),
+    ];
+
+    for (const attachment of attachments) {
+      const filename = safeAttachmentName(attachment.filename);
+      const mimeType = String(attachment.mimeType || "application/octet-stream")
+        .replace(/[\r\n]/g, "")
+        .trim() || "application/octet-stream";
+      const content = Buffer.isBuffer(attachment.buffer)
+        ? attachment.buffer
+        : Buffer.from(attachment.buffer || "");
+
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${mimeType}; name="${filename}"`,
+        `Content-Disposition: attachment; filename="${filename}"`,
+        "Content-Transfer-Encoding: base64",
+        "",
+        wrapBase64(content.toString("base64"))
+      );
+    }
+
+    parts.push(`--${boundary}--`, "");
+    mimeMessage = `${headers.join("\r\n")}\r\n\r\n${parts.join("\r\n")}`;
+  } else {
+    headers.push(
+      'Content-Type: text/plain; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64"
+    );
+    const body = wrapBase64(
+      Buffer.from(String(text || ""), "utf8").toString("base64")
+    );
+    mimeMessage = `${headers.join("\r\n")}\r\n\r\n${body}`;
+  }
+
+  const raw = base64Url(mimeMessage);
   const result = await gmail.users.messages.send({
     userId: "me",
     requestBody: { raw },
   });
-  return { id: result.data.id || null, threadId: result.data.threadId || null, from: email };
+
+  return {
+    id: result.data.id || null,
+    threadId: result.data.threadId || null,
+    from: email,
+  };
 }
