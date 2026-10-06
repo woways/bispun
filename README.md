@@ -1,16 +1,16 @@
-# ConsulBuzz
+# Bispun
 
 **Multi-Tenant CRM & Business Management SaaS Platform**
 
-ConsulBuzz is a scalable multi-tenant CRM platform designed for organizations that need to manage leads, admissions, revenue, analytics, teams, integrations, subscriptions, and business operations from a centralized system.
+Bispun is a scalable multi-tenant CRM platform designed for organizations that need to manage leads, admissions, revenue, analytics, teams, integrations, subscriptions, and business operations from a centralized system.
 
-The platform provides separate **Super Admin** and **Client Portal** environments, allowing ConsulBuzz to onboard and manage multiple companies while keeping each organization's data, users, configuration, and operations isolated.
+The platform provides separate **Super Admin** and **Client Portal** environments, allowing Bispun to onboard and manage multiple companies while keeping each organization's data, users, configuration, and operations isolated.
 
 ---
 
 ## 🚀 Product Overview
 
-ConsulBuzz is built as a SaaS platform where multiple organizations can use the same application with their own:
+Bispun is built as a SaaS platform where multiple organizations can use the same application with their own:
 
 - Company workspace
 - Branding
@@ -72,7 +72,7 @@ Modules can be controlled according to the organization's subscription and confi
 
 ## 👥 Role & Permission Management
 
-ConsulBuzz supports role-based access control.
+Bispun supports role-based access control.
 
 Current roles include:
 
@@ -98,7 +98,7 @@ This allows companies to control access beyond basic role assignments.
 
 ## 🏢 Multi-Tenant Architecture
 
-ConsulBuzz follows a company-based multi-tenant architecture.
+Bispun follows a company-based multi-tenant architecture.
 
 Business records are associated with a specific company, including:
 
@@ -123,7 +123,7 @@ This architecture is designed to keep client data logically separated while allo
 
 ## 💳 Subscription & Billing
 
-ConsulBuzz includes subscription infrastructure for:
+Bispun includes subscription infrastructure for:
 
 - Monthly billing
 - Yearly billing
@@ -185,7 +185,7 @@ Platform administrators can monitor:
 
 ## 🔗 Lead & Integration Infrastructure
 
-ConsulBuzz supports configurable lead acquisition and integration infrastructure.
+Bispun supports configurable lead acquisition and integration infrastructure.
 
 Available integration types include:
 
@@ -220,7 +220,7 @@ Custom fields can be configured as required, optional, active/inactive, and visi
 
 ## 🔔 Notifications
 
-ConsulBuzz contains an in-app notification system supporting events such as:
+Bispun contains an in-app notification system supporting events such as:
 
 - Lead updates
 - Admission updates
@@ -277,7 +277,7 @@ Sensitive credentials must never be committed to the repository.
 
 ## 📝 Audit Logging
 
-ConsulBuzz contains separate auditing infrastructure for:
+Bispun contains separate auditing infrastructure for:
 
 ### Client Audit Logs
 
