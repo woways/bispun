@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 
 import prisma from "./lib/prisma.js";
 import { loadServerConfig } from "./lib/env.js";
+import { syncDueSubscriptionLifecycles } from "./lib/subscriptions.js";
 import {
   requestId,
   securityHeaders,
@@ -224,6 +225,29 @@ app.use((error, req, res, next) => {
 });
 
 const server = http.createServer(app);
+
+// Keep manual annual subscriptions in sync even when clients do not open the
+// billing screen. The client-auth middleware also reconciles on every request,
+// so this interval is a safety net for Super Admin reporting and expiry state.
+async function reconcileSubscriptions() {
+  try {
+    const result = await syncDueSubscriptionLifecycles();
+    if (result.expired || result.pastDue) {
+      console.log(
+        `Subscription lifecycle sync: ${result.pastDue} past due, ${result.expired} expired`
+      );
+    }
+  } catch (error) {
+    console.error("Subscription lifecycle sync failed:", error);
+  }
+}
+
+reconcileSubscriptions();
+const subscriptionLifecycleTimer = setInterval(
+  reconcileSubscriptions,
+  60 * 60 * 1000
+);
+subscriptionLifecycleTimer.unref?.();
 
 // Attach Socket.IO for real-time chat (shares cookie-JWT auth).
 const io = attachSocketServer(server, config);

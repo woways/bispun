@@ -682,6 +682,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     setBillingData,
   ] = useState({
     subscription: null,
+    renewalPolicy: {
+      mode: "MANUAL",
+      billingCycle: "YEARLY",
+      reminderDays: [30, 7, 0],
+      graceDays: 7,
+    },
     plans: [],
     payments: [],
   });
@@ -1073,24 +1079,46 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       ?.renewalDate ||
     null;
 
-  const sidebarNextAnnualRenewalDate =
+  const sidebarRenewalDateValue =
     sidebarRenewalDate &&
     !Number.isNaN(new Date(sidebarRenewalDate).getTime())
-      ? (() => {
-          const next = new Date(sidebarRenewalDate);
-          next.setFullYear(next.getFullYear() + 1);
-          return next;
-        })()
+      ? new Date(sidebarRenewalDate)
       : null;
 
   const sidebarNextAnnualRenewalLabel =
-    sidebarNextAnnualRenewalDate
-      ? sidebarNextAnnualRenewalDate.toLocaleDateString("en-IN", {
+    sidebarRenewalDateValue
+      ? sidebarRenewalDateValue.toLocaleDateString("en-IN", {
           day: "2-digit",
           month: "short",
           year: "numeric",
         })
       : null;
+
+  const subscriptionStatus =
+    billingData?.subscription?.status ||
+    company?.subscription?.status ||
+    null;
+
+  const subscriptionAccessRestricted =
+    ["EXPIRED", "CANCELLED"].includes(
+      String(subscriptionStatus || "").toUpperCase()
+    );
+
+  const subscriptionPastDue =
+    String(subscriptionStatus || "").toUpperCase() ===
+    "PAST_DUE";
+
+  const subscriptionGraceEndsAt = (() => {
+    const direct = billingData?.subscription?.graceEndsAt;
+    if (direct && !Number.isNaN(new Date(direct).getTime())) {
+      return new Date(direct);
+    }
+
+    if (!sidebarRenewalDateValue) return null;
+    const grace = new Date(sidebarRenewalDateValue);
+    grace.setDate(grace.getDate() + 7);
+    return grace;
+  })();
 
   const tenant =
     useMemo(
@@ -1425,6 +1453,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       setBillingData({
         subscription:
           data.subscription || null,
+        renewalPolicy:
+          data.renewalPolicy || {
+            mode: "MANUAL",
+            billingCycle: "YEARLY",
+            reminderDays: [30, 7, 0],
+            graceDays: 7,
+          },
         plans:
           data.plans || [],
         payments:
@@ -1580,6 +1615,27 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               await loadBillingData();
 
               if (verified.captured) {
+                // Refresh the live company snapshot after renewal/plan change so
+                // expiry restrictions disappear immediately and new plan modules
+                // are available without requiring a manual browser refresh.
+                try {
+                  const refreshedSession =
+                    await apiRequest(
+                      "/api/client/auth/me"
+                    );
+
+                  if (refreshedSession?.company) {
+                    setLiveCompany(
+                      refreshedSession.company
+                    );
+                  }
+                } catch (refreshError) {
+                  console.error(
+                    "Unable to refresh subscription session:",
+                    refreshError
+                  );
+                }
+
                 if (verified.receipt) {
                   setReceiptData(
                     verified.receipt
@@ -4142,7 +4198,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           <button type="button" onClick={() => { setAccountActionsOpen(false); openBilling(); }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-white/[0.06]">
                             <Rocket size={15} strokeWidth={2} className="flex-shrink-0 text-slate-400" />
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] font-semibold text-slate-200">Upgrade plan</span>
+                              <span className="block text-[13px] font-semibold text-slate-200">Manage plan & renewal</span>
                               {sidebarNextAnnualRenewalLabel && (
                                 <span className="block text-[10px] text-slate-500">Valid till {sidebarNextAnnualRenewalLabel}</span>
                               )}
@@ -4366,11 +4422,107 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           {/* MAIN CONTENT */}
           <main className="mt-14 min-h-[calc(100vh-56px)] bg-[#f6f7fa] px-3 pt-3 pb-4 sm:px-5 sm:pt-4 sm:pb-5 lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
             <div className="max-w-[1560px] mx-auto">
+              {subscriptionPastDue && (
+                <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="text-xs font-bold">Annual renewal is past due</div>
+                      <div className="mt-0.5 text-[12px] leading-5 text-amber-800">
+                        You are in the 7-day grace period. Renew before
+                        {" "}
+                        {subscriptionGraceEndsAt
+                          ? subscriptionGraceEndsAt.toLocaleDateString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "the grace period ends"}
+                        {" "}
+                        to keep uninterrupted CRM access.
+                      </div>
+                    </div>
+                  </div>
+                  {isClientAdmin && (
+                    <button
+                      type="button"
+                      onClick={openBilling}
+                      className="inline-flex h-9 items-center justify-center rounded-lg bg-amber-900 px-3 text-xs font-bold text-white hover:bg-amber-950"
+                    >
+                      Renew now
+                    </button>
+                  )}
+                </div>
+              )}
               {renderModule()}
             </div>
           </main>
         </div>
       </div>
+
+      {subscriptionAccessRestricted && !billingOpen && (
+        <div className="fixed inset-0 z-[90] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
+              <Lock size={20} />
+            </div>
+
+            <h2 className="mt-4 text-xl font-bold text-slate-950">
+              Annual subscription expired
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              The 7-day renewal grace period has ended. Your CRM data is safe,
+              but business modules are temporarily restricted until the annual
+              subscription is renewed.
+            </p>
+
+            {subscriptionGraceEndsAt && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                Grace period ended on{" "}
+                <span className="font-bold text-slate-900">
+                  {subscriptionGraceEndsAt.toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              {isClientAdmin ? (
+                <button
+                  type="button"
+                  onClick={openBilling}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white hover:bg-brand-700"
+                >
+                  <ReceiptIndianRupee size={16} />
+                  Renew Subscription
+                </button>
+              ) : (
+                <div className="flex-1 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                  Please ask your Client Admin to renew the subscription.
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={signOut}
+                disabled={signingOut}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {signingOut ? (
+                  <Loader2 size={15} className="animate-spin" />
+                ) : (
+                  <LogOut size={15} />
+                )}
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {billingOpen && (
         <div className="fixed inset-0 z-[95] bg-slate-950/55 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -4408,6 +4560,49 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
               )}
 
+              {billingData.subscription &&
+                ["PAST_DUE", "EXPIRED"].includes(
+                  String(billingData.subscription.status || "").toUpperCase()
+                ) && (
+                  <div
+                    className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${
+                      String(billingData.subscription.status).toUpperCase() ===
+                      "EXPIRED"
+                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                        : "border-amber-200 bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    <AlertCircle
+                      size={14}
+                      className="mt-0.5 flex-shrink-0"
+                    />
+                    <div>
+                      <div className="font-bold">
+                        {String(billingData.subscription.status).toUpperCase() ===
+                        "EXPIRED"
+                          ? "Annual subscription expired"
+                          : "Annual renewal is past due"}
+                      </div>
+                      <div className="mt-1 leading-5">
+                        {String(billingData.subscription.status).toUpperCase() ===
+                        "EXPIRED"
+                          ? "CRM access is restricted until the annual plan is renewed."
+                          : `You are in the 7-day grace period. Renew by ${
+                              billingData.subscription.graceEndsAt
+                                ? new Date(
+                                    billingData.subscription.graceEndsAt
+                                  ).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
+                                : "the grace-period end date"
+                            } to avoid interruption.`}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               {billingLoading ? (
                 <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-500">
                   <Loader2
@@ -4431,21 +4626,26 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       </div>
 
                       {billingData.subscription && (
-                        <div className="text-xs text-slate-500 mt-1">
-                          Annual · Renewal{" "}
-                          {billingData.subscription.renewalDate
-                            ? new Date(
-                                billingData.subscription.renewalDate
-                              ).toLocaleDateString(
-                                "en-IN",
-                                {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                }
-                              )
-                            : "—"}
-                        </div>
+                        <>
+                          <div className="text-xs text-slate-500 mt-1">
+                            Annual · Manual renewal · Due{" "}
+                            {billingData.subscription.renewalDate
+                              ? new Date(
+                                  billingData.subscription.renewalDate
+                                ).toLocaleDateString(
+                                  "en-IN",
+                                  {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  }
+                                )
+                              : "—"}
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">
+                            Reminders: 30 days, 7 days and on expiry · 7-day grace period
+                          </div>
+                        </>
                       )}
 
                       {billingData.subscription &&
@@ -4521,6 +4721,31 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       {billingData.plans.map((billingPlan) => {
                         const isCurrent =
                           billingData.subscription?.plan?.key === billingPlan.key;
+
+                        const currentRenewalDate =
+                          billingData.subscription?.renewalDate
+                            ? new Date(
+                                billingData.subscription.renewalDate
+                              )
+                            : null;
+
+                        const renewalWindowOpen =
+                          isCurrent &&
+                          (
+                            ["PAST_DUE", "EXPIRED"].includes(
+                              String(
+                                billingData.subscription?.status ||
+                                  ""
+                              ).toUpperCase()
+                            ) ||
+                            (currentRenewalDate &&
+                              !Number.isNaN(
+                                currentRenewalDate.getTime()
+                              ) &&
+                              currentRenewalDate.getTime() -
+                                Date.now() <=
+                                30 * 24 * 60 * 60 * 1000)
+                          );
 
                         const isPopular =
                           String(billingPlan.key || "").toLowerCase() === "pro";
@@ -4717,7 +4942,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-auto pt-7">
-                                {isCurrent ? (
+                                {isCurrent && !renewalWindowOpen ? (
                                   <button
                                     type="button"
                                     disabled
@@ -4757,7 +4982,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                                     {!yearlyAvailable
                                       ? "Annual plan unavailable"
-                                      : `Upgrade to ${billingPlan.name}`}
+                                      : isCurrent
+                                      ? `Renew ${billingPlan.name}`
+                                      : `Switch to ${billingPlan.name}`}
                                   </button>
                                 )}
                               </div>
@@ -4768,7 +4995,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </div>
 
                     <div className="mx-auto mt-5 max-w-2xl text-center text-[12px] leading-5 text-slate-500">
-                      Your existing CRM records remain unchanged when you upgrade. New plan capabilities become available after successful payment verification.
+                      Your existing CRM records remain unchanged when you renew or switch plans. New plan capabilities become available after successful payment verification.
                     </div>
                   </div>
 

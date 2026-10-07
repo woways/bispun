@@ -2524,6 +2524,9 @@ function BillingTab({
           <div className="mt-5 space-y-3">
             <InfoRow label="Plan" value={billing.plan?.name || "—"} />
             <InfoRow label="Billing Cycle" value="Annual" />
+            <InfoRow label="Renewal Mode" value={billing.renewalMode || "MANUAL"} />
+            <InfoRow label="Renewal Date" value={formatDate(billing.renewalDate)} />
+            <InfoRow label="Grace Ends" value={formatDate(billing.graceEndsAt)} />
             <InfoRow
               label="Original Price"
               value={formatMoney(

@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { getSubscriptionGraceEndsAt } from "../lib/subscriptions.js";
 import {
   requireClientUser,
 } from "../middleware/clientAuth.js";
@@ -107,10 +108,8 @@ async function ensureBillingRenewalReminder(
   if (
     !user ||
     (
-      user.role !==
-        "CLIENT_ADMIN" &&
-      user.canManageBilling !==
-        true
+      user.role !== "CLIENT_ADMIN" &&
+      user.canManageBilling !== true
     )
   ) {
     return;
@@ -120,104 +119,85 @@ async function ensureBillingRenewalReminder(
     await prisma.subscription.findFirst({
       where: {
         companyId,
-        renewalDate: {
-          not: null,
-        },
+        renewalDate: { not: null },
         status: {
           in: [
             "TRIAL",
             "ACTIVE",
             "PAST_DUE",
+            "EXPIRED",
           ],
         },
       },
       include: {
         plan: {
-          select: {
-            name: true,
-          },
+          select: { name: true },
         },
       },
-      orderBy: {
-        createdAt:
-          "desc",
-      },
+      orderBy: { createdAt: "desc" },
     });
 
-  if (
-    !subscription
-      ?.renewalDate
-  ) {
+  if (!subscription?.renewalDate) {
     return;
   }
 
-  const now =
-    new Date();
+  const now = new Date();
+  const renewalDate = new Date(subscription.renewalDate);
+  const graceEndsAt = getSubscriptionGraceEndsAt(renewalDate);
+  const dateKey = renewalDate.toISOString().slice(0, 10);
+  const formatDate = (date) =>
+    date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
 
-  const sevenDays =
-    new Date(
-      now.getTime() +
-        7 * 24 * 60 * 60 * 1000
-    );
-
-  // Renewal too far in the future: nothing to show yet.
-  if (
-    subscription.renewalDate >
-    sevenDays
-  ) {
-    return;
-  }
-
-  const subMarker = `BILLING_RENEWAL:${subscription.id}:`;
-
-  // Renewal date has passed: the "approaching" reminder is now misleading.
-  // Remove any stale "approaching" notifications and raise an "overdue" one.
-  if (
-    subscription.renewalDate < now
-  ) {
+  // On/after the due date, replace approaching reminders with one clear
+  // overdue/expired message that explains the 7-day grace period.
+  if (renewalDate <= now) {
     await prisma.notification.deleteMany({
       where: {
         companyId,
         userId,
-        title:
-          "Subscription renewal approaching",
+        title: {
+          in: [
+            "Subscription renewal approaching",
+            "Subscription renewal due soon",
+          ],
+        },
         message: {
-          contains: subMarker,
+          contains: `BILLING_RENEWAL_`,
         },
       },
     });
 
-    const overdueMarker = `BILLING_OVERDUE:${subscription.id}:${subscription.renewalDate
-      .toISOString()
-      .slice(0, 10)}`;
+    const expired =
+      subscription.status === "EXPIRED" ||
+      (graceEndsAt && now >= graceEndsAt);
+    const marker =
+      `BILLING_OVERDUE:${subscription.id}:${dateKey}`;
 
-    const overdueExists =
+    const exists =
       await prisma.notification.findFirst({
         where: {
           companyId,
           userId,
-          message: {
-            contains: overdueMarker,
-          },
+          message: { contains: marker },
         },
         select: { id: true },
       });
 
-    if (!overdueExists) {
+    if (!exists) {
       await prisma.notification.create({
         data: {
           companyId,
           userId,
-          title:
-            "Subscription renewal overdue",
-          message: `${subscription.plan.name} renewal was due on ${subscription.renewalDate.toLocaleDateString(
-            "en-IN",
-            {
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }
-          )}. Please renew to avoid interruption. ${overdueMarker}`,
+          title: expired
+            ? "Subscription expired"
+            : "Subscription renewal overdue",
+          message: expired
+            ? `${subscription.plan.name} expired after the 7-day grace period. Renew the annual plan to restore CRM access. ${marker}`
+            : `${subscription.plan.name} renewal was due on ${formatDate(renewalDate)}. Manual renewal is required by ${formatDate(graceEndsAt)} to avoid CRM access restriction. ${marker}`,
           type: "BILLING",
           actionModule: "settings",
           actionLabel: "Renew now",
@@ -228,22 +208,46 @@ async function ensureBillingRenewalReminder(
     return;
   }
 
+  const daysUntilRenewal =
+    (renewalDate.getTime() - now.getTime()) /
+    (24 * 60 * 60 * 1000);
+
+  const reminderDays =
+    daysUntilRenewal <= 7
+      ? 7
+      : daysUntilRenewal <= 30
+      ? 30
+      : null;
+
+  if (!reminderDays) {
+    return;
+  }
+
+  // When the 7-day reminder is reached, remove the older 30-day reminder so
+  // the notification list only shows the most useful current action.
+  if (reminderDays === 7) {
+    await prisma.notification.deleteMany({
+      where: {
+        companyId,
+        userId,
+        message: {
+          contains: `BILLING_RENEWAL_30:${subscription.id}:`,
+        },
+      },
+    });
+  }
+
   const marker =
-    `BILLING_RENEWAL:${subscription.id}:${subscription.renewalDate.toISOString().slice(0, 10)}`;
+    `BILLING_RENEWAL_${reminderDays}:${subscription.id}:${dateKey}`;
 
   const exists =
     await prisma.notification.findFirst({
       where: {
         companyId,
         userId,
-        message: {
-          contains:
-            marker,
-        },
+        message: { contains: marker },
       },
-      select: {
-        id: true,
-      },
+      select: { id: true },
     });
 
   if (!exists) {
@@ -252,19 +256,15 @@ async function ensureBillingRenewalReminder(
         companyId,
         userId,
         title:
-          "Subscription renewal approaching",
+          reminderDays === 7
+            ? "Subscription renewal due soon"
+            : "Subscription renewal approaching",
         message:
-          `${subscription.plan.name} renews on ${subscription.renewalDate.toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          })}. ${marker}`,
-        type:
-          "BILLING",
-        actionModule:
-          "settings",
-        actionLabel:
-          "View billing",
+          `${subscription.plan.name} annual plan renews on ${formatDate(renewalDate)}. ` +
+          `This is a manual renewal, so you can confirm the plan before payment. ${marker}`,
+        type: "BILLING",
+        actionModule: "settings",
+        actionLabel: "View billing",
       },
     });
   }

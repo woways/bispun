@@ -477,6 +477,10 @@ export default function Billing() {
                 </th>
 
                 <th className="px-4 py-3 text-left">
+                  Grace Ends
+                </th>
+
+                <th className="px-4 py-3 text-left">
                   End
                 </th>
               </tr>
@@ -514,7 +518,10 @@ export default function Billing() {
                     </td>
 
                     <td className="px-4 py-3 text-slate-700">
-                      Annual
+                      <div>Annual</div>
+                      <div className="mt-0.5 text-[11px] text-slate-400">
+                        {client.renewalMode || "MANUAL"}
+                      </div>
                     </td>
 
                     <td className="px-4 py-3 font-medium text-slate-900">
@@ -554,6 +561,12 @@ export default function Billing() {
 
                     <td className="px-4 py-3 text-xs text-slate-500">
                       {formatDate(
+                        client.graceEndsAt
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-xs text-slate-500">
+                      {formatDate(
                         client.endDate
                       )}
                     </td>
@@ -564,7 +577,7 @@ export default function Billing() {
               {!clients.length && (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     No subscriptions

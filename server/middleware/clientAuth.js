@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
+import { syncSubscriptionLifecycle } from "../lib/subscriptions.js";
 import {
   normalizePageAccess,
   fullPageAccess,
@@ -179,13 +180,7 @@ export async function requireClientUser(
       clientSession.revokedAt ||
       clientSession.expiresAt <=
         new Date() ||
-      !user.company ||
-      [
-        "SUSPENDED",
-        "INACTIVE",
-      ].includes(
-        user.company.status
-      )
+      !user.company
     ) {
       return res
         .status(401)
@@ -195,6 +190,40 @@ export async function requireClientUser(
             "Unauthorized",
         });
     }
+
+    // A manual Super Admin suspension is separate from subscription expiry.
+    // Suspended/inactive companies stay fully blocked until Super Admin restores them.
+    if (["SUSPENDED", "INACTIVE"].includes(user.company.status)) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your company account is currently unavailable. Please contact Bispun support.",
+      });
+    }
+
+    const subscriptionLifecycle =
+      await syncSubscriptionLifecycle(user.companyId);
+
+    // After the 7-day grace period, only authentication/security and billing
+    // routes remain available. This lets the Client Admin sign in and renew,
+    // while protecting all CRM business data until payment succeeds.
+    const renewalSafeRoute =
+      req.originalUrl.startsWith("/api/client/billing") ||
+      req.originalUrl.startsWith("/api/client/auth");
+
+    if (subscriptionLifecycle.accessRestricted && !renewalSafeRoute) {
+      return res.status(402).json({
+        success: false,
+        renewalRequired: true,
+        subscriptionExpired: true,
+        message:
+          "Your Bispun subscription has expired. Please renew the annual plan to restore CRM access.",
+        renewalDate: subscriptionLifecycle.renewalDate,
+        graceEndsAt: subscriptionLifecycle.graceEndsAt,
+      });
+    }
+
+    req.subscriptionLifecycle = subscriptionLifecycle;
 
     req.clientUser = {
       userId:

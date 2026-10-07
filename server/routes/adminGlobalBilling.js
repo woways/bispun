@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { getSubscriptionLifecycleSnapshot } from "../lib/subscriptions.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 
 const router = Router();
@@ -26,9 +27,14 @@ function getCurrentSubscription(
 function annualValue(
   subscription
 ) {
+  const lifecycle =
+    getSubscriptionLifecycleSnapshot(
+      subscription
+    );
+
   if (
     !subscription ||
-    subscription.status !==
+    lifecycle.status !==
       "ACTIVE"
   ) {
     return 0;
@@ -98,6 +104,10 @@ router.get("/", async (req, res) => {
             getCurrentSubscription(
               company.subscriptions
             );
+          const lifecycle =
+            getSubscriptionLifecycleSnapshot(
+              subscription
+            );
 
           return {
             id:
@@ -115,8 +125,7 @@ router.get("/", async (req, res) => {
               subscription?.plan
                 ?.name || null,
             subscriptionStatus:
-              subscription
-                ?.status || null,
+              lifecycle.status,
             billingCycle:
               subscription
                 ? "YEARLY"
@@ -138,6 +147,10 @@ router.get("/", async (req, res) => {
               subscription
                 ?.renewalDate ||
               null,
+            renewalMode:
+              lifecycle.renewalMode,
+            graceEndsAt:
+              lifecycle.graceEndsAt,
             endDate:
               subscription
                 ?.endDate ||

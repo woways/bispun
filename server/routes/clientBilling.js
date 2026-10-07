@@ -8,6 +8,8 @@ import {
 } from "../lib/razorpay.js";
 import {
   finalizeCapturedPayment,
+  getSubscriptionLifecycleSnapshot,
+  SUBSCRIPTION_GRACE_DAYS,
 } from "../lib/subscriptions.js";
 import {
   requireClientUser,
@@ -119,15 +121,25 @@ router.get("/", async (req, res) => {
       }),
     ]);
 
+    const lifecycle =
+      getSubscriptionLifecycleSnapshot(subscription);
+
     return res.json({
       success: true,
+
+      renewalPolicy: {
+        mode: "MANUAL",
+        billingCycle: "YEARLY",
+        reminderDays: [30, 7, 0],
+        graceDays: SUBSCRIPTION_GRACE_DAYS,
+      },
 
       subscription:
         subscription
           ? {
               id: subscription.id,
               status:
-                subscription.status,
+                lifecycle.status,
               billingCycle:
                 "YEARLY",
               amount: Number(
@@ -150,6 +162,16 @@ router.get("/", async (req, res) => {
                 subscription.renewalDate,
               endDate:
                 subscription.endDate,
+              renewalMode:
+                lifecycle.renewalMode,
+              graceDays:
+                SUBSCRIPTION_GRACE_DAYS,
+              graceEndsAt:
+                lifecycle.graceEndsAt,
+              renewalRequired:
+                lifecycle.renewalRequired,
+              accessRestricted:
+                lifecycle.accessRestricted,
               plan: {
                 id:
                   subscription.plan.id,

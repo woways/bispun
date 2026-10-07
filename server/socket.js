@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from "socket.io";
 import jwt from "jsonwebtoken";
 import prisma from "./lib/prisma.js";
+import { syncSubscriptionLifecycle } from "./lib/subscriptions.js";
 
 const COOKIE_NAME = "cb_client_token";
 
@@ -61,9 +62,20 @@ export function attachSocketServer(httpServer, config) {
     },
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const auth = authenticateSocket(socket);
     if (!auth) return next(new Error("Unauthorized"));
+
+    try {
+      const lifecycle = await syncSubscriptionLifecycle(auth.companyId);
+      if (lifecycle.accessRestricted) {
+        return next(new Error("Subscription expired"));
+      }
+    } catch (error) {
+      console.error("Socket subscription check failed:", error);
+      return next(new Error("Unauthorized"));
+    }
+
     socket.data.userId = auth.userId;
     socket.data.companyId = auth.companyId;
     next();

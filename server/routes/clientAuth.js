@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
+import { syncSubscriptionLifecycle } from "../lib/subscriptions.js";
 import {
   lookupIpLocation,
 } from "../lib/ipGeolocation.js";
@@ -660,6 +661,14 @@ router.post(
           });
       }
 
+      // Reconcile manual annual renewal state at sign-in so the session payload
+      // immediately reflects ACTIVE / PAST_DUE / EXPIRED.
+      await syncSubscriptionLifecycle(user.companyId);
+
+      const freshUser =
+        (await getClientUser(user.id)) ||
+        user;
+
       const expiresAt =
         new Date(
           Date.now() +
@@ -804,7 +813,7 @@ router.post(
         success:
           true,
         ...buildClientSession(
-          user
+          freshUser
         ),
       });
     } catch (error) {

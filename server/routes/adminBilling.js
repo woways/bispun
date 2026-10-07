@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { getSubscriptionLifecycleSnapshot } from "../lib/subscriptions.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
 
@@ -32,6 +33,11 @@ function formatBilling(
     };
   }
 
+  const lifecycle =
+    getSubscriptionLifecycleSnapshot(
+      subscription
+    );
+
   return {
     company: {
       id: company.id,
@@ -42,7 +48,11 @@ function formatBilling(
 
     subscription: {
       id: subscription.id,
-      status: subscription.status,
+      status: lifecycle.status,
+      renewalMode:
+        lifecycle.renewalMode,
+      graceEndsAt:
+        lifecycle.graceEndsAt,
       billingCycle:
         "YEARLY",
       startDate:
