@@ -26,10 +26,12 @@ import adminGlobalUsageRoutes from "./routes/adminGlobalUsage.js";
 import adminGlobalBillingRoutes from "./routes/adminGlobalBilling.js";
 import adminAnalyticsRoutes from "./routes/adminAnalytics.js";
 import adminPaymentsRoutes from "./routes/adminPayments.js";
+import adminPaymentLinksRoutes from "./routes/adminPaymentLinks.js";
 import adminAuditLogsRoutes from "./routes/adminAuditLogs.js";
 import adminWebsiteLeadsRoutes from "./routes/adminWebsiteLeads.js";
 import adminReferralsRoutes from "./routes/adminReferrals.js";
 import publicWebsiteLeadsRoutes from "./routes/publicWebsiteLeads.js";
+import publicPayRoutes from "./routes/publicPay.js";
 
 import clientAuthRoutes from "./routes/clientAuth.js";
 import clientLeadsRoutes from "./routes/clientLeads.js";
@@ -158,6 +160,7 @@ app.use("/api/admin/global-billing", adminGlobalBillingRoutes);
 app.use("/api/admin/analytics", adminAnalyticsRoutes);
 app.use("/api/admin/system-settings", adminSystemSettingsRoutes);
 app.use("/api/admin/payments", adminPaymentsRoutes);
+app.use("/api/admin/payment-links", adminPaymentLinksRoutes);
 app.use("/api/admin/audit-logs", adminAuditLogsRoutes);
 app.use("/api/admin/website-leads", adminWebsiteLeadsRoutes);
 app.use("/api/admin/referrals", adminReferralsRoutes);
@@ -165,6 +168,7 @@ app.use("/api/admin/referrals", adminReferralsRoutes);
 // Public marketing-site lead capture. This route is intentionally unauthenticated
 // but remains protected by the global API rate limiter and CORS allow-list.
 app.use("/api/public/website-leads", publicWebsiteLeadsRoutes);
+app.use("/api/public/pay", publicPayRoutes);
 
 app.use("/api/client/auth", clientAuthRoutes);
 app.use("/api/client/leads", clientLeadsRoutes);

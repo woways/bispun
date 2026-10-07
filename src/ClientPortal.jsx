@@ -89,6 +89,7 @@ import GoalsAndTargets from "./modules/client/GoalsAndTargets";
 import Referrals from "./modules/client/Referrals";
 import MyStore from "./modules/client/MyStore";
 import { applyBrandTheme } from "./lib/brandTheme";
+import { downloadInvoicePdf } from "./lib/invoicePdf";
 
 
 function SidebarIcon({
@@ -4882,6 +4883,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   className="h-9 px-4 rounded-xl bg-white text-slate-950 text-xs font-semibold shadow-sm"
                 >
                   Print / Save PDF
+                </button>
+              )}
+
+              {receiptData && (
+                <button
+                  type="button"
+                  onClick={() => downloadInvoicePdf(receiptData)}
+                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700"
+                >
+                  Download PDF invoice
                 </button>
               )}
             </div>

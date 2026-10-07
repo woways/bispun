@@ -45,6 +45,7 @@ import {
 } from "../../components/ui";
 
 import { apiRequest } from "../../lib/api";
+import GeneratePaymentLinkButton from "./GeneratePaymentLinkButton";
 
 const MODULE_ICONS = {
   LayoutDashboard,
@@ -2824,6 +2825,7 @@ export default function Client360({
           </div>
 
           <div className="flex items-center gap-2">
+            <GeneratePaymentLinkButton companyId={client.id} />
             <button
               type="button"
               onClick={loadClient}

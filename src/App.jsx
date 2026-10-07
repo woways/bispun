@@ -4,6 +4,7 @@ import ClientPortal from "./ClientPortal";
 import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
 import SuperAdmin from "./SuperAdmin";
+import PayPage from "./PayPage";
 import { apiRequest } from "./lib/api";
 
 function SkeletonBlock({ className = "" }) {
@@ -626,6 +627,11 @@ export default function App() {
               <SuperAdmin />
             </AdminRoute>
           }
+        />
+
+        <Route
+          path="/pay/:token"
+          element={<PayPage />}
         />
 
         <Route
