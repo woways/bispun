@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { apiRequest } from "./lib/api";
+import ContactOtpVerification from "./components/ContactOtpVerification";
 import { downloadInvoicePdf } from "./lib/invoicePdf";
 
 const inr = (n) =>
@@ -20,11 +21,39 @@ const inr = (n) =>
   });
 
 function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(value || "").trim());
+  const email = String(value || "").trim().toLowerCase();
+
+  if (!email || email.length > 254 || email.includes(" ")) {
+    return false;
+  }
+
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf("@")) {
+    return false;
+  }
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+
+  if (
+    local.length > 64 ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..")
+  ) {
+    return false;
+  }
+
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local) &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain);
 }
+
+function normalizePhoneInput(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 10);
+}
+
 function isValidPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 8 && digits.length <= 15;
+  return /^\d{10}$/.test(String(value || "").trim());
 }
 
 function loadRazorpayCheckout() {
@@ -76,6 +105,11 @@ export default function SignupPage() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [planKey, setPlanKey] = useState((planParam || "").toLowerCase());
   const [form, setForm] = useState(EMPTY);
+  const [verificationTokens, setVerificationTokens] = useState({
+    companyEmail: "",
+    companyPhone: "",
+    adminEmail: "",
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -98,17 +132,43 @@ export default function SignupPage() {
   const planLocked =
     Boolean(planParam) &&
     plans.some((p) => p.key === String(planParam).toLowerCase());
-  const updateField = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const updateField = (k, v) => {
+    setForm((f) => ({ ...f, [k]: v }));
+
+    const verificationKey =
+      k === "email"
+        ? "companyEmail"
+        : k === "phone"
+        ? "companyPhone"
+        : k === "adminEmail"
+        ? "adminEmail"
+        : null;
+
+    if (verificationKey) {
+      setVerificationTokens((current) => ({
+        ...current,
+        [verificationKey]: "",
+      }));
+    }
+  };
+
+  const allContactsVerified =
+    Boolean(verificationTokens.companyEmail) &&
+    Boolean(verificationTokens.companyPhone) &&
+    Boolean(verificationTokens.adminEmail);
 
   function validate() {
     if (!form.name.trim()) return "Company name is required";
     if (!form.business.trim()) return "Business type is required";
     if (!form.ownerName.trim()) return "Owner name is required";
     if (!isValidEmail(form.email)) return "Enter a valid company email";
-    if (!isValidPhone(form.phone)) return "Enter a valid company phone number";
+    if (!isValidPhone(form.phone)) return "Enter a valid 10-digit company phone number";
     if (!planKey) return "Please choose a plan";
     if (!form.adminName.trim()) return "Admin name is required";
     if (!isValidEmail(form.adminEmail)) return "Enter a valid admin email";
+    if (!verificationTokens.companyEmail) return "Verify the company email with OTP";
+    if (!verificationTokens.companyPhone) return "Verify the company phone number with OTP";
+    if (!verificationTokens.adminEmail) return "Verify the admin email with OTP";
     if (String(form.adminPassword).length < 8)
       return "Password must be at least 8 characters";
     return "";
@@ -127,7 +187,13 @@ export default function SignupPage() {
       await loadRazorpayCheckout();
       const data = await apiRequest("/api/public/onboard/start", {
         method: "POST",
-        body: JSON.stringify({ planKey, ...form }),
+        body: JSON.stringify({
+          planKey,
+          ...form,
+          companyEmailVerificationToken: verificationTokens.companyEmail,
+          phoneVerificationToken: verificationTokens.companyPhone,
+          adminEmailVerificationToken: verificationTokens.adminEmail,
+        }),
       });
       const rzp = new window.Razorpay({
         key: data.keyId,
@@ -282,21 +348,61 @@ export default function SignupPage() {
                 onChange={(e) => updateField("ownerName", e.target.value)}
                 placeholder="Owner / Founder"
               />
-              <Input
-                label="Company Email"
-                required
-                type="email"
-                value={form.email}
-                onChange={(e) => updateField("email", e.target.value)}
-                placeholder="info@company.com"
-              />
-              <Input
-                label="Phone"
-                required
-                value={form.phone}
-                onChange={(e) => updateField("phone", e.target.value)}
-                placeholder="9876543210"
-              />
+              <div>
+                <Input
+                  label="Company Email"
+                  required
+                  type="email"
+                  maxLength={254}
+                  value={form.email}
+                  onChange={(e) => updateField("email", e.target.value)}
+                  placeholder="info@company.com"
+                />
+                <ContactOtpVerification
+                  endpointBase="/api/public/onboard"
+                  channel="email"
+                  purpose="company_email"
+                  target={String(form.email || "").trim().toLowerCase()}
+                  valid={isValidEmail(form.email)}
+                  verifiedToken={verificationTokens.companyEmail}
+                  onVerified={(token) =>
+                    setVerificationTokens((current) => ({
+                      ...current,
+                      companyEmail: token,
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <Input
+                  label="Phone"
+                  required
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  title="Enter exactly 10 digits"
+                  value={form.phone}
+                  onChange={(e) =>
+                    updateField("phone", normalizePhoneInput(e.target.value))
+                  }
+                  placeholder="9876543210"
+                />
+                <ContactOtpVerification
+                  endpointBase="/api/public/onboard"
+                  channel="phone"
+                  purpose="company_phone"
+                  target={form.phone}
+                  valid={isValidPhone(form.phone)}
+                  verifiedToken={verificationTokens.companyPhone}
+                  onVerified={(token) =>
+                    setVerificationTokens((current) => ({
+                      ...current,
+                      companyPhone: token,
+                    }))
+                  }
+                />
+              </div>
               <Input
                 label="City"
                 value={form.city}
@@ -374,14 +480,31 @@ export default function SignupPage() {
                 onChange={(e) => updateField("adminName", e.target.value)}
                 placeholder="Your name"
               />
-              <Input
-                label="Admin Email"
-                required
-                type="email"
-                value={form.adminEmail}
-                onChange={(e) => updateField("adminEmail", e.target.value)}
-                placeholder="admin@company.com"
-              />
+              <div>
+                <Input
+                  label="Admin Email"
+                  required
+                  type="email"
+                  maxLength={254}
+                  value={form.adminEmail}
+                  onChange={(e) => updateField("adminEmail", e.target.value)}
+                  placeholder="admin@company.com"
+                />
+                <ContactOtpVerification
+                  endpointBase="/api/public/onboard"
+                  channel="email"
+                  purpose="admin_email"
+                  target={String(form.adminEmail || "").trim().toLowerCase()}
+                  valid={isValidEmail(form.adminEmail)}
+                  verifiedToken={verificationTokens.adminEmail}
+                  onVerified={(token) =>
+                    setVerificationTokens((current) => ({
+                      ...current,
+                      adminEmail: token,
+                    }))
+                  }
+                />
+              </div>
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Password
@@ -449,7 +572,7 @@ export default function SignupPage() {
 
           <button
             onClick={pay}
-            disabled={processing || loadingPlans}
+            disabled={processing || loadingPlans || !allContactsVerified}
             className="mt-5 w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 flex items-center justify-center gap-2"
           >
             {processing && <Loader2 size={16} className="animate-spin" />}
@@ -459,6 +582,11 @@ export default function SignupPage() {
               ? `Pay ${inr(plan.breakdown.finalAmount)}`
               : "Pay"}
           </button>
+          {!allContactsVerified && (
+            <p className="mt-2 text-[11px] font-medium text-amber-700 text-center">
+              Verify company email, phone number and admin email before payment.
+            </p>
+          )}
           <p className="mt-2 text-[11px] text-slate-400 text-center">
             Secured by Razorpay · UPI, cards, net-banking
           </p>

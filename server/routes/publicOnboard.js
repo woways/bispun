@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { Router } from "express";
+import { resolveMx } from "node:dns/promises";
 
 import prisma from "../lib/prisma.js";
 import { getRazorpayClient, getRazorpayConfig } from "../lib/razorpay.js";
@@ -9,15 +10,68 @@ import {
   finalizeSelfServeSignup,
   buildSelfServeReceipt,
 } from "../lib/selfServeOnboard.js";
+import {
+  assertContactVerified,
+  ContactVerificationError,
+  sendContactVerificationOtp,
+  verifyContactVerificationOtp,
+} from "../lib/contactVerification.js";
 
 const router = Router();
 
-function isEmail(v) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(String(v || "").trim());
+function isEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+
+  if (!email || email.length > 254 || email.includes(" ")) {
+    return false;
+  }
+
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf("@")) {
+    return false;
+  }
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+
+  if (
+    local.length > 64 ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..")
+  ) {
+    return false;
+  }
+
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local) &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain);
 }
-function isPhone(v) {
-  const d = String(v || "").replace(/\D/g, "");
-  return d.length >= 8 && d.length <= 15;
+
+function isPhone(value) {
+  return /^\d{10}$/.test(String(value || "").trim());
+}
+
+function getEmailDomain(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .split("@")
+    .pop();
+}
+
+async function emailDomainCanReceiveMail(email) {
+  const domain = getEmailDomain(email);
+
+  try {
+    const records = await resolveMx(domain);
+    return Array.isArray(records) && records.length > 0;
+  } catch (error) {
+    if (["ENOTFOUND", "ENODATA", "EFORMERR", "EBADNAME"].includes(error?.code)) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 function safeEqualHex(a, b) {
   try {
@@ -55,6 +109,65 @@ router.get("/plans", async (_req, res) => {
   }
 });
 
+/** Contact verification used before a public signup can start payment. */
+router.post("/verification/send", async (req, res) => {
+  try {
+    const channel = String(req.body?.channel || "").trim().toLowerCase();
+    const purpose = String(req.body?.purpose || "").trim().toLowerCase();
+    const target = String(req.body?.target || "").trim();
+
+    if (channel === "email") {
+      if (!isEmail(target)) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address" });
+      }
+      let domainValid;
+      try {
+        domainValid = await emailDomainCanReceiveMail(target);
+      } catch (error) {
+        console.error("Public OTP email-domain check failed:", error);
+        return res.status(503).json({ success: false, message: "Unable to verify this email domain right now. Please try again." });
+      }
+      if (!domainValid) {
+        return res.status(400).json({ success: false, message: "Use an email address with a valid mail domain" });
+      }
+    } else if (channel === "phone") {
+      if (!isPhone(target)) {
+        return res.status(400).json({ success: false, message: "Enter a valid 10-digit phone number" });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid verification channel" });
+    }
+
+    const result = await sendContactVerificationOtp({ channel, purpose, target });
+    return res.json({ success: true, message: "OTP sent successfully", ...result });
+  } catch (error) {
+    if (error instanceof ContactVerificationError) {
+      return res.status(error.status || 400).json({ success: false, message: error.message, code: error.code });
+    }
+    console.error("Public contact OTP send failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to send OTP" });
+  }
+});
+
+router.post("/verification/verify", async (req, res) => {
+  try {
+    const result = await verifyContactVerificationOtp({
+      channel: req.body?.channel,
+      purpose: req.body?.purpose,
+      target: req.body?.target,
+      otp: req.body?.otp,
+      challengeToken: req.body?.challengeToken,
+    });
+    return res.json({ success: true, message: "Verified successfully", ...result });
+  } catch (error) {
+    if (error instanceof ContactVerificationError) {
+      return res.status(error.status || 400).json({ success: false, message: error.message, code: error.code });
+    }
+    console.error("Public contact OTP verify failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to verify OTP" });
+  }
+});
+
 /**
  * POST /api/public/onboard/start
  * Validates the signup form, creates a Razorpay order, stashes the form in
@@ -76,15 +189,75 @@ router.post("/start", async (req, res) => {
     const adminEmail = String(b.adminEmail || "").trim().toLowerCase();
     const adminPassword = String(b.adminPassword || "");
     const referralCode = String(b.referralCode || "").trim().toUpperCase();
+    const companyEmailVerificationToken = String(b.companyEmailVerificationToken || "");
+    const adminEmailVerificationToken = String(b.adminEmailVerificationToken || "");
+    const phoneVerificationToken = String(b.phoneVerificationToken || "");
 
     if (!companyName) return res.status(400).json({ success: false, message: "Company name is required" });
     if (!business) return res.status(400).json({ success: false, message: "Business type is required" });
     if (!ownerName) return res.status(400).json({ success: false, message: "Owner name is required" });
     if (!isEmail(companyEmail)) return res.status(400).json({ success: false, message: "Enter a valid company email" });
-    if (!isPhone(companyPhone)) return res.status(400).json({ success: false, message: "Enter a valid company phone" });
+    if (!isPhone(companyPhone)) return res.status(400).json({ success: false, message: "Enter a valid 10-digit company phone number" });
     if (!adminName) return res.status(400).json({ success: false, message: "Admin name is required" });
     if (!isEmail(adminEmail)) return res.status(400).json({ success: false, message: "Enter a valid admin email" });
     if (adminPassword.length < 8) return res.status(400).json({ success: false, message: "Admin password must be at least 8 characters" });
+
+    let companyEmailDomainValid;
+    let adminEmailDomainValid;
+
+    try {
+      [companyEmailDomainValid, adminEmailDomainValid] = await Promise.all([
+        emailDomainCanReceiveMail(companyEmail),
+        emailDomainCanReceiveMail(adminEmail),
+      ]);
+    } catch (error) {
+      console.error("Public signup email domain verification failed:", error);
+      return res.status(503).json({
+        success: false,
+        message: "Unable to verify email domains right now. Please try again.",
+      });
+    }
+
+    if (!companyEmailDomainValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Company email domain could not be verified. Use a valid email address.",
+      });
+    }
+
+    if (!adminEmailDomainValid) {
+      return res.status(400).json({
+        success: false,
+        message: "Admin email domain could not be verified. Use a valid email address.",
+      });
+    }
+
+    try {
+      assertContactVerified(companyEmailVerificationToken, {
+        channel: "email",
+        purpose: "company_email",
+        target: companyEmail,
+      });
+      assertContactVerified(adminEmailVerificationToken, {
+        channel: "email",
+        purpose: "admin_email",
+        target: adminEmail,
+      });
+      assertContactVerified(phoneVerificationToken, {
+        channel: "phone",
+        purpose: "company_phone",
+        target: companyPhone,
+      });
+    } catch (error) {
+      if (error instanceof ContactVerificationError) {
+        return res.status(error.status || 400).json({
+          success: false,
+          message: error.message,
+          code: error.code,
+        });
+      }
+      throw error;
+    }
 
     const plan = await prisma.plan.findUnique({ where: { key: planKey } });
     if (!plan || !plan.active) return res.status(404).json({ success: false, message: "Selected plan is unavailable" });

@@ -1,12 +1,13 @@
-import { cloneElement, useEffect, useState } from "react";
+import { cloneElement, lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import ClientPortal from "./ClientPortal";
 import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
-import SuperAdmin from "./SuperAdmin";
-import PayPage from "./PayPage";
-import SignupPage from "./SignupPage";
 import { apiRequest } from "./lib/api";
+
+const ClientPortal = lazy(() => import("./ClientPortal"));
+const SuperAdmin = lazy(() => import("./SuperAdmin"));
+const PayPage = lazy(() => import("./PayPage"));
+const SignupPage = lazy(() => import("./SignupPage"));
 
 function SkeletonBlock({ className = "" }) {
   return (
@@ -585,6 +586,7 @@ function AdminRoute({
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<DashboardLoadingScreen />}>
       <Routes>
         <Route
           path="/login"
@@ -655,6 +657,7 @@ export default function App() {
           }
         />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

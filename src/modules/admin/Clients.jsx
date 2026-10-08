@@ -18,6 +18,10 @@ import {
   EyeOff,
   Loader2,
   FileText,
+  Link2,
+  Copy,
+  CheckCircle2,
+  ExternalLink,
 } from "lucide-react";
 
 import { downloadProformaPdf } from "../../lib/invoicePdf";
@@ -144,6 +148,15 @@ function OnboardClientModal({
   const [showPassword, setShowPassword] =
     useState(false);
 
+  const [prePaymentLink, setPrePaymentLink] =
+    useState(null);
+
+  const [generatingPaymentLink, setGeneratingPaymentLink] =
+    useState(false);
+
+  const [linkCopied, setLinkCopied] =
+    useState(false);
+
   const [form, setForm] = useState({
     name: "",
     brandName: "",
@@ -207,56 +220,7 @@ function OnboardClientModal({
     }));
   }
 
-  // Build a pre-payment proforma (quote) PDF from the current form values.
-  // Uses the same pricing math as the live total shown in the Subscription
-  // section: GST (18%) on the discounted subtotal.
-  function previewProforma() {
-    setError("");
-    const selectedPlan =
-      plans.find((p) => p.key === form.planKey) || null;
-    if (!selectedPlan) {
-      setError("Select a plan before generating a proforma");
-      return;
-    }
-    if (!String(form.name || "").trim()) {
-      setError("Enter the company name before generating a proforma");
-      return;
-    }
-
-    const listPrice = Number(selectedPlan.yearlyPrice || 0);
-    let discount = Number(form.discountAmount);
-    if (!Number.isFinite(discount) || discount < 0) discount = 0;
-    if (discount > listPrice) discount = listPrice;
-    const subtotal = Math.max(listPrice - discount, 0);
-    const gstAmount = Math.round(subtotal * 0.18 * 100) / 100;
-    const finalAmount = Math.round((subtotal + gstAmount) * 100) / 100;
-
-    downloadProformaPdf({
-      company: {
-        name: form.name,
-        brandName: form.brandName || form.name,
-        city: form.city,
-        email: form.email,
-        phone: form.phone,
-      },
-      admin: { name: form.adminName, email: form.adminEmail },
-      plan: { name: selectedPlan.name },
-      listPrice,
-      discountAmount: discount,
-      subtotal,
-      gstRate: 18,
-      gstAmount,
-      finalAmount,
-    });
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-
-    if (saving) return;
-
-    setError("");
-
+  function validateOnboardingForm() {
     const requiredFields = [
       ["name", "Company name"],
       ["business", "Business type"],
@@ -273,28 +237,140 @@ function OnboardClientModal({
       ([field]) => !String(form[field] || "").trim()
     );
 
-    if (missingField) {
-      setError(`${missingField[1]} is required`);
-      return;
-    }
-
-    if (!isValidEmail(form.email)) {
-      setError("Enter a valid company email");
-      return;
-    }
-
-    if (!isValidEmail(form.adminEmail)) {
-      setError("Enter a valid client admin email");
-      return;
-    }
-
-    if (!isValidPhone(form.phone)) {
-      setError("Enter a valid company phone number");
-      return;
-    }
-
+    if (missingField) return `${missingField[1]} is required`;
+    if (!isValidEmail(form.email)) return "Enter a valid company email";
+    if (!isValidEmail(form.adminEmail)) return "Enter a valid client admin email";
+    if (!isValidPhone(form.phone)) return "Enter a valid company phone number";
     if (String(form.adminPassword).length < 8) {
-      setError("Temporary password must be at least 8 characters");
+      return "Temporary password must be at least 8 characters";
+    }
+    return "";
+  }
+
+  // Downloads the full client confirmation/proforma before onboarding/payment.
+  // The temporary password is intentionally never printed in the PDF.
+  function previewProforma() {
+    setError("");
+
+    const validationError = validateOnboardingForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    const selectedPlan =
+      plans.find((p) => p.key === form.planKey) || null;
+    if (!selectedPlan) {
+      setError("Select a plan before generating a proforma");
+      return;
+    }
+
+    const listPrice = Number(selectedPlan.yearlyPrice || 0);
+    let discount = Number(form.discountAmount);
+    if (!Number.isFinite(discount) || discount < 0) discount = 0;
+    if (discount > listPrice) discount = listPrice;
+    const subtotal = Math.max(listPrice - discount, 0);
+    const gstAmount = Math.round(subtotal * 0.18 * 100) / 100;
+    const finalAmount = Math.round((subtotal + gstAmount) * 100) / 100;
+
+    downloadProformaPdf({
+      company: {
+        name: form.name,
+        brandName: form.brandName || form.name,
+        business: form.business,
+        ownerName: form.ownerName,
+        city: form.city,
+        email: form.email,
+        phone: form.phone,
+        subdomain: form.subdomain || "Auto-generated after payment",
+        primaryColor: form.primaryColor,
+      },
+      admin: { name: form.adminName, email: form.adminEmail },
+      referralCode: form.referralCode,
+      plan: { name: selectedPlan.name },
+      billingCycle: "Annual",
+      paymentLink: prePaymentLink?.payUrl || "",
+      listPrice,
+      discountAmount: discount,
+      subtotal,
+      gstRate: 18,
+      gstAmount,
+      finalAmount,
+    });
+  }
+
+  async function generatePreOnboardingPaymentLink() {
+    if (generatingPaymentLink || prePaymentLink) return;
+
+    setError("");
+    const validationError = validateOnboardingForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setGeneratingPaymentLink(true);
+    try {
+      const data = await apiRequest(
+        "/api/admin/payment-links/pre-onboard",
+        {
+          method: "POST",
+          body: JSON.stringify(form),
+        }
+      );
+      setPrePaymentLink(data);
+      setLinkCopied(false);
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to generate pre-onboarding payment link"
+      );
+    } finally {
+      setGeneratingPaymentLink(false);
+    }
+  }
+
+  async function copyPrePaymentLink() {
+    if (!prePaymentLink?.payUrl) return;
+    try {
+      await navigator.clipboard.writeText(prePaymentLink.payUrl);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1800);
+    } catch {
+      setError("Unable to copy the payment link. Select and copy it manually.");
+    }
+  }
+
+  async function cancelPrePaymentLink() {
+    if (!prePaymentLink?.pendingId) return;
+    setError("");
+    try {
+      await apiRequest(
+        `/api/admin/payment-links/pre-onboard/${prePaymentLink.pendingId}`,
+        { method: "DELETE" }
+      );
+      setPrePaymentLink(null);
+      setLinkCopied(false);
+    } catch (error) {
+      setError(error?.data?.message || "Unable to cancel payment link");
+    }
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+
+    if (saving) return;
+
+    setError("");
+
+    if (prePaymentLink) {
+      setError("A pre-onboarding payment link is active. Cancel it first if you want to onboard manually.");
+      return;
+    }
+
+    const validationError = validateOnboardingForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -334,9 +410,7 @@ function OnboardClientModal({
             </h2>
 
             <p className="text-xs text-slate-500 mt-0.5">
-              Create a new company,
-              subscription and client
-              administrator.
+              Confirm client details, share the proforma and collect payment before activation.
             </p>
           </div>
 
@@ -354,7 +428,10 @@ function OnboardClientModal({
           onSubmit={submit}
           className="overflow-y-auto max-h-[calc(92vh-74px)]"
         >
-          <div className="p-6 space-y-7">
+          <fieldset
+            disabled={Boolean(prePaymentLink)}
+            className={`p-6 space-y-7 ${prePaymentLink ? "opacity-70" : ""}`}
+          >
             {error && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-rose-200 bg-rose-50 text-sm text-rose-700">
                 <AlertCircle
@@ -894,9 +971,64 @@ function OnboardClientModal({
                 </div>
               </div>
             </section>
-          </div>
+          </fieldset>
 
-          <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 px-6 py-4 flex justify-end gap-2">
+          {prePaymentLink && (
+            <div className="mx-6 mb-5 rounded-xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-emerald-900">
+                    Pre-onboarding payment link is ready
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-emerald-800">
+                    Send this link to the client. The company, subscription and client admin are created automatically only after Razorpay confirms the payment.
+                  </p>
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      readOnly
+                      value={prePaymentLink.payUrl || ""}
+                      onFocus={(e) => e.target.select()}
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs text-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyPrePaymentLink}
+                      className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-semibold text-white hover:bg-indigo-700 inline-flex items-center justify-center gap-2"
+                    >
+                      <Copy size={13} />
+                      {linkCopied ? "Copied" : "Copy link"}
+                    </button>
+                    <a
+                      href={prePaymentLink.payUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink size={13} />
+                      Open
+                    </a>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[11px] text-emerald-700">
+                      Link expires in {prePaymentLink.expiresInDays || 7} days. Re-download the proforma now if you want the payment link printed inside the PDF.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={cancelPrePaymentLink}
+                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700"
+                    >
+                      Cancel payment link & edit details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 px-6 py-4 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -913,14 +1045,31 @@ function OnboardClientModal({
               className="h-9 px-4 text-xs font-semibold border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 disabled:opacity-50 inline-flex items-center gap-2"
             >
               <FileText size={14} />
-              Preview Proforma
+              Download Proforma PDF
             </button>
+
+            {!prePaymentLink && (
+              <button
+                type="button"
+                onClick={generatePreOnboardingPaymentLink}
+                disabled={saving || loadingPlans || generatingPaymentLink}
+                className="h-9 px-4 text-xs font-semibold border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {generatingPaymentLink ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Link2 size={14} />
+                )}
+                {generatingPaymentLink ? "Generating..." : "Generate Payment Link"}
+              </button>
+            )}
 
             <button
               type="submit"
               disabled={
                 saving ||
-                loadingPlans
+                loadingPlans ||
+                Boolean(prePaymentLink)
               }
               className="h-9 px-4 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg inline-flex items-center gap-2 shadow-sm"
             >
@@ -933,6 +1082,8 @@ function OnboardClientModal({
 
               {saving
                 ? "Creating..."
+                : prePaymentLink
+                ? "Waiting for Payment"
                 : "Onboard Client"}
             </button>
           </div>

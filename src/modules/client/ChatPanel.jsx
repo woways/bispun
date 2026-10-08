@@ -279,7 +279,12 @@ function groupMessageReactions(reactions, myId) {
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export default function ChatPanel({ currentUser }) {
+export default function ChatPanel({
+  currentUser,
+  onUnreadCountChange,
+  initialConversationId,
+  onTargetConversationHandled,
+}) {
   const myId = currentUser?.id;
 
   const [conversations, setConversations] = useState([]);
@@ -536,6 +541,7 @@ export default function ChatPanel({ currentUser }) {
   const threadScrollRef = useRef(null);
   const composerRef = useRef(null);
   const activeIdRef = useRef(null);
+  const targetConversationHandledRef = useRef(null);
 
   activeIdRef.current = activeId;
 
@@ -567,7 +573,8 @@ export default function ChatPanel({ currentUser }) {
           loadConversations();
           return current;
         }
-        const isOpen = conversationId === activeIdRef.current;
+        const isOpen =
+          conversationId === activeIdRef.current && !document.hidden;
         const updated = {
           ...current[idx],
           lastMessage,
@@ -687,6 +694,43 @@ export default function ChatPanel({ currentUser }) {
 
   useEffect(() => {
     loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const unread = conversations.reduce((total, conversation) => {
+      if (conversation.isMuted) return total;
+      return total + Number(conversation.unreadCount || 0);
+    }, 0);
+    onUnreadCountChange?.(unread);
+  }, [conversations, onUnreadCountChange]);
+
+  useEffect(() => {
+    const targetId = String(initialConversationId || "");
+    if (!targetId || targetConversationHandledRef.current === targetId) return;
+    if (!conversations.some((conversation) => conversation.id === targetId)) return;
+
+    targetConversationHandledRef.current = targetId;
+    setActiveId(targetId);
+    onTargetConversationHandled?.(null);
+  }, [conversations, initialConversationId, onTargetConversationHandled]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.hidden || !activeIdRef.current) return;
+      const conversationId = activeIdRef.current;
+      loadMessages(conversationId);
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === conversationId
+            ? { ...conversation, unreadCount: 0 }
+            : conversation
+        )
+      );
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

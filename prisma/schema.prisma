@@ -234,6 +234,7 @@ model Company {
   admissionPartners       AdmissionPartner[]
   admissionStreams        AdmissionStream[]
   admissionBranches       AdmissionBranch[]
+  admissionPartnerAttachments AdmissionPartnerAttachment[]
   calendarEvents          CalendarEvent[]
   workspaceYears          CompanyWorkspaceYear[]
   clientSessions          ClientSession[]
@@ -502,6 +503,8 @@ model PaymentTransaction {
 
   @@index([companyId, createdAt])
   @@index([companyId, status])
+  @@index([createdAt])
+  @@index([status, createdAt])
   @@index([subscriptionId])
   @@index([planId])
   @@index([initiatedByUserId])
@@ -804,6 +807,7 @@ model AdmissionPartner {
 
   branches   AdmissionBranch[]
   admissions Admission[]
+  attachments AdmissionPartnerAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -813,6 +817,31 @@ model AdmissionPartner {
   @@index([companyId, sortOrder])
   @@index([streamId])
   @@index([companyId, streamId])
+}
+
+model AdmissionPartnerAttachment {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  partnerId String
+  partner   AdmissionPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  fileName     String
+  mimeType     String?
+  sizeBytes    Int      @default(0)
+  url          String
+  publicId     String
+  resourceType String   @default("raw")
+
+  uploadedByUserId String?
+  uploadedByName   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, partnerId, createdAt])
+  @@index([partnerId, createdAt])
 }
 
 model AdmissionBranch {

@@ -5,6 +5,10 @@ import ExcelJS from "exceljs";
 import prisma from "../lib/prisma.js";
 import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
 import {
+  uploadAdmissionPartnerAttachment,
+  deleteAdmissionPartnerAttachment,
+} from "../lib/admissionAttachmentStorage.js";
+import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
@@ -90,6 +94,31 @@ const upload = multer({
       callback(new Error("Only CSV and XLSX files are supported"));
       return;
     }
+    callback(null, true);
+  },
+});
+
+const COLLEGE_ATTACHMENT_EXTENSIONS = new Set([
+  ".pdf", ".png", ".jpg", ".jpeg", ".webp",
+  ".doc", ".docx", ".xls", ".xlsx", ".csv",
+  ".ppt", ".pptx", ".txt", ".zip",
+]);
+
+const collegeAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+    files: 1,
+  },
+  fileFilter(req, file, callback) {
+    const name = String(file.originalname || "").toLowerCase();
+    const extension = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+
+    if (!COLLEGE_ATTACHMENT_EXTENSIONS.has(extension)) {
+      callback(new Error("Unsupported attachment type"));
+      return;
+    }
+
     callback(null, true);
   },
 });
@@ -466,6 +495,7 @@ function partnerMetrics(partner) {
         }
       : null,
     totalBranches: Number(partner._count?.branches || partner.branches?.length || 0),
+    attachmentCount: Number(partner._count?.attachments || partner.attachments?.length || 0),
     totalAdmissions: admissions.length,
     thisMonth: admissions.filter(
       (item) => new Date(item.admissionDate) >= monthStart
@@ -509,6 +539,7 @@ router.get("/streams", async (req, res) => {
             _count: {
               select: {
                 branches: true,
+                attachments: true,
               },
             },
             admissions: {
@@ -788,6 +819,7 @@ router.get("/partners", async (req, res) => {
         _count: {
           select: {
             branches: true,
+            attachments: true,
           },
         },
         admissions: {
@@ -965,7 +997,7 @@ router.delete("/partners/:id", async (req, res) => {
     const companyId = req.clientUser.companyId;
     const existing = await prisma.admissionPartner.findFirst({
       where: { id: req.params.id, companyId },
-      include: { _count: { select: { admissions: true } } },
+      include: { _count: { select: { admissions: true, attachments: true } } },
     });
 
     if (!existing) {
@@ -979,11 +1011,162 @@ router.delete("/partners/:id", async (req, res) => {
       });
     }
 
+    if (existing._count.attachments > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "This college has attachments. Remove its attachments before deleting the college.",
+      });
+    }
+
     await prisma.admissionPartner.delete({ where: { id: existing.id } });
     return res.json({ success: true, message: "College removed" });
   } catch (error) {
     console.error("Failed to delete admission partner:", error);
     return res.status(500).json({ success: false, message: "Unable to remove college" });
+  }
+});
+
+/* =========================================================
+   COLLEGE / PARTNER ATTACHMENTS
+========================================================= */
+
+router.get("/partners/:id/attachments", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const partner = await prisma.admissionPartner.findFirst({
+      where: { id: req.params.id, companyId, active: true },
+      select: { id: true, name: true },
+    });
+
+    if (!partner) {
+      return res.status(404).json({ success: false, message: "College not found" });
+    }
+
+    const attachments = await prisma.admissionPartnerAttachment.findMany({
+      where: { companyId, partnerId: partner.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return res.json({
+      success: true,
+      partner,
+      attachments: attachments.map((item) => ({
+        id: item.id,
+        fileName: item.fileName,
+        mimeType: item.mimeType,
+        sizeBytes: item.sizeBytes,
+        url: item.url,
+        uploadedByName: item.uploadedByName,
+        createdAt: item.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Failed to load college attachments:", error);
+    return res.status(500).json({ success: false, message: "Unable to load college attachments" });
+  }
+});
+
+router.post(
+  "/partners/:id/attachments",
+  collegeAttachmentUpload.single("file"),
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const partner = await prisma.admissionPartner.findFirst({
+        where: { id: req.params.id, companyId, active: true },
+        select: { id: true, name: true },
+      });
+
+      if (!partner) {
+        return res.status(404).json({ success: false, message: "College not found" });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "Choose a file to upload" });
+      }
+
+      const stored = await uploadAdmissionPartnerAttachment(req.file, companyId, partner.id);
+
+      const attachment = await prisma.admissionPartnerAttachment.create({
+        data: {
+          companyId,
+          partnerId: partner.id,
+          fileName: stored.fileName,
+          mimeType: stored.mimeType,
+          sizeBytes: stored.sizeBytes,
+          url: stored.url,
+          publicId: stored.publicId,
+          resourceType: stored.resourceType,
+          uploadedByUserId: req.clientUser.userId || null,
+          uploadedByName: req.clientUser.name || req.clientUser.email || null,
+        },
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Attachment uploaded successfully",
+        attachment: {
+          id: attachment.id,
+          fileName: attachment.fileName,
+          mimeType: attachment.mimeType,
+          sizeBytes: attachment.sizeBytes,
+          url: attachment.url,
+          uploadedByName: attachment.uploadedByName,
+          createdAt: attachment.createdAt,
+        },
+      });
+    } catch (error) {
+      if (error instanceof multer.MulterError) {
+        return res.status(400).json({
+          success: false,
+          message: error.code === "LIMIT_FILE_SIZE"
+            ? "Attachment must be 15 MB or smaller"
+            : "Unable to upload attachment",
+        });
+      }
+
+      if (String(error?.message || "") === "Unsupported attachment type") {
+        return res.status(400).json({
+          success: false,
+          message: "Use PDF, image, Word, Excel, CSV, PowerPoint, TXT or ZIP files",
+        });
+      }
+
+      console.error("Failed to upload college attachment:", error);
+      return res.status(500).json({
+        success: false,
+        message: error?.message || "Unable to upload college attachment",
+      });
+    }
+  }
+);
+
+router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const attachment = await prisma.admissionPartnerAttachment.findFirst({
+      where: {
+        id: req.params.attachmentId,
+        partnerId: req.params.partnerId,
+        companyId,
+      },
+    });
+
+    if (!attachment) {
+      return res.status(404).json({ success: false, message: "Attachment not found" });
+    }
+
+    await deleteAdmissionPartnerAttachment({
+      publicId: attachment.publicId,
+      resourceType: attachment.resourceType,
+    });
+
+    await prisma.admissionPartnerAttachment.delete({ where: { id: attachment.id } });
+
+    return res.json({ success: true, message: "Attachment removed" });
+  } catch (error) {
+    console.error("Failed to delete college attachment:", error);
+    return res.status(500).json({ success: false, message: "Unable to remove college attachment" });
   }
 });
 

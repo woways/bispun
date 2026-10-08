@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -8,6 +10,8 @@ import {
 import {
   useNavigate,
 } from "react-router-dom";
+
+import { io } from "socket.io-client";
 
 import {
   Bell,
@@ -71,25 +75,25 @@ import {
 
 import {
   apiRequest,
+  API_URL,
 } from "./lib/api";
 
-import Dashboard from "./modules/client/Dashboard";
-import UTMLeads from "./modules/client/UTMLeads";
-import Admissions from "./modules/client/Admissions";
-import Revenue from "./modules/client/Revenue";
-import LeadStore from "./modules/client/LeadStore";
-import Walkins from "./modules/client/Walkins";
-import Counselling from "./modules/client/Counselling";
-import Analytics from "./modules/client/Analytics";
-import Help from "./modules/client/Help";
-import SettingsView from "./modules/client/Settings";
-import CalendarModal from "./modules/client/CalendarModal";
-import ChatPanel from "./modules/client/ChatPanel";
-import GoalsAndTargets from "./modules/client/GoalsAndTargets";
-import Referrals from "./modules/client/Referrals";
-import MyStore from "./modules/client/MyStore";
+const Dashboard = lazy(() => import("./modules/client/Dashboard"));
+const UTMLeads = lazy(() => import("./modules/client/UTMLeads"));
+const Admissions = lazy(() => import("./modules/client/Admissions"));
+const Revenue = lazy(() => import("./modules/client/Revenue"));
+const LeadStore = lazy(() => import("./modules/client/LeadStore"));
+const Walkins = lazy(() => import("./modules/client/Walkins"));
+const Counselling = lazy(() => import("./modules/client/Counselling"));
+const Analytics = lazy(() => import("./modules/client/Analytics"));
+const Help = lazy(() => import("./modules/client/Help"));
+const SettingsView = lazy(() => import("./modules/client/Settings"));
+const CalendarModal = lazy(() => import("./modules/client/CalendarModal"));
+const ChatPanel = lazy(() => import("./modules/client/ChatPanel"));
+const GoalsAndTargets = lazy(() => import("./modules/client/GoalsAndTargets"));
+const Referrals = lazy(() => import("./modules/client/Referrals"));
+const MyStore = lazy(() => import("./modules/client/MyStore"));
 import { applyBrandTheme } from "./lib/brandTheme";
-import { downloadInvoicePdf } from "./lib/invoicePdf";
 
 
 function SidebarIcon({
@@ -442,6 +446,9 @@ export default function ClientPortal({
     "dashboard"
   );
 
+  const moduleRef = useRef(module);
+  moduleRef.current = module;
+
   const [
     signingOut,
     setSigningOut,
@@ -483,6 +490,13 @@ export default function ClientPortal({
     notificationError,
     setNotificationError,
   ] = useState("");
+
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [chatToast, setChatToast] = useState(null);
+  const [targetChatConversationId, setTargetChatConversationId] = useState(null);
+  const chatSocketRef = useRef(null);
+  const chatAudioContextRef = useRef(null);
+  const chatToastTimerRef = useRef(null);
 
   const notificationRef =
     useRef(null);
@@ -990,6 +1004,240 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const isClientAdmin =
     user?.role === "CLIENT_ADMIN";
+
+  async function refreshChatUnreadCount() {
+    if (!user?.id) return;
+    try {
+      const data = await apiRequest("/api/client/chat");
+      const unread = (Array.isArray(data.conversations) ? data.conversations : []).reduce(
+        (total, conversation) =>
+          conversation.isMuted
+            ? total
+            : total + Number(conversation.unreadCount || 0),
+        0
+      );
+      setChatUnreadCount(unread);
+    } catch (error) {
+      console.error("Unable to load chat unread count:", error);
+    }
+  }
+
+  function playChatNotificationSound() {
+    try {
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+
+      const context =
+        chatAudioContextRef.current || new AudioContextClass();
+      chatAudioContextRef.current = context;
+
+      const play = () => {
+        const now = context.currentTime;
+
+        // A brighter, louder two-part chat chime. It is intentionally
+        // WhatsApp-like in feel, but uses our own tone instead of copying
+        // the WhatsApp notification sound.
+        const master = context.createGain();
+        const compressor = context.createDynamicsCompressor();
+
+        master.gain.setValueAtTime(0.9, now);
+        compressor.threshold.setValueAtTime(-18, now);
+        compressor.knee.setValueAtTime(16, now);
+        compressor.ratio.setValueAtTime(5, now);
+        compressor.attack.setValueAtTime(0.003, now);
+        compressor.release.setValueAtTime(0.18, now);
+
+        master.connect(compressor);
+        compressor.connect(context.destination);
+
+        const notes = [
+          { delay: 0, frequency: 780, peak: 0.24, duration: 0.17 },
+          { delay: 0.11, frequency: 1040, peak: 0.28, duration: 0.22 },
+        ];
+
+        notes.forEach(({ delay, frequency, peak, duration }) => {
+          const start = now + delay;
+          const oscillator = context.createOscillator();
+          const overtone = context.createOscillator();
+          const gain = context.createGain();
+          const overtoneGain = context.createGain();
+
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(frequency, start);
+
+          overtone.type = "triangle";
+          overtone.frequency.setValueAtTime(frequency * 2, start);
+
+          gain.gain.setValueAtTime(0.0001, start);
+          gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
+          gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+
+          overtoneGain.gain.setValueAtTime(0.0001, start);
+          overtoneGain.gain.exponentialRampToValueAtTime(peak * 0.22, start + 0.01);
+          overtoneGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.8);
+
+          oscillator.connect(gain);
+          overtone.connect(overtoneGain);
+          gain.connect(master);
+          overtoneGain.connect(master);
+
+          oscillator.start(start);
+          overtone.start(start);
+          oscillator.stop(start + duration + 0.03);
+          overtone.stop(start + duration + 0.03);
+        });
+      };
+
+      if (context.state === "suspended") {
+        context.resume().then(play).catch(() => {});
+      } else {
+        play();
+      }
+    } catch (error) {
+      console.debug("Chat sound unavailable:", error);
+    }
+  }
+
+  function openChatConversation(conversationId) {
+    if (conversationId) {
+      setTargetChatConversationId(String(conversationId));
+    }
+    setChatToast(null);
+    setModule("chats");
+    setMobileSidebarOpen(false);
+  }
+
+  function requestDesktopChatNotifications() {
+    if (!("Notification" in window)) return;
+    if (window.Notification.permission === "default") {
+      window.Notification.requestPermission().catch(() => {});
+    }
+  }
+
+  useEffect(() => {
+    function unlockAudio() {
+      try {
+        const AudioContextClass =
+          window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        if (!chatAudioContextRef.current) {
+          chatAudioContextRef.current = new AudioContextClass();
+        }
+        if (chatAudioContextRef.current.state === "suspended") {
+          chatAudioContextRef.current.resume().catch(() => {});
+        }
+      } catch {
+        // Browser audio support is optional.
+      }
+    }
+
+    window.addEventListener("pointerdown", unlockAudio, { once: true, capture: true });
+    window.addEventListener("keydown", unlockAudio, { once: true, capture: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio, true);
+      window.removeEventListener("keydown", unlockAudio, true);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    refreshChatUnreadCount();
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refreshChatUnreadCount();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const interval = window.setInterval(refreshChatUnreadCount, 60000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    const socket = io(API_URL, {
+      path: "/socket.io",
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+    chatSocketRef.current = socket;
+
+    socket.on("connect", refreshChatUnreadCount);
+    socket.on("connect_error", (error) => {
+      console.error("Global chat notification socket error:", error.message);
+    });
+
+    socket.on("conversation:activity", ({ conversationId, lastMessage, isMuted }) => {
+      if (!lastMessage || lastMessage?.sender?.id === user.id) return;
+      if (isMuted) return;
+
+      const shouldAlert = document.hidden || moduleRef.current !== "chats";
+      if (!shouldAlert) return;
+
+      setChatUnreadCount((current) => current + 1);
+      playChatNotificationSound();
+
+      const senderName = lastMessage?.sender?.name || "New message";
+      const preview = String(lastMessage?.body || "").trim() || "Sent an attachment";
+      const nextToast = {
+        conversationId: String(conversationId),
+        senderName,
+        preview,
+      };
+      setChatToast(nextToast);
+
+      if (chatToastTimerRef.current) {
+        window.clearTimeout(chatToastTimerRef.current);
+      }
+      chatToastTimerRef.current = window.setTimeout(() => {
+        setChatToast(null);
+      }, 6000);
+
+      if (document.hidden && "Notification" in window && window.Notification.permission === "granted") {
+        try {
+          const notification = new window.Notification(`Bispun · ${senderName}`, {
+            body: preview.length > 120 ? `${preview.slice(0, 117)}...` : preview,
+            icon: "/brand/bispun-icon.png",
+            tag: `bispun-chat-${conversationId}`,
+          });
+          notification.onclick = () => {
+            window.focus();
+            openChatConversation(conversationId);
+            notification.close();
+          };
+        } catch {
+          // Native browser notifications are optional.
+        }
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      chatSocketRef.current = null;
+      if (chatToastTimerRef.current) {
+        window.clearTimeout(chatToastTimerRef.current);
+        chatToastTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  useEffect(() => {
+    document.title = chatUnreadCount > 0
+      ? `(${chatUnreadCount > 99 ? "99+" : chatUnreadCount}) Bispun`
+      : "Bispun";
+
+    return () => {
+      document.title = "Bispun";
+    };
+  }, [chatUnreadCount]);
 
   const permissions =
     user?.permissions ||
@@ -3125,7 +3373,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     if (module === "chats") {
-      return <ChatPanel currentUser={user} />;
+      return (
+        <ChatPanel
+          currentUser={user}
+          onUnreadCountChange={setChatUnreadCount}
+          initialConversationId={targetChatConversationId}
+          onTargetConversationHandled={setTargetChatConversationId}
+        />
+      );
     }
 
     if (module === "goals-and-targets") {
@@ -3209,7 +3464,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       module
     ) {
       case "chats":
-        return <ChatPanel currentUser={user} />;
+        return (
+        <ChatPanel
+          currentUser={user}
+          onUnreadCountChange={setChatUnreadCount}
+          initialConversationId={targetChatConversationId}
+          onTargetConversationHandled={setTargetChatConversationId}
+        />
+      );
 
       case "dashboard":
         return (
@@ -3738,6 +4000,36 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         }
       `}</style>
 
+      {chatToast && (
+        <button
+          type="button"
+          onClick={() => openChatConversation(chatToast.conversationId)}
+          className="fixed right-4 top-4 z-[120] w-[min(380px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-[0_18px_50px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5"
+        >
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+              <MessageSquare size={18} strokeWidth={2.2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-3">
+                <span className="truncate text-[13px] font-black text-slate-900">
+                  {chatToast.senderName}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-600">
+                  New chat
+                </span>
+              </span>
+              <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-slate-600">
+                {chatToast.preview}
+              </span>
+              <span className="mt-2 block text-[11px] font-semibold text-indigo-600">
+                Click to open chat
+              </span>
+            </span>
+          </div>
+        </button>
+      )}
+
       {/* MOBILE APP BAR */}
       <div className="lg:hidden fixed inset-x-0 top-0 z-[60] h-14 bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3 flex items-center justify-between">
         <button
@@ -3899,6 +4191,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         onDragEnd={handleNavDragEnd}
                         title={sidebarCompact ? group.label : undefined}
                         onClick={() => {
+                          if (group.key === "chats") {
+                            requestDesktopChatNotifications();
+                          }
                           setModule(key);
                           setMobileSidebarOpen(false);
                         }}
@@ -3913,8 +4208,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         }`}
                       >
                         {sidebarCompact ? (
-                          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
+                          <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
                             <Icon size={20} strokeWidth={2} />
+                            {group.key === "chats" && chatUnreadCount > 0 && (
+                              <span className="absolute -right-1 -top-1 min-w-[18px] h-[18px] rounded-full bg-rose-500 px-1 text-[10px] font-black leading-[18px] text-center text-white shadow-sm">
+                                {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                              </span>
+                            )}
                           </span>
                         ) : (
                           <Icon size={16} strokeWidth={2} className="flex-shrink-0" />
@@ -3925,6 +4225,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             <span className="flex-1 text-left text-sm font-medium">
                               {group.label}
                             </span>
+
+                            {group.key === "chats" && chatUnreadCount > 0 && (
+                              <span className="min-w-[22px] h-[20px] rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-5 text-center text-white shadow-sm">
+                                {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                              </span>
+                            )}
 
                             {active ? (
                               <ChevronRight className="h-3.5 w-3.5 text-white/60" />
@@ -4454,7 +4760,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   )}
                 </div>
               )}
-              {renderModule()}
+              <Suspense
+                fallback={
+                  <div className="flex min-h-[360px] items-center justify-center gap-2 text-sm text-slate-500">
+                    <Loader2 size={16} className="animate-spin text-indigo-600" />
+                    Loading module...
+                  </div>
+                }
+              >
+                {renderModule()}
+              </Suspense>
             </div>
           </main>
         </div>
@@ -5116,7 +5431,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               {receiptData && (
                 <button
                   type="button"
-                  onClick={() => downloadInvoicePdf(receiptData)}
+                  onClick={async () => {
+                    const { downloadInvoicePdf } = await import("./lib/invoicePdf");
+                    downloadInvoicePdf(receiptData);
+                  }}
                   className="h-9 px-4 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700"
                 >
                   Download PDF invoice
@@ -5398,11 +5716,15 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         </div>
       )}
 
-      <CalendarModal
-        open={calendarOpen}
-        onClose={() => setCalendarOpen(false)}
-        currentUser={user}
-      />
+      <Suspense fallback={null}>
+        {calendarOpen ? (
+          <CalendarModal
+            open={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            currentUser={user}
+          />
+        ) : null}
+      </Suspense>
 
       {addYearOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">

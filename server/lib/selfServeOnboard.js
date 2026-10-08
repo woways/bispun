@@ -95,7 +95,34 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   });
   if (!plan || !plan.active) throw new Error("Plan is unavailable for this signup");
 
-  const pricing = computeSelfServePricing(plan.yearlyPrice);
+  const isAdminPreOnboard = data.source === "admin_pre_onboard";
+
+  // Public signup uses list price + GST. Super Admin pre-onboarding links may
+  // include a manual discount, so preserve the exact quoted amount stored in
+  // PendingSignup instead of recomputing it as a public self-serve purchase.
+  const pricing = (() => {
+    if (!isAdminPreOnboard) return computeSelfServePricing(plan.yearlyPrice);
+
+    const listPrice = Number(pending.listPrice || plan.yearlyPrice || 0);
+    let discount = Number(data.discountAmount || 0);
+    if (!Number.isFinite(discount) || discount < 0) discount = 0;
+    if (discount > listPrice) discount = listPrice;
+    discount = Math.round(discount * 100) / 100;
+
+    const subtotal = Math.round((listPrice - discount) * 100) / 100;
+    const finalAmount = Math.round(Number(pending.amount || 0) * 100) / 100;
+    const gstAmount = Math.max(0, Math.round((finalAmount - subtotal) * 100) / 100);
+
+    return {
+      listPrice,
+      discount,
+      subtotal,
+      gstRate: gstAmount > 0 ? GST_RATE : 0,
+      gstAmount,
+      finalAmount,
+    };
+  })();
+
   const slug = slugify(data.companyName);
   const subdomain = await uniqueSubdomain(data.subdomain || `${slug}.bispun.com`);
 
@@ -132,7 +159,7 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
         email: data.companyEmail,
         phone: data.companyPhone,
         subdomain,
-        primaryColor: settings.defaultPrimaryColor || "indigo",
+        primaryColor: data.primaryColor || settings.defaultPrimaryColor || "indigo",
         status: "ACTIVE",
       },
     });
@@ -141,7 +168,7 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
       data: {
         companyId: company.id,
         portalName: String(data.brandName || `${data.companyName} CRM`).trim(),
-        primaryColor: settings.defaultPrimaryColor || "indigo",
+        primaryColor: data.primaryColor || settings.defaultPrimaryColor || "indigo",
         timezone: settings.defaultTimezone || "Asia/Kolkata",
         currency: settings.defaultCurrency || "INR",
         dateFormat: settings.defaultDateFormat || "DD/MM/YYYY",
@@ -159,7 +186,7 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
         startDate,
         renewalDate,
         listPrice: pricing.listPrice,
-        discountAmount: 0,
+        discountAmount: pricing.discount,
         amount: pricing.finalAmount,
       },
     });
@@ -206,7 +233,7 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
         status: "CAPTURED",
         billingCycle: "YEARLY",
         listPrice: pricing.listPrice,
-        discountAmount: 0,
+        discountAmount: pricing.discount,
         amount: pricing.finalAmount,
         currency: pending.currency || "INR",
         providerOrderId: pending.providerOrderId,

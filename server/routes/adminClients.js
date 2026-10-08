@@ -5,6 +5,12 @@ import { resolveMx } from "node:dns/promises";
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
+import {
+  assertContactVerified,
+  ContactVerificationError,
+  sendContactVerificationOtp,
+  verifyContactVerificationOtp,
+} from "../lib/contactVerification.js";
 
 const router = Router();
 
@@ -15,14 +21,35 @@ async function getAdminActor(req) {
 }
 
 function isValidEmail(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
-    String(value || "").trim()
-  );
+  const email = String(value || "").trim().toLowerCase();
+
+  if (!email || email.length > 254 || email.includes(" ")) {
+    return false;
+  }
+
+  const atIndex = email.indexOf("@");
+  if (atIndex <= 0 || atIndex !== email.lastIndexOf("@")) {
+    return false;
+  }
+
+  const local = email.slice(0, atIndex);
+  const domain = email.slice(atIndex + 1);
+
+  if (
+    local.length > 64 ||
+    local.startsWith(".") ||
+    local.endsWith(".") ||
+    local.includes("..")
+  ) {
+    return false;
+  }
+
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(local) &&
+    /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i.test(domain);
 }
 
 function isValidPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 8 && digits.length <= 15;
+  return /^\d{10}$/.test(String(value || "").trim());
 }
 
 const LEGACY_SUBDOMAIN_SUFFIX = ".consulbuzz.com";
@@ -345,6 +372,68 @@ router.get("/plans/available", async (req, res) => {
 });
 
 /* =========================================================
+   CONTACT OTP VERIFICATION
+========================================================= */
+
+router.post("/verification/send", async (req, res) => {
+  try {
+    const channel = String(req.body?.channel || "").trim().toLowerCase();
+    const purpose = String(req.body?.purpose || "").trim().toLowerCase();
+    const target = String(req.body?.target || "").trim();
+
+    if (channel === "email") {
+      if (!isValidEmail(target)) {
+        return res.status(400).json({ success: false, message: "Enter a valid email address" });
+      }
+      let domainValid;
+      try {
+        domainValid = await emailDomainCanReceiveMail(target);
+      } catch (error) {
+        console.error("OTP email-domain check failed:", error);
+        return res.status(503).json({ success: false, message: "Unable to verify this email domain right now. Please try again." });
+      }
+      if (!domainValid) {
+        return res.status(400).json({ success: false, message: "Use an email address with a valid mail domain" });
+      }
+    } else if (channel === "phone") {
+      if (!isValidPhone(target)) {
+        return res.status(400).json({ success: false, message: "Enter a valid 10-digit phone number" });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid verification channel" });
+    }
+
+    const result = await sendContactVerificationOtp({ channel, purpose, target });
+    return res.json({ success: true, message: "OTP sent successfully", ...result });
+  } catch (error) {
+    if (error instanceof ContactVerificationError) {
+      return res.status(error.status || 400).json({ success: false, message: error.message, code: error.code });
+    }
+    console.error("Admin contact OTP send failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to send OTP" });
+  }
+});
+
+router.post("/verification/verify", async (req, res) => {
+  try {
+    const result = await verifyContactVerificationOtp({
+      channel: req.body?.channel,
+      purpose: req.body?.purpose,
+      target: req.body?.target,
+      otp: req.body?.otp,
+      challengeToken: req.body?.challengeToken,
+    });
+    return res.json({ success: true, message: "Verified successfully", ...result });
+  } catch (error) {
+    if (error instanceof ContactVerificationError) {
+      return res.status(error.status || 400).json({ success: false, message: error.message, code: error.code });
+    }
+    console.error("Admin contact OTP verify failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to verify OTP" });
+  }
+});
+
+/* =========================================================
    ONBOARD CLIENT
 ========================================================= */
 
@@ -385,6 +474,9 @@ router.post("/", async (req, res) => {
       adminName,
       adminEmail,
       adminPassword,
+      companyEmailVerificationToken,
+      adminEmailVerificationToken,
+      phoneVerificationToken,
       referralCode: rawReferralCode,
     } = req.body || {};
 
@@ -468,7 +560,7 @@ router.post("/", async (req, res) => {
     if (!isValidPhone(companyPhone)) {
       return res.status(400).json({
         success: false,
-        message: "Enter a valid company phone number",
+        message: "Enter a valid 10-digit company phone number",
       });
     }
 
@@ -548,6 +640,33 @@ router.post("/", async (req, res) => {
         message:
           "Client admin email domain could not be verified. Use an email domain that can receive mail.",
       });
+    }
+
+    try {
+      assertContactVerified(companyEmailVerificationToken, {
+        channel: "email",
+        purpose: "company_email",
+        target: companyEmail,
+      });
+      assertContactVerified(adminEmailVerificationToken, {
+        channel: "email",
+        purpose: "admin_email",
+        target: clientAdminEmail,
+      });
+      assertContactVerified(phoneVerificationToken, {
+        channel: "phone",
+        purpose: "company_phone",
+        target: companyPhone,
+      });
+    } catch (error) {
+      if (error instanceof ContactVerificationError) {
+        return res.status(error.status || 400).json({
+          success: false,
+          message: error.message,
+          code: error.code,
+        });
+      }
+      throw error;
     }
 
     const slug = slugify(companyName);

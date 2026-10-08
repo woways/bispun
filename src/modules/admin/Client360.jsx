@@ -35,6 +35,8 @@ import {
   Sliders,
   History,
   ShieldCheck,
+  ReceiptIndianRupee,
+  Download,
 } from "lucide-react";
 
 import {
@@ -46,6 +48,7 @@ import {
 
 import { apiRequest } from "../../lib/api";
 import GeneratePaymentLinkButton from "./GeneratePaymentLinkButton";
+import BillingReceiptModal from "../../components/BillingReceiptModal";
 
 const MODULE_ICONS = {
   LayoutDashboard,
@@ -2361,6 +2364,10 @@ function BillingTab({
 }) {
   const [billing, setBilling] = useState(null);
   const [company, setCompany] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2383,9 +2390,13 @@ function BillingTab({
     setError("");
 
     try {
-      const data = await apiRequest(`/api/admin/billing/${clientId}`);
+      const [data, paymentData] = await Promise.all([
+        apiRequest(`/api/admin/billing/${clientId}`),
+        apiRequest(`/api/admin/payments?companyId=${encodeURIComponent(clientId)}&limit=200`),
+      ]);
       setCompany(data.company);
       setBilling(data.subscription);
+      setPayments(paymentData.payments || []);
 
       if (data.subscription) {
         setForm({
@@ -2432,6 +2443,23 @@ function BillingTab({
       setError(error?.data?.message || "Unable to update billing");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function openPaymentReceipt(payment) {
+    setReceiptOpen(true);
+    setReceiptData(null);
+    setReceiptLoading(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(`/api/admin/payments/${payment.id}/receipt`);
+      setReceiptData(data.receipt || null);
+    } catch (loadError) {
+      setReceiptOpen(false);
+      setError(loadError?.data?.message || "Unable to load payment receipt");
+    } finally {
+      setReceiptLoading(false);
     }
   }
 
@@ -2642,6 +2670,60 @@ function BillingTab({
         </form>
       </div>
 
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <ReceiptIndianRupee size={15} className="text-indigo-600" />
+              <h3 className="text-sm font-semibold text-slate-900">Invoices & Receipts</h3>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">Complete Bispun subscription payment history for this client.</p>
+          </div>
+          <Badge tone="indigo">{payments.length} records</Badge>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50/80">
+              <tr>
+                {['Date','Plan','Invoice / Receipt No','Subtotal','GST','Paid','Status','Documents'].map((label) => (
+                  <th key={label} className="px-4 py-3 text-left">{label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((payment) => (
+                <tr key={payment.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70">
+                  <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-500">{formatDate(payment.paidAt || payment.createdAt)}</td>
+                  <td className="px-4 py-3 text-slate-700">{payment.plan?.name || '—'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600">{payment.receipt || payment.id}</td>
+                  <td className="px-4 py-3">{formatMoney(payment.subtotal)}</td>
+                  <td className="px-4 py-3">{formatMoney(payment.gstAmount)}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">{formatMoney(payment.amount)}</td>
+                  <td className="px-4 py-3">
+                    <Badge tone={payment.status === 'CAPTURED' ? 'emerald' : payment.status === 'FAILED' ? 'rose' : payment.status === 'AUTHORIZED' ? 'amber' : 'slate'}>{payment.status}</Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    {payment.status === 'CAPTURED' ? (
+                      <button
+                        type="button"
+                        onClick={() => openPaymentReceipt(payment)}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        <ReceiptIndianRupee size={11} /> View Receipt
+                      </button>
+                    ) : <span className="text-xs text-slate-400">Available after payment</span>}
+                  </td>
+                </tr>
+              ))}
+              {!payments.length ? (
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">No payment records for this client yet.</td></tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
         <div className="text-xs font-medium text-slate-700">
           Privacy boundary
@@ -2652,6 +2734,14 @@ function BillingTab({
           incentives or other private financial records.
         </div>
       </div>
+
+      <BillingReceiptModal
+        open={receiptOpen}
+        loading={receiptLoading}
+        receipt={receiptData}
+        onClose={() => { setReceiptOpen(false); setReceiptData(null); }}
+        onError={setError}
+      />
     </div>
   );
 }

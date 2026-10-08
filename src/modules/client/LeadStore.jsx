@@ -78,6 +78,12 @@ const TYPES = [
   },
 ];
 
+const ALL_LEADS_TYPE = {
+  key: "all",
+  api: "ALL",
+  label: "All Leads",
+};
+
 const INDIVIDUAL_LEAD_TYPE = {
   key: "individual",
   api: "INDIVIDUAL",
@@ -85,9 +91,27 @@ const INDIVIDUAL_LEAD_TYPE = {
 };
 
 const ALL_LEAD_TYPES = [
+  ALL_LEADS_TYPE,
   INDIVIDUAL_LEAD_TYPE,
   ...TYPES,
 ];
+
+function leadCategoryApi(lead) {
+  return String(
+    lead?.type || (lead?.isManual ? "INDIVIDUAL" : "")
+  )
+    .trim()
+    .toUpperCase();
+}
+
+function leadCategoryLabel(lead) {
+  const api = leadCategoryApi(lead);
+  return (
+    [INDIVIDUAL_LEAD_TYPE, ...TYPES].find((type) => type.api === api)?.label ||
+    api ||
+    "Unknown"
+  );
+}
 
 const LEAD_TEMPERATURES = [
   { value: "HOT", label: "Hot" },
@@ -2198,7 +2222,7 @@ export default function LeadStore({ selectedYear = "all" }) {
     setSub,
   ] =
     useState(
-      "individual"
+      "all"
     );
 
   const [
@@ -2632,31 +2656,18 @@ export default function LeadStore({ selectedYear = "all" }) {
             type.key ===
             sub
         ) ||
-        INDIVIDUAL_LEAD_TYPE,
+        ALL_LEADS_TYPE,
       [sub]
     );
 
   const currentTypeLeads =
     useMemo(
       () =>
-        individualLeads.filter(
-          (lead) => {
-            const leadType =
-              String(
-                lead.type ||
-                  (lead.isManual
-                    ? "INDIVIDUAL"
-                    : "")
-              )
-                .trim()
-                .toUpperCase();
-
-            return (
-              leadType ===
-              selectedType.api
-            );
-          }
-        ),
+        selectedType.api === "ALL"
+          ? individualLeads
+          : individualLeads.filter(
+              (lead) => leadCategoryApi(lead) === selectedType.api
+            ),
       [
         individualLeads,
         selectedType,
@@ -2666,12 +2677,11 @@ export default function LeadStore({ selectedYear = "all" }) {
   const currentTypeDatasets =
     useMemo(
       () =>
-        datasets.filter(
-          (dataset) =>
-            !selectedType ||
-            dataset.type ===
-              selectedType.api
-        ),
+        selectedType.api === "ALL"
+          ? datasets
+          : datasets.filter(
+              (dataset) => dataset.type === selectedType.api
+            ),
       [
         datasets,
         selectedType,
@@ -2960,18 +2970,12 @@ export default function LeadStore({ selectedYear = "all" }) {
           (type) => ({
             key: type.key,
             label: type.label,
-            count: individualLeads.filter(
-              (lead) =>
-                String(
-                  lead.type ||
-                    (lead.isManual
-                      ? "INDIVIDUAL"
-                      : "")
-                )
-                  .trim()
-                  .toUpperCase() ===
-                type.api
-            ).length,
+            count:
+              type.api === "ALL"
+                ? individualLeads.length
+                : individualLeads.filter(
+                    (lead) => leadCategoryApi(lead) === type.api
+                  ).length,
           })
         ),
       [individualLeads]
@@ -3271,7 +3275,7 @@ export default function LeadStore({ selectedYear = "all" }) {
           lead.phone,
           lead.email,
           lead.course,
-          selectedType.label,
+          leadCategoryLabel(lead),
           lead.sourceName,
           lead.assignedToName ||
             "Unassigned",
@@ -4792,8 +4796,9 @@ export default function LeadStore({ selectedYear = "all" }) {
           assignees={assignees}
           lead={editingIndividual}
           defaultType={
-            selectedType?.api ||
-            "INDIVIDUAL"
+            selectedType?.api === "ALL"
+              ? "INDIVIDUAL"
+              : selectedType?.api || "INDIVIDUAL"
           }
           onClose={() => {
             setShowIndividual(false);
@@ -4814,7 +4819,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             const savedType =
               String(
                 data.lead?.type ||
-                  selectedType?.api ||
+                  (selectedType?.api === "ALL" ? "INDIVIDUAL" : selectedType?.api) ||
                   "INDIVIDUAL"
               )
                 .trim()
@@ -4846,7 +4851,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             assignees
           }
           defaultType={
-            sub === "individual"
+            sub === "individual" || sub === "all"
               ? "EXTERNAL_DATA"
               : selectedType?.api ||
                 "EXTERNAL_DATA"

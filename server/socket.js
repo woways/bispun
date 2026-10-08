@@ -180,8 +180,17 @@ export function attachSocketServer(httpServer, config) {
         };
 
         io.to(`conversation:${conversationId}`).emit("message:new", payload);
-        const members = await prisma.conversationMember.findMany({ where: { conversationId }, select: { userId: true } });
-        members.forEach((m) => io.to(`user:${m.userId}`).emit("conversation:activity", { conversationId, lastMessage: payload }));
+        const members = await prisma.conversationMember.findMany({
+          where: { conversationId },
+          select: { userId: true, isMuted: true },
+        });
+        members.forEach((m) =>
+          io.to(`user:${m.userId}`).emit("conversation:activity", {
+            conversationId,
+            lastMessage: payload,
+            isMuted: Boolean(m.isMuted),
+          })
+        );
         ack?.({ ok: true, message: payload });
       } catch (error) {
         console.error("message:send failed:", error);

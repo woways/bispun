@@ -22,6 +22,8 @@ import {
   Building2,
   ArrowLeft,
   Upload,
+  Paperclip,
+  ExternalLink,
   ChevronRight,
   GraduationCap,
   Download,
@@ -1071,6 +1073,180 @@ function BranchModal({
   );
 }
 
+function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
+  const [attachments, setAttachments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadAttachments() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/admissions/partners/${partner.id}/attachments`
+      );
+      setAttachments(data.attachments || []);
+    } catch (loadError) {
+      setError(loadError?.data?.message || "Unable to load attachments");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAttachments();
+  }, [partner.id]);
+
+  async function uploadFile(file) {
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const body = new FormData();
+      body.append("file", file);
+
+      const data = await apiRequest(
+        `/api/client/admissions/partners/${partner.id}/attachments`,
+        { method: "POST", body }
+      );
+
+      setAttachments((current) => [data.attachment, ...current]);
+      if (onChanged) await onChanged();
+    } catch (uploadError) {
+      setError(uploadError?.data?.message || "Unable to upload attachment");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAttachment(attachment) {
+    if (!window.confirm(`Remove ${attachment.fileName}?`)) return;
+
+    setError("");
+    try {
+      await apiRequest(
+        `/api/client/admissions/partners/${partner.id}/attachments/${attachment.id}`,
+        { method: "DELETE" }
+      );
+      setAttachments((current) => current.filter((item) => item.id !== attachment.id));
+      if (onChanged) await onChanged();
+    } catch (deleteError) {
+      setError(deleteError?.data?.message || "Unable to remove attachment");
+    }
+  }
+
+  function fileSize(bytes) {
+    const value = Number(bytes || 0);
+    if (!value) return "—";
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Paperclip size={16} className="text-indigo-600" />
+              <h2 className="text-[17px] font-bold text-slate-950">College Attachments</h2>
+            </div>
+            <p className="mt-1 text-[13px] text-slate-500">
+              {partner.name} · keep brochures, fee structures, approvals and other college files here.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5">
+          {error ? (
+            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
+              {error}
+            </div>
+          ) : null}
+
+          <label className={`flex min-h-[108px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed px-5 text-center transition ${uploading ? "cursor-wait border-slate-200 bg-slate-50" : "border-indigo-200 bg-indigo-50/40 hover:border-indigo-300 hover:bg-indigo-50"}`}>
+            <input
+              type="file"
+              className="hidden"
+              disabled={uploading}
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip"
+              onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                event.target.value = "";
+                uploadFile(file);
+              }}
+            />
+            <div>
+              {uploading ? <Loader2 size={22} className="mx-auto animate-spin text-indigo-600" /> : <Upload size={22} className="mx-auto text-indigo-600" />}
+              <div className="mt-2 text-[14px] font-bold text-slate-800">
+                {uploading ? "Uploading..." : "Upload college attachment"}
+              </div>
+              <div className="mt-1 text-[12px] text-slate-500">
+                PDF, images, Word, Excel, CSV, PowerPoint, TXT or ZIP · max 15 MB
+              </div>
+            </div>
+          </label>
+
+          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-500">Files</div>
+              <div className="text-[12px] font-semibold text-slate-500">{attachments.length} attachment{attachments.length === 1 ? "" : "s"}</div>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-slate-500">
+                <Loader2 size={15} className="animate-spin" /> Loading attachments...
+              </div>
+            ) : attachments.length ? (
+              <div className="divide-y divide-slate-100">
+                {attachments.map((attachment) => (
+                  <div key={attachment.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-semibold text-slate-900">{attachment.fileName}</div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        {fileSize(attachment.sizeBytes)} · {formatDate(attachment.createdAt)}
+                        {attachment.uploadedByName ? ` · ${attachment.uploadedByName}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <a
+                        href={attachment.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        <ExternalLink size={12} /> Open
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(attachment)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                        title="Remove attachment"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-[13px] text-slate-500">No attachments added for this college yet.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdmissionModal({
   partner,
   market = "DOMESTIC",
@@ -1985,6 +2161,7 @@ function AdmissionsManager({
 
   const [streamModal, setStreamModal] = useState(null);
   const [collegeModal, setCollegeModal] = useState(null);
+  const [attachmentsPartner, setAttachmentsPartner] = useState(null);
   const [branchModal, setBranchModal] = useState(null);
   const [admissionModal, setAdmissionModal] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -2813,6 +2990,8 @@ function AdmissionsManager({
     openLabel,
     onEdit,
     onDelete,
+    onAttachments,
+    attachmentCount = 0,
     extra,
   }) {
     const gradient =
@@ -2835,6 +3014,22 @@ function AdmissionsManager({
             </div>
 
             <div className="flex gap-2">
+              {onAttachments ? (
+                <button
+                  type="button"
+                  onClick={onAttachments}
+                  title={`Attachments${attachmentCount ? ` (${attachmentCount})` : ""}`}
+                  className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 text-white hover:bg-white/20"
+                >
+                  <Paperclip size={13} />
+                  {attachmentCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-white px-1 text-center text-[9px] font-black leading-4 text-slate-800">
+                      {attachmentCount > 99 ? "99+" : attachmentCount}
+                    </span>
+                  ) : null}
+                </button>
+              ) : null}
+
               {onEdit ? (
                 <button
                   type="button"
@@ -3489,6 +3684,8 @@ function AdmissionsManager({
                 setSelectedPartner(partner);
                 setSelectedBranch(null);
               }}
+              onAttachments={() => setAttachmentsPartner(partner)}
+              attachmentCount={partner.attachmentCount || 0}
               onEdit={() =>
                 setCollegeModal({
                   mode: "edit",
@@ -3534,6 +3731,16 @@ function AdmissionsManager({
               Add the first college inside {selectedStream.name}.
             </div>
           </div>
+        ) : null}
+
+        {attachmentsPartner ? (
+          <CollegeAttachmentsModal
+            partner={attachmentsPartner}
+            onClose={() => setAttachmentsPartner(null)}
+            onChanged={async () => {
+              await loadPartners(selectedStream?.id);
+            }}
+          />
         ) : null}
 
         {collegeModal ? (

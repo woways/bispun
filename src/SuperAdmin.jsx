@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -43,19 +45,19 @@ import {
   apiRequest,
 } from "./lib/api";
 
-import AdminDashboard from "./modules/admin/AdminDashboard";
-import Clients from "./modules/admin/Clients";
-import Client360 from "./modules/admin/Client360";
-import Plans from "./modules/admin/Plans";
-import Modules from "./modules/admin/Modules";
-import Usage from "./modules/admin/Usage";
-import Billing from "./modules/admin/Billing";
-import Support from "./modules/admin/Support";
-import Analytics from "./modules/admin/Analytics";
-import SystemSettings from "./modules/admin/SystemSettings";
-import ActivityLog from "./modules/admin/ActivityLog";
-import WebsiteLeads from "./modules/admin/WebsiteLeads";
-import Referrals from "./modules/admin/Referrals";
+const AdminDashboard = lazy(() => import("./modules/admin/AdminDashboard"));
+const Clients = lazy(() => import("./modules/admin/Clients"));
+const Client360 = lazy(() => import("./modules/admin/Client360"));
+const Plans = lazy(() => import("./modules/admin/Plans"));
+const Modules = lazy(() => import("./modules/admin/Modules"));
+const Usage = lazy(() => import("./modules/admin/Usage"));
+const Billing = lazy(() => import("./modules/admin/Billing"));
+const Support = lazy(() => import("./modules/admin/Support"));
+const Analytics = lazy(() => import("./modules/admin/Analytics"));
+const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
+const ActivityLog = lazy(() => import("./modules/admin/ActivityLog"));
+const WebsiteLeads = lazy(() => import("./modules/admin/WebsiteLeads"));
+const Referrals = lazy(() => import("./modules/admin/Referrals"));
 
 const MENU = [
   {
@@ -920,9 +922,16 @@ export default function SuperAdmin() {
           }`}
         >
           <div className="max-w-[1600px] mx-auto">
-            {
-              renderSection()
-            }
+            <Suspense
+              fallback={
+                <div className="flex min-h-[360px] items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 size={16} className="animate-spin text-indigo-600" />
+                  Loading section...
+                </div>
+              }
+            >
+              {renderSection()}
+            </Suspense>
           </div>
         </main>
       </div>
