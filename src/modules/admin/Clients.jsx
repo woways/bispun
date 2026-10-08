@@ -17,7 +17,10 @@ import {
   Eye,
   EyeOff,
   Loader2,
+  FileText,
 } from "lucide-react";
+
+import { downloadProformaPdf } from "../../lib/invoicePdf";
 
 import {
   SectionHeader,
@@ -202,6 +205,49 @@ function OnboardClientModal({
       ...current,
       [field]: value,
     }));
+  }
+
+  // Build a pre-payment proforma (quote) PDF from the current form values.
+  // Uses the same pricing math as the live total shown in the Subscription
+  // section: GST (18%) on the discounted subtotal.
+  function previewProforma() {
+    setError("");
+    const selectedPlan =
+      plans.find((p) => p.key === form.planKey) || null;
+    if (!selectedPlan) {
+      setError("Select a plan before generating a proforma");
+      return;
+    }
+    if (!String(form.name || "").trim()) {
+      setError("Enter the company name before generating a proforma");
+      return;
+    }
+
+    const listPrice = Number(selectedPlan.yearlyPrice || 0);
+    let discount = Number(form.discountAmount);
+    if (!Number.isFinite(discount) || discount < 0) discount = 0;
+    if (discount > listPrice) discount = listPrice;
+    const subtotal = Math.max(listPrice - discount, 0);
+    const gstAmount = Math.round(subtotal * 0.18 * 100) / 100;
+    const finalAmount = Math.round((subtotal + gstAmount) * 100) / 100;
+
+    downloadProformaPdf({
+      company: {
+        name: form.name,
+        brandName: form.brandName || form.name,
+        city: form.city,
+        email: form.email,
+        phone: form.phone,
+      },
+      admin: { name: form.adminName, email: form.adminEmail },
+      plan: { name: selectedPlan.name },
+      listPrice,
+      discountAmount: discount,
+      subtotal,
+      gstRate: 18,
+      gstAmount,
+      finalAmount,
+    });
   }
 
   async function submit(e) {
@@ -858,6 +904,16 @@ function OnboardClientModal({
               className="h-9 px-4 text-xs font-semibold border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
             >
               Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={previewProforma}
+              disabled={saving || loadingPlans}
+              className="h-9 px-4 text-xs font-semibold border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50 disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              <FileText size={14} />
+              Preview Proforma
             </button>
 
             <button
