@@ -5,6 +5,7 @@ import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
 import SuperAdmin from "./SuperAdmin";
 import PayPage from "./PayPage";
+import SignupPage from "./SignupPage";
 import { apiRequest } from "./lib/api";
 
 function SkeletonBlock({ className = "" }) {
@@ -632,6 +633,16 @@ export default function App() {
         <Route
           path="/pay/:token"
           element={<PayPage />}
+        />
+
+        <Route
+          path="/signup"
+          element={<SignupPage />}
+        />
+
+        <Route
+          path="/signup/:plan"
+          element={<SignupPage />}
         />
 
         <Route

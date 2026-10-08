@@ -5,6 +5,7 @@ import {
   finalizeCapturedPayment,
   markPaymentFailed,
 } from "../lib/subscriptions.js";
+import { finalizeSelfServeSignup } from "../lib/selfServeOnboard.js";
 
 function safeEqualHex(a, b) {
   try {
@@ -115,6 +116,26 @@ export default async function razorpayWebhook(
           providerPaymentId:
             payment.id,
         });
+      } else if (!transaction) {
+        // No PaymentTransaction yet => this may be a self-serve signup whose
+        // account is created only on capture. Finalise it from the holding row.
+        const pending =
+          await prisma.pendingSignup.findUnique({
+            where: {
+              providerOrderId:
+                payment.order_id,
+            },
+          });
+
+        if (
+          pending &&
+          pending.status === "PENDING"
+        ) {
+          await finalizeSelfServeSignup(
+            pending,
+            payment.id
+          );
+        }
       }
     }
 

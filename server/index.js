@@ -33,6 +33,7 @@ import adminWebsiteLeadsRoutes from "./routes/adminWebsiteLeads.js";
 import adminReferralsRoutes from "./routes/adminReferrals.js";
 import publicWebsiteLeadsRoutes from "./routes/publicWebsiteLeads.js";
 import publicPayRoutes from "./routes/publicPay.js";
+import publicOnboardRoutes from "./routes/publicOnboard.js";
 
 import clientAuthRoutes from "./routes/clientAuth.js";
 import clientLeadsRoutes from "./routes/clientLeads.js";
@@ -170,6 +171,7 @@ app.use("/api/admin/referrals", adminReferralsRoutes);
 // but remains protected by the global API rate limiter and CORS allow-list.
 app.use("/api/public/website-leads", publicWebsiteLeadsRoutes);
 app.use("/api/public/pay", publicPayRoutes);
+app.use("/api/public/onboard", publicOnboardRoutes);
 
 app.use("/api/client/auth", clientAuthRoutes);
 app.use("/api/client/leads", clientLeadsRoutes);

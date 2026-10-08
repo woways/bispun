@@ -1599,3 +1599,32 @@ model WebsiteLead {
   @@index([phone])
   @@index([demoRequested, updatedAt])
 }
+
+// Holding area for self-serve signups: the typed form is stashed here when the
+// Razorpay order is created, and the real Company/admin/subscription are only
+// created once payment is captured (via the public verify endpoint OR the
+// webhook, so a closed tab never loses a paid signup). Touches no existing table.
+model PendingSignup {
+  id String @id @default(cuid())
+
+  providerOrderId   String  @unique
+  providerPaymentId String?
+
+  planId String
+
+  // Full signup form (org + admin with pre-hashed password + referralCode).
+  payload Json
+
+  listPrice Decimal? @db.Decimal(12, 2)
+  amount    Decimal  @db.Decimal(12, 2)
+  currency  String   @default("INR")
+
+  // PENDING -> CONSUMED (account created) | FAILED
+  status            String  @default("PENDING")
+  createdCompanyId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
