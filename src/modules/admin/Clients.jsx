@@ -98,9 +98,12 @@ function isValidEmail(value) {
   );
 }
 
+function normalizePhoneInput(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 10);
+}
+
 function isValidPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 8 && digits.length <= 15;
+  return /^\d{10}$/.test(String(value || "").trim());
 }
 
 function Input({
@@ -240,7 +243,7 @@ function OnboardClientModal({
     if (missingField) return `${missingField[1]} is required`;
     if (!isValidEmail(form.email)) return "Enter a valid company email";
     if (!isValidEmail(form.adminEmail)) return "Enter a valid client admin email";
-    if (!isValidPhone(form.phone)) return "Enter a valid company phone number";
+    if (!isValidPhone(form.phone)) return "Enter exactly 10 digits for company phone number";
     if (String(form.adminPassword).length < 8) {
       return "Temporary password must be at least 8 characters";
     }
@@ -530,11 +533,15 @@ function OnboardClientModal({
                   label="Phone"
                   required
                   type="tel"
+                  inputMode="numeric"
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  title="Enter exactly 10 digits"
                   value={form.phone}
                   onChange={(e) =>
                     updateField(
                       "phone",
-                      e.target.value
+                      normalizePhoneInput(e.target.value)
                     )
                   }
                   placeholder="9876543210"

@@ -43,8 +43,7 @@ function isValidEmail(value) {
 }
 
 function isValidPhone(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  return digits.length >= 8 && digits.length <= 15;
+  return /^\d{10}$/.test(String(value || "").trim());
 }
 
 function slugify(value) {
@@ -114,7 +113,7 @@ router.post("/pre-onboard", async (req, res) => {
     if (!ownerName) return res.status(400).json({ success: false, message: "Owner name is required" });
     if (!city) return res.status(400).json({ success: false, message: "City is required" });
     if (!isValidEmail(companyEmail)) return res.status(400).json({ success: false, message: "Enter a valid company email" });
-    if (!isValidPhone(companyPhone)) return res.status(400).json({ success: false, message: "Enter a valid company phone" });
+    if (!isValidPhone(companyPhone)) return res.status(400).json({ success: false, message: "Enter exactly 10 digits for company phone number" });
     if (!adminName) return res.status(400).json({ success: false, message: "Client admin name is required" });
     if (!isValidEmail(adminEmail)) return res.status(400).json({ success: false, message: "Enter a valid client admin email" });
     if (adminPassword.length < 8) return res.status(400).json({ success: false, message: "Client admin password must be at least 8 characters" });
