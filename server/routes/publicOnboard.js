@@ -93,12 +93,14 @@ router.get("/plans", async (_req, res) => {
     return res.json({
       success: true,
       plans: plans.map((p) => {
-        const pricing = computeSelfServePricing(p.yearlyPrice);
+        const pricing = computeSelfServePricing(p);
         return {
           key: p.key,
           name: p.name,
           tagline: p.tagline || "",
           yearlyPrice: p.yearlyPrice !== null ? Number(p.yearlyPrice) : null,
+          offerPrice: p.offerPrice !== null && p.offerPrice !== undefined ? Number(p.offerPrice) : null,
+          offerEndsAt: pricing.offerActive ? p.offerEndsAt : null,
           breakdown: pricing,
         };
       }),
@@ -269,7 +271,7 @@ router.post("/start", async (req, res) => {
     const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } }).catch(() => null);
     if (existingAdmin) return res.status(409).json({ success: false, message: "An account with this admin email already exists. Please log in instead." });
 
-    const pricing = computeSelfServePricing(plan.yearlyPrice);
+    const pricing = computeSelfServePricing(plan);
     const amountPaise = Math.round(pricing.finalAmount * 100);
     if (amountPaise < 100) return res.status(400).json({ success: false, message: "Payable amount is invalid" });
 
@@ -295,6 +297,7 @@ router.post("/start", async (req, res) => {
         payload: {
           planId: plan.id,
           planKey: plan.key,
+          pricing,
           companyName,
           brandName,
           business,

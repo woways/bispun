@@ -444,8 +444,13 @@ export default function SignupPage() {
                         )}
                       </div>
                       <div className="mt-2 text-lg font-semibold text-slate-900">
+                        {Number(p.breakdown.discount) > 0 && (
+                          <span className="text-sm font-normal text-slate-400 line-through mr-1.5">
+                            ₹{Number(p.breakdown.listPrice).toLocaleString("en-IN")}
+                          </span>
+                        )}
                         ₹
-                        {Number(p.breakdown.listPrice).toLocaleString("en-IN")}
+                        {Number(p.breakdown.subtotal).toLocaleString("en-IN")}
                         <span className="text-xs font-normal text-slate-500">
                           /year
                         </span>
@@ -558,6 +563,18 @@ export default function SignupPage() {
                   <span>Plan price ({plan.name})</span>
                   <span>{inr(plan.breakdown.listPrice)}</span>
                 </div>
+                {Number(plan.breakdown.discount) > 0 && (
+                  <div className="flex items-center justify-between gap-6 text-emerald-600 mt-1">
+                    <span>Discount</span>
+                    <span>−{inr(plan.breakdown.discount)}</span>
+                  </div>
+                )}
+                {Number(plan.breakdown.discount) > 0 && (
+                  <div className="flex items-center justify-between gap-6 text-slate-500 mt-1">
+                    <span>Subtotal</span>
+                    <span>{inr(plan.breakdown.subtotal)}</span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-6 text-slate-500 mt-1">
                   <span>GST ({plan.breakdown.gstRate}%)</span>
                   <span>+{inr(plan.breakdown.gstAmount)}</span>

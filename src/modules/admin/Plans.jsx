@@ -58,6 +58,40 @@ function formatMoney(value) {
 
 
 
+// ISO datetime -> yyyy-mm-dd for <input type="date">; "" when empty/invalid.
+function toDateInput(value) {
+
+  if (!value) return "";
+
+  const d = new Date(value);
+
+  if (Number.isNaN(d.getTime())) return "";
+
+  return d.toISOString().slice(0, 10);
+
+}
+
+
+
+// Is a plan's promotional offer currently live (positive, below list, not expired)?
+function planOfferActive(plan) {
+
+  const op = Number(plan?.offerPrice);
+
+  const lp = Number(plan?.yearlyPrice);
+
+  if (!Number.isFinite(op) || op <= 0) return false;
+
+  if (!Number.isFinite(lp) || op >= lp) return false;
+
+  if (plan.offerEndsAt && new Date(plan.offerEndsAt).getTime() < Date.now()) return false;
+
+  return true;
+
+}
+
+
+
 function planIcon(key) {
 
   if (key === "pro") {
@@ -146,6 +180,24 @@ function PlanCard({
 
 
 
+      offerPrice:
+
+        plan.offerPrice !==
+
+        null && plan.offerPrice !== undefined
+
+          ? String(plan.offerPrice)
+
+          : "",
+
+
+
+      offerEndsAt:
+
+        toDateInput(plan.offerEndsAt),
+
+
+
       active:
 
         plan.active,
@@ -180,7 +232,7 @@ function PlanCard({
 
   useEffect(() => {
 
-    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", active: plan.active });
+    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", offerPrice: plan.offerPrice !== null && plan.offerPrice !== undefined ? String(plan.offerPrice) : "", offerEndsAt: toDateInput(plan.offerEndsAt), active: plan.active });
 
   }, [plan]);
 
@@ -239,6 +291,18 @@ function PlanCard({
               yearlyPrice:
 
                 form.yearlyPrice,
+
+
+
+              offerPrice:
+
+                form.offerPrice,
+
+
+
+              offerEndsAt:
+
+                form.offerEndsAt || null,
 
 
 
@@ -634,6 +698,92 @@ function PlanCard({
 
 
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          <div>
+
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+
+              Offer Price <span className="text-slate-400 font-normal">(optional)</span>
+
+            </label>
+
+            <input
+
+              type="number"
+
+              min="0"
+
+              value={form.offerPrice}
+
+              onChange={(event) =>
+
+                setForm((current) => ({
+
+                  ...current,
+
+                  offerPrice: event.target.value,
+
+                }))
+
+              }
+
+              placeholder="Discounted annual price"
+
+              className="min-w-0 w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+
+            />
+
+          </div>
+
+          <div>
+
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+
+              Offer Ends <span className="text-slate-400 font-normal">(optional)</span>
+
+            </label>
+
+            <input
+
+              type="date"
+
+              value={form.offerEndsAt}
+
+              onChange={(event) =>
+
+                setForm((current) => ({
+
+                  ...current,
+
+                  offerEndsAt: event.target.value,
+
+                }))
+
+              }
+
+              className="min-w-0 w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+
+            />
+
+          </div>
+
+        </div>
+
+        {form.offerPrice && Number(form.offerPrice) > 0 && form.yearlyPrice && Number(form.offerPrice) >= Number(form.yearlyPrice) ? (
+
+          <p className="text-[11px] text-amber-600">Offer price should be below the annual price to apply a discount.</p>
+
+        ) : null}
+
+        {form.offerPrice && Number(form.offerPrice) > 0 && !form.offerEndsAt ? (
+
+          <p className="text-[11px] text-slate-400">No end date — the offer runs until you clear the offer price.</p>
+
+        ) : null}
+
+
+
         <div>
 
           <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -957,6 +1107,18 @@ function PlanCard({
           )}
 
         </strong>
+
+        {planOfferActive(plan) && (
+
+          <div className="mt-1 text-emerald-600">
+
+            Offer price: <strong>{formatMoney(plan.offerPrice)}</strong>
+
+            {plan.offerEndsAt ? ` · till ${toDateInput(plan.offerEndsAt)}` : " · no end date"}
+
+          </div>
+
+        )}
 
       </div>
 

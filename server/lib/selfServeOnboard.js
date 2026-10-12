@@ -47,13 +47,43 @@ export function addMonths(date, months) {
   return result;
 }
 
-// Self-serve pricing: list price + 18% GST, no discount (discount is admin-only).
-export function computeSelfServePricing(yearlyPrice) {
-  const listPrice = Number(yearlyPrice) || 0;
-  const subtotal = listPrice; // no discount on self-serve
+// Is a plan's promotional offer currently live? Offer must be a positive price
+// below the list price, and either have no end date or an end date in the future.
+export function isPlanOfferActive(offerPrice, offerEndsAt, listPrice) {
+  const op = Number(offerPrice);
+  const lp = Number(listPrice) || 0;
+  if (!Number.isFinite(op) || op <= 0) return false;
+  if (op >= lp) return false;
+  if (offerEndsAt && new Date(offerEndsAt).getTime() < Date.now()) return false;
+  return true;
+}
+
+// Self-serve pricing: list price (or active offer price) + 18% GST.
+// Accepts a plan object { yearlyPrice, offerPrice, offerEndsAt } or, for
+// back-compatibility, a raw yearly price number.
+export function computeSelfServePricing(plan) {
+  const isObj = plan && typeof plan === "object";
+  const listPrice = Number(isObj ? plan.yearlyPrice : plan) || 0;
+  const offerPrice = isObj ? plan.offerPrice : null;
+  const offerEndsAt = isObj ? plan.offerEndsAt : null;
+
+  const offerActive = isPlanOfferActive(offerPrice, offerEndsAt, listPrice);
+  const subtotal = offerActive
+    ? Math.round(Number(offerPrice) * 100) / 100
+    : listPrice;
+  const discount = Math.round((listPrice - subtotal) * 100) / 100;
   const gstAmount = Math.round(subtotal * (GST_RATE / 100) * 100) / 100;
   const finalAmount = Math.round((subtotal + gstAmount) * 100) / 100;
-  return { listPrice, discount: 0, subtotal, gstRate: GST_RATE, gstAmount, finalAmount };
+  return {
+    listPrice,
+    discount,
+    subtotal,
+    gstRate: GST_RATE,
+    gstAmount,
+    finalAmount,
+    offerActive,
+    offerEndsAt: offerActive ? offerEndsAt : null,
+  };
 }
 
 async function uniqueSubdomain(base) {
@@ -101,7 +131,22 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   // include a manual discount, so preserve the exact quoted amount stored in
   // PendingSignup instead of recomputing it as a public self-serve purchase.
   const pricing = (() => {
-    if (!isAdminPreOnboard) return computeSelfServePricing(plan.yearlyPrice);
+    if (!isAdminPreOnboard) {
+      // Prefer the exact breakdown captured when the order was created, so the
+      // receipt matches the charged amount even if the offer has since expired.
+      const stored = data.pricing;
+      if (stored && Number.isFinite(Number(stored.finalAmount))) {
+        return {
+          listPrice: Number(stored.listPrice) || 0,
+          discount: Number(stored.discount) || 0,
+          subtotal: Number(stored.subtotal) || 0,
+          gstRate: Number(stored.gstRate ?? GST_RATE),
+          gstAmount: Number(stored.gstAmount) || 0,
+          finalAmount: Number(stored.finalAmount) || 0,
+        };
+      }
+      return computeSelfServePricing(plan);
+    }
 
     const listPrice = Number(pending.listPrice || plan.yearlyPrice || 0);
     let discount = Number(data.discountAmount || 0);

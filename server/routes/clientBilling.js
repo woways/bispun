@@ -14,6 +14,7 @@ import {
 import {
   requireClientUser,
 } from "../middleware/clientAuth.js";
+import { isPlanOfferActive } from "../lib/selfServeOnboard.js";
 
 const router = Router();
 
@@ -58,22 +59,19 @@ function safeEqualHex(a, b) {
   }
 }
 
-const PRO_PROMO_PRICE = 29500;
-const PRO_PROMO_ENDS_AT = Date.parse("2026-11-10T23:59:59+05:30");
-
+// The annual amount actually charged for a plan: its promotional offer price
+// while the offer is live (set per-plan by Super Admin), otherwise the stored
+// yearly price. Single source of truth — no hardcoded plan keys or prices.
 function paymentAmount(plan) {
-  const planKey = String(plan?.key || "").toLowerCase();
-
-  // Promotional Pro offer: keep the stored yearly price as the list price
-  // (₹54,000), but charge ₹29,500 through Nov 10, 2026 (India time).
-  if (planKey === "pro" && Date.now() <= PRO_PROMO_ENDS_AT) {
-    return PRO_PROMO_PRICE;
+  const yearly =
+    plan.yearlyPrice !== null && plan.yearlyPrice !== undefined
+      ? Number(plan.yearlyPrice)
+      : null;
+  if (yearly === null) return null;
+  if (isPlanOfferActive(plan.offerPrice, plan.offerEndsAt, yearly)) {
+    return Math.round(Number(plan.offerPrice) * 100) / 100;
   }
-
-  return plan.yearlyPrice !== null &&
-    plan.yearlyPrice !== undefined
-    ? Number(plan.yearlyPrice)
-    : null;
+  return yearly;
 }
 
 router.get("/", async (req, res) => {
@@ -198,6 +196,17 @@ router.get("/", async (req, res) => {
                   plan.yearlyPrice
                 )
               : null,
+          offerPrice:
+            plan.offerPrice !== null &&
+            plan.offerPrice !== undefined
+              ? Number(plan.offerPrice)
+              : null,
+          offerEndsAt: plan.offerEndsAt || null,
+          offerActive: isPlanOfferActive(
+            plan.offerPrice,
+            plan.offerEndsAt,
+            plan.yearlyPrice
+          ),
         })
       ),
 

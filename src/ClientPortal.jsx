@@ -5072,18 +5072,32 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         const planKey =
                           String(billingPlan.key || "").toLowerCase();
 
-                        const isProPlan = planKey === "pro";
-                        const proOfferPrice = 29500;
-                        const proListPrice = 54000;
-                        const proOfferEndsAt = new Date("2026-11-10T23:59:59+05:30").getTime();
-                        const isProOfferActive =
-                          isProPlan && Date.now() <= proOfferEndsAt;
+                        // Offer is driven entirely by the Super Admin plan
+                        // settings (offerPrice + offerEndsAt), surfaced by the
+                        // billing API as offerActive/offerPrice/offerEndsAt.
+                        const offerActive =
+                          Boolean(billingPlan.offerActive) && yearlyAvailable;
+                        const listPriceValue = Number(billingPlan.yearlyPrice || 0);
+                        const offerPriceValue = Number(billingPlan.offerPrice || 0);
+                        const offerPctOff =
+                          offerActive && listPriceValue > 0
+                            ? Math.round(
+                                ((listPriceValue - offerPriceValue) / listPriceValue) * 100
+                              )
+                            : 0;
+                        const offerEndsLabel = billingPlan.offerEndsAt
+                          ? new Date(billingPlan.offerEndsAt).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "";
 
                         const selectedPrice =
                           yearlyAvailable
-                            ? isProOfferActive
-                              ? proOfferPrice
-                              : Number(billingPlan.yearlyPrice || 0)
+                            ? offerActive
+                              ? offerPriceValue
+                              : listPriceValue
                             : 0;
 
                         const planDescriptions = {
@@ -5185,14 +5199,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-6">
-                                {isProOfferActive && yearlyAvailable && (
+                                {offerActive && (
                                   <div className="mb-2 flex flex-wrap items-center gap-2">
                                     <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
-                                      ₹{proListPrice.toLocaleString("en-IN")}/year
+                                      ₹{listPriceValue.toLocaleString("en-IN")}/year
                                     </span>
-                                    <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
-                                      ~45% OFF
-                                    </span>
+                                    {offerPctOff > 0 && (
+                                      <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
+                                        ~{offerPctOff}% OFF
+                                      </span>
+                                    )}
                                   </div>
                                 )}
 
@@ -5218,9 +5234,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
                                 </div>
 
-                                {isProOfferActive && yearlyAvailable && (
+                                {offerActive && offerEndsLabel && (
                                   <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
-                                    Offer valid till Nov 10, 2026
+                                    Offer valid till {offerEndsLabel}
                                   </div>
                                 )}
                               </div>
