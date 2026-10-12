@@ -5706,6 +5706,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         Subscription Receipt
                         <br />
                         <span className="font-semibold text-slate-600">WOWAYS PRIVATE LIMITED</span>
+                        <br />
+                        A product of Woways Private Limited.
                       </div>
                     </div>
                   </div>

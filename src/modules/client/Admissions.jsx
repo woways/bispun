@@ -25,6 +25,8 @@ import {
   Paperclip,
   ExternalLink,
   ChevronRight,
+  Folder,
+  FolderPlus,
   GraduationCap,
   Download,
   ArrowUpDown,
@@ -1075,19 +1077,28 @@ function BranchModal({
 
 function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
   const [attachments, setAttachments] = useState([]);
+  const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+
+  // null = "All files", "__root" = files not in any folder, otherwise a folder id.
+  const [activeFolderId, setActiveFolderId] = useState(null);
+  const [search, setSearch] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [savingFolder, setSavingFolder] = useState(false);
+
+  const base = `/api/client/admissions/partners/${partner.id}`;
 
   async function loadAttachments() {
     setLoading(true);
     setError("");
 
     try {
-      const data = await apiRequest(
-        `/api/client/admissions/partners/${partner.id}/attachments`
-      );
+      const data = await apiRequest(`${base}/attachments`);
       setAttachments(data.attachments || []);
+      setFolders(data.folders || []);
     } catch (loadError) {
       setError(loadError?.data?.message || "Unable to load attachments");
     } finally {
@@ -1097,6 +1108,7 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
 
   useEffect(() => {
     loadAttachments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partner.id]);
 
   async function uploadFile(file) {
@@ -1108,11 +1120,12 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
     try {
       const body = new FormData();
       body.append("file", file);
+      // Upload into the folder the user is currently viewing (if any).
+      if (activeFolderId && activeFolderId !== "__root") {
+        body.append("folderId", activeFolderId);
+      }
 
-      const data = await apiRequest(
-        `/api/client/admissions/partners/${partner.id}/attachments`,
-        { method: "POST", body }
-      );
+      const data = await apiRequest(`${base}/attachments`, { method: "POST", body });
 
       setAttachments((current) => [data.attachment, ...current]);
       if (onChanged) await onChanged();
@@ -1128,14 +1141,89 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
 
     setError("");
     try {
-      await apiRequest(
-        `/api/client/admissions/partners/${partner.id}/attachments/${attachment.id}`,
-        { method: "DELETE" }
-      );
+      await apiRequest(`${base}/attachments/${attachment.id}`, { method: "DELETE" });
       setAttachments((current) => current.filter((item) => item.id !== attachment.id));
       if (onChanged) await onChanged();
     } catch (deleteError) {
       setError(deleteError?.data?.message || "Unable to remove attachment");
+    }
+  }
+
+  async function moveAttachment(attachment, folderId) {
+    const target = folderId || null;
+    if ((attachment.folderId || null) === target) return;
+
+    setError("");
+    try {
+      await apiRequest(`${base}/attachments/${attachment.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ folderId: target }),
+      });
+      setAttachments((current) =>
+        current.map((item) => (item.id === attachment.id ? { ...item, folderId: target } : item))
+      );
+    } catch (moveError) {
+      setError(moveError?.data?.message || "Unable to move attachment");
+    }
+  }
+
+  async function createFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+
+    setSavingFolder(true);
+    setError("");
+    try {
+      const data = await apiRequest(`${base}/folders`, {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      setFolders((current) => [...current, data.folder]);
+      setNewFolderName("");
+      setCreatingFolder(false);
+      setActiveFolderId(data.folder.id);
+    } catch (createError) {
+      setError(createError?.data?.message || "Unable to create folder");
+    } finally {
+      setSavingFolder(false);
+    }
+  }
+
+  async function renameFolder(folder) {
+    const name = window.prompt("Rename folder", folder.name);
+    if (name == null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === folder.name) return;
+
+    setError("");
+    try {
+      await apiRequest(`${base}/folders/${folder.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmed }),
+      });
+      setFolders((current) =>
+        current.map((item) => (item.id === folder.id ? { ...item, name: trimmed } : item))
+      );
+    } catch (renameError) {
+      setError(renameError?.data?.message || "Unable to rename folder");
+    }
+  }
+
+  async function deleteFolder(folder) {
+    if (!window.confirm(`Delete the folder "${folder.name}"? Files inside it stay and move back to All files.`)) {
+      return;
+    }
+
+    setError("");
+    try {
+      await apiRequest(`${base}/folders/${folder.id}`, { method: "DELETE" });
+      setFolders((current) => current.filter((item) => item.id !== folder.id));
+      setAttachments((current) =>
+        current.map((item) => (item.folderId === folder.id ? { ...item, folderId: null } : item))
+      );
+      if (activeFolderId === folder.id) setActiveFolderId(null);
+    } catch (deleteError) {
+      setError(deleteError?.data?.message || "Unable to delete folder");
     }
   }
 
@@ -1147,9 +1235,30 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
     return `${(value / (1024 * 1024)).toFixed(1)} MB`;
   }
 
+  const query = search.trim().toLowerCase();
+  const searching = query.length > 0;
+
+  // Keep folder counts live as files move around.
+  const countFor = (id) => attachments.filter((a) => (a.folderId || null) === id).length;
+
+  // Which files to show: when searching, match across every folder; otherwise
+  // show the files in the selected folder (or all / unfiled).
+  const visibleAttachments = attachments.filter((a) => {
+    if (searching) return a.fileName.toLowerCase().includes(query);
+    if (activeFolderId === null) return true;
+    if (activeFolderId === "__root") return !a.folderId;
+    return a.folderId === activeFolderId;
+  });
+
+  const visibleFolders = searching
+    ? folders.filter((f) => f.name.toLowerCase().includes(query))
+    : folders;
+
+  const folderName = (id) => folders.find((f) => f.id === id)?.name || "";
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
@@ -1157,7 +1266,7 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
               <h2 className="text-[17px] font-bold text-slate-950">College Attachments</h2>
             </div>
             <p className="mt-1 text-[13px] text-slate-500">
-              {partner.name} · keep brochures, fee structures, approvals and other college files here.
+              {partner.name} · organise brochures, fee structures, approvals and other files into folders.
             </p>
           </div>
           <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
@@ -1165,81 +1274,282 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto p-5">
-          {error ? (
-            <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
-              {error}
-            </div>
-          ) : null}
-
-          <label className={`flex min-h-[108px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed px-5 text-center transition ${uploading ? "cursor-wait border-slate-200 bg-slate-50" : "border-indigo-200 bg-indigo-50/40 hover:border-indigo-300 hover:bg-indigo-50"}`}>
+        {/* Search bar */}
+        <div className="border-b border-slate-200 px-5 py-3">
+          <div className="relative">
+            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
-              type="file"
-              className="hidden"
-              disabled={uploading}
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip"
-              onChange={(event) => {
-                const file = event.target.files?.[0] || null;
-                event.target.value = "";
-                uploadFile(file);
-              }}
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search files and folders…"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-9 text-[13px] text-slate-800 outline-none focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100"
             />
-            <div>
-              {uploading ? <Loader2 size={22} className="mx-auto animate-spin text-indigo-600" /> : <Upload size={22} className="mx-auto text-indigo-600" />}
-              <div className="mt-2 text-[14px] font-bold text-slate-800">
-                {uploading ? "Uploading..." : "Upload college attachment"}
-              </div>
-              <div className="mt-1 text-[12px] text-slate-500">
-                PDF, images, Word, Excel, CSV, PowerPoint, TXT or ZIP · max 15 MB
-              </div>
-            </div>
-          </label>
+            {search ? (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100"
+                title="Clear search"
+              >
+                <X size={14} />
+              </button>
+            ) : null}
+          </div>
+        </div>
 
-          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-500">Files</div>
-              <div className="text-[12px] font-semibold text-slate-500">{attachments.length} attachment{attachments.length === 1 ? "" : "s"}</div>
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* Folder rail */}
+          <div className="shrink-0 border-b border-slate-200 bg-slate-50/60 p-3 sm:w-56 sm:border-b-0 sm:border-r">
+            <div className="flex flex-wrap gap-1.5 sm:flex-col">
+              <button
+                type="button"
+                onClick={() => setActiveFolderId(null)}
+                disabled={searching}
+                className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
+                  activeFolderId === null && !searching ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                } ${searching ? "opacity-50" : ""}`}
+              >
+                <span className="flex items-center gap-2"><Paperclip size={14} /> All files</span>
+                <span className="text-[11px] opacity-80">{attachments.length}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveFolderId("__root")}
+                disabled={searching}
+                className={`flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold transition ${
+                  activeFolderId === "__root" && !searching ? "bg-indigo-600 text-white" : "text-slate-700 hover:bg-slate-100"
+                } ${searching ? "opacity-50" : ""}`}
+              >
+                <span className="flex items-center gap-2"><Folder size={14} /> Unfiled</span>
+                <span className="text-[11px] opacity-80">{countFor(null)}</span>
+              </button>
 
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-slate-500">
-                <Loader2 size={15} className="animate-spin" /> Loading attachments...
-              </div>
-            ) : attachments.length ? (
-              <div className="divide-y divide-slate-100">
-                {attachments.map((attachment) => (
-                  <div key={attachment.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-semibold text-slate-900">{attachment.fileName}</div>
-                      <div className="mt-1 text-[11px] text-slate-500">
-                        {fileSize(attachment.sizeBytes)} · {formatDate(attachment.createdAt)}
-                        {attachment.uploadedByName ? ` · ${attachment.uploadedByName}` : ""}
-                      </div>
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      <a
-                        href={attachment.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        <ExternalLink size={12} /> Open
-                      </a>
-                      <button
-                        type="button"
-                        onClick={() => removeAttachment(attachment)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
-                        title="Remove attachment"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+              {folders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className={`group flex items-center gap-1 rounded-lg px-1.5 ${
+                    activeFolderId === folder.id && !searching ? "bg-indigo-600" : "hover:bg-slate-100"
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setActiveFolderId(folder.id)}
+                    disabled={searching}
+                    className={`flex min-w-0 flex-1 items-center justify-between gap-2 py-2 pl-1.5 text-[13px] font-semibold transition ${
+                      activeFolderId === folder.id && !searching ? "text-white" : "text-slate-700"
+                    } ${searching ? "opacity-50" : ""}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Folder size={14} className="shrink-0" />
+                      <span className="truncate">{folder.name}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] opacity-80">{countFor(folder.id)}</span>
+                  </button>
+                  <div className="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={() => renameFolder(folder)}
+                      className={`flex h-6 w-6 items-center justify-center rounded ${
+                        activeFolderId === folder.id && !searching ? "text-white/90 hover:bg-white/20" : "text-slate-400 hover:bg-slate-200"
+                      }`}
+                      title="Rename folder"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteFolder(folder)}
+                      className={`flex h-6 w-6 items-center justify-center rounded ${
+                        activeFolderId === folder.id && !searching ? "text-white/90 hover:bg-white/20" : "text-rose-500 hover:bg-rose-100"
+                      }`}
+                      title="Delete folder"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                ))}
+                </div>
+              ))}
+            </div>
+
+            {creatingFolder ? (
+              <div className="mt-2 rounded-lg border border-indigo-200 bg-white p-2">
+                <input
+                  type="text"
+                  autoFocus
+                  value={newFolderName}
+                  maxLength={80}
+                  onChange={(event) => setNewFolderName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") createFolder();
+                    if (event.key === "Escape") { setCreatingFolder(false); setNewFolderName(""); }
+                  }}
+                  placeholder="Folder name"
+                  className="h-8 w-full rounded-md border border-slate-200 px-2 text-[13px] outline-none focus:border-indigo-300"
+                />
+                <div className="mt-2 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={createFolder}
+                    disabled={savingFolder || !newFolderName.trim()}
+                    className="h-7 flex-1 rounded-md bg-indigo-600 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingFolder ? "Saving…" : "Create"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCreatingFolder(false); setNewFolderName(""); }}
+                    className="h-7 rounded-md border border-slate-200 px-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="py-12 text-center text-[13px] text-slate-500">No attachments added for this college yet.</div>
+              <button
+                type="button"
+                onClick={() => setCreatingFolder(true)}
+                className="mt-2 flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-[13px] font-semibold text-slate-600 hover:border-indigo-300 hover:text-indigo-600"
+              >
+                <FolderPlus size={14} /> New folder
+              </button>
             )}
+          </div>
+
+          {/* Files pane */}
+          <div className="min-w-0 flex-1 overflow-y-auto p-5">
+            {error ? (
+              <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-[13px] font-medium text-rose-700">
+                {error}
+              </div>
+            ) : null}
+
+            <label className={`flex min-h-[96px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed px-5 text-center transition ${uploading ? "cursor-wait border-slate-200 bg-slate-50" : "border-indigo-200 bg-indigo-50/40 hover:border-indigo-300 hover:bg-indigo-50"}`}>
+              <input
+                type="file"
+                className="hidden"
+                disabled={uploading}
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.zip"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  event.target.value = "";
+                  uploadFile(file);
+                }}
+              />
+              <div>
+                {uploading ? <Loader2 size={22} className="mx-auto animate-spin text-indigo-600" /> : <Upload size={22} className="mx-auto text-indigo-600" />}
+                <div className="mt-2 text-[14px] font-bold text-slate-800">
+                  {uploading
+                    ? "Uploading..."
+                    : activeFolderId && activeFolderId !== "__root"
+                    ? `Upload to “${folderName(activeFolderId)}”`
+                    : "Upload college attachment"}
+                </div>
+                <div className="mt-1 text-[12px] text-slate-500">
+                  PDF, images, Word, Excel, CSV, PowerPoint, TXT or ZIP · max 15 MB
+                </div>
+              </div>
+            </label>
+
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                  {searching
+                    ? "Search results"
+                    : activeFolderId === null
+                    ? "All files"
+                    : activeFolderId === "__root"
+                    ? "Unfiled"
+                    : folderName(activeFolderId)}
+                </div>
+                <div className="text-[12px] font-semibold text-slate-500">
+                  {visibleAttachments.length} file{visibleAttachments.length === 1 ? "" : "s"}
+                </div>
+              </div>
+
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-12 text-[13px] text-slate-500">
+                  <Loader2 size={15} className="animate-spin" /> Loading attachments...
+                </div>
+              ) : (
+                <>
+                  {/* When searching, surface matching folders too. */}
+                  {searching && visibleFolders.length ? (
+                    <div className="divide-y divide-slate-100 border-b border-slate-100 bg-slate-50/40">
+                      {visibleFolders.map((folder) => (
+                        <button
+                          key={folder.id}
+                          type="button"
+                          onClick={() => { setSearch(""); setActiveFolderId(folder.id); }}
+                          className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-slate-100"
+                        >
+                          <span className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+                            <Folder size={14} className="text-indigo-500" /> {folder.name}
+                          </span>
+                          <span className="text-[11px] text-slate-500">{countFor(folder.id)} file{countFor(folder.id) === 1 ? "" : "s"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {visibleAttachments.length ? (
+                    <div className="divide-y divide-slate-100">
+                      {visibleAttachments.map((attachment) => (
+                        <div key={attachment.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="truncate text-[13px] font-semibold text-slate-900">{attachment.fileName}</div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              {fileSize(attachment.sizeBytes)} · {formatDate(attachment.createdAt)}
+                              {attachment.uploadedByName ? ` · ${attachment.uploadedByName}` : ""}
+                              {(searching || activeFolderId === null) && attachment.folderId
+                                ? ` · in ${folderName(attachment.folderId)}`
+                                : ""}
+                            </div>
+                          </div>
+                          <div className="flex flex-shrink-0 items-center gap-2">
+                            <select
+                              value={attachment.folderId || ""}
+                              onChange={(event) => moveAttachment(attachment, event.target.value)}
+                              title="Move to folder"
+                              className="h-8 max-w-[140px] rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none hover:bg-slate-50 focus:border-indigo-300"
+                            >
+                              <option value="">Unfiled</option>
+                              {folders.map((folder) => (
+                                <option key={folder.id} value={folder.id}>{folder.name}</option>
+                              ))}
+                            </select>
+                            <a
+                              href={attachment.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              <ExternalLink size={12} /> Open
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(attachment)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              title="Remove attachment"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center text-[13px] text-slate-500">
+                      {searching
+                        ? "No files or folders match your search."
+                        : activeFolderId && activeFolderId !== "__root"
+                        ? "This folder is empty. Upload a file or move one here."
+                        : "No attachments added for this college yet."}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -202,6 +202,7 @@ export function downloadInvoicePdf(receipt) {
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
   doc.text("This invoice confirms successful payment for your CRM subscription.", left, 766);
+  doc.text("A product of Woways Private Limited.", left, 780);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(71, 85, 105);
   doc.text("WOWAYS PRIVATE LIMITED", right, 766, { align: "right" });
@@ -288,7 +289,14 @@ export function downloadPaymentReceiptPdf(receipt) {
   y += 18;
   doc.setFont("helvetica", "bold");
   doc.setTextColor(55);
+  doc.text("Thank you for choosing Bispun.", left, y);
+  y += 16;
   doc.text("WOWAYS PRIVATE LIMITED", left, y);
+  y += 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(120);
+  doc.text("A product of Woways Private Limited.", left, y);
 
   const name = `Bispun-Receipt-${receipt.receiptNumber || receipt.id || "payment"}.pdf`;
   doc.save(name);

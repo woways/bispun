@@ -1042,20 +1042,33 @@ router.get("/partners/:id/attachments", async (req, res) => {
       return res.status(404).json({ success: false, message: "College not found" });
     }
 
-    const attachments = await prisma.admissionPartnerAttachment.findMany({
-      where: { companyId, partnerId: partner.id },
-      orderBy: { createdAt: "desc" },
-    });
+    const [attachments, folders] = await Promise.all([
+      prisma.admissionPartnerAttachment.findMany({
+        where: { companyId, partnerId: partner.id },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.admissionAttachmentFolder.findMany({
+        where: { companyId, partnerId: partner.id },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      }),
+    ]);
 
     return res.json({
       success: true,
       partner,
+      folders: folders.map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        fileCount: attachments.filter((a) => a.folderId === folder.id).length,
+        createdAt: folder.createdAt,
+      })),
       attachments: attachments.map((item) => ({
         id: item.id,
         fileName: item.fileName,
         mimeType: item.mimeType,
         sizeBytes: item.sizeBytes,
         url: item.url,
+        folderId: item.folderId || null,
         uploadedByName: item.uploadedByName,
         createdAt: item.createdAt,
       })),
@@ -1085,12 +1098,23 @@ router.post(
         return res.status(400).json({ success: false, message: "Choose a file to upload" });
       }
 
+      // Optional target folder — must belong to this college/company.
+      let folderId = String(req.body?.folderId || "").trim() || null;
+      if (folderId) {
+        const folder = await prisma.admissionAttachmentFolder.findFirst({
+          where: { id: folderId, companyId, partnerId: partner.id },
+          select: { id: true },
+        });
+        if (!folder) folderId = null;
+      }
+
       const stored = await uploadAdmissionPartnerAttachment(req.file, companyId, partner.id);
 
       const attachment = await prisma.admissionPartnerAttachment.create({
         data: {
           companyId,
           partnerId: partner.id,
+          folderId,
           fileName: stored.fileName,
           mimeType: stored.mimeType,
           sizeBytes: stored.sizeBytes,
@@ -1111,6 +1135,7 @@ router.post(
           mimeType: attachment.mimeType,
           sizeBytes: attachment.sizeBytes,
           url: attachment.url,
+          folderId: attachment.folderId || null,
           uploadedByName: attachment.uploadedByName,
           createdAt: attachment.createdAt,
         },
@@ -1167,6 +1192,159 @@ router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res)
   } catch (error) {
     console.error("Failed to delete college attachment:", error);
     return res.status(500).json({ success: false, message: "Unable to remove college attachment" });
+  }
+});
+
+// ---- College attachment folders --------------------------------------------
+
+async function findPartnerForFolders(companyId, partnerId) {
+  return prisma.admissionPartner.findFirst({
+    where: { id: partnerId, companyId, active: true },
+    select: { id: true },
+  });
+}
+
+// Create a folder on a college.
+router.post("/partners/:id/folders", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const partner = await findPartnerForFolders(companyId, req.params.id);
+    if (!partner) {
+      return res.status(404).json({ success: false, message: "College not found" });
+    }
+
+    const name = String(req.body?.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Folder name is required" });
+    }
+    if (name.length > 80) {
+      return res.status(400).json({ success: false, message: "Folder name must be 80 characters or less" });
+    }
+
+    const existing = await prisma.admissionAttachmentFolder.findFirst({
+      where: { companyId, partnerId: partner.id, name },
+      select: { id: true },
+    });
+    if (existing) {
+      return res.status(409).json({ success: false, message: "A folder with this name already exists" });
+    }
+
+    const folder = await prisma.admissionAttachmentFolder.create({
+      data: { companyId, partnerId: partner.id, name },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Folder created",
+      folder: { id: folder.id, name: folder.name, fileCount: 0, createdAt: folder.createdAt },
+    });
+  } catch (error) {
+    console.error("Failed to create attachment folder:", error);
+    return res.status(500).json({ success: false, message: "Unable to create folder" });
+  }
+});
+
+// Rename a folder.
+router.patch("/partners/:partnerId/folders/:folderId", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const folder = await prisma.admissionAttachmentFolder.findFirst({
+      where: { id: req.params.folderId, partnerId: req.params.partnerId, companyId },
+    });
+    if (!folder) {
+      return res.status(404).json({ success: false, message: "Folder not found" });
+    }
+
+    const name = String(req.body?.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ success: false, message: "Folder name is required" });
+    }
+    if (name.length > 80) {
+      return res.status(400).json({ success: false, message: "Folder name must be 80 characters or less" });
+    }
+
+    const clash = await prisma.admissionAttachmentFolder.findFirst({
+      where: { companyId, partnerId: folder.partnerId, name, NOT: { id: folder.id } },
+      select: { id: true },
+    });
+    if (clash) {
+      return res.status(409).json({ success: false, message: "A folder with this name already exists" });
+    }
+
+    const updated = await prisma.admissionAttachmentFolder.update({
+      where: { id: folder.id },
+      data: { name },
+    });
+
+    return res.json({
+      success: true,
+      message: "Folder renamed",
+      folder: { id: updated.id, name: updated.name },
+    });
+  } catch (error) {
+    console.error("Failed to rename attachment folder:", error);
+    return res.status(500).json({ success: false, message: "Unable to rename folder" });
+  }
+});
+
+// Delete a folder. Files inside are kept and moved back to "All files"
+// (folderId is set to null via the schema's onDelete: SetNull).
+router.delete("/partners/:partnerId/folders/:folderId", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const folder = await prisma.admissionAttachmentFolder.findFirst({
+      where: { id: req.params.folderId, partnerId: req.params.partnerId, companyId },
+      select: { id: true },
+    });
+    if (!folder) {
+      return res.status(404).json({ success: false, message: "Folder not found" });
+    }
+
+    await prisma.admissionAttachmentFolder.delete({ where: { id: folder.id } });
+
+    return res.json({ success: true, message: "Folder deleted" });
+  } catch (error) {
+    console.error("Failed to delete attachment folder:", error);
+    return res.status(500).json({ success: false, message: "Unable to delete folder" });
+  }
+});
+
+// Move an attachment into a folder (or back out, folderId: null).
+router.patch("/partners/:partnerId/attachments/:attachmentId", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const attachment = await prisma.admissionPartnerAttachment.findFirst({
+      where: { id: req.params.attachmentId, partnerId: req.params.partnerId, companyId },
+      select: { id: true },
+    });
+    if (!attachment) {
+      return res.status(404).json({ success: false, message: "Attachment not found" });
+    }
+
+    let folderId = req.body?.folderId ? String(req.body.folderId).trim() : null;
+    if (folderId) {
+      const folder = await prisma.admissionAttachmentFolder.findFirst({
+        where: { id: folderId, companyId, partnerId: req.params.partnerId },
+        select: { id: true },
+      });
+      if (!folder) {
+        return res.status(404).json({ success: false, message: "Folder not found" });
+      }
+    }
+
+    const updated = await prisma.admissionPartnerAttachment.update({
+      where: { id: attachment.id },
+      data: { folderId },
+    });
+
+    return res.json({
+      success: true,
+      message: "Attachment moved",
+      attachment: { id: updated.id, folderId: updated.folderId || null },
+    });
+  } catch (error) {
+    console.error("Failed to move attachment:", error);
+    return res.status(500).json({ success: false, message: "Unable to move attachment" });
   }
 });
 
