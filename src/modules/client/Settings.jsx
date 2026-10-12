@@ -324,11 +324,152 @@ export default function SettingsView({
     }
   }
 
+  // ---- WhatsApp (Meta Cloud API) integration state ----
+  // Model A: the client connects their OWN WhatsApp Business number via Meta
+  // Embedded Signup. Bispun never sends on its own number; Meta bills the client.
+  const [waStatus, setWaStatus] = useState({
+    configured: false,
+    connected: false,
+    status: "DISCONNECTED",
+    displayNumber: null,
+    verifiedName: null,
+    config: { appId: "", configId: "", graphVersion: "v21.0" },
+  });
+  const [waBusy, setWaBusy] = useState(false);
+  const [waNotice, setWaNotice] = useState("");
+  const [waLoading, setWaLoading] = useState(true);
+
+  async function loadWhatsAppStatus() {
+    setWaLoading(true);
+    try {
+      const data = await apiRequest("/api/client/whatsapp/status");
+      setWaStatus({
+        configured: !!data?.configured,
+        connected: !!data?.connected,
+        status: data?.status || "DISCONNECTED",
+        displayNumber: data?.displayNumber || null,
+        verifiedName: data?.verifiedName || null,
+        config: data?.config || { appId: "", configId: "", graphVersion: "v21.0" },
+      });
+    } catch (error) {
+      console.error("Unable to load WhatsApp status:", error);
+    } finally {
+      setWaLoading(false);
+    }
+  }
+
+  // Load the Facebook JS SDK once (needed to launch Embedded Signup).
+  function loadFacebookSdk(appId, version) {
+    return new Promise((resolve, reject) => {
+      if (window.FB) return resolve(window.FB);
+      window.fbAsyncInit = function () {
+        window.FB.init({ appId, cookie: true, xfbml: false, version });
+        resolve(window.FB);
+      };
+      const existing = document.getElementById("facebook-jssdk");
+      if (existing) return; // init will fire via fbAsyncInit
+      const s = document.createElement("script");
+      s.id = "facebook-jssdk";
+      s.async = true;
+      s.defer = true;
+      s.src = "https://connect.facebook.net/en_US/sdk.js";
+      s.onerror = () => reject(new Error("Unable to load Facebook SDK"));
+      document.body.appendChild(s);
+    });
+  }
+
+  async function connectWhatsApp() {
+    setWaNotice("");
+    const { appId, configId, graphVersion } = waStatus.config || {};
+    if (!waStatus.configured || !appId || !configId) {
+      setWaNotice("WhatsApp isn't set up on the server yet. Please try again later.");
+      return;
+    }
+    setWaBusy(true);
+    try {
+      await loadFacebookSdk(appId, graphVersion || "v21.0");
+
+      // Embedded Signup returns the WABA id + phone number id via postMessage.
+      const captured = { wabaId: "", phoneNumberId: "" };
+      const onMessage = (event) => {
+        if (!String(event.origin || "").includes("facebook.com")) return;
+        try {
+          const payload =
+            typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+          if (payload?.type === "WA_EMBEDDED_SIGNUP" && payload?.data) {
+            captured.wabaId = payload.data.waba_id || captured.wabaId;
+            captured.phoneNumberId =
+              payload.data.phone_number_id || captured.phoneNumberId;
+          }
+        } catch {
+          /* ignore non-JSON messages */
+        }
+      };
+      window.addEventListener("message", onMessage);
+
+      window.FB.login(
+        async (response) => {
+          window.removeEventListener("message", onMessage);
+          const code = response?.authResponse?.code;
+          if (!code) {
+            setWaBusy(false);
+            setWaNotice("WhatsApp connection was cancelled.");
+            return;
+          }
+          try {
+            const data = await apiRequest("/api/client/whatsapp/connect", {
+              method: "POST",
+              body: JSON.stringify({
+                code,
+                wabaId: captured.wabaId,
+                phoneNumberId: captured.phoneNumberId,
+              }),
+            });
+            if (data?.connected) {
+              setWaNotice("WhatsApp connected.");
+              await loadWhatsAppStatus();
+            } else {
+              setWaNotice(data?.message || "Could not finish connecting.");
+            }
+          } catch (err) {
+            setWaNotice(err?.data?.message || "Could not finish connecting WhatsApp.");
+          } finally {
+            setWaBusy(false);
+          }
+        },
+        {
+          config_id: configId,
+          response_type: "code",
+          override_default_response_type: true,
+          extras: { setup: {}, sessionInfoVersion: "2" },
+        }
+      );
+    } catch (error) {
+      setWaBusy(false);
+      setWaNotice(error?.message || "Unable to start WhatsApp connect.");
+    }
+  }
+
+  async function disconnectWhatsApp() {
+    setWaBusy(true);
+    setWaNotice("");
+    try {
+      await apiRequest("/api/client/whatsapp/disconnect", { method: "POST" });
+      await loadWhatsAppStatus();
+      setWaNotice("WhatsApp disconnected.");
+    } catch (error) {
+      setWaNotice(error?.data?.message || "Unable to disconnect WhatsApp.");
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
   // Load status when opening the Integrations tab, and show the result of a
   // just-completed OAuth redirect (?google=connected|error|norefresh).
   useEffect(() => {
     if (tab !== "integrations") return;
     loadGoogleStatus();
+    loadWhatsAppStatus();
     try {
       const params = new URLSearchParams(window.location.search);
       const g = params.get("google");
@@ -4172,12 +4313,46 @@ export default function SettingsView({
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
                   <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200"><MessageCircle size={20} /></span>
-                    <div><div className="text-[15px] font-bold text-slate-900">WhatsApp</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Send approved WhatsApp messages and templates to leads.</p></div>
+                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200"><MessageCircle size={20} /></span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="text-[15px] font-bold text-slate-900">WhatsApp</div>
+                        {waStatus.connected && (
+                          <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">Connected</span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-[13px] leading-5 text-slate-500">
+                        Connect your own WhatsApp Business number to message leads. You pay Meta directly for messages; Bispun adds no charge.
+                      </p>
+                      {waStatus.connected && waStatus.displayNumber && (
+                        <p className="mt-1 text-[12px] text-slate-600">
+                          {waStatus.verifiedName ? `${waStatus.verifiedName} · ` : ""}{waStatus.displayNumber}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <span className="mt-4 inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">Coming Soon</span>
+
+                  {waNotice && (
+                    <div className="mt-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-slate-600">{waNotice}</div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {waLoading ? (
+                      <span className="text-[13px] text-slate-400">Checking status…</span>
+                    ) : !waStatus.configured ? (
+                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200">Setup pending — available once Bispun finishes WhatsApp setup</span>
+                    ) : waStatus.connected ? (
+                      <button type="button" onClick={disconnectWhatsApp} disabled={waBusy} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                        {waBusy ? "Working…" : "Disconnect"}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={connectWhatsApp} disabled={waBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+                        <MessageCircle size={15} /> {waBusy ? "Opening…" : "Connect WhatsApp"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">

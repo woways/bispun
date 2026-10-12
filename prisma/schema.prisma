@@ -214,6 +214,7 @@ model Company {
   subscriptions  Subscription[]
   companyModules CompanyModule[]
   settings       CompanySettings?
+  whatsapp       WhatsAppConnection?
 
   leads                   Lead[]
   leadStatusOptions        LeadStatusOption[]
@@ -1656,4 +1657,33 @@ model PendingSignup {
   updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
+}
+
+// One WhatsApp Business (Cloud API) connection per client company.
+// The client connects their OWN WhatsApp Business number via Meta Embedded
+// Signup; Bispun only stores the resulting IDs + token. Meta bills the client
+// directly for messages — Bispun is not in that money flow.
+model WhatsAppConnection {
+  id      String  @id @default(cuid())
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String @unique
+
+  wabaId        String? // WhatsApp Business Account ID
+  phoneNumberId String? // the phone number's ID used to send messages
+  displayNumber String? // human-readable number, e.g. +91 98xxxxxx
+  verifiedName  String? // business display name approved by Meta
+
+  accessToken String? // encrypted (AES-256-GCM, same scheme as Google tokens)
+
+  // DISCONNECTED | CONNECTED | ERROR
+  status String @default("DISCONNECTED")
+
+  connectedByUserId String?
+  connectedAt       DateTime?
+  lastError         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
 }

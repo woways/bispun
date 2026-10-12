@@ -56,6 +56,7 @@ import clientGoogleRoutes from "./routes/clientGoogle.js";
 import clientCommunicationsRoutes from "./routes/clientCommunications.js";
 import clientYearsRoutes from "./routes/clientYears.js";
 import clientChatRoutes from "./routes/clientChat.js";
+import clientWhatsAppRoutes, { whatsappWebhookRouter } from "./routes/clientWhatsApp.js";
 
 import razorpayWebhook from "./routes/razorpayWebhook.js";
 import http from "http";
@@ -194,6 +195,8 @@ app.use("/api/client/counselling", clientCounsellingRoutes);
 app.use("/api/client/calendar", clientCalendarRoutes);
 app.use("/api/client/years", clientYearsRoutes);
 app.use("/api/client/chat", clientChatRoutes);
+app.use("/api/client/whatsapp", clientWhatsAppRoutes);
+app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);
 app.use("/api/client/targets", clientTargetsRoutes);
 app.use("/api/client/referrals", clientReferralsRoutes);
 app.use("/api/client/store", clientStoreRoutes);
