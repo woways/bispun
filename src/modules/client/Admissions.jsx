@@ -2504,80 +2504,80 @@ function AdmissionsManager({
 
   const STREAM_GRADIENTS = {
     blue: {
-      primary: "bg-gradient-to-br from-[#2563eb] via-[#1d4ed8] to-[#3730a3]",
-      secondary: "bg-gradient-to-br from-[#3b82f6] via-[#2563eb] to-[#1d4ed8]",
+      primary: "bg-gradient-to-br from-[#2563eb] to-[#4338ca]",
+      secondary: "bg-gradient-to-br from-[#2563eb] to-[#4338ca]",
     },
     orange: {
-      primary: "bg-gradient-to-br from-[#f97316] via-[#ea580c] to-[#c2410c]",
-      secondary: "bg-gradient-to-br from-[#fb923c] via-[#f97316] to-[#ea580c]",
+      primary: "bg-gradient-to-br from-[#f97316] to-[#d97706]",
+      secondary: "bg-gradient-to-br from-[#f97316] to-[#d97706]",
     },
     purple: {
-      primary: "bg-gradient-to-br from-[#7c3aed] via-[#7e22ce] to-[#6b21a8]",
-      secondary: "bg-gradient-to-br from-[#a855f7] via-[#9333ea] to-[#7e22ce]",
+      primary: "bg-gradient-to-br from-[#7c3aed] to-[#7e22ce]",
+      secondary: "bg-gradient-to-br from-[#7c3aed] to-[#7e22ce]",
     },
     green: {
-      primary: "bg-gradient-to-br from-[#059669] via-[#0d9488] to-[#0f766e]",
-      secondary: "bg-gradient-to-br from-[#10b981] via-[#059669] to-[#0d9488]",
+      primary: "bg-gradient-to-br from-[#059669] to-[#0f766e]",
+      secondary: "bg-gradient-to-br from-[#059669] to-[#0f766e]",
     },
     rose: {
-      primary: "bg-gradient-to-br from-[#e11d48] via-[#be123c] to-[#be185d]",
-      secondary: "bg-gradient-to-br from-[#f43f5e] via-[#e11d48] to-[#be123c]",
+      primary: "bg-gradient-to-br from-[#e11d48] to-[#be185d]",
+      secondary: "bg-gradient-to-br from-[#e11d48] to-[#be185d]",
     },
     slate: {
-      primary: "bg-gradient-to-br from-[#475569] via-[#334155] to-[#1e293b]",
-      secondary: "bg-gradient-to-br from-[#64748b] via-[#475569] to-[#334155]",
+      primary: "bg-gradient-to-br from-[#334155] to-[#0f172a]",
+      secondary: "bg-gradient-to-br from-[#334155] to-[#0f172a]",
     },
     sky: {
-      primary: "bg-gradient-to-br from-[#0ea5e9] via-[#0284c7] to-[#1d4ed8]",
-      secondary: "bg-gradient-to-br from-[#38bdf8] via-[#0ea5e9] to-[#0284c7]",
+      primary: "bg-gradient-to-br from-[#0ea5e9] to-[#1d4ed8]",
+      secondary: "bg-gradient-to-br from-[#0ea5e9] to-[#1d4ed8]",
     },
     cyan: {
-      primary: "bg-gradient-to-br from-[#06b6d4] via-[#0891b2] to-[#0f766e]",
-      secondary: "bg-gradient-to-br from-[#22d3ee] via-[#06b6d4] to-[#0e7490]",
+      primary: "bg-gradient-to-br from-[#06b6d4] to-[#0f766e]",
+      secondary: "bg-gradient-to-br from-[#06b6d4] to-[#0f766e]",
     },
     teal: {
-      primary: "bg-gradient-to-br from-[#14b8a6] via-[#0d9488] to-[#047857]",
-      secondary: "bg-gradient-to-br from-[#2dd4bf] via-[#14b8a6] to-[#0d9488]",
+      primary: "bg-gradient-to-br from-[#14b8a6] to-[#047857]",
+      secondary: "bg-gradient-to-br from-[#14b8a6] to-[#047857]",
     },
     lime: {
-      primary: "bg-gradient-to-br from-[#84cc16] via-[#65a30d] to-[#15803d]",
-      secondary: "bg-gradient-to-br from-[#a3e635] via-[#84cc16] to-[#65a30d]",
+      primary: "bg-gradient-to-br from-[#84cc16] to-[#15803d]",
+      secondary: "bg-gradient-to-br from-[#84cc16] to-[#15803d]",
     },
     yellow: {
-      primary: "bg-gradient-to-br from-[#facc15] via-[#f59e0b] to-[#ea580c]",
-      secondary: "bg-gradient-to-br from-[#fde047] via-[#facc15] to-[#f59e0b]",
+      primary: "bg-gradient-to-br from-[#facc15] to-[#ea580c]",
+      secondary: "bg-gradient-to-br from-[#facc15] to-[#ea580c]",
     },
     amber: {
-      primary: "bg-gradient-to-br from-[#f59e0b] via-[#d97706] to-[#a16207]",
-      secondary: "bg-gradient-to-br from-[#fbbf24] via-[#f59e0b] to-[#d97706]",
+      primary: "bg-gradient-to-br from-[#f59e0b] to-[#a16207]",
+      secondary: "bg-gradient-to-br from-[#f59e0b] to-[#a16207]",
     },
     red: {
-      primary: "bg-gradient-to-br from-[#ef4444] via-[#dc2626] to-[#be123c]",
-      secondary: "bg-gradient-to-br from-[#f87171] via-[#ef4444] to-[#dc2626]",
+      primary: "bg-gradient-to-br from-[#ef4444] to-[#be123c]",
+      secondary: "bg-gradient-to-br from-[#ef4444] to-[#be123c]",
     },
     pink: {
-      primary: "bg-gradient-to-br from-[#ec4899] via-[#db2777] to-[#be123c]",
-      secondary: "bg-gradient-to-br from-[#f472b6] via-[#ec4899] to-[#db2777]",
+      primary: "bg-gradient-to-br from-[#ec4899] to-[#be123c]",
+      secondary: "bg-gradient-to-br from-[#ec4899] to-[#be123c]",
     },
     fuchsia: {
-      primary: "bg-gradient-to-br from-[#c026d3] via-[#a21caf] to-[#be185d]",
-      secondary: "bg-gradient-to-br from-[#d946ef] via-[#c026d3] to-[#a21caf]",
+      primary: "bg-gradient-to-br from-[#c026d3] to-[#be185d]",
+      secondary: "bg-gradient-to-br from-[#c026d3] to-[#be185d]",
     },
     indigo: {
-      primary: "bg-gradient-to-br from-[#4f46e5] via-[#4338ca] to-[#1e40af]",
-      secondary: "bg-gradient-to-br from-[#6366f1] via-[#4f46e5] to-[#4338ca]",
+      primary: "bg-gradient-to-br from-[#4f46e5] to-[#1e40af]",
+      secondary: "bg-gradient-to-br from-[#4f46e5] to-[#1e40af]",
     },
     navy: {
-      primary: "bg-gradient-to-br from-[#1e3a8a] via-[#172554] to-[#0f172a]",
-      secondary: "bg-gradient-to-br from-[#1e40af] via-[#1e3a8a] to-[#172554]",
+      primary: "bg-gradient-to-br from-[#1e3a8a] to-[#020617]",
+      secondary: "bg-gradient-to-br from-[#1e3a8a] to-[#020617]",
     },
     black: {
-      primary: "bg-gradient-to-br from-[#27272a] via-[#18181b] to-[#000000]",
-      secondary: "bg-gradient-to-br from-[#3f3f46] via-[#27272a] to-[#18181b]",
+      primary: "bg-gradient-to-br from-[#27272a] to-[#000000]",
+      secondary: "bg-gradient-to-br from-[#27272a] to-[#000000]",
     },
     emerald: {
-      primary: "bg-gradient-to-br from-[#10b981] via-[#059669] to-[#065f46]",
-      secondary: "bg-gradient-to-br from-[#34d399] via-[#10b981] to-[#047857]",
+      primary: "bg-gradient-to-br from-[#10b981] to-[#047857]",
+      secondary: "bg-gradient-to-br from-[#10b981] to-[#047857]",
     },
   };
 
