@@ -14,7 +14,6 @@ import {
   X,
   Loader2,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
@@ -74,18 +73,6 @@ function EditSlabsModal({
     setRows((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function applyDefaults() {
-    setRows(
-      (defaultSlabs || []).map((s) => ({
-        minAdmissions: String(s.minAdmissions),
-        maxAdmissions:
-          s.maxAdmissions === null || s.maxAdmissions === undefined
-            ? ""
-            : String(s.maxAdmissions),
-        amount: String(s.amount),
-      }))
-    );
-  }
 
   async function handleSave() {
     setError("");
@@ -208,15 +195,6 @@ function EditSlabsModal({
             >
               <Plus size={14} /> Add slab
             </button>
-            {defaultSlabs && defaultSlabs.length ? (
-              <button
-                type="button"
-                onClick={applyDefaults}
-                className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-100 bg-indigo-50 px-3 text-[12px] font-semibold text-indigo-700 hover:bg-indigo-100"
-              >
-                <Sparkles size={14} /> Use suggested
-              </button>
-            ) : null}
           </div>
 
           {error ? (
