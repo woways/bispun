@@ -53,6 +53,7 @@ import {
 
 import { apiRequest } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
+import RevenueSlabs from "./RevenueSlabs";
 
 function money(value) {
   return `₹${Number(
@@ -1751,9 +1752,13 @@ export default function Revenue({ selectedYear = "all" }) {
               ["overview", "Overview"],
               ["expenses", "Expenses"],
               ["incentives", "Incentives"],
+              ["collegeSlabs", "College Revenue"],
+              ["staffIncentives", "Staff Incentives"],
             ]
               .filter(
                 ([item]) =>
+                  item === "collegeSlabs" ||
+                  item === "staffIncentives" ||
                   !data.allowedSections ||
                   data.allowedSections[item]
               )
@@ -2252,6 +2257,14 @@ export default function Revenue({ selectedYear = "all" }) {
                 </div>
               </div>
             </div>
+          )}
+
+          {tab === "collegeSlabs" && (
+            <RevenueSlabs selectedYear={selectedYear} view="college" />
+          )}
+
+          {tab === "staffIncentives" && (
+            <RevenueSlabs selectedYear={selectedYear} view="employee" />
           )}
 
           {tab ===

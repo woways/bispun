@@ -2594,7 +2594,7 @@ function AdmissionsManager({
         variant % 2 === 0
           ? group.primary
           : group.secondary,
-      soft: "bg-white/16",
+      soft: "bg-white/20",
       button:
         "bg-white/20 hover:bg-white/30 text-white",
     };
@@ -3312,11 +3312,8 @@ function AdmissionsManager({
 
     return (
       <div
-        className={`relative overflow-hidden rounded-2xl p-4 text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)] ${gradient.bg}`}
+        className={`group relative rounded-3xl p-6 text-white shadow-sm transition-all hover:-translate-y-1 hover:shadow-xl ${gradient.bg}`}
       >
-        <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-14 -left-10 h-36 w-36 rounded-full bg-black/10" />
-
         <div className="relative">
           <div className="flex items-start justify-between gap-4">
             <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${gradient.soft}`}>
@@ -3329,7 +3326,7 @@ function AdmissionsManager({
                   type="button"
                   onClick={onAttachments}
                   title={`Attachments${attachmentCount ? ` (${attachmentCount})` : ""}`}
-                  className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 text-white hover:bg-white/20"
+                  className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30"
                 >
                   <Paperclip size={13} />
                   {attachmentCount > 0 ? (
@@ -3344,7 +3341,7 @@ function AdmissionsManager({
                 <button
                   type="button"
                   onClick={onEdit}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 text-white hover:bg-white/20"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30"
                 >
                   <Pencil size={13} />
                 </button>
@@ -3354,7 +3351,7 @@ function AdmissionsManager({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/12 text-white hover:bg-white/20"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 text-white hover:bg-white/30"
                 >
                   <Trash2 size={13} />
                 </button>

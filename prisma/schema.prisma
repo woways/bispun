@@ -246,6 +246,8 @@ model Company {
   referrals               Referral[]
   crmReferral             CrmReferral? @relation("ReferredCompany")
   storeAssets             StoreAsset[]
+  revenueSlabs            AdmissionRevenueSlab[]
+  employeeIncentiveSlabs  EmployeeIncentiveSlab[]
 }
 
 model User {
@@ -817,6 +819,7 @@ model AdmissionPartner {
   admissions Admission[]
   attachments AdmissionPartnerAttachment[]
   attachmentFolders AdmissionAttachmentFolder[]
+  revenueSlabs AdmissionRevenueSlab[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1719,4 +1722,52 @@ model WhatsAppConnection {
   updatedAt DateTime @updatedAt
 
   @@index([status])
+}
+
+// ─── REVENUE SLABS (admissions → count × band rate) ──────────────────────────
+// College-level revenue slab. Set by the client-org admin per AdmissionPartner
+// (the "college"). Revenue = admissions in the college's band * band rate.
+model AdmissionRevenueSlab {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  partnerId String
+  partner   AdmissionPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  minAdmissions Int
+  maxAdmissions Int? // null = no upper limit (e.g. "6+")
+  amount        Decimal @db.Decimal(14, 2) // rate per admission for this band
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, partnerId, minAdmissions])
+  @@index([companyId])
+  @@index([partnerId])
+  @@index([companyId, partnerId])
+}
+
+// Employee incentive slab. Per staff member (matched by counsellorName, the
+// Bispun equivalent of Student Mentor's admissionDoneBy). Bonus = that
+// employee's admission count * the rate of the band they fall into.
+model EmployeeIncentiveSlab {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  counsellorName String
+
+  minAdmissions Int
+  maxAdmissions Int?
+  amount        Decimal @db.Decimal(14, 2) // rate per admission for this band
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, counsellorName, minAdmissions])
+  @@index([companyId])
+  @@index([companyId, counsellorName])
 }
