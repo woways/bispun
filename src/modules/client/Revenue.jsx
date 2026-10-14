@@ -1198,7 +1198,12 @@ export default function Revenue({ selectedYear = "all" }) {
   // section the viewer is still allowed to open.
   useEffect(() => {
     const allowed = data.allowedSections;
-    if (allowed && !allowed[tab]) {
+    if (
+      allowed &&
+      tab !== "collegeSlabs" &&
+      tab !== "staffIncentives" &&
+      !allowed[tab]
+    ) {
       const first = ["overview", "expenses", "incentives"].find(
         (s) => allowed[s]
       );
