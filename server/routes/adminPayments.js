@@ -23,8 +23,11 @@ function endOfDay(value) {
 }
 
 function paymentBreakdown(payment) {
+  // Never derive a historical invoice from the plan's *current* price.
+  // Older transactions may not have listPrice persisted, so fall back to
+  // the amount actually charged rather than today's plan price.
   const listPrice = Number(
-    payment.listPrice || payment.plan?.yearlyPrice || payment.amount || 0
+    payment.listPrice ?? payment.amount ?? 0
   );
   const discountAmount = Number(payment.discountAmount || 0);
   const subtotal = Math.max(0, Math.round((listPrice - discountAmount) * 100) / 100);

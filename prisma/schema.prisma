@@ -248,6 +248,10 @@ model Company {
   storeAssets             StoreAsset[]
   revenueSlabs            AdmissionRevenueSlab[]
   employeeIncentiveSlabs  EmployeeIncentiveSlab[]
+  nurtureSequences         NurtureSequence[]
+  nurtureEnrollments       NurtureEnrollment[]
+  nurtureRunLogs           NurtureRunLog[]
+  callRecords              CallRecord[]
 }
 
 model User {
@@ -1770,4 +1774,125 @@ model EmployeeIncentiveSlab {
   @@unique([companyId, counsellorName, minAdmissions])
   @@index([companyId])
   @@index([companyId, counsellorName])
+}
+
+
+// ─── SMART NURTURE / RE-ENGAGEMENT ───────────────────────────────────────────
+// Sequence definitions are intentionally stored as JSON steps so the product can
+// evolve the workflow builder without frequent schema changes. Each step is a
+// small object such as EMAIL, WHATSAPP_TEMPLATE, FOLLOW_UP_TASK or
+// MANAGER_NOTIFICATION plus a delayMinutes value.
+model NurtureSequence {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  status      String @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+  steps       Json
+
+  createdByUserId String
+  lastRunAt       DateTime?
+
+  enrollments NurtureEnrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+}
+
+model NurtureEnrollment {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  sequenceId String
+  sequence   NurtureSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  leadId   String
+  leadName String?
+
+  createdByUserId String
+  status          String   @default("ACTIVE") // ACTIVE | PAUSED | COMPLETED | REPLIED | FAILED | CANCELLED
+  nextStepIndex   Int      @default(0)
+  nextRunAt       DateTime?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  lastError       String?
+
+  logs NurtureRunLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sequenceId, leadId])
+  @@index([companyId, status, nextRunAt])
+  @@index([companyId, leadId, createdAt])
+  @@index([sequenceId, status])
+}
+
+model NurtureRunLog {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  enrollmentId String
+  enrollment   NurtureEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+
+  leadId    String
+  stepIndex Int
+  stepType  String
+  status    String // SENT | CREATED | NOTIFIED | SKIPPED | FAILED | REPLIED
+
+  summary           String?
+  providerMessageId String?
+  errorMessage      String?
+  executedAt        DateTime @default(now())
+
+  @@index([companyId, executedAt])
+  @@index([enrollmentId, executedAt])
+  @@index([leadId, executedAt])
+}
+
+// ─── CALL / TELEPHONY HISTORY ────────────────────────────────────────────────
+// Works immediately for CRM dial + manual outcome tracking. Provider webhooks
+// can update the same records with duration, recording and inbound/missed calls.
+model CallRecord {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  leadId   String?
+  leadName String?
+  userId   String?
+
+  phone     String
+  direction String @default("OUTBOUND") // OUTBOUND | INBOUND | MISSED
+  status    String @default("DIALLED")  // DIALLED | RINGING | CONNECTED | NOT_CONNECTED | COMPLETED | MISSED | FAILED
+  outcome   String?
+  notes     String?
+
+  provider       String @default("CRM_DIAL")
+  providerCallId String?
+  recordingUrl   String?
+
+  startedAt      DateTime @default(now())
+  answeredAt     DateTime?
+  endedAt        DateTime?
+  durationSeconds Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, createdAt])
+  @@index([companyId, leadId, createdAt])
+  @@index([companyId, phone, createdAt])
+  @@index([providerCallId])
 }

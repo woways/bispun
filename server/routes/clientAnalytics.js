@@ -745,6 +745,222 @@ router.get("/dashboard", async (req, res) => {
       )
       .slice(0, 10);
 
+    // Daily Action Center intentionally ignores the selected reporting year.
+    // It is a "what needs attention now" view, while the rest of the dashboard
+    // continues to respect the global year selector.
+    const actionNow = new Date();
+    const [actionLeadRows, actionAdmissionRows, actionFollowUpRows] =
+      await Promise.all([
+        prisma.lead.findMany({
+          where: {
+            companyId,
+            stage: { notIn: ["ADMITTED", "LOST"] },
+          },
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            stage: true,
+            temperature: true,
+            leadStatus: true,
+            assignedToName: true,
+            createdAt: true,
+            leadDataset: { select: { assignedToUserId: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 3000,
+        }),
+        prisma.admission.findMany({
+          where: {
+            companyId,
+            status: { not: "CANCELLED" },
+          },
+          select: {
+            id: true,
+            studentName: true,
+            counsellorName: true,
+            totalFee: true,
+            paidAmount: true,
+            amountStatus: true,
+            revenueStatus: true,
+            admissionDate: true,
+            lead: {
+              select: {
+                assignedToName: true,
+                leadDataset: { select: { assignedToUserId: true } },
+              },
+            },
+          },
+          orderBy: { admissionDate: "desc" },
+          take: 3000,
+        }),
+        prisma.counsellingSession.findMany({
+          where: {
+            companyId,
+            followUpAt: { lt: actionNow },
+            status: { in: ["SCHEDULED", "FOLLOW_UP"] },
+          },
+          select: {
+            id: true,
+            leadId: true,
+            studentName: true,
+            counsellorName: true,
+            followUpAt: true,
+            status: true,
+          },
+          orderBy: { followUpAt: "asc" },
+          take: 1000,
+        }),
+      ]);
+
+    const visibleActionLeads = actionLeadRows.filter((lead) =>
+      visibleToDashboardUser({
+        record: lead,
+        fieldName: "assignedToName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      })
+    );
+
+    const visibleActionAdmissions = actionAdmissionRows.filter((admission) =>
+      visibleToDashboardUser({
+        record: admission,
+        fieldName: "counsellorName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      })
+    );
+
+    const visibleActionFollowUps = actionFollowUpRows.filter((session) => {
+      if (currentUser.role === "CLIENT_ADMIN") return true;
+      const normalized = normalizeName(session.counsellorName);
+      if (normalized && visibleUserNames.has(normalized)) return true;
+      return includeUnassigned && !normalized;
+    });
+
+    const actionLeadIds = visibleActionLeads.map((lead) => lead.id);
+    const actionCommunications = actionLeadIds.length
+      ? await prisma.leadCommunication.findMany({
+          where: {
+            companyId,
+            leadId: { in: actionLeadIds },
+          },
+          select: {
+            leadId: true,
+            channel: true,
+            status: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        })
+      : [];
+
+    const contactedLeadIds = new Set(
+      actionCommunications.map((item) => item.leadId).filter(Boolean)
+    );
+
+    const hotLeadsNotContacted = visibleActionLeads.filter((lead) => {
+      const freshStatus = normalizeName(lead.leadStatus) === "fresh";
+      return (
+        lead.temperature === "HOT" &&
+        (lead.stage === "NEW" || freshStatus) &&
+        !contactedLeadIds.has(lead.id)
+      );
+    });
+
+    const pendingAdmissions = visibleActionAdmissions
+      .map((admission) => ({
+        ...admission,
+        pendingAmount: Math.max(
+          Number(admission.totalFee || 0) - Number(admission.paidAmount || 0),
+          0
+        ),
+        ageDays: Math.max(
+          0,
+          Math.floor(
+            (actionNow.getTime() - new Date(admission.admissionDate).getTime()) /
+              86400000
+          )
+        ),
+      }))
+      .filter(
+        (admission) =>
+          admission.pendingAmount > 0 && admission.amountStatus !== "RECEIVED"
+      );
+
+    const revenueAtRiskAdmissions = pendingAdmissions.filter(
+      (admission) =>
+        admission.ageDays >= 30 ||
+        (admission.revenueStatus === "BUFFER_ZONE" && admission.ageDays >= 60)
+    );
+
+    const revenueAtRiskAmount = revenueAtRiskAdmissions.reduce(
+      (sum, admission) => sum + admission.pendingAmount,
+      0
+    );
+
+    const whatsAppRepliesWaiting = actionCommunications.filter(
+      (item) =>
+        item.channel === "WHATSAPP_INBOUND" && item.status === "WAITING_REPLY"
+    );
+
+    const actionCenter = {
+      generatedAt: actionNow,
+      totalPrioritySignals:
+        hotLeadsNotContacted.length +
+        visibleActionFollowUps.length +
+        pendingAdmissions.length +
+        whatsAppRepliesWaiting.length +
+        revenueAtRiskAdmissions.length,
+      items: [
+        {
+          key: "hot-leads",
+          label: "Hot leads not contacted",
+          count: hotLeadsNotContacted.length,
+          detail: "Hot leads still waiting for first tracked contact",
+          tone: "rose",
+        },
+        {
+          key: "overdue-followups",
+          label: "Follow-ups overdue",
+          count: visibleActionFollowUps.length,
+          detail: "Counselling follow-ups past their scheduled time",
+          tone: "amber",
+        },
+        {
+          key: "pending-payments",
+          label: "Payments pending",
+          count: pendingAdmissions.length,
+          amount: pendingAdmissions.reduce(
+            (sum, admission) => sum + admission.pendingAmount,
+            0
+          ),
+          detail: "Outstanding admission fee collections",
+          tone: "amber",
+        },
+        {
+          key: "whatsapp-replies",
+          label: "WhatsApp replies waiting",
+          count: whatsAppRepliesWaiting.length,
+          detail: "Inbound WhatsApp messages waiting for a response",
+          tone: "indigo",
+        },
+        {
+          key: "revenue-risk",
+          label: "Revenue at risk",
+          count: revenueAtRiskAdmissions.length,
+          amount: revenueAtRiskAmount,
+          detail: "Pending revenue aged 30+ days or stuck in Buffer Zone",
+          tone: "rose",
+        },
+      ],
+    };
+
     return res.json({
       success: true,
       selectedYear: selectedYear || "all",
@@ -753,6 +969,7 @@ router.get("/dashboard", async (req, res) => {
         role: currentUser.role,
         department: currentUser.department || null,
       },
+      actionCenter,
       summary: {
         totalLeads,
         newLeads,
@@ -777,6 +994,351 @@ router.get("/dashboard", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Unable to load dashboard",
+    });
+  }
+});
+
+
+/* =========================================================
+   ACTION CENTER DETAILS
+   Loaded only when a dashboard priority card is opened so the
+   main dashboard payload stays compact.
+========================================================= */
+
+router.get("/action-center/:key", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const userId = req.clientUser.userId;
+    const key = String(req.params.key || "").trim();
+    const allowedKeys = new Set([
+      "hot-leads",
+      "overdue-followups",
+      "pending-payments",
+      "whatsapp-replies",
+      "revenue-risk",
+    ]);
+
+    if (!allowedKeys.has(key)) {
+      return res.status(400).json({
+        success: false,
+        message: "Unknown Action Center item",
+      });
+    }
+
+    const access = await getDashboardAccessScope(companyId, userId);
+
+    if (!access) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    const {
+      currentUser,
+      visibleUserIds,
+      visibleUserNames,
+    } = access;
+
+    const includeUnassigned = currentUser.role === "MANAGER";
+    const now = new Date();
+
+    const visibleLead = (lead) =>
+      visibleToDashboardUser({
+        record: lead,
+        fieldName: "assignedToName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      });
+
+    const visibleAdmission = (admission) =>
+      visibleToDashboardUser({
+        record: admission,
+        fieldName: "counsellorName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      });
+
+    if (key === "hot-leads") {
+      const leads = await prisma.lead.findMany({
+        where: {
+          companyId,
+          stage: { notIn: ["ADMITTED", "LOST"] },
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          stage: true,
+          temperature: true,
+          leadStatus: true,
+          assignedToName: true,
+          createdAt: true,
+          leadDataset: { select: { assignedToUserId: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 3000,
+      });
+
+      const visibleLeads = leads.filter(visibleLead);
+      const leadIds = visibleLeads.map((lead) => lead.id);
+      const communications = leadIds.length
+        ? await prisma.leadCommunication.findMany({
+            where: { companyId, leadId: { in: leadIds } },
+            select: { leadId: true },
+          })
+        : [];
+      const contactedLeadIds = new Set(
+        communications.map((item) => item.leadId).filter(Boolean)
+      );
+
+      const items = visibleLeads
+        .filter((lead) => {
+          const freshStatus = normalizeName(lead.leadStatus) === "fresh";
+          return (
+            lead.temperature === "HOT" &&
+            (lead.stage === "NEW" || freshStatus) &&
+            !contactedLeadIds.has(lead.id)
+          );
+        })
+        .map((lead) => ({
+          id: lead.id,
+          kind: "lead",
+          primary: lead.name || "Unnamed lead",
+          phone: lead.phone || null,
+          email: lead.email || null,
+          owner: lead.assignedToName || "Unassigned",
+          status: lead.stage || "NEW",
+          occurredAt: lead.createdAt,
+          note: "No tracked communication yet",
+        }));
+
+      return res.json({
+        success: true,
+        key,
+        label: "Hot leads not contacted",
+        count: items.length,
+        items,
+      });
+    }
+
+    if (key === "overdue-followups") {
+      const sessions = await prisma.counsellingSession.findMany({
+        where: {
+          companyId,
+          followUpAt: { lt: now },
+          status: { in: ["SCHEDULED", "FOLLOW_UP"] },
+        },
+        select: {
+          id: true,
+          leadId: true,
+          studentName: true,
+          counsellorName: true,
+          followUpAt: true,
+          status: true,
+        },
+        orderBy: { followUpAt: "asc" },
+        take: 1000,
+      });
+
+      const items = sessions
+        .filter((session) => {
+          if (currentUser.role === "CLIENT_ADMIN") return true;
+          const normalized = normalizeName(session.counsellorName);
+          if (normalized && visibleUserNames.has(normalized)) return true;
+          return includeUnassigned && !normalized;
+        })
+        .map((session) => ({
+          id: session.id,
+          leadId: session.leadId || null,
+          kind: "followup",
+          primary: session.studentName || "Lead follow-up",
+          owner: session.counsellorName || "Unassigned",
+          status: session.status,
+          occurredAt: session.followUpAt,
+          note: "Follow-up time has passed",
+        }));
+
+      return res.json({
+        success: true,
+        key,
+        label: "Follow-ups overdue",
+        count: items.length,
+        items,
+      });
+    }
+
+    if (key === "pending-payments" || key === "revenue-risk") {
+      const admissions = await prisma.admission.findMany({
+        where: {
+          companyId,
+          status: { not: "CANCELLED" },
+        },
+        select: {
+          id: true,
+          leadId: true,
+          studentName: true,
+          studentPhone: true,
+          studentEmail: true,
+          counsellorName: true,
+          totalFee: true,
+          paidAmount: true,
+          amountStatus: true,
+          revenueStatus: true,
+          admissionDate: true,
+          lead: {
+            select: {
+              assignedToName: true,
+              leadDataset: { select: { assignedToUserId: true } },
+            },
+          },
+        },
+        orderBy: { admissionDate: "asc" },
+        take: 3000,
+      });
+
+      const pendingAdmissions = admissions
+        .filter(visibleAdmission)
+        .map((admission) => ({
+          ...admission,
+          pendingAmount: Math.max(
+            Number(admission.totalFee || 0) - Number(admission.paidAmount || 0),
+            0
+          ),
+          ageDays: Math.max(
+            0,
+            Math.floor(
+              (now.getTime() - new Date(admission.admissionDate).getTime()) /
+                86400000
+            )
+          ),
+        }))
+        .filter(
+          (admission) =>
+            admission.pendingAmount > 0 && admission.amountStatus !== "RECEIVED"
+        );
+
+      const selected =
+        key === "revenue-risk"
+          ? pendingAdmissions.filter(
+              (admission) =>
+                admission.ageDays >= 30 ||
+                (admission.revenueStatus === "BUFFER_ZONE" &&
+                  admission.ageDays >= 60)
+            )
+          : pendingAdmissions;
+
+      const items = selected.map((admission) => ({
+        id: admission.id,
+        leadId: admission.leadId || null,
+        kind: key === "revenue-risk" ? "revenue" : "payment",
+        primary: admission.studentName || "Admission",
+        phone: admission.studentPhone || null,
+        email: admission.studentEmail || null,
+        owner:
+          admission.counsellorName ||
+          admission.lead?.assignedToName ||
+          "Unassigned",
+        status:
+          key === "revenue-risk"
+            ? admission.revenueStatus || "AT_RISK"
+            : admission.amountStatus || "PENDING",
+        occurredAt: admission.admissionDate,
+        amount: admission.pendingAmount,
+        totalFee: Number(admission.totalFee || 0),
+        paidAmount: Number(admission.paidAmount || 0),
+        ageDays: admission.ageDays,
+        note:
+          key === "revenue-risk"
+            ? `${admission.ageDays} days with pending revenue`
+            : "Admission fee still outstanding",
+      }));
+
+      return res.json({
+        success: true,
+        key,
+        label:
+          key === "revenue-risk" ? "Revenue at risk" : "Payments pending",
+        count: items.length,
+        amount: items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+        items,
+      });
+    }
+
+    const leads = await prisma.lead.findMany({
+      where: {
+        companyId,
+        stage: { notIn: ["ADMITTED", "LOST"] },
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        assignedToName: true,
+        leadDataset: { select: { assignedToUserId: true } },
+      },
+      take: 3000,
+    });
+
+    const visibleLeads = leads.filter(visibleLead);
+    const leadMap = new Map(visibleLeads.map((lead) => [lead.id, lead]));
+    const leadIds = visibleLeads.map((lead) => lead.id);
+    const communications = leadIds.length
+      ? await prisma.leadCommunication.findMany({
+          where: {
+            companyId,
+            leadId: { in: leadIds },
+            channel: "WHATSAPP_INBOUND",
+            status: "WAITING_REPLY",
+          },
+          select: {
+            id: true,
+            leadId: true,
+            message: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "asc" },
+          take: 1000,
+        })
+      : [];
+
+    const items = communications.map((communication) => {
+      const lead = leadMap.get(communication.leadId);
+      return {
+        id: communication.id,
+        leadId: communication.leadId || null,
+        kind: "whatsapp",
+        primary: lead?.name || "WhatsApp lead",
+        phone: lead?.phone || null,
+        email: lead?.email || null,
+        owner: lead?.assignedToName || "Unassigned",
+        status: "WAITING_REPLY",
+        occurredAt: communication.createdAt,
+        note:
+          String(communication.message || "").trim().slice(0, 180) ||
+          "Inbound WhatsApp message waiting for a response",
+      };
+    });
+
+    return res.json({
+      success: true,
+      key,
+      label: "WhatsApp replies waiting",
+      count: items.length,
+      items,
+    });
+  } catch (error) {
+    console.error("Failed to fetch Action Center details:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load Action Center details",
     });
   }
 });

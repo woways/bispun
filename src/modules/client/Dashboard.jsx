@@ -23,6 +23,7 @@ import {
   MapPin,
   UserRound,
   CheckCircle2,
+  MessageCircle,
 } from "lucide-react";
 
 import {
@@ -239,6 +240,7 @@ export default function Dashboard({
 
   const [data, setData] = useState({
     summary: {},
+    actionCenter: { items: [], totalPrioritySignals: 0 },
     revenueTrend: [],
     leadsBySource: [],
     teamPerformance: [],
@@ -253,6 +255,12 @@ export default function Dashboard({
 
   const [error, setError] =
     useState("");
+
+  const [actionDetailOpen, setActionDetailOpen] = useState(false);
+  const [actionDetailItem, setActionDetailItem] = useState(null);
+  const [actionDetailData, setActionDetailData] = useState(null);
+  const [actionDetailLoading, setActionDetailLoading] = useState(false);
+  const [actionDetailError, setActionDetailError] = useState("");
 
 
   const [
@@ -340,6 +348,8 @@ export default function Dashboard({
       setData({
         summary:
           result.summary || {},
+        actionCenter:
+          result.actionCenter || { items: [], totalPrioritySignals: 0 },
         revenueTrend:
           result.revenueTrend || [],
         leadsBySource:
@@ -363,6 +373,30 @@ export default function Dashboard({
       );
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function openActionDetail(item) {
+    if (!item?.key) return;
+
+    setActionDetailItem(item);
+    setActionDetailOpen(true);
+    setActionDetailLoading(true);
+    setActionDetailError("");
+    setActionDetailData(null);
+
+    try {
+      const result = await apiRequest(
+        `/api/client/analytics/action-center/${encodeURIComponent(item.key)}`
+      );
+
+      setActionDetailData(result);
+    } catch (error) {
+      setActionDetailError(
+        error?.data?.message || "Unable to load Action Center details"
+      );
+    } finally {
+      setActionDetailLoading(false);
     }
   }
 
@@ -886,6 +920,26 @@ export default function Dashboard({
         normalizedUserName
     ) || null;
 
+  const actionCenter = data.actionCenter || { items: [], totalPrioritySignals: 0 };
+  const actionCenterItems = Array.isArray(actionCenter.items)
+    ? actionCenter.items
+    : [];
+
+  const actionIconByKey = {
+    "hot-leads": Users,
+    "overdue-followups": Clock,
+    "pending-payments": CircleDollarSign,
+    "whatsapp-replies": MessageCircle,
+    "revenue-risk": AlertCircle,
+  };
+
+  const actionToneByName = {
+    rose: "border-rose-100 bg-rose-50/60 text-rose-700",
+    amber: "border-amber-100 bg-amber-50/60 text-amber-700",
+    indigo: "border-indigo-100 bg-indigo-50/60 text-indigo-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+
   const pulseMetrics = [
     {
       label: "Total Leads",
@@ -1348,6 +1402,64 @@ export default function Dashboard({
 
               {!isMyWorkView && (
                 <>
+              <section className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+                <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
+                      Daily Priority
+                    </div>
+                    <h2 className="mt-0.5 text-[16px] font-bold text-slate-950">Action Center</h2>
+                    <p className="mt-0.5 text-[12px] text-slate-500">
+                      What needs attention now, based on live CRM activity.
+                    </p>
+                  </div>
+              
+                  <div className="self-start rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 sm:self-auto sm:text-right">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Priority signals</div>
+                    <div className="mt-0.5 text-[18px] font-extrabold text-slate-900">
+                      {Number(actionCenter.totalPrioritySignals || 0).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+                </div>
+              
+                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-5">
+                  {actionCenterItems.map((item) => {
+                    const Icon = actionIconByKey[item.key] || Activity;
+                    const tone = actionToneByName[item.tone] || actionToneByName.slate;
+              
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => openActionDetail(item)}
+                        className="group bg-white p-4 text-left transition-colors hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                        aria-label={`Open ${item.label} details`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-bold leading-5 text-slate-900">{item.label}</div>
+                            <div className="mt-2 text-[24px] font-extrabold tracking-tight text-slate-950">
+                              {Number(item.count || 0).toLocaleString("en-IN")}
+                            </div>
+                            {item.amount !== undefined ? (
+                              <div className="mt-0.5 text-[12px] font-bold text-slate-600">{money(item.amount)}</div>
+                            ) : null}
+                          </div>
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${tone}`}>
+                            <Icon size={16} />
+                          </div>
+                        </div>
+                        <div className="mt-3 text-[11px] leading-4 text-slate-500">{item.detail}</div>
+                        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-80 transition group-hover:opacity-100">
+                          View details
+                          <ChevronRight size={12} />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
               {/* OPERATIONS ROW */}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 <section className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -1951,6 +2063,145 @@ export default function Dashboard({
           )}
 
       {/* EVENT MODAL */}
+
+      {actionDetailOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[2px]">
+          <div className="flex max-h-[86vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">
+                  Action Center
+                </div>
+                <h3 className="mt-1 text-[18px] font-extrabold text-slate-950">
+                  {actionDetailData?.label || actionDetailItem?.label || "Priority details"}
+                </h3>
+                <p className="mt-1 text-[12px] text-slate-500">
+                  See exactly which records need attention now.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Items</div>
+                  <div className="text-[17px] font-extrabold text-slate-900">
+                    {Number(actionDetailData?.count ?? actionDetailItem?.count ?? 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionDetailOpen(false);
+                    setActionDetailItem(null);
+                    setActionDetailData(null);
+                    setActionDetailError("");
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                  aria-label="Close Action Center details"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              {actionDetailLoading ? (
+                <div className="flex min-h-[220px] items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 size={16} className="animate-spin" />
+                  Loading details...
+                </div>
+              ) : actionDetailError ? (
+                <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-rose-100 bg-rose-50/60 px-5 text-center">
+                  <AlertCircle size={20} className="text-rose-500" />
+                  <div className="mt-2 text-sm font-bold text-rose-700">{actionDetailError}</div>
+                  <button
+                    type="button"
+                    onClick={() => openActionDetail(actionDetailItem)}
+                    className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 hover:bg-rose-50"
+                  >
+                    <RefreshCw size={13} />
+                    Retry
+                  </button>
+                </div>
+              ) : Array.isArray(actionDetailData?.items) && actionDetailData.items.length ? (
+                <div className="space-y-2.5">
+                  {actionDetailData.items.map((record) => (
+                    <div
+                      key={`${record.kind || "item"}-${record.id}`}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="truncate text-[13px] font-extrabold text-slate-900">
+                              {record.primary || "CRM record"}
+                            </div>
+                            {record.status ? (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-600">
+                                {String(record.status).replaceAll("_", " ")}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {(record.phone || record.email) && (
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                              {record.phone ? <span>{record.phone}</span> : null}
+                              {record.email ? <span>{record.email}</span> : null}
+                            </div>
+                          )}
+
+                          {record.note ? (
+                            <div className="mt-2 text-[12px] leading-5 text-slate-600">
+                              {record.note}
+                            </div>
+                          ) : null}
+
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                            {record.owner ? (
+                              <span className="inline-flex items-center gap-1">
+                                <UserRound size={11} />
+                                {record.owner}
+                              </span>
+                            ) : null}
+                            {record.occurredAt ? (
+                              <span className="inline-flex items-center gap-1">
+                                <CalendarDays size={11} />
+                                {formatUiDateTime(record.occurredAt, uiPreferences)}
+                              </span>
+                            ) : null}
+                            {Number.isFinite(Number(record.ageDays)) && record.ageDays > 0 ? (
+                              <span>{record.ageDays} days old</span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {record.amount !== undefined && record.amount !== null ? (
+                          <div className="shrink-0 sm:text-right">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">Pending</div>
+                            <div className="mt-0.5 text-[16px] font-extrabold text-slate-950">
+                              {money(record.amount)}
+                            </div>
+                            {record.totalFee !== undefined ? (
+                              <div className="mt-1 text-[10px] text-slate-400">
+                                Total {money(record.totalFee)} · Paid {money(record.paidAmount)}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">
+                  <CheckCircle2 size={22} className="text-emerald-500" />
+                  <div className="mt-2 text-sm font-bold text-slate-800">Nothing waiting here</div>
+                  <div className="mt-1 text-xs text-slate-500">There are no records requiring attention in this category.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {fullCalendarOpen && (
         <div className="fixed inset-0 z-[88] bg-slate-950/45 backdrop-blur-[2px] p-3 sm:p-6 overflow-y-auto">

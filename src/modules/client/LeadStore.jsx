@@ -38,6 +38,7 @@ import {
   Paperclip,
   Link2,
   FileText,
+  Workflow,
 } from "lucide-react";
 
 import {
@@ -49,6 +50,8 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
+import NurtureCenter from "../../components/lead/NurtureCenter";
+import CallCenterModal from "../../components/lead/CallCenterModal";
 
 const TYPES = [
   {
@@ -141,6 +144,14 @@ function temperatureSelectClass(value) {
   if (value === "HOT") return "border-rose-200 bg-rose-50 text-rose-700";
   if (value === "COLD") return "border-sky-200 bg-sky-50 text-sky-700";
   return "border-amber-200 bg-amber-50 text-amber-700";
+}
+
+function intelligenceTone(score) {
+  const value = Number(score || 0);
+  if (value >= 80) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value >= 65) return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  if (value >= 45) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 
@@ -283,7 +294,7 @@ function isValidManualLeadName(value) {
 }
 
 
-function PhoneAction({ phone, name, onCopied }) {
+function PhoneAction({ phone, name, onCopied, onDial }) {
   const [menu, setMenu] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
@@ -379,14 +390,17 @@ function PhoneAction({ phone, name, onCopied }) {
             <Copy size={14} />
             Copy number
           </button>
-          <a
-            href={`tel:${phone}`}
-            onClick={() => setMenu(null)}
+          <button
+            type="button"
+            onClick={() => {
+              setMenu(null);
+              onDial?.();
+            }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >
             <PhoneCall size={14} />
-            Dial number
-          </a>
+            Dial & track
+          </button>
         </div>
       ) : null}
     </>
@@ -2327,6 +2341,7 @@ export default function LeadStore({ selectedYear = "all" }) {
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
   const [leadStatusOptions, setLeadStatusOptions] = useState(FIXED_LEAD_STATUSES);
+  const [intelligenceLead, setIntelligenceLead] = useState(null);
 
   const [messageComposerOpen, setMessageComposerOpen] = useState(false);
   const [messageLeadIds, setMessageLeadIds] = useState([]);
@@ -2343,6 +2358,8 @@ export default function LeadStore({ selectedYear = "all" }) {
     message: "",
     driveLinks: "",
   });
+  const [nurtureOpen, setNurtureOpen] = useState(false);
+  const [callLead, setCallLead] = useState(null);
 
   function formatAttachmentSize(bytes) {
     const size = Number(bytes || 0);
@@ -2983,7 +3000,7 @@ export default function LeadStore({ selectedYear = "all" }) {
 
 
   const visibleIndividualColumnCount =
-    3 +
+    4 +
     INDIVIDUAL_COLUMN_OPTIONS.filter(
       (column) => individualColumns[column.key]
     ).length;
@@ -3186,6 +3203,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         )
       );
 
+      await loadIndividualLeads();
       setSuccessMessage(data?.message || "Lead temperature updated.");
     } catch (error) {
       setError(
@@ -3235,6 +3253,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         );
       }
 
+      await loadIndividualLeads();
       setSuccessMessage(data?.message || "Lead status updated.");
     } catch (error) {
       setError(
@@ -3438,6 +3457,15 @@ export default function LeadStore({ selectedYear = "all" }) {
               }
             />
             Refresh
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setNurtureOpen(true)}
+            className="h-9 px-3.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
+          >
+            <Workflow size={14} />
+            Smart Nurture
           </button>
 
           <button
@@ -4068,6 +4096,15 @@ export default function LeadStore({ selectedYear = "all" }) {
               Send Message
             </button>
 
+            <button
+              type="button"
+              onClick={() => setNurtureOpen(true)}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              <Workflow size={14} />
+              Start Nurture
+            </button>
+
             <select
               value={bulkAssigneeId}
               onChange={(event) =>
@@ -4145,6 +4182,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
                   {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Type</th>}
                   {individualColumns.status && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
+                  <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Intelligence</th>
                   {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
 
                   <th className="sticky right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -4239,6 +4277,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                                 phone={lead.phone}
                                 name={lead.name}
                                 onCopied={setSuccessMessage}
+                                onDial={() => setCallLead(lead)}
                               />
                             </td>
                           )}
@@ -4274,10 +4313,40 @@ export default function LeadStore({ selectedYear = "all" }) {
                               />
                             </td>
                           )}
+                          <td className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+                            {lead.intelligence ? (
+                              <button
+                                type="button"
+                                onClick={() => setIntelligenceLead(lead)}
+                                title={lead.intelligence.nextBestAction || "View lead intelligence"}
+                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-indigo-200 hover:bg-indigo-50/50"
+                              >
+                                <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-[11px] font-extrabold ${intelligenceTone(lead.intelligence.score)}`}>
+                                  {lead.intelligence.score}
+                                </span>
+                                <span>
+                                  <span className="block text-[11px] font-bold text-slate-700">{lead.intelligence.conversionChance}</span>
+                                  <span className="block text-[10px] text-slate-400">View reason</span>
+                                </span>
+                              </button>
+                            ) : (
+                              <span className="text-[12px] text-slate-400">—</span>
+                            )}
+                          </td>
                           {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 
                           <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setCallLead(lead)}
+                                title={lead.phone ? `Call ${lead.name}` : "Lead has no phone number"}
+                                disabled={!lead.phone}
+                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${lead.phone ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-300"}`}
+                              >
+                                <PhoneCall size={14} />
+                              </button>
+
                               <button
                                 type="button"
                                 onClick={() => openMessageComposer([lead.id])}
@@ -4642,6 +4711,99 @@ export default function LeadStore({ selectedYear = "all" }) {
           )}
         </div>
       )}
+
+      {intelligenceLead && (
+        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">Lead Intelligence</div>
+                <div className="mt-1 text-[18px] font-bold text-slate-950">{intelligenceLead.name}</div>
+                <div className="mt-0.5 text-[12px] text-slate-500">Score, conversion chance, reasons and the next best action.</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIntelligenceLead(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Lead Score</div>
+                  <div className="mt-2 flex items-end gap-2">
+                    <span className={`inline-flex h-12 min-w-12 items-center justify-center rounded-xl border px-2 text-[20px] font-extrabold ${intelligenceTone(intelligenceLead.intelligence?.score)}`}>
+                      {intelligenceLead.intelligence?.score ?? "—"}
+                    </span>
+                    <span className="pb-1 text-[12px] text-slate-400">/ 100</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Conversion Chance</div>
+                  <div className="mt-2 text-[20px] font-extrabold text-slate-950">{intelligenceLead.intelligence?.conversionChance || "—"}</div>
+                  <div className="mt-1 text-[12px] text-slate-500">Current probability signal: {intelligenceLead.intelligence?.conversionPercent ?? 0}%</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-500">Next Best Action</div>
+                <div className="mt-2 text-[14px] font-semibold leading-6 text-indigo-950">
+                  {intelligenceLead.intelligence?.nextBestAction || "Follow up and record the next step."}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[12px] font-bold text-slate-700">Why this score</div>
+                <div className="mt-2 space-y-2">
+                  {(intelligenceLead.intelligence?.reasons || []).map((reason, index) => (
+                    <div key={`${reason}-${index}`} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[12px] leading-5 text-slate-600">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
+                      <span>{reason}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Tracked contacts</div>
+                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.communicationCount ?? 0}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Last contact</div>
+                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.lastContactAt ? formatDate(intelligenceLead.intelligence.lastContactAt) : "—"}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Next follow-up</div>
+                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.nextFollowUpAt ? formatDate(intelligenceLead.intelligence.nextFollowUpAt) : "Not scheduled"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 bg-slate-50/70 px-5 py-4">
+              <button type="button" onClick={() => setIntelligenceLead(null)} className="h-9 rounded-lg bg-slate-900 px-4 text-[12px] font-semibold text-white hover:bg-slate-800">
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <NurtureCenter
+        open={nurtureOpen}
+        onClose={() => setNurtureOpen(false)}
+        selectedLeadIds={selectedLeadIds}
+      />
+
+      <CallCenterModal
+        open={Boolean(callLead)}
+        onClose={() => setCallLead(null)}
+        lead={callLead}
+      />
 
       {messageComposerOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">

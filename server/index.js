@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import prisma from "./lib/prisma.js";
 import { loadServerConfig } from "./lib/env.js";
 import { syncDueSubscriptionLifecycles } from "./lib/subscriptions.js";
+import { startNurtureWorker } from "./lib/nurtureEngine.js";
 import {
   requestId,
   securityHeaders,
@@ -58,6 +59,8 @@ import clientCommunicationsRoutes from "./routes/clientCommunications.js";
 import clientYearsRoutes from "./routes/clientYears.js";
 import clientChatRoutes from "./routes/clientChat.js";
 import clientWhatsAppRoutes, { whatsappWebhookRouter } from "./routes/clientWhatsApp.js";
+import clientNurtureRoutes from "./routes/clientNurture.js";
+import clientTelephonyRoutes, { telephonyWebhookRouter } from "./routes/clientTelephony.js";
 
 import razorpayWebhook from "./routes/razorpayWebhook.js";
 import http from "http";
@@ -198,7 +201,10 @@ app.use("/api/client/calendar", clientCalendarRoutes);
 app.use("/api/client/years", clientYearsRoutes);
 app.use("/api/client/chat", clientChatRoutes);
 app.use("/api/client/whatsapp", clientWhatsAppRoutes);
+app.use("/api/client/nurture", clientNurtureRoutes);
+app.use("/api/client/telephony", clientTelephonyRoutes);
 app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);
+app.use("/api/webhooks/telephony", telephonyWebhookRouter);
 app.use("/api/client/targets", clientTargetsRoutes);
 app.use("/api/client/referrals", clientReferralsRoutes);
 app.use("/api/client/store", clientStoreRoutes);
@@ -250,6 +256,7 @@ async function reconcileSubscriptions() {
 }
 
 reconcileSubscriptions();
+startNurtureWorker();
 const subscriptionLifecycleTimer = setInterval(
   reconcileSubscriptions,
   60 * 60 * 1000

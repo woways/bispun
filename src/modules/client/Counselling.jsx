@@ -19,6 +19,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  PhoneCall,
 } from "lucide-react";
 
 import {
@@ -30,6 +31,7 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import CallCenterModal from "../../components/lead/CallCenterModal";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -99,6 +101,14 @@ function prettyMode(value) {
     .split("_")
     .map((word) => (word ? word[0].toUpperCase() + word.slice(1) : ""))
     .join(" ");
+}
+
+function intelligenceTone(score) {
+  const value = Number(score || 0);
+  if (value >= 80) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value >= 65) return "border-indigo-200 bg-indigo-50 text-indigo-700";
+  if (value >= 45) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function CounsellingMetric({
@@ -186,6 +196,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
   const [formError, setFormError] = useState("");
   const [actionId, setActionId] = useState("");
   const [copiedId, setCopiedId] = useState("");
+  const [callLead, setCallLead] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -553,6 +564,49 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       <Info label="Came With" value={session.accompaniedBy} />
                     </div>
 
+                    {session.intelligence ? (
+                      <div className="mt-5 overflow-hidden rounded-xl border border-indigo-100 bg-indigo-50/40">
+                        <div className="grid grid-cols-1 divide-y divide-indigo-100 sm:grid-cols-[140px_160px_minmax(0,1fr)] sm:divide-x sm:divide-y-0">
+                          <div className="p-3.5">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-400">Lead Score</div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-2 text-[15px] font-extrabold ${intelligenceTone(session.intelligence.score)}`}>
+                                {session.intelligence.score}
+                              </span>
+                              <span className="text-[11px] text-slate-400">/100</span>
+                            </div>
+                          </div>
+
+                          <div className="p-3.5">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-400">Conversion Chance</div>
+                            <div className="mt-2 text-[14px] font-bold text-slate-900">{session.intelligence.conversionChance}</div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">{session.intelligence.conversionPercent}% signal</div>
+                          </div>
+
+                          <div className="p-3.5">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-indigo-400">Next Best Action</div>
+                            <div className="mt-2 text-[12px] font-semibold leading-5 text-indigo-950">{session.intelligence.nextBestAction}</div>
+                          </div>
+                        </div>
+
+                        {Array.isArray(session.intelligence.reasons) && session.intelligence.reasons.length ? (
+                          <details className="border-t border-indigo-100 bg-white/70">
+                            <summary className="cursor-pointer list-none px-3.5 py-2.5 text-[11px] font-semibold text-indigo-700 [&::-webkit-details-marker]:hidden">
+                              Why this score
+                            </summary>
+                            <div className="space-y-1.5 px-3.5 pb-3">
+                              {session.intelligence.reasons.map((reason, index) => (
+                                <div key={`${reason}-${index}`} className="flex items-start gap-2 text-[11px] leading-4 text-slate-600">
+                                  <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-indigo-500" />
+                                  <span>{reason}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     {session.meetingLink ? (
                       <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2 flex-wrap">
                         <div className="h-8 max-w-full inline-flex items-center gap-2 text-[13px] font-mono bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 rounded-lg">
@@ -606,6 +660,15 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       type="button"
+                      title="Call student"
+                      onClick={() => setCallLead({ id: session.leadId || null, name: session.student, phone: session.phone })}
+                      disabled={!session.phone}
+                      className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                    >
+                      <PhoneCall size={14} />
+                    </button>
+                    <button
+                      type="button"
                       title="Edit"
                       onClick={() => openEdit(session)}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
@@ -632,6 +695,12 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           ))
         )}
       </div>
+
+      <CallCenterModal
+        open={Boolean(callLead)}
+        onClose={() => setCallLead(null)}
+        lead={callLead}
+      />
 
       {modalOpen ? (
         <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">

@@ -15,6 +15,45 @@ import {
 
 const router = Router();
 
+function phoneDigits(value) {
+  return String(value || "").replace(/\D/g, "");
+}
+
+async function findLeadByPhone(companyId, value) {
+  const digits = phoneDigits(value);
+  if (!digits) return null;
+  const lastTen = digits.slice(-10);
+
+  const candidates = await prisma.lead.findMany({
+    where: {
+      companyId,
+      phone: { contains: lastTen },
+    },
+    select: { id: true, phone: true, name: true },
+    take: 25,
+  });
+
+  return (
+    candidates.find((lead) => phoneDigits(lead.phone).slice(-10) === lastTen) ||
+    null
+  );
+}
+
+function inboundMessageText(message) {
+  const type = String(message?.type || "message");
+  if (message?.text?.body) return String(message.text.body);
+  if (message?.button?.text) return String(message.button.text);
+  if (message?.interactive?.button_reply?.title) {
+    return String(message.interactive.button_reply.title);
+  }
+  if (message?.interactive?.list_reply?.title) {
+    return String(message.interactive.list_reply.title);
+  }
+  if (message?.image?.caption) return String(message.image.caption);
+  if (message?.document?.caption) return String(message.document.caption);
+  return `[${type} WhatsApp message]`;
+}
+
 function publicStatus(conn) {
   return {
     connected: Boolean(conn && conn.status === "CONNECTED"),
@@ -175,7 +214,39 @@ router.post("/send-template", requireClientUser, async (req, res) => {
       components: Array.isArray(req.body?.components) ? req.body.components : [],
     });
 
-    return res.json({ success: true, messageId: result?.messages?.[0]?.id || null });
+    const messageId = result?.messages?.[0]?.id || null;
+    const lead = await findLeadByPhone(req.clientUser.companyId, to).catch(() => null);
+
+    await prisma.leadCommunication.create({
+      data: {
+        companyId: req.clientUser.companyId,
+        userId: req.clientUser.userId,
+        leadId: lead?.id || null,
+        channel: "WHATSAPP",
+        status: "SENT",
+        sender: conn.displayNumber || conn.phoneNumberId || null,
+        recipient: to,
+        subject: "WhatsApp template",
+        message: `Template: ${templateName}`,
+        providerMessageId: messageId,
+      },
+    }).catch((error) => {
+      console.warn("WhatsApp communication log failed:", error?.message);
+    });
+
+    if (lead?.id) {
+      await prisma.leadCommunication.updateMany({
+        where: {
+          companyId: req.clientUser.companyId,
+          leadId: lead.id,
+          channel: "WHATSAPP_INBOUND",
+          status: "WAITING_REPLY",
+        },
+        data: { status: "REPLIED" },
+      }).catch(() => {});
+    }
+
+    return res.json({ success: true, messageId });
   } catch (error) {
     console.error("WhatsApp send-template failed:", error);
     return res.status(502).json({ success: false, message: error.message || "WhatsApp send failed" });
@@ -201,13 +272,111 @@ whatsappWebhookRouter.get("/", (req, res) => {
   return res.sendStatus(403);
 });
 
-whatsappWebhookRouter.post("/", (req, res) => {
-  // Phase 1: acknowledge so Meta keeps delivering. Inbound handling (inbox)
-  // comes in a later phase; log for now.
+whatsappWebhookRouter.post("/", async (req, res) => {
   try {
-    console.log("WhatsApp webhook event:", JSON.stringify(req.body)?.slice(0, 500));
-  } catch {
-    /* ignore */
+    const entries = Array.isArray(req.body?.entry) ? req.body.entry : [];
+
+    for (const entry of entries) {
+      const changes = Array.isArray(entry?.changes) ? entry.changes : [];
+
+      for (const change of changes) {
+        const value = change?.value || {};
+        const phoneNumberId = String(value?.metadata?.phone_number_id || "").trim();
+        const messages = Array.isArray(value?.messages) ? value.messages : [];
+
+        if (!phoneNumberId || !messages.length) continue;
+
+        const conn = await prisma.whatsAppConnection.findFirst({
+          where: { phoneNumberId },
+          select: {
+            companyId: true,
+            connectedByUserId: true,
+            displayNumber: true,
+            phoneNumberId: true,
+          },
+        });
+
+        if (!conn) continue;
+
+        for (const message of messages) {
+          const providerMessageId = String(message?.id || "").trim() || null;
+
+          if (providerMessageId) {
+            const duplicate = await prisma.leadCommunication.findFirst({
+              where: {
+                companyId: conn.companyId,
+                providerMessageId,
+              },
+              select: { id: true },
+            });
+            if (duplicate) continue;
+          }
+
+          const from = phoneDigits(message?.from);
+          const lead = await findLeadByPhone(conn.companyId, from).catch(() => null);
+
+          await prisma.leadCommunication.create({
+            data: {
+              companyId: conn.companyId,
+              userId: conn.connectedByUserId || "whatsapp-webhook",
+              leadId: lead?.id || null,
+              channel: "WHATSAPP_INBOUND",
+              status: "WAITING_REPLY",
+              sender: from || null,
+              recipient: conn.displayNumber || conn.phoneNumberId || "WhatsApp",
+              subject: "Inbound WhatsApp",
+              message: inboundMessageText(message),
+              providerMessageId,
+            },
+          });
+
+          // Smart Nurture enrollment reply update: an inbound WhatsApp message
+          // means the lead responded, so stop any active nurture sequences for
+          // this lead immediately instead of waiting for the next worker tick.
+          if (lead?.id) {
+            const activeEnrollments = await prisma.nurtureEnrollment.findMany({
+              where: {
+                companyId: conn.companyId,
+                leadId: lead.id,
+                status: "ACTIVE",
+              },
+              select: { id: true, nextStepIndex: true },
+            }).catch(() => []);
+
+            if (activeEnrollments.length) {
+              const completedAt = new Date();
+              await prisma.nurtureEnrollment.updateMany({
+                where: { id: { in: activeEnrollments.map((item) => item.id) } },
+                data: {
+                  status: "REPLIED",
+                  completedAt,
+                  nextRunAt: null,
+                  lastError: null,
+                },
+              });
+
+              await prisma.nurtureRunLog.createMany({
+                data: activeEnrollments.map((item) => ({
+                  companyId: conn.companyId,
+                  enrollmentId: item.id,
+                  leadId: lead.id,
+                  stepIndex: item.nextStepIndex,
+                  stepType: "RESPONSE_CHECK",
+                  status: "REPLIED",
+                  summary: "Sequence stopped because the lead replied on WhatsApp.",
+                  executedAt: completedAt,
+                })),
+              }).catch(() => {});
+            }
+          }
+        }
+      }
+    }
+  } catch (error) {
+    // Always acknowledge Meta so a temporary application error does not create
+    // an aggressive webhook retry loop. Log the failure for server monitoring.
+    console.error("WhatsApp inbound webhook handling failed:", error);
   }
+
   return res.sendStatus(200);
 });

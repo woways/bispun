@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { buildLeadIntelligence } from "../lib/leadIntelligence.js";
 import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
 import {
   requireClientUser,
@@ -77,9 +78,10 @@ function startOfWeek(date) {
   return start;
 }
 
-function formatSession(session) {
+function formatSession(session, intelligence = null) {
   return {
     id: session.id,
+    leadId: session.leadId,
     student: session.studentName,
     studentName: session.studentName,
     phone: session.studentPhone,
@@ -104,6 +106,7 @@ function formatSession(session) {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     market: session.market,
+    intelligence,
   };
 }
 
@@ -175,6 +178,7 @@ router.get("/", async (req, res) => {
       prisma.counsellingSession.findMany({
         where: { companyId, ...(market ? { market } : {}) },
         select: {
+          leadId: true,
           status: true,
           scheduledAt: true,
           followUpAt: true,
@@ -183,9 +187,82 @@ router.get("/", async (req, res) => {
       }),
     ]);
 
+    const leadIds = Array.from(
+      new Set(sessions.map((session) => session.leadId).filter(Boolean))
+    );
+
+    const [leads, communicationGroups, leadSessions] = leadIds.length
+      ? await Promise.all([
+          prisma.lead.findMany({
+            where: { companyId, id: { in: leadIds } },
+            select: {
+              id: true,
+              name: true,
+              phone: true,
+              email: true,
+              stage: true,
+              temperature: true,
+              leadStatus: true,
+              assignedToName: true,
+              createdAt: true,
+              admission: { select: { id: true, status: true } },
+            },
+          }),
+          prisma.leadCommunication.groupBy({
+            by: ["leadId"],
+            where: { companyId, leadId: { in: leadIds } },
+            _count: { _all: true },
+            _max: { createdAt: true },
+          }),
+          prisma.counsellingSession.findMany({
+            where: { companyId, leadId: { in: leadIds } },
+            select: {
+              leadId: true,
+              status: true,
+              scheduledAt: true,
+              followUpAt: true,
+            },
+          }),
+        ])
+      : [[], [], []];
+
+    const leadById = new Map(leads.map((lead) => [lead.id, lead]));
+    const communicationByLead = new Map(
+      communicationGroups
+        .filter((item) => item.leadId)
+        .map((item) => [
+          item.leadId,
+          { count: item._count?._all || 0, lastAt: item._max?.createdAt || null },
+        ])
+    );
+    const sessionsByLead = new Map();
+
+    for (const item of leadSessions) {
+      if (!item.leadId) continue;
+      if (!sessionsByLead.has(item.leadId)) sessionsByLead.set(item.leadId, []);
+      sessionsByLead.get(item.leadId).push(item);
+    }
+
+    const intelligenceByLead = new Map();
+    for (const lead of leads) {
+      intelligenceByLead.set(
+        lead.id,
+        buildLeadIntelligence({
+          lead,
+          communicationSummary: communicationByLead.get(lead.id) || {},
+          counsellingSessions: sessionsByLead.get(lead.id) || [],
+        })
+      );
+    }
+
     return res.json({
       success: true,
-      sessions: sessions.map(formatSession),
+      sessions: sessions.map((session) =>
+        formatSession(
+          session,
+          session.leadId ? intelligenceByLead.get(session.leadId) || null : null
+        )
+      ),
       summary: buildSummary(allSessions),
     });
   } catch (error) {
