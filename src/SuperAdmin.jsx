@@ -35,6 +35,7 @@ import {
   Loader2,
   UserPlus,
   Gift,
+  HardDrive,
 } from "lucide-react";
 
 import {
@@ -58,6 +59,7 @@ const SystemSettings = lazy(() => import("./modules/admin/SystemSettings"));
 const ActivityLog = lazy(() => import("./modules/admin/ActivityLog"));
 const WebsiteLeads = lazy(() => import("./modules/admin/WebsiteLeads"));
 const Referrals = lazy(() => import("./modules/admin/Referrals"));
+const StorageUsage = lazy(() => import("./modules/admin/StorageUsage"));
 
 const MENU = [
   {
@@ -95,6 +97,11 @@ const MENU = [
     key: "usage",
     label: "Usage",
     icon: Activity,
+  },
+  {
+    key: "storage",
+    label: "Storage (S3)",
+    icon: HardDrive,
   },
   {
     key: "billing",
@@ -460,6 +467,9 @@ export default function SuperAdmin() {
 
       case "usage":
         return <Usage />;
+
+      case "storage":
+        return <StorageUsage />;
 
       case "billing":
         return <Billing />;

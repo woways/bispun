@@ -2,7 +2,7 @@ import { Router } from "express";
 import crypto from "crypto";
 
 import prisma from "../lib/prisma.js";
-import { deleteChatFile } from "../lib/chatStorage.js";
+import { deleteChatFile, uploadChatFile } from "../lib/chatStorage.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
 
 const router = Router();
@@ -871,35 +871,69 @@ router.post("/messages/:messageId/forward", async (req, res) => {
 
 
 /* ------------------------------------------------------------------ */
-/* POST /upload-signature — signed direct upload to Cloudinary         */
+/* POST /upload — upload a chat attachment to Bispun S3                */
+/* Accepts a JSON body: { fileName, mimeType, fileSize, dataUrl }      */
+/* (base64 data URL), mirroring the expense-proof upload pattern.      */
 /* ------------------------------------------------------------------ */
 
-router.post("/upload-signature", async (req, res) => {
+router.post("/upload", async (req, res) => {
   try {
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+    const { fileName, mimeType, fileSize, dataUrl } = req.body || {};
 
-    if (!cloudName || !apiKey || !apiSecret) {
-      return res.status(500).json({ success: false, message: "Cloudinary is not configured" });
+    const allowedTypes = [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "application/pdf",
+    ];
+
+    if (!fileName || !mimeType || !dataUrl) {
+      return res.status(400).json({ success: false, message: "File is required" });
+    }
+    if (!allowedTypes.includes(String(mimeType))) {
+      return res.status(400).json({
+        success: false,
+        message: "Only PNG, JPG, WEBP and PDF files are allowed",
+      });
     }
 
-    const timestamp = Math.floor(Date.now() / 1000);
-    const folder = `consulbuzz/chat/${req.clientUser.companyId}`;
-    const toSign = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-    const signature = crypto.createHash("sha1").update(toSign).digest("hex");
+    const base64 = String(dataUrl).includes(",")
+      ? String(dataUrl).split(",")[1]
+      : String(dataUrl);
+    const buffer = Buffer.from(base64, "base64");
+
+    if (!buffer.length || buffer.length > 10 * 1024 * 1024) {
+      return res.status(400).json({
+        success: false,
+        message: "File must be 10 MB or smaller",
+      });
+    }
+
+    const stored = await uploadChatFile(
+      {
+        buffer,
+        originalname: String(fileName),
+        mimetype: String(mimeType),
+        size: Number(fileSize || buffer.length),
+      },
+      req.clientUser.companyId
+    );
 
     return res.json({
       success: true,
-      cloudName,
-      apiKey,
-      timestamp,
-      folder,
-      signature,
+      url: stored.url,
+      publicId: stored.publicId,
+      resourceType: stored.resourceType,
+      fileName: stored.originalName,
+      mimeType: stored.mimeType,
+      size: stored.sizeBytes,
     });
   } catch (error) {
-    console.error("Cloudinary signature failed:", error);
-    return res.status(500).json({ success: false, message: "Unable to prepare upload" });
+    console.error("Chat file upload failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || "Unable to upload file",
+    });
   }
 });
 

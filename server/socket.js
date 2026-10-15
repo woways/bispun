@@ -132,11 +132,18 @@ export function attachSocketServer(httpServer, config) {
         }
 
         const safeAttachments = attachments
-          .filter((a) => a && typeof a.url === "string" && a.url.startsWith("https://res.cloudinary.com/"))
+          .filter(
+            (a) =>
+              a &&
+              typeof a.url === "string" &&
+              a.url.length > 0 &&
+              typeof a.publicId === "string" &&
+              a.publicId.length > 0
+          )
           .map((a) => ({
             url: String(a.url),
             publicId: String(a.publicId || ""),
-            resourceType: String(a.resourceType || "raw"),
+            resourceType: String(a.resourceType || "s3"),
             fileName: String(a.fileName || "attachment").slice(0, 255),
             mimeType: String(a.mimeType || "application/octet-stream").slice(0, 120),
             size: Number.isFinite(Number(a.size)) ? Math.max(0, Math.trunc(Number(a.size))) : 0,

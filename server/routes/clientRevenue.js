@@ -1,7 +1,10 @@
 import { Router } from "express";
-import crypto from "crypto";
-
 import prisma from "../lib/prisma.js";
+import {
+  putObject,
+  buildObjectKey,
+  fileProxyUrl,
+} from "../lib/s3Storage.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -418,7 +421,7 @@ router.get("/", async (req, res) => {
 
 /* =========================================================
    UPLOAD EXPENSE PROOF
-   Uses Cloudinary signed upload without additional npm packages.
+   Stores the proof document in Bispun S3 (private bucket).
 ========================================================= */
 
 router.post(
@@ -481,121 +484,36 @@ router.post(
         });
       }
 
-      const cloudName =
-        process.env
-          .CLOUDINARY_CLOUD_NAME;
+      const base64 = String(dataUrl).includes(",")
+        ? String(dataUrl).split(",")[1]
+        : String(dataUrl);
+      const buffer = Buffer.from(base64, "base64");
 
-      const apiKey =
-        process.env
-          .CLOUDINARY_API_KEY;
-
-      const apiSecret =
-        process.env
-          .CLOUDINARY_API_SECRET;
-
-      if (
-        !cloudName ||
-        !apiKey ||
-        !apiSecret
-      ) {
-        return res.status(503).json({
+      if (!buffer.length) {
+        return res.status(400).json({
           success: false,
-          message:
-            "Expense proof storage is not configured. Add Cloudinary environment variables.",
+          message: "Proof file is empty or invalid",
         });
       }
 
-      const timestamp =
-        Math.floor(
-          Date.now() / 1000
-        );
-
-      const folder =
-        `consulbuzz/${req.clientUser.companyId}/expense-proofs`;
-
-      const signatureBase =
-        `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
-
-      const signature =
-        crypto
-          .createHash("sha1")
-          .update(
-            signatureBase
-          )
-          .digest("hex");
-
-      const form =
-        new FormData();
-
-      form.append(
-        "file",
-        String(dataUrl)
+      const key = buildObjectKey(
+        [req.clientUser.companyId, "expense-proofs"],
+        String(fileName)
       );
 
-      form.append(
-        "api_key",
-        apiKey
-      );
-
-      form.append(
-        "timestamp",
-        String(timestamp)
-      );
-
-      form.append(
-        "folder",
-        folder
-      );
-
-      form.append(
-        "signature",
-        signature
-      );
-
-      const response =
-        await fetch(
-          `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
-          {
-            method: "POST",
-            body: form,
-          }
-        );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !result?.secure_url
-      ) {
-        console.error(
-          "Cloudinary expense upload failed:",
-          result
-        );
-
-        return res.status(502).json({
-          success: false,
-          message:
-            result?.error?.message ||
-            "Unable to upload proof document",
-        });
-      }
+      await putObject({
+        buffer,
+        key,
+        contentType: String(mimeType),
+      });
 
       return res.json({
         success: true,
-        url:
-          result.secure_url,
-        publicId:
-          result.public_id,
-        fileName:
-          String(fileName),
-        mimeType:
-          String(mimeType),
-        bytes:
-          Number(
-            result.bytes ||
-              parsedSize
-          ),
+        url: fileProxyUrl(key),
+        publicId: key,
+        fileName: String(fileName),
+        mimeType: String(mimeType),
+        bytes: buffer.length || parsedSize,
       });
     } catch (error) {
       console.error(

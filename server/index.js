@@ -65,6 +65,8 @@ import { attachSocketServer } from "./socket.js";
 import clientTargetsRoutes from "./routes/clientTargets.js";
 import clientReferralsRoutes from "./routes/clientReferrals.js";
 import clientStoreRoutes from "./routes/clientStore.js";
+import filesRoutes from "./routes/files.js";
+import adminS3UsageRoutes from "./routes/adminS3Usage.js";
 
 const config = loadServerConfig();
 
@@ -160,6 +162,7 @@ app.use("/api/admin/billing", adminBillingRoutes);
 app.use("/api/admin/plans", adminPlansRoutes);
 app.use("/api/admin/modules", adminModulesRoutes);
 app.use("/api/admin/global-usage", adminGlobalUsageRoutes);
+app.use("/api/admin/s3-usage", adminS3UsageRoutes);
 app.use("/api/admin/global-billing", adminGlobalBillingRoutes);
 app.use("/api/admin/analytics", adminAnalyticsRoutes);
 app.use("/api/admin/system-settings", adminSystemSettingsRoutes);
@@ -202,6 +205,9 @@ app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);
 app.use("/api/client/targets", clientTargetsRoutes);
 app.use("/api/client/referrals", clientReferralsRoutes);
 app.use("/api/client/store", clientStoreRoutes);
+
+// Public file proxy → verifies signed token, redirects to presigned S3 URL.
+app.use("/api/files", filesRoutes);
 
 app.use((req, res) =>
   res.status(404).json({
