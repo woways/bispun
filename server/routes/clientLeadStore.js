@@ -12,6 +12,7 @@ import { Readable } from "node:stream";
 
 
 import prisma from "../lib/prisma.js";
+import { buildLeadIntelligence } from "../lib/leadIntelligence.js";
 
 import {
 
@@ -2448,11 +2449,74 @@ router.get(
 
           },
 
+          admission: {
+
+            select: {
+
+              id: true,
+
+              status: true,
+
+            },
+
+          },
+
         },
 
         orderBy: { createdAt: "desc" },
 
       });
+
+      const leadIds = leads.map((lead) => lead.id);
+
+      const [communicationGroups, counsellingRows] = leadIds.length
+        ? await Promise.all([
+            prisma.leadCommunication.groupBy({
+              by: ["leadId"],
+              where: {
+                companyId,
+                leadId: { in: leadIds },
+              },
+              _count: { _all: true },
+              _max: { createdAt: true },
+            }),
+            prisma.counsellingSession.findMany({
+              where: {
+                companyId,
+                leadId: { in: leadIds },
+              },
+              select: {
+                leadId: true,
+                status: true,
+                scheduledAt: true,
+                followUpAt: true,
+              },
+            }),
+          ])
+        : [[], []];
+
+      const communicationByLead = new Map(
+        communicationGroups
+          .filter((item) => item.leadId)
+          .map((item) => [
+            item.leadId,
+            {
+              count: item._count?._all || 0,
+              lastAt: item._max?.createdAt || null,
+            },
+          ])
+      );
+
+      const counsellingByLead = new Map();
+
+      for (const session of counsellingRows) {
+        if (!session.leadId) continue;
+        if (!counsellingByLead.has(session.leadId)) {
+          counsellingByLead.set(session.leadId, []);
+        }
+        counsellingByLead.get(session.leadId).push(session);
+      }
+
 
 
 
@@ -2544,6 +2608,12 @@ router.get(
             )
 
             .join("\n"),
+
+          intelligence: buildLeadIntelligence({
+            lead,
+            communicationSummary: communicationByLead.get(lead.id) || {},
+            counsellingSessions: counsellingByLead.get(lead.id) || [],
+          }),
 
           customFields: lead.customFieldValues.map((item) => ({
 

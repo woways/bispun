@@ -1,5 +1,6 @@
 import { Router } from "express";
 import prisma from "../lib/prisma.js";
+import { buildLeadIntelligence, isPriorityLeadForFollowUp } from "../lib/leadIntelligence.js";
 import {
   putObject,
   buildObjectKey,
@@ -139,6 +140,7 @@ router.get("/", async (req, res) => {
       admissions,
       expenses,
       incentives,
+      priorityLeads,
     ] = await Promise.all([
       prisma.admission.findMany({
         where: {
@@ -151,10 +153,17 @@ router.get("/", async (req, res) => {
         },
 
         select: {
+          id: true,
+          leadId: true,
+          studentName: true,
+          college: true,
+          counsellorName: true,
           totalFee: true,
           paidAmount: true,
+          amountStatus: true,
           admissionDate: true,
           revenueStatus: true,
+          updatedAt: true,
         },
 
         orderBy: {
@@ -192,6 +201,28 @@ router.get("/", async (req, res) => {
         orderBy: {
           incentiveDate: "desc",
         },
+      }),
+
+      prisma.lead.findMany({
+        where: {
+          companyId,
+          ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
+          stage: { notIn: ["ADMITTED", "LOST"] },
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          stage: true,
+          temperature: true,
+          leadStatus: true,
+          assignedToName: true,
+          createdAt: true,
+          admission: { select: { id: true, status: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 2000,
       }),
     ]);
 
@@ -295,6 +326,173 @@ router.get("/", async (req, res) => {
 
     const now = new Date();
 
+    const priorityLeadIds = priorityLeads.map((lead) => lead.id);
+    const [communicationGroups, counsellingRows] = priorityLeadIds.length
+      ? await Promise.all([
+          prisma.leadCommunication.groupBy({
+            by: ["leadId"],
+            where: {
+              companyId,
+              leadId: { in: priorityLeadIds },
+            },
+            _count: { _all: true },
+            _max: { createdAt: true },
+          }),
+          prisma.counsellingSession.findMany({
+            where: {
+              companyId,
+              leadId: { in: priorityLeadIds },
+            },
+            select: {
+              leadId: true,
+              status: true,
+              scheduledAt: true,
+              followUpAt: true,
+            },
+          }),
+        ])
+      : [[], []];
+
+    const communicationByLead = new Map(
+      communicationGroups
+        .filter((item) => item.leadId)
+        .map((item) => [
+          item.leadId,
+          {
+            count: item._count?._all || 0,
+            lastAt: item._max?.createdAt || null,
+          },
+        ])
+    );
+
+    const counsellingByLead = new Map();
+    for (const session of counsellingRows) {
+      if (!session.leadId) continue;
+      if (!counsellingByLead.has(session.leadId)) {
+        counsellingByLead.set(session.leadId, []);
+      }
+      counsellingByLead.get(session.leadId).push(session);
+    }
+
+    const leadIntelligenceRows = priorityLeads.map((lead) => ({
+      lead,
+      intelligence: buildLeadIntelligence({
+        lead,
+        communicationSummary: communicationByLead.get(lead.id) || {},
+        counsellingSessions: counsellingByLead.get(lead.id) || [],
+        now,
+      }),
+    }));
+
+    const highValueNoFollowUp = leadIntelligenceRows
+      .filter(({ lead, intelligence }) =>
+        isPriorityLeadForFollowUp(lead, intelligence) &&
+        !intelligence.nextFollowUpAt
+      )
+      .sort((a, b) => b.intelligence.score - a.intelligence.score);
+
+    const pendingAdmissions = admissions
+      .map((admission) => {
+        const pending = Math.max(
+          Number(admission.totalFee || 0) - Number(admission.paidAmount || 0),
+          0
+        );
+        const ageDays = Math.max(
+          0,
+          Math.floor(
+            (now.getTime() - new Date(admission.admissionDate).getTime()) / 86400000
+          )
+        );
+        return { admission, pending, ageDays };
+      })
+      .filter(({ admission, pending }) =>
+        pending > 0 && admission.amountStatus !== "RECEIVED"
+      );
+
+    const overdueCollections = pendingAdmissions
+      .filter(({ ageDays }) => ageDays >= 30)
+      .sort((a, b) => b.pending - a.pending);
+
+    const stuckRevenue = pendingAdmissions
+      .filter(
+        ({ admission, ageDays }) =>
+          admission.revenueStatus === "BUFFER_ZONE" && ageDays >= 60
+      )
+      .sort((a, b) => b.pending - a.pending);
+
+    const atRiskAdmissionIds = new Set([
+      ...overdueCollections.map(({ admission }) => admission.id),
+      ...stuckRevenue.map(({ admission }) => admission.id),
+    ]);
+
+    const atRiskAmount = pendingAdmissions
+      .filter(({ admission }) => atRiskAdmissionIds.has(admission.id))
+      .reduce((sum, item) => sum + item.pending, 0);
+
+    const pendingFeeAmount = pendingAdmissions.reduce(
+      (sum, item) => sum + item.pending,
+      0
+    );
+
+    const mapAdmissionRiskItem = ({ admission, pending, ageDays }) => ({
+      id: admission.id,
+      studentName: admission.studentName,
+      college: admission.college,
+      counsellorName: admission.counsellorName || "Unassigned",
+      pendingAmount: pending,
+      ageDays,
+      admissionDate: admission.admissionDate,
+      revenueStatus: admission.revenueStatus,
+    });
+
+    const leakageRadar = {
+      generatedAt: now,
+      rules: {
+        overdueCollectionDays: 30,
+        stuckRevenueDays: 60,
+        highValueLeadBasis: "Hot, qualified or high-scoring leads without a scheduled next follow-up",
+      },
+      summary: {
+        atRiskAmount,
+        pendingFeeAmount,
+        atRiskAdmissions: atRiskAdmissionIds.size,
+        highValueLeadsWithoutFollowUp: highValueNoFollowUp.length,
+      },
+      overdueCollections: {
+        count: overdueCollections.length,
+        amount: overdueCollections.reduce((sum, item) => sum + item.pending, 0),
+        items: overdueCollections.slice(0, 8).map(mapAdmissionRiskItem),
+      },
+      pendingFees: {
+        count: pendingAdmissions.length,
+        amount: pendingFeeAmount,
+        items: pendingAdmissions
+          .slice()
+          .sort((a, b) => b.pending - a.pending)
+          .slice(0, 8)
+          .map(mapAdmissionRiskItem),
+      },
+      highValueNoFollowUp: {
+        count: highValueNoFollowUp.length,
+        items: highValueNoFollowUp.slice(0, 8).map(({ lead, intelligence }) => ({
+          id: lead.id,
+          leadName: lead.name,
+          assignedToName: lead.assignedToName || "Unassigned",
+          score: intelligence.score,
+          conversionChance: intelligence.conversionChance,
+          nextBestAction: intelligence.nextBestAction,
+          temperature: lead.temperature || "WARM",
+          stage: lead.stage,
+          createdAt: lead.createdAt,
+        })),
+      },
+      stuckRevenue: {
+        count: stuckRevenue.length,
+        amount: stuckRevenue.reduce((sum, item) => sum + item.pending, 0),
+        items: stuckRevenue.slice(0, 8).map(mapAdmissionRiskItem),
+      },
+    };
+
     const months = selectedYear
       ? Array.from({ length: 12 }, (_, month) => new Date(selectedYear, month, 1))
       : [];
@@ -367,6 +565,8 @@ router.get("/", async (req, res) => {
       },
 
       monthlyRevenue,
+
+      leakageRadar,
 
       // Section-level access: withhold the Expenses / Incentives payloads when
       // the viewer's finance access does not include those sections.

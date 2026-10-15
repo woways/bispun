@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -10,8 +8,6 @@ import {
 import {
   useNavigate,
 } from "react-router-dom";
-
-import { io } from "socket.io-client";
 
 import {
   Bell,
@@ -75,25 +71,26 @@ import {
 
 import {
   apiRequest,
-  API_URL,
 } from "./lib/api";
 
-const Dashboard = lazy(() => import("./modules/client/Dashboard"));
-const UTMLeads = lazy(() => import("./modules/client/UTMLeads"));
-const Admissions = lazy(() => import("./modules/client/Admissions"));
-const Revenue = lazy(() => import("./modules/client/Revenue"));
-const LeadStore = lazy(() => import("./modules/client/LeadStore"));
-const Walkins = lazy(() => import("./modules/client/Walkins"));
-const Counselling = lazy(() => import("./modules/client/Counselling"));
-const Analytics = lazy(() => import("./modules/client/Analytics"));
-const Help = lazy(() => import("./modules/client/Help"));
-const SettingsView = lazy(() => import("./modules/client/Settings"));
-const CalendarModal = lazy(() => import("./modules/client/CalendarModal"));
-const ChatPanel = lazy(() => import("./modules/client/ChatPanel"));
-const GoalsAndTargets = lazy(() => import("./modules/client/GoalsAndTargets"));
-const Referrals = lazy(() => import("./modules/client/Referrals"));
-const MyStore = lazy(() => import("./modules/client/MyStore"));
+import Dashboard from "./modules/client/Dashboard";
+import UTMLeads from "./modules/client/UTMLeads";
+import Admissions from "./modules/client/Admissions";
+import Revenue from "./modules/client/Revenue";
+import LeadStore from "./modules/client/LeadStore";
+import Walkins from "./modules/client/Walkins";
+import Counselling from "./modules/client/Counselling";
+import Analytics from "./modules/client/Analytics";
+import Help from "./modules/client/Help";
+import SettingsView from "./modules/client/Settings";
+import CalendarModal from "./modules/client/CalendarModal";
+import ChatPanel from "./modules/client/ChatPanel";
+import GoalsAndTargets from "./modules/client/GoalsAndTargets";
+import Referrals from "./modules/client/Referrals";
+import MyStore from "./modules/client/MyStore";
 import { applyBrandTheme } from "./lib/brandTheme";
+import { downloadInvoicePdf } from "./lib/invoicePdf";
+import BillingReceiptModal from "./components/BillingReceiptModal";
 
 
 function SidebarIcon({
@@ -446,9 +443,6 @@ export default function ClientPortal({
     "dashboard"
   );
 
-  const moduleRef = useRef(module);
-  moduleRef.current = module;
-
   const [
     signingOut,
     setSigningOut,
@@ -490,13 +484,6 @@ export default function ClientPortal({
     notificationError,
     setNotificationError,
   ] = useState("");
-
-  const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  const [chatToast, setChatToast] = useState(null);
-  const [targetChatConversationId, setTargetChatConversationId] = useState(null);
-  const chatSocketRef = useRef(null);
-  const chatAudioContextRef = useRef(null);
-  const chatToastTimerRef = useRef(null);
 
   const notificationRef =
     useRef(null);
@@ -1004,240 +991,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const isClientAdmin =
     user?.role === "CLIENT_ADMIN";
-
-  async function refreshChatUnreadCount() {
-    if (!user?.id) return;
-    try {
-      const data = await apiRequest("/api/client/chat");
-      const unread = (Array.isArray(data.conversations) ? data.conversations : []).reduce(
-        (total, conversation) =>
-          conversation.isMuted
-            ? total
-            : total + Number(conversation.unreadCount || 0),
-        0
-      );
-      setChatUnreadCount(unread);
-    } catch (error) {
-      console.error("Unable to load chat unread count:", error);
-    }
-  }
-
-  function playChatNotificationSound() {
-    try {
-      const AudioContextClass =
-        window.AudioContext || window.webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const context =
-        chatAudioContextRef.current || new AudioContextClass();
-      chatAudioContextRef.current = context;
-
-      const play = () => {
-        const now = context.currentTime;
-
-        // A brighter, louder two-part chat chime. It is intentionally
-        // WhatsApp-like in feel, but uses our own tone instead of copying
-        // the WhatsApp notification sound.
-        const master = context.createGain();
-        const compressor = context.createDynamicsCompressor();
-
-        master.gain.setValueAtTime(0.9, now);
-        compressor.threshold.setValueAtTime(-18, now);
-        compressor.knee.setValueAtTime(16, now);
-        compressor.ratio.setValueAtTime(5, now);
-        compressor.attack.setValueAtTime(0.003, now);
-        compressor.release.setValueAtTime(0.18, now);
-
-        master.connect(compressor);
-        compressor.connect(context.destination);
-
-        const notes = [
-          { delay: 0, frequency: 780, peak: 0.24, duration: 0.17 },
-          { delay: 0.11, frequency: 1040, peak: 0.28, duration: 0.22 },
-        ];
-
-        notes.forEach(({ delay, frequency, peak, duration }) => {
-          const start = now + delay;
-          const oscillator = context.createOscillator();
-          const overtone = context.createOscillator();
-          const gain = context.createGain();
-          const overtoneGain = context.createGain();
-
-          oscillator.type = "sine";
-          oscillator.frequency.setValueAtTime(frequency, start);
-
-          overtone.type = "triangle";
-          overtone.frequency.setValueAtTime(frequency * 2, start);
-
-          gain.gain.setValueAtTime(0.0001, start);
-          gain.gain.exponentialRampToValueAtTime(peak, start + 0.012);
-          gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
-
-          overtoneGain.gain.setValueAtTime(0.0001, start);
-          overtoneGain.gain.exponentialRampToValueAtTime(peak * 0.22, start + 0.01);
-          overtoneGain.gain.exponentialRampToValueAtTime(0.0001, start + duration * 0.8);
-
-          oscillator.connect(gain);
-          overtone.connect(overtoneGain);
-          gain.connect(master);
-          overtoneGain.connect(master);
-
-          oscillator.start(start);
-          overtone.start(start);
-          oscillator.stop(start + duration + 0.03);
-          overtone.stop(start + duration + 0.03);
-        });
-      };
-
-      if (context.state === "suspended") {
-        context.resume().then(play).catch(() => {});
-      } else {
-        play();
-      }
-    } catch (error) {
-      console.debug("Chat sound unavailable:", error);
-    }
-  }
-
-  function openChatConversation(conversationId) {
-    if (conversationId) {
-      setTargetChatConversationId(String(conversationId));
-    }
-    setChatToast(null);
-    setModule("chats");
-    setMobileSidebarOpen(false);
-  }
-
-  function requestDesktopChatNotifications() {
-    if (!("Notification" in window)) return;
-    if (window.Notification.permission === "default") {
-      window.Notification.requestPermission().catch(() => {});
-    }
-  }
-
-  useEffect(() => {
-    function unlockAudio() {
-      try {
-        const AudioContextClass =
-          window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return;
-        if (!chatAudioContextRef.current) {
-          chatAudioContextRef.current = new AudioContextClass();
-        }
-        if (chatAudioContextRef.current.state === "suspended") {
-          chatAudioContextRef.current.resume().catch(() => {});
-        }
-      } catch {
-        // Browser audio support is optional.
-      }
-    }
-
-    window.addEventListener("pointerdown", unlockAudio, { once: true, capture: true });
-    window.addEventListener("keydown", unlockAudio, { once: true, capture: true });
-    return () => {
-      window.removeEventListener("pointerdown", unlockAudio, true);
-      window.removeEventListener("keydown", unlockAudio, true);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id) return undefined;
-
-    refreshChatUnreadCount();
-
-    const handleVisibilityChange = () => {
-      if (!document.hidden) refreshChatUnreadCount();
-    };
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    const interval = window.setInterval(refreshChatUnreadCount, 60000);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!user?.id) return undefined;
-
-    const socket = io(API_URL, {
-      path: "/socket.io",
-      withCredentials: true,
-      transports: ["websocket", "polling"],
-    });
-    chatSocketRef.current = socket;
-
-    socket.on("connect", refreshChatUnreadCount);
-    socket.on("connect_error", (error) => {
-      console.error("Global chat notification socket error:", error.message);
-    });
-
-    socket.on("conversation:activity", ({ conversationId, lastMessage, isMuted }) => {
-      if (!lastMessage || lastMessage?.sender?.id === user.id) return;
-      if (isMuted) return;
-
-      const shouldAlert = document.hidden || moduleRef.current !== "chats";
-      if (!shouldAlert) return;
-
-      setChatUnreadCount((current) => current + 1);
-      playChatNotificationSound();
-
-      const senderName = lastMessage?.sender?.name || "New message";
-      const preview = String(lastMessage?.body || "").trim() || "Sent an attachment";
-      const nextToast = {
-        conversationId: String(conversationId),
-        senderName,
-        preview,
-      };
-      setChatToast(nextToast);
-
-      if (chatToastTimerRef.current) {
-        window.clearTimeout(chatToastTimerRef.current);
-      }
-      chatToastTimerRef.current = window.setTimeout(() => {
-        setChatToast(null);
-      }, 6000);
-
-      if (document.hidden && "Notification" in window && window.Notification.permission === "granted") {
-        try {
-          const notification = new window.Notification(`Bispun · ${senderName}`, {
-            body: preview.length > 120 ? `${preview.slice(0, 117)}...` : preview,
-            icon: "/brand/bispun-icon.png",
-            tag: `bispun-chat-${conversationId}`,
-          });
-          notification.onclick = () => {
-            window.focus();
-            openChatConversation(conversationId);
-            notification.close();
-          };
-        } catch {
-          // Native browser notifications are optional.
-        }
-      }
-    });
-
-    return () => {
-      socket.disconnect();
-      chatSocketRef.current = null;
-      if (chatToastTimerRef.current) {
-        window.clearTimeout(chatToastTimerRef.current);
-        chatToastTimerRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
-
-  useEffect(() => {
-    document.title = chatUnreadCount > 0
-      ? `(${chatUnreadCount > 99 ? "99+" : chatUnreadCount}) Bispun`
-      : "Bispun";
-
-    return () => {
-      document.title = "Bispun";
-    };
-  }, [chatUnreadCount]);
 
   const permissions =
     user?.permissions ||
@@ -3373,14 +3126,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     if (module === "chats") {
-      return (
-        <ChatPanel
-          currentUser={user}
-          onUnreadCountChange={setChatUnreadCount}
-          initialConversationId={targetChatConversationId}
-          onTargetConversationHandled={setTargetChatConversationId}
-        />
-      );
+      return <ChatPanel currentUser={user} />;
     }
 
     if (module === "goals-and-targets") {
@@ -3464,14 +3210,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       module
     ) {
       case "chats":
-        return (
-        <ChatPanel
-          currentUser={user}
-          onUnreadCountChange={setChatUnreadCount}
-          initialConversationId={targetChatConversationId}
-          onTargetConversationHandled={setTargetChatConversationId}
-        />
-      );
+        return <ChatPanel currentUser={user} />;
 
       case "dashboard":
         return (
@@ -4000,36 +3739,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         }
       `}</style>
 
-      {chatToast && (
-        <button
-          type="button"
-          onClick={() => openChatConversation(chatToast.conversationId)}
-          className="fixed right-4 top-4 z-[120] w-[min(380px,calc(100vw-32px))] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-[0_18px_50px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5"
-        >
-          <div className="flex items-start gap-3">
-            <span className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
-              <MessageSquare size={18} strokeWidth={2.2} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-3">
-                <span className="truncate text-[13px] font-black text-slate-900">
-                  {chatToast.senderName}
-                </span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-600">
-                  New chat
-                </span>
-              </span>
-              <span className="mt-1 line-clamp-2 block text-[12px] leading-5 text-slate-600">
-                {chatToast.preview}
-              </span>
-              <span className="mt-2 block text-[11px] font-semibold text-indigo-600">
-                Click to open chat
-              </span>
-            </span>
-          </div>
-        </button>
-      )}
-
       {/* MOBILE APP BAR */}
       <div className="lg:hidden fixed inset-x-0 top-0 z-[60] h-14 bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3 flex items-center justify-between">
         <button
@@ -4191,9 +3900,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         onDragEnd={handleNavDragEnd}
                         title={sidebarCompact ? group.label : undefined}
                         onClick={() => {
-                          if (group.key === "chats") {
-                            requestDesktopChatNotifications();
-                          }
                           setModule(key);
                           setMobileSidebarOpen(false);
                         }}
@@ -4208,13 +3914,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         }`}
                       >
                         {sidebarCompact ? (
-                          <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
+                          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
                             <Icon size={20} strokeWidth={2} />
-                            {group.key === "chats" && chatUnreadCount > 0 && (
-                              <span className="absolute -right-1 -top-1 min-w-[18px] h-[18px] rounded-full bg-rose-500 px-1 text-[10px] font-black leading-[18px] text-center text-white shadow-sm">
-                                {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
-                              </span>
-                            )}
                           </span>
                         ) : (
                           <Icon size={16} strokeWidth={2} className="flex-shrink-0" />
@@ -4225,12 +3926,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             <span className="flex-1 text-left text-sm font-medium">
                               {group.label}
                             </span>
-
-                            {group.key === "chats" && chatUnreadCount > 0 && (
-                              <span className="min-w-[22px] h-[20px] rounded-full bg-rose-500 px-1.5 text-[10px] font-black leading-5 text-center text-white shadow-sm">
-                                {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
-                              </span>
-                            )}
 
                             {active ? (
                               <ChevronRight className="h-3.5 w-3.5 text-white/60" />
@@ -4760,16 +4455,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   )}
                 </div>
               )}
-              <Suspense
-                fallback={
-                  <div className="flex min-h-[360px] items-center justify-center gap-2 text-sm text-slate-500">
-                    <Loader2 size={16} className="animate-spin text-indigo-600" />
-                    Loading module...
-                  </div>
-                }
-              >
-                {renderModule()}
-              </Suspense>
+              {renderModule()}
             </div>
           </main>
         </div>
@@ -5072,32 +4758,18 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         const planKey =
                           String(billingPlan.key || "").toLowerCase();
 
-                        // Offer is driven entirely by the Super Admin plan
-                        // settings (offerPrice + offerEndsAt), surfaced by the
-                        // billing API as offerActive/offerPrice/offerEndsAt.
-                        const offerActive =
-                          Boolean(billingPlan.offerActive) && yearlyAvailable;
-                        const listPriceValue = Number(billingPlan.yearlyPrice || 0);
-                        const offerPriceValue = Number(billingPlan.offerPrice || 0);
-                        const offerPctOff =
-                          offerActive && listPriceValue > 0
-                            ? Math.round(
-                                ((listPriceValue - offerPriceValue) / listPriceValue) * 100
-                              )
-                            : 0;
-                        const offerEndsLabel = billingPlan.offerEndsAt
-                          ? new Date(billingPlan.offerEndsAt).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "";
+                        const isProPlan = planKey === "pro";
+                        const proOfferPrice = 29500;
+                        const proListPrice = 54000;
+                        const proOfferEndsAt = new Date("2026-11-10T23:59:59+05:30").getTime();
+                        const isProOfferActive =
+                          isProPlan && Date.now() <= proOfferEndsAt;
 
                         const selectedPrice =
                           yearlyAvailable
-                            ? offerActive
-                              ? offerPriceValue
-                              : listPriceValue
+                            ? isProOfferActive
+                              ? proOfferPrice
+                              : Number(billingPlan.yearlyPrice || 0)
                             : 0;
 
                         const planDescriptions = {
@@ -5199,16 +4871,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-6">
-                                {offerActive && (
+                                {isProOfferActive && yearlyAvailable && (
                                   <div className="mb-2 flex flex-wrap items-center gap-2">
                                     <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
-                                      ₹{listPriceValue.toLocaleString("en-IN")}/year
+                                      ₹{proListPrice.toLocaleString("en-IN")}/year
                                     </span>
-                                    {offerPctOff > 0 && (
-                                      <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
-                                        ~{offerPctOff}% OFF
-                                      </span>
-                                    )}
+                                    <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
+                                      ~45% OFF
+                                    </span>
                                   </div>
                                 )}
 
@@ -5234,9 +4904,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
                                 </div>
 
-                                {offerActive && offerEndsLabel && (
+                                {isProOfferActive && yearlyAvailable && (
                                   <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
-                                    Offer valid till {offerEndsLabel}
+                                    Offer valid till Nov 10, 2026
                                   </div>
                                 )}
                               </div>
@@ -5416,333 +5086,32 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         </div>
       )}
 
-      {receiptOpen && (
-        <div
-          id="consulbuzz-payment-receipt-print-root"
-          className="fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-[3px] p-2 sm:p-3 overflow-y-auto"
-        >
-          <div className="max-w-[780px] mx-auto">
-            <div className="flex items-center justify-between gap-3 mb-3 print:hidden">
-              <button
-                type="button"
-                onClick={() => {
-                  setReceiptOpen(false);
-                  setReceiptData(null);
-                }}
-                className="h-9 px-3 rounded-xl border border-white/20 bg-white/10 text-white text-xs font-semibold hover:bg-white/15"
-              >
-                Close
-              </button>
+      <BillingReceiptModal
+        open={receiptOpen}
+        loading={receiptLoading}
+        receipt={
+          receiptData
+            ? {
+                ...receiptData,
+                company: {
+                  ...(company || {}),
+                  ...(receiptData.company || {}),
+                },
+              }
+            : null
+        }
+        onClose={() => {
+          setReceiptOpen(false);
+          setReceiptData(null);
+        }}
+        onError={setBillingError}
+      />
 
-              {receiptData && (
-                <button
-                  type="button"
-                  onClick={printReceipt}
-                  className="h-9 px-4 rounded-xl bg-white text-slate-950 text-xs font-semibold shadow-sm"
-                >
-                  Print / Save PDF
-                </button>
-              )}
-
-              {receiptData && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const { downloadInvoicePdf } = await import("./lib/invoicePdf");
-                    downloadInvoicePdf(receiptData);
-                  }}
-                  className="h-9 px-4 rounded-xl bg-indigo-600 text-white text-xs font-semibold shadow-sm hover:bg-indigo-700"
-                >
-                  Download PDF invoice
-                </button>
-              )}
-            </div>
-
-            <div
-              id="consulbuzz-payment-receipt"
-              className="bg-white rounded-[24px] shadow-2xl overflow-hidden print:shadow-none print:rounded-none print:text-[13px]"
-            >
-              {receiptLoading ? (
-                <div className="py-24 flex items-center justify-center gap-2 text-sm text-slate-500">
-                  <Loader2 size={16} className="animate-spin" />
-                  Loading receipt...
-                </div>
-              ) : receiptData ? (
-                <>
-                  <div className="px-6 sm:px-8 pt-6 pb-5 border-b border-slate-100">
-                    <div className="flex items-start justify-between gap-6">
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={bispunLogo}
-                            alt="Bispun"
-                            className="h-11 w-auto object-contain"
-                          />
-
-                          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-slate-400">
-                            CRM Subscription
-                          </div>
-                        </div>
-
-                        <div className="mt-5 text-[13px] font-bold uppercase tracking-[0.14em] text-slate-400">
-                          Payment Receipt
-                        </div>
-
-                        <div className="mt-1.5 text-[25px] sm:text-[30px] leading-none font-black tracking-[-0.045em] text-slate-950">
-                          ₹{Number(
-                            receiptData.amount || 0
-                          ).toLocaleString("en-IN")}
-                        </div>
-
-                        <div className="mt-1.5 text-[12px] font-semibold text-emerald-600">
-                          Payment successful
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-emerald-700">
-                          <CheckCircle2 size={12} />
-                          Paid
-                        </div>
-
-                        <div className="mt-3 text-[13px] text-slate-400">
-                          Receipt No.
-                        </div>
-                        <div className="mt-1 text-xs font-bold text-slate-800 break-all max-w-[220px]">
-                          {receiptData.receiptNumber || receiptData.id}
-                        </div>
-
-                        <div className="mt-2 text-[13px] text-slate-400">
-                          Payment Date
-                        </div>
-                        <div className="mt-1 text-xs font-semibold text-slate-700">
-                          {new Date(
-                            receiptData.paidAt ||
-                              receiptData.createdAt
-                          ).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="px-6 sm:px-8 py-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <div>
-                        <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Billed To
-                        </div>
-
-                        <div className="mt-3 text-sm font-bold text-slate-950">
-                          {receiptData.company?.brandName ||
-                            receiptData.company?.name ||
-                            company.name}
-                        </div>
-
-                        <div className="mt-1 text-xs leading-5 text-slate-500">
-                          {receiptData.company?.email || company.email || "—"}
-                          <br />
-                          {receiptData.company?.phone || company.phone || ""}
-                          {receiptData.company?.city
-                            ? ` · ${receiptData.company.city}`
-                            : company.city
-                            ? ` · ${company.city}`
-                            : ""}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                          Subscription
-                        </div>
-
-                        <div className="mt-3 text-sm font-bold text-slate-950">
-                          {receiptData.plan?.name} Plan
-                        </div>
-
-                        <div className="mt-1 text-xs leading-5 text-slate-500">
-                          Annual Billing
-                          <br />
-                          Renewal:{" "}
-                          {receiptData.subscription?.renewalDate
-                            ? new Date(
-                                receiptData.subscription.renewalDate
-                              ).toLocaleDateString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })
-                            : "—"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-5 rounded-xl border border-slate-200 overflow-hidden">
-                      <div className="grid grid-cols-[1fr_auto] bg-slate-50 px-4 py-2.5 text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">
-                        <div>Description</div>
-                        <div>Amount</div>
-                      </div>
-
-                      <div className="grid grid-cols-[1fr_auto] px-4 py-3 border-t border-slate-100">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">
-                            Bispun {receiptData.plan?.name} Plan
-                          </div>
-                          <div className="mt-1 text-[13px] text-slate-500">
-                            Annual CRM subscription
-                          </div>
-                        </div>
-
-                        <div className="text-sm font-bold text-slate-950">
-                          ₹{Number(
-                            receiptData.listPrice ??
-                              receiptData.amount ??
-                              0
-                          ).toLocaleString("en-IN")}
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/60">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Original Price</span>
-                          <span className="font-semibold text-slate-800">
-                            ₹{Number(
-                              receiptData.listPrice ??
-                                receiptData.amount ??
-                                0
-                            ).toLocaleString("en-IN")}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Discount</span>
-                          <span
-                            className={`font-semibold ${
-                              Number(
-                                receiptData.discountAmount || 0
-                              ) > 0
-                                ? "text-rose-600"
-                                : "text-slate-500"
-                            }`}
-                          >
-                            {Number(
-                              receiptData.discountAmount || 0
-                            ) > 0
-                              ? `− ₹${Number(
-                                  receiptData.discountAmount
-                                ).toLocaleString("en-IN")}`
-                              : "No discount"}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Subtotal</span>
-                          <span className="font-semibold text-slate-800">
-                            ₹{Number(
-                              receiptData.subtotal ??
-                                (Number(receiptData.listPrice ?? receiptData.amount ?? 0) -
-                                  Number(receiptData.discountAmount || 0))
-                            ).toLocaleString("en-IN")}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className="text-slate-500">GST (18%)</span>
-                          <span className="font-semibold text-slate-800">
-                            ₹{Number(
-                              receiptData.gstAmount ??
-                                (Number(receiptData.subtotal ?? 0) * 0.18)
-                            ).toLocaleString("en-IN")}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-end justify-between gap-3">
-                          <span className="text-sm font-bold text-slate-950">
-                            Total Paid
-                          </span>
-                          <span className="text-[19px] font-black tracking-tight text-slate-950">
-                            ₹{Number(
-                              receiptData.finalAmount ??
-                                receiptData.amount ??
-                                0
-                            ).toLocaleString("en-IN")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-5">
-                      <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                        Payment Details
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                        {[
-                          ["Payment Method", "Razorpay"],
-                          ["Currency", receiptData.currency || "INR"],
-                          ["Payment ID", receiptData.providerPaymentId || "—"],
-                          ["Order ID", receiptData.providerOrderId || "—"],
-                          ["Status", receiptData.status || "CAPTURED"],
-                          [
-                            "Billing Cycle",
-                            "Annual",
-                          ],
-                        ].map(([label, value]) => (
-                          <div
-                            key={label}
-                            className="border-b border-slate-100 pb-2"
-                          >
-                            <div className="text-[12px] text-slate-400">
-                              {label}
-                            </div>
-                            <div className="mt-1 text-xs font-semibold text-slate-800 break-all">
-                              {value}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-bold text-slate-900">
-                          Thank you for choosing Bispun.
-                        </div>
-                        <div className="mt-1 text-[13px] text-slate-500">
-                          This receipt confirms successful payment for your CRM subscription.
-                        </div>
-                      </div>
-
-                      <div className="text-[12px] text-slate-400 sm:text-right">
-                        Bispun CRM
-                        <br />
-                        Subscription Receipt
-                        <br />
-                        <span className="font-semibold text-slate-600">WOWAYS PRIVATE LIMITED</span>
-                        <br />
-                        A product of Woways Private Limited.
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <Suspense fallback={null}>
-        {calendarOpen ? (
-          <CalendarModal
-            open={calendarOpen}
-            onClose={() => setCalendarOpen(false)}
-            currentUser={user}
-          />
-        ) : null}
-      </Suspense>
+      <CalendarModal
+        open={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        currentUser={user}
+      />
 
       {addYearOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">

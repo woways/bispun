@@ -1176,6 +1176,176 @@ function RevenueMetric({
   );
 }
 
+
+function LeakageRadarView({ radar }) {
+  const safeRadar = radar || {};
+  const summary = safeRadar.summary || {};
+
+  const categories = [
+    {
+      key: "overdue",
+      title: "Overdue Collections",
+      subtitle: `Pending for ${safeRadar.rules?.overdueCollectionDays || 30}+ days`,
+      data: safeRadar.overdueCollections || {},
+      tone: "rose",
+      icon: Clock,
+    },
+    {
+      key: "pending",
+      title: "Admissions with Pending Fee",
+      subtitle: "Admissions where collection is still incomplete",
+      data: safeRadar.pendingFees || {},
+      tone: "amber",
+      icon: CreditCard,
+    },
+    {
+      key: "leads",
+      title: "High-value Leads · No Follow-up",
+      subtitle: "Hot / qualified / high-scoring leads without a next step",
+      data: safeRadar.highValueNoFollowUp || {},
+      tone: "indigo",
+      icon: UserCheck,
+    },
+    {
+      key: "stuck",
+      title: "Revenue Stuck Too Long",
+      subtitle: `Buffer-zone revenue pending for ${safeRadar.rules?.stuckRevenueDays || 60}+ days`,
+      data: safeRadar.stuckRevenue || {},
+      tone: "slate",
+      icon: AlertCircle,
+    },
+  ];
+
+  const toneClass = {
+    rose: "border-rose-100 bg-rose-50/60 text-rose-700",
+    amber: "border-amber-100 bg-amber-50/60 text-amber-700",
+    indigo: "border-indigo-100 bg-indigo-50/60 text-indigo-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+
+  return (
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-600">
+              Revenue Leakage Radar
+            </div>
+            <h3 className="mt-1 text-[18px] font-bold text-slate-950">
+              Money and opportunities that need attention
+            </h3>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Uses existing admission, payment and lead activity to surface recovery priorities.
+            </p>
+          </div>
+
+          <div className="min-w-[210px] rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 sm:text-right">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-rose-500">
+              Revenue at risk
+            </div>
+            <div className="mt-1 text-[24px] font-extrabold tracking-tight text-rose-700">
+              {money(summary.atRiskAmount)}
+            </div>
+            <div className="mt-1 text-[12px] text-rose-600/80">
+              {Number(summary.atRiskAdmissions || 0).toLocaleString("en-IN")} admission{Number(summary.atRiskAdmissions || 0) === 1 ? "" : "s"} need collection attention
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
+          {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
+            <div key={key} className="bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-bold text-slate-900">{title}</div>
+                  <div className="mt-1 text-[12px] leading-5 text-slate-500">{subtitle}</div>
+                </div>
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${toneClass[tone]}`}>
+                  <Icon size={16} />
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Cases</div>
+                  <div className="mt-1 text-[22px] font-extrabold text-slate-950">{Number(data.count || 0).toLocaleString("en-IN")}</div>
+                </div>
+                {data.amount !== undefined ? (
+                  <div className="text-right">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Value</div>
+                    <div className="mt-1 text-[15px] font-bold text-slate-800">{money(data.amount)}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {categories.map(({ key, title, data }) => {
+          const items = Array.isArray(data.items) ? data.items : [];
+          return (
+            <section key={`list-${key}`} className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+                <div>
+                  <h4 className="text-[14px] font-bold text-slate-900">{title}</h4>
+                  <p className="mt-0.5 text-[12px] text-slate-500">Top priority cases</p>
+                </div>
+                <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                  {Number(data.count || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              {items.length ? (
+                <div className="divide-y divide-slate-100">
+                  {items.slice(0, 5).map((item) => (
+                    <div key={`${key}-${item.id}`} className="flex items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-semibold text-slate-900">
+                          {item.studentName || item.leadName || "—"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {key === "leads"
+                            ? `${item.conversionChance || "—"} chance · Score ${item.score ?? "—"}`
+                            : `${item.college || "College not set"} · ${item.ageDays || 0} days`}
+                        </div>
+                        {key === "leads" && item.nextBestAction ? (
+                          <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-indigo-600">
+                            {item.nextBestAction}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {item.pendingAmount !== undefined ? (
+                        <div className="shrink-0 text-right text-[13px] font-bold text-slate-800">
+                          {money(item.pendingAmount)}
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-[11px] font-semibold text-slate-400">
+                          {item.assignedToName || "Unassigned"}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-[12px] text-slate-400">
+                  No cases in this category.
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
+        “Overdue” currently means pending for {safeRadar.rules?.overdueCollectionDays || 30}+ days, and “stuck” means Buffer Zone revenue pending for {safeRadar.rules?.stuckRevenueDays || 60}+ days. If you later add an explicit fee due-date field, the radar can switch to that exact due date.
+      </div>
+    </div>
+  );
+}
+
 export default function Revenue({ selectedYear = "all" }) {
   const [tab, setTab] =
     useState("overview");
@@ -1184,6 +1354,7 @@ export default function Revenue({ selectedYear = "all" }) {
     useState({
       summary: {},
       monthlyRevenue: [],
+      leakageRadar: null,
       expenses: [],
       incentives: [],
     });
@@ -1202,7 +1373,8 @@ export default function Revenue({ selectedYear = "all" }) {
       allowed &&
       tab !== "collegeSlabs" &&
       tab !== "staffIncentives" &&
-      !allowed[tab]
+      ((tab === "leakage" && !allowed.overview) ||
+        (tab !== "leakage" && !allowed[tab]))
     ) {
       const first = ["overview", "expenses", "incentives"].find(
         (s) => allowed[s]
@@ -1755,6 +1927,7 @@ export default function Revenue({ selectedYear = "all" }) {
           <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] inline-flex gap-1">
             {[
               ["overview", "Overview"],
+              ["leakage", "Leakage Radar"],
               ["expenses", "Expenses"],
               ["incentives", "Incentives"],
               ["collegeSlabs", "College Revenue"],
@@ -1765,7 +1938,9 @@ export default function Revenue({ selectedYear = "all" }) {
                   item === "collegeSlabs" ||
                   item === "staffIncentives" ||
                   !data.allowedSections ||
-                  data.allowedSections[item]
+                  (item === "leakage"
+                    ? data.allowedSections.overview
+                    : data.allowedSections[item])
               )
               .map(([item, label]) => (
               <button
@@ -1782,6 +1957,10 @@ export default function Revenue({ selectedYear = "all" }) {
               </button>
             ))}
           </div>
+
+          {tab === "leakage" && (
+            <LeakageRadarView radar={data.leakageRadar} />
+          )}
 
           {tab ===
             "overview" && (

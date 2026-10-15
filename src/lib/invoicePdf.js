@@ -32,180 +32,150 @@ export function downloadInvoicePdf(receipt) {
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
-  const left = 42;
-  const right = pageW - 42;
+  const left = 46;
+  const right = pageW - 46;
   const contentW = right - left;
   const company = receipt.company || {};
   const plan = receipt.plan || {};
+
   const paidAmount = Number(receipt.finalAmount ?? receipt.amount ?? 0);
-  const listPrice = Number(receipt.listPrice ?? receipt.amount ?? 0);
+  const listPrice = Number(receipt.listPrice ?? receipt.subtotal ?? receipt.amount ?? 0);
   const discount = Number(receipt.discountAmount || 0);
   const subtotal = Number(receipt.subtotal ?? Math.max(0, listPrice - discount));
-  const gstRate = Number(receipt.gstRate ?? (receipt.gstAmount ? 18 : 0));
   const gst = Number(receipt.gstAmount || 0);
+  const gstRate = Number(receipt.gstRate ?? (gst > 0 ? 18 : 0));
   const invoiceNo = receipt.receiptNumber || receipt.id || "";
   const paidDate = fmtDate(receipt.paidAt || receipt.createdAt);
 
-  // Header / brand
+  const label = (text, x, y) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(text, x, y);
+  };
+
+  const value = (text, x, y, options = {}) => {
+    doc.setFont("helvetica", options.bold === false ? "normal" : "bold");
+    doc.setFontSize(options.size || 10);
+    doc.setTextColor(...(options.color || [30, 41, 59]));
+    doc.text(String(text || "—"), x, y, options.textOptions || {});
+  };
+
+  // Header: brand left, document title centered, payment meta right.
   doc.setFont("helvetica", "bold");
   doc.setFontSize(23);
   doc.setTextColor(16, 24, 40);
-  doc.text("BISPUN", left, 58);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(148, 163, 184);
-  doc.text("CRM SUBSCRIPTION", left + 92, 57);
+  doc.text("BISPUN", left, 50);
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("CRM SUBSCRIPTION", left, 67);
 
-  // Paid pill
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  doc.setTextColor(15, 23, 42);
+  doc.text("TAX INVOICE", pageW / 2, 58, { align: "center" });
+
   doc.setFillColor(236, 253, 245);
   doc.setDrawColor(167, 243, 208);
-  doc.roundedRect(right - 73, 35, 73, 26, 13, 13, "FD");
+  doc.roundedRect(right - 67, 34, 67, 25, 12, 12, "FD");
   doc.setTextColor(4, 120, 87);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("PAID", right - 36.5, 52, { align: "center" });
+  doc.setFontSize(8.5);
+  doc.text("PAID", right - 33.5, 50, { align: "center" });
 
-  doc.setFontSize(10);
-  doc.setTextColor(148, 163, 184);
-  doc.text("TAX INVOICE", left, 94);
-  doc.setFontSize(25);
-  doc.setTextColor(15, 23, 42);
-  doc.setFont("helvetica", "bold");
-  doc.text(inr(paidAmount), left, 121);
-  doc.setFontSize(9);
-  doc.setTextColor(5, 150, 105);
-  doc.text("Payment successful", left, 139);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(148, 163, 184);
-  doc.text("Invoice No.", right, 92, { align: "right" });
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(51, 65, 85);
-  doc.text(invoiceNo, right, 108, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(148, 163, 184);
-  doc.text("Payment Date", right, 127, { align: "right" });
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(51, 65, 85);
-  doc.text(paidDate, right, 143, { align: "right" });
+  label("INVOICE NO.", right - 185, 83);
+  value(invoiceNo, right, 98, {
+    size: 8.5,
+    textOptions: { align: "right", maxWidth: 185 },
+  });
+  label("PAYMENT DATE", right - 185, 118);
+  value(paidDate, right, 133, {
+    size: 8.5,
+    textOptions: { align: "right", maxWidth: 185 },
+  });
 
   doc.setDrawColor(241, 245, 249);
-  doc.line(0, 164, pageW, 164);
+  doc.line(left, 154, right, 154);
 
-  // Two-column summary
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(148, 163, 184);
-  doc.text("BILLED TO", left, 194);
-  doc.text("SUBSCRIPTION", left + contentW * 0.54, 194);
-
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text(company.brandName || company.name || "Client", left, 218);
-  doc.text(`${plan.name || "Bispun"} Plan`, left + contentW * 0.54, 218);
+  // Client / subscription summary
+  const col2 = left + contentW * 0.55;
+  label("BILLED TO", left, 188);
+  label("SUBSCRIPTION", col2, 188);
+  value(company.brandName || company.name || "Client", left, 210, { size: 11 });
+  value(`${plan.name || "Bispun"} Plan`, col2, 210, { size: 11 });
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8.7);
   doc.setTextColor(100, 116, 139);
-  let by = 236;
+  let by = 227;
   if (company.email) { doc.text(String(company.email), left, by); by += 14; }
   const contact = [company.phone, company.city].filter(Boolean).join(" · ");
   if (contact) doc.text(contact, left, by);
+  doc.text("Annual Billing", col2, 227);
+  if (receipt.subscription?.renewalDate) {
+    doc.text(`Renews ${fmtDate(receipt.subscription.renewalDate).split(",")[0]}`, col2, 241);
+  }
 
-  doc.text("Annual Billing", left + contentW * 0.54, 236);
-  const renewal = receipt.subscription?.renewalDate ? fmtDate(receipt.subscription.renewalDate).split(",")[0] : "—";
-  doc.text(`Renewal: ${renewal}`, left + contentW * 0.54, 251);
-
-  // Amount table
-  let y = 286;
+  // Payment summary — one clean amount hierarchy, no duplicate description amount.
+  let y = 276;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(left, y, contentW, 248, 10, 10, "FD");
-  doc.setFillColor(248, 250, 252);
-  doc.rect(left, y, contentW, 34, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(148, 163, 184);
-  doc.text("DESCRIPTION", left + 16, y + 21);
-  doc.text("AMOUNT", right - 16, y + 21, { align: "right" });
+  doc.roundedRect(left, y, contentW, discount > 0 ? 187 : 164, 9, 9, "FD");
+  label("PAYMENT SUMMARY", left + 15, y + 21);
+  y += 48;
 
-  y += 56;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(30, 41, 59);
-  doc.text(`Bispun ${plan.name || "Subscription"} Plan`, left + 16, y);
-  doc.text(inr(listPrice), right - 16, y, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text("Annual CRM subscription", left + 16, y + 18);
-
-  doc.setDrawColor(241, 245, 249);
-  doc.line(left, y + 38, right, y + 38);
-  y += 64;
-
-  const detail = (label, value, valueColor = [51, 65, 85]) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(label, left + 16, y);
+  const summaryRow = (name, amount, opts = {}) => {
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.bold ? 10.5 : 9.2);
+    doc.setTextColor(...(opts.color || [100, 116, 139]));
+    doc.text(name, left + 15, y);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...valueColor);
-    doc.text(value, right - 16, y, { align: "right" });
-    y += 23;
+    doc.setTextColor(...(opts.valueColor || [51, 65, 85]));
+    doc.text(amount, right - 15, y, { align: "right" });
+    y += opts.gap || 24;
   };
 
-  detail("Original Price", inr(listPrice));
-  detail("Discount", discount > 0 ? `- ${inr(discount)}` : "No discount", discount > 0 ? [225, 29, 72] : [100, 116, 139]);
-  detail("Subtotal", inr(subtotal));
-  detail(`GST (${gstRate}%)`, inr(gst));
-
+  summaryRow("Plan price", inr(listPrice));
+  if (discount > 0) {
+    summaryRow("Discount", `- ${inr(discount)}`, { valueColor: [225, 29, 72] });
+  }
+  summaryRow("Subtotal", inr(subtotal));
+  summaryRow(`GST (${gstRate}%)`, inr(gst));
   doc.setDrawColor(226, 232, 240);
-  doc.line(left + 16, y - 5, right - 16, y - 5);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Total Paid", left + 16, y + 17);
-  doc.setFontSize(16);
-  doc.text(inr(paidAmount), right - 16, y + 17, { align: "right" });
+  doc.line(left + 15, y - 8, right - 15, y - 8);
+  summaryRow("Total Paid", inr(paidAmount), {
+    bold: true,
+    color: [15, 23, 42],
+    valueColor: [15, 23, 42],
+    gap: 18,
+  });
 
-  // Payment details
-  y = 570;
-  doc.setFontSize(9);
-  doc.setTextColor(148, 163, 184);
-  doc.text("PAYMENT DETAILS", left, y);
-  const x2 = left + contentW * 0.54;
-  const field = (label, value, x, yy) => {
+  // Compact payment reference
+  const refY = discount > 0 ? 500 : 478;
+  label("PAYMENT REFERENCE", left, refY);
+  const third = contentW / 3;
+  const refField = (x, title, text) => {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(148, 163, 184);
-    doc.text(label, x, yy);
+    doc.text(title, x, refY + 20);
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.3);
     doc.setTextColor(51, 65, 85);
-    doc.text(String(value || "—"), x, yy + 16, { maxWidth: contentW * 0.42 });
+    doc.text(String(text || "—"), x, refY + 36, { maxWidth: third - 18 });
   };
-  field("Payment Method", "Razorpay", left, y + 22);
-  field("Currency", receipt.currency || "INR", x2, y + 22);
-  field("Payment ID", receipt.providerPaymentId || "—", left, y + 66);
-  field("Order ID", receipt.providerOrderId || "—", x2, y + 66);
-  field("Status", receipt.status || "CAPTURED", left, y + 110);
-  field("Billing Cycle", "Annual", x2, y + 110);
+  refField(left, "Method", "Razorpay");
+  refField(left + third, "Payment ID", receipt.providerPaymentId || "—");
+  refField(left + third * 2, "Order ID", receipt.providerOrderId || "—");
 
   doc.setDrawColor(241, 245, 249);
-  doc.line(left, 728, right, 728);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(30, 41, 59);
-  doc.text("Thank you for choosing Bispun.", left, 750);
+  doc.line(left, 590, right, 590);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
-  doc.text("This invoice confirms successful payment for your CRM subscription.", left, 766);
-  doc.text("A product of Woways Private Limited.", left, 780);
+  doc.text("Thank you for choosing Bispun.", left, 612);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(71, 85, 105);
-  doc.text("WOWAYS PRIVATE LIMITED", right, 766, { align: "right" });
+  doc.text("WOWAYS PRIVATE LIMITED", right, 612, { align: "right" });
 
   doc.save(`Bispun-Invoice-${invoiceNo || "payment"}.pdf`);
 }
@@ -220,86 +190,127 @@ export function downloadPaymentReceiptPdf(receipt) {
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
-  const left = 48;
-  const right = pageW - 48;
-  let y = 56;
+  const left = 46;
+  const right = pageW - 46;
+  const contentW = right - left;
   const company = receipt.company || {};
   const plan = receipt.plan || {};
+  const paidAmount = Number(receipt.finalAmount ?? receipt.amount ?? 0);
+  const listPrice = Number(receipt.listPrice ?? receipt.subtotal ?? receipt.amount ?? 0);
+  const discount = Number(receipt.discountAmount || 0);
+  const subtotal = Number(receipt.subtotal ?? Math.max(0, listPrice - discount));
+  const gst = Number(receipt.gstAmount || 0);
+  const gstRate = Number(receipt.gstRate ?? (gst > 0 ? 18 : 0));
+  const receiptNo = receipt.receiptNumber || receipt.id || "";
+
+  const label = (text, x, y) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text(text, x, y);
+  };
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(23);
+  doc.setTextColor(16, 24, 40);
+  doc.text("BISPUN", left, 50);
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text("CRM SUBSCRIPTION", left, 67);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.setTextColor(79, 70, 229);
-  doc.text("Bispun", left, y);
+  doc.setTextColor(15, 23, 42);
+  doc.text("PAYMENT RECEIPT", pageW / 2, 58, { align: "center" });
 
-  doc.setFont("helvetica", "normal");
+  doc.setFillColor(236, 253, 245);
+  doc.setDrawColor(167, 243, 208);
+  doc.roundedRect(right - 67, 34, 67, 25, 12, 12, "FD");
+  doc.setTextColor(4, 120, 87);
+  doc.setFontSize(8.5);
+  doc.text("PAID", right - 33.5, 50, { align: "center" });
+
+  label("RECEIPT NO.", right - 185, 83);
+  doc.setFontSize(8.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text(receiptNo, right, 98, { align: "right", maxWidth: 185 });
+  label("PAYMENT DATE", right - 185, 118);
+  doc.setTextColor(51, 65, 85);
+  doc.text(fmtDate(receipt.paidAt || receipt.createdAt), right, 133, { align: "right", maxWidth: 185 });
+
+  doc.setDrawColor(241, 245, 249);
+  doc.line(left, 154, right, 154);
+
+  const col2 = left + contentW * 0.55;
+  label("RECEIVED FROM", left, 188);
+  label("SUBSCRIPTION", col2, 188);
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(70);
-  doc.text("Payment Receipt", right, y - 8, { align: "right" });
-  doc.setFontSize(9);
-  doc.text(`Receipt No: ${receipt.receiptNumber || receipt.id || ""}`, right, y + 7, { align: "right" });
-  doc.text(`Paid on: ${fmtDate(receipt.paidAt || receipt.createdAt)}`, right, y + 20, { align: "right" });
-
-  y += 42;
-  doc.setDrawColor(226);
-  doc.line(left, y, right, y);
-  y += 28;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(40);
-  doc.text("Received from", left, y);
-  y += 16;
+  doc.setTextColor(15, 23, 42);
+  doc.text(company.brandName || company.name || "Client", left, 210);
+  doc.text(`${plan.name || "Bispun"} Plan`, col2, 210);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(75);
-  doc.text(company.brandName || company.name || "Client", left, y);
-  if (company.email) { y += 14; doc.text(String(company.email), left, y); }
-  if (company.phone) { y += 14; doc.text(String(company.phone), left, y); }
+  doc.setFontSize(8.7);
+  doc.setTextColor(100, 116, 139);
+  if (company.email) doc.text(String(company.email), left, 228);
+  const contact = [company.phone, company.city].filter(Boolean).join(" · ");
+  if (contact) doc.text(contact, left, 242);
+  doc.text("Annual Billing", col2, 228);
 
-  y += 34;
+  let y = 278;
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(left, y, right - left, 92, 8, 8, "F");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(100);
-  doc.text("For", left + 16, y + 24);
-  doc.text("Amount received", left + 16, y + 50);
-  doc.text("Payment status", left + 16, y + 76);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(left, y, contentW, discount > 0 ? 187 : 164, 9, 9, "FD");
+  label("PAYMENT SUMMARY", left + 15, y + 21);
+  y += 48;
 
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(35);
-  doc.text(`${plan.name || "Bispun"} Annual Subscription`, right - 16, y + 24, { align: "right" });
-  doc.setFontSize(14);
-  doc.text(inr(receipt.finalAmount != null ? receipt.finalAmount : receipt.amount), right - 16, y + 52, { align: "right" });
-  doc.setFontSize(10);
-  doc.setTextColor(5, 150, 105);
-  doc.text(String(receipt.status || "CAPTURED"), right - 16, y + 76, { align: "right" });
+  const row = (name, amount, opts = {}) => {
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.bold ? 10.5 : 9.2);
+    doc.setTextColor(...(opts.color || [100, 116, 139]));
+    doc.text(name, left + 15, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...(opts.valueColor || [51, 65, 85]));
+    doc.text(amount, right - 15, y, { align: "right" });
+    y += 24;
+  };
 
-  y += 122;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(90);
-  if (receipt.providerPaymentId) { doc.text(`Razorpay Payment ID: ${receipt.providerPaymentId}`, left, y); y += 14; }
-  if (receipt.providerOrderId) { doc.text(`Razorpay Order ID: ${receipt.providerOrderId}`, left, y); y += 14; }
-  if (receipt.currency) { doc.text(`Currency: ${receipt.currency}`, left, y); y += 14; }
-  doc.text("This is a system-generated payment receipt.", left, y);
+  row("Plan price", inr(listPrice));
+  if (discount > 0) row("Discount", `- ${inr(discount)}`, { valueColor: [225, 29, 72] });
+  row("Subtotal", inr(subtotal));
+  row(`GST (${gstRate}%)`, inr(gst));
+  doc.setDrawColor(226, 232, 240);
+  doc.line(left + 15, y - 8, right - 15, y - 8);
+  row("Total Paid", inr(paidAmount), { bold: true, color: [15, 23, 42], valueColor: [15, 23, 42] });
 
-  y += 44;
-  doc.setDrawColor(226);
-  doc.line(left, y, right, y);
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(55);
-  doc.text("Thank you for choosing Bispun.", left, y);
-  y += 16;
-  doc.text("WOWAYS PRIVATE LIMITED", left, y);
-  y += 14;
+  const refY = discount > 0 ? 500 : 478;
+  label("PAYMENT REFERENCE", left, refY);
+  const third = contentW / 3;
+  const ref = (x, title, text) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(title, x, refY + 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.3);
+    doc.setTextColor(51, 65, 85);
+    doc.text(String(text || "—"), x, refY + 36, { maxWidth: third - 18 });
+  };
+  ref(left, "Method", "Razorpay");
+  ref(left + third, "Payment ID", receipt.providerPaymentId || "—");
+  ref(left + third * 2, "Order ID", receipt.providerOrderId || "—");
+
+  doc.setDrawColor(241, 245, 249);
+  doc.line(left, 590, right, 590);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(120);
-  doc.text("A product of Woways Private Limited.", left, y);
+  doc.setTextColor(100, 116, 139);
+  doc.text("This receipt confirms successful payment for your Bispun subscription.", left, 612);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(71, 85, 105);
+  doc.text("WOWAYS PRIVATE LIMITED", right, 612, { align: "right" });
 
-  const name = `Bispun-Receipt-${receipt.receiptNumber || receipt.id || "payment"}.pdf`;
-  doc.save(name);
+  doc.save(`Bispun-Receipt-${receiptNo || "payment"}.pdf`);
 }
 
 /**
