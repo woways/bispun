@@ -158,12 +158,20 @@ export async function presignGet(key, expiresInSeconds = 300) {
 
 /**
  * Scan the whole bucket and aggregate storage usage grouped by the first
- * path segment of each object key (= companyId). Returns:
+ * path segment of each object key (= companyId).
+ *
+ * Optional date window filters by each object's upload time (LastModified):
+ *   { from?: Date, to?: Date }  — only objects uploaded in [from, to] are counted.
+ *
+ * Returns:
  *   { totalBytes, totalObjects, byCompany: { [companyId]: { bytes, objects } } }
  */
-export async function aggregateUsageByCompany() {
+export async function aggregateUsageByCompany({ from, to } = {}) {
   const { bucket } = s3Config();
   const client = getClient();
+
+  const fromMs = from ? new Date(from).getTime() : null;
+  const toMs = to ? new Date(to).getTime() : null;
 
   const byCompany = {};
   let totalBytes = 0;
@@ -180,6 +188,13 @@ export async function aggregateUsageByCompany() {
     );
 
     for (const obj of out.Contents || []) {
+      // Date-window filter on upload time.
+      if (fromMs || toMs) {
+        const t = obj.LastModified ? new Date(obj.LastModified).getTime() : 0;
+        if (fromMs && t < fromMs) continue;
+        if (toMs && t > toMs) continue;
+      }
+
       const size = Number(obj.Size || 0);
       const companyId = String(obj.Key || "").split("/")[0] || "unknown";
       if (!byCompany[companyId]) byCompany[companyId] = { bytes: 0, objects: 0 };
