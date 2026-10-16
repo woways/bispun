@@ -846,16 +846,21 @@ router.post("/messages/:messageId/forward", async (req, res) => {
       forwarded.push(payload);
 
       io?.to(`conversation:${membership.conversationId}`).emit("message:new", payload);
-      io?.to(`conversation:${membership.conversationId}`).emit("conversation:activity", {
-        conversationId: membership.conversationId,
-        lastMessage: {
-          id: created.id,
-          body: created.body,
-          createdAt: created.createdAt,
-          senderId: me,
-          deletedForEveryone: false,
-        },
-      });
+
+      if (io) {
+        const activityMembers = await prisma.conversationMember.findMany({
+          where: { conversationId: membership.conversationId },
+          select: { userId: true, isMuted: true },
+        });
+
+        activityMembers.forEach((member) => {
+          io.to(`user:${member.userId}`).emit("conversation:activity", {
+            conversationId: membership.conversationId,
+            lastMessage: payload,
+            isMuted: Boolean(member.isMuted),
+          });
+        });
+      }
     }
 
     return res.json({

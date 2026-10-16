@@ -1,13 +1,16 @@
 import nodemailer from "nodemailer";
 
+const BISPUN_FROM_EMAIL = "info@bispun.com";
+const BISPUN_FROM = `Bispun <${BISPUN_FROM_EMAIL}>`;
+
 /**
  * Email sending via Gmail SMTP (or any SMTP).
  *
  * Required env vars (set these in server/.env and on Render):
- *   SMTP_USER   the Gmail address that sends mail (e.g. tech@woways.in)
+ *   SMTP_USER   the Gmail / Workspace account that authenticates SMTP (use info@bispun.com)
  *   SMTP_PASS   a Gmail "App Password" (NOT your normal password)
- *   SMTP_FROM   optional display sender, e.g. "Bispun <tech@woways.in>"
- *                (defaults to SMTP_USER)
+ *   SMTP_FROM   optional display sender, e.g. "Bispun <info@bispun.com>"
+ *                (defaults to the Bispun sender below)
  *   SMTP_HOST   optional, defaults to smtp.gmail.com
  *   SMTP_PORT   optional, defaults to 465 (SSL)
  *
@@ -65,8 +68,16 @@ export async function sendMail({ to, subject, html, text }) {
     return { sent: false, skipped: true };
   }
   try {
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER;
-    const info = await transport.sendMail({ from, to, subject, html, text });
+    const from = process.env.SMTP_FROM || BISPUN_FROM;
+    const replyTo = process.env.SMTP_REPLY_TO || BISPUN_FROM_EMAIL;
+    const info = await transport.sendMail({
+      from,
+      replyTo,
+      to,
+      subject,
+      html,
+      text,
+    });
     return { sent: true, messageId: info.messageId };
   } catch (error) {
     console.error("[mailer] Failed to send email to", to, error.message);

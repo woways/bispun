@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
 import { syncSubscriptionLifecycle } from "../lib/subscriptions.js";
+import { fullPageAccess, normalizeUserPageAccess } from "../lib/pageAccess.js";
 import {
   lookupIpLocation,
 } from "../lib/ipGeolocation.js";
@@ -312,6 +313,14 @@ function buildClientSession(user) {
         user.department,
       sidebarOrder:
         user.sidebarOrder || [],
+
+      pageAccess:
+        user.role === "CLIENT_ADMIN"
+          ? fullPageAccess()
+          : normalizeUserPageAccess(user.pageAccess, {
+              role: user.role,
+              canViewAnalytics: user.canViewAnalytics,
+            }),
 
       permissions: {
         canManageUsers:

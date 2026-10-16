@@ -5,7 +5,11 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
-import { insightsSectionAllowed } from "../lib/pageAccess.js";
+import {
+  insightsSectionAllowed,
+  dashboardSectionAllowed,
+  allowedDashboardSections,
+} from "../lib/pageAccess.js";
 
 const router = Router();
 
@@ -566,33 +570,26 @@ router.get("/dashboard", async (req, res) => {
       };
     });
 
-    const revenueTrend =
-      currentUser.role === "CLIENT_ADMIN"
-        ? months.map((month) => {
-            const key = monthKey(month);
-            const monthAdmissions = activeAdmissions.filter(
-              (admission) =>
-                monthKey(
-                  new Date(admission.admissionDate)
-                ) === key
-            );
+    const revenueTrend = months.map((month) => {
+      const key = monthKey(month);
+      const monthAdmissions = activeAdmissions.filter(
+        (admission) =>
+          monthKey(new Date(admission.admissionDate)) === key
+      );
 
-            return {
-              key,
-              m: monthLabel(month),
-              potential: monthAdmissions.reduce(
-                (sum, admission) =>
-                  sum + Number(admission.totalFee || 0),
-                0
-              ),
-              received: monthAdmissions.reduce(
-                (sum, admission) =>
-                  sum + Number(admission.paidAmount || 0),
-                0
-              ),
-            };
-          })
-        : [];
+      return {
+        key,
+        m: monthLabel(month),
+        potential: monthAdmissions.reduce(
+          (sum, admission) => sum + Number(admission.totalFee || 0),
+          0
+        ),
+        received: monthAdmissions.reduce(
+          (sum, admission) => sum + Number(admission.paidAmount || 0),
+          0
+        ),
+      };
+    });
 
     const sourceCounts = {};
 
@@ -961,6 +958,12 @@ router.get("/dashboard", async (req, res) => {
       ],
     };
 
+    const dashboardAccess = allowedDashboardSections(
+      req.clientUser.pageAccess,
+      req.clientUser.role
+    );
+    const canDashboard = (section) => dashboardAccess.includes(section);
+
     return res.json({
       success: true,
       selectedYear: selectedYear || "all",
@@ -969,8 +972,12 @@ router.get("/dashboard", async (req, res) => {
         role: currentUser.role,
         department: currentUser.department || null,
       },
-      actionCenter,
-      summary: {
+      dashboardAccess,
+      actionCenter: canDashboard("action-center")
+        ? actionCenter
+        : { items: [], totalPrioritySignals: 0 },
+      summary: canDashboard("business-pulse")
+        ? {
         totalLeads,
         newLeads,
         qualifiedLeads,
@@ -979,13 +986,14 @@ router.get("/dashboard", async (req, res) => {
         receivedAmount,
         pendingAmount,
         currentProfit,
-      },
-      revenueTrend,
-      leadsBySource,
-      teamPerformance,
+      }
+        : {},
+      revenueTrend: canDashboard("revenue-trend") ? revenueTrend : [],
+      leadsBySource: canDashboard("leads-by-source") ? leadsBySource : [],
+      teamPerformance: canDashboard("team-performance") ? teamPerformance : [],
       myPerformance,
-      recentAdmissions,
-      admissionsByMonth,
+      recentAdmissions: canDashboard("recent-admissions") ? recentAdmissions : [],
+      admissionsByMonth: canDashboard("admissions-by-month") ? admissionsByMonth : [],
       recentActivity,
     });
   } catch (error) {
@@ -1007,6 +1015,13 @@ router.get("/dashboard", async (req, res) => {
 
 router.get("/action-center/:key", async (req, res) => {
   try {
+    if (!dashboardSectionAllowed(req.clientUser.pageAccess, req.clientUser.role, "action-center")) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to Dashboard Action Center",
+      });
+    }
+
     const companyId = req.clientUser.companyId;
     const userId = req.clientUser.userId;
     const key = String(req.params.key || "").trim();

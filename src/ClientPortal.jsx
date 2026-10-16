@@ -9,6 +9,8 @@ import {
   useNavigate,
 } from "react-router-dom";
 
+import { io } from "socket.io-client";
+
 import {
   Bell,
   MessageSquare,
@@ -70,8 +72,14 @@ import {
 } from "./components/ui";
 
 import {
+  API_URL,
   apiRequest,
 } from "./lib/api";
+import {
+  playChatSound,
+  playNotificationSound,
+  unlockUiSound,
+} from "./lib/sound";
 
 import Dashboard from "./modules/client/Dashboard";
 import UTMLeads from "./modules/client/UTMLeads";
@@ -487,6 +495,7 @@ export default function ClientPortal({
 
   const notificationRef =
     useRef(null);
+  const previousUnreadNotificationCountRef = useRef(null);
 
   const [
     profileMenuOpen,
@@ -996,6 +1005,15 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     user?.permissions ||
     {};
 
+  const userPageAccess = user?.pageAccess || {};
+
+  function hasDashboardSidebarAccess() {
+    if (user?.role === "CLIENT_ADMIN") return true;
+    const dashboard = userPageAccess?.dashboard;
+    return dashboard?.all === true ||
+      (Array.isArray(dashboard?.sections) && dashboard.sections.length > 0);
+  }
+
   function hasModulePermission(
     moduleKey
   ) {
@@ -1004,6 +1022,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       "CLIENT_ADMIN"
     ) {
       return true;
+    }
+
+    if (moduleKey === "dashboard") {
+      return hasDashboardSidebarAccess();
     }
 
     const permission =
@@ -1250,9 +1272,18 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         "/api/client/notifications/unread-count"
       );
 
-      setUnreadNotificationCount(
-        Number(data.unreadCount || 0)
-      );
+      const nextUnreadCount = Number(data.unreadCount || 0);
+      const previousUnreadCount = previousUnreadNotificationCountRef.current;
+
+      if (
+        previousUnreadCount !== null &&
+        nextUnreadCount > previousUnreadCount
+      ) {
+        playNotificationSound();
+      }
+
+      previousUnreadNotificationCountRef.current = nextUnreadCount;
+      setUnreadNotificationCount(nextUnreadCount);
     } catch (error) {
       console.error(
         "Unable to load notification count:",
@@ -1281,9 +1312,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           )
         );
 
-        setUnreadNotificationCount((current) =>
-          Math.max(0, current - 1)
-        );
+        setUnreadNotificationCount((current) => {
+          const next = Math.max(0, current - 1);
+          previousUnreadNotificationCountRef.current = next;
+          return next;
+        });
       } catch (error) {
         console.error(
           "Unable to mark notification as read:",
@@ -1316,6 +1349,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         }))
       );
 
+      previousUnreadNotificationCountRef.current = 0;
       setUnreadNotificationCount(0);
     } catch (error) {
       console.error(
@@ -1330,11 +1364,43 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
     const interval = window.setInterval(
       loadUnreadNotificationCount,
-      60000
+      15000
     );
 
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const unlock = () => {
+      unlockUiSound();
+    };
+
+    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("keydown", unlock, { once: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+
+    const socket = io(API_URL, {
+      path: "/socket.io",
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("conversation:activity", ({ lastMessage, isMuted }) => {
+      const senderId = lastMessage?.sender?.id;
+      if (!senderId || senderId === user.id || isMuted) return;
+      playChatSound();
+    });
+
+    return () => socket.disconnect();
+  }, [user?.id]);
 
   async function signOut() {
     if (
@@ -3056,17 +3122,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
           <div className="flex min-w-0 gap-7 overflow-x-auto px-1">
             {tabs.map((tab) => {
+              if (!hasModulePermission(tab.key)) return null;
+
               const active = activeModule === tab.key;
               const featureKey = tab.key.includes("walkins")
                 ? "walkins"
                 : tab.key.includes("counselling")
                   ? "counselling"
                   : "admissions";
-
-              const locked = tab.premium
-                ? !enabledFeatures.includes(featureKey) ||
-                  !hasModulePermission(tab.key)
-                : !hasModulePermission(tab.key);
 
               const TabIcon = tab.icon;
 
@@ -3094,13 +3157,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       size={12}
                       className="text-amber-500"
                       title="Premium module"
-                    />
-                  ) : null}
-
-                  {locked ? (
-                    <Lock
-                      size={10}
-                      className="text-slate-400"
                     />
                   ) : null}
 
@@ -3871,9 +3927,15 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             >
               <div className="sidebar-scroll h-full overflow-y-auto overflow-x-hidden pr-0.5">
                 {navGroups.map((group, navIndex) => {
+                  const visibleGroupItems = group.items.filter((key) =>
+                    hasModulePermission(key)
+                  );
+
+                  if (visibleGroupItems.length === 0) return null;
+
                   const Icon = group.icon;
                   const groupActive =
-                    group.items.includes(module) ||
+                    visibleGroupItems.includes(module) ||
                     (group.key === "admissions" &&
                       (module.startsWith("domestic-") ||
                         module.startsWith("international-")));
@@ -3883,11 +3945,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   if (group.direct) {
                     const key = group.items[0];
                     const active = module === key;
-                    const locked =
-                      group.key === "chats" || group.key === "goals-and-targets" || group.key === "my-referrals" || group.key === "my-store"
-                        ? false
-                        : !enabledFeatures.includes(key) ||
-                          !hasModulePermission(key);
 
                     return (
                       <button
@@ -3929,8 +3986,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                             {active ? (
                               <ChevronRight className="h-3.5 w-3.5 text-white/60" />
-                            ) : locked ? (
-                              <Lock size={11} className="text-slate-400" />
                             ) : null}
                           </>
                         )}
@@ -3970,13 +4025,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           <div className="mt-1 space-y-1">
                             {group.items.map((key) => {
                               const meta = MODULE_META[key];
-                              if (!meta) return null;
+                              if (!meta || !hasModulePermission(key)) return null;
 
                               const ChildIcon = getModuleIcon(key, meta.icon);
                               const active = module === key;
-                              const locked =
-                                !enabledFeatures.includes(key.includes("walkins") ? "walkins" : key.includes("counselling") ? "counselling" : key.includes("admissions") ? "admissions" : key) ||
-                                !hasModulePermission(key);
 
                               return (
                                 <button
@@ -3999,9 +4051,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                     <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
                                   )}
 
-                                  {locked && (
-                                    <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full bg-slate-500" />
-                                  )}
                                 </button>
                               );
                             })}
@@ -4062,13 +4111,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             <div className="space-y-0.5">
                               {group.items.map((key) => {
                                 const meta = MODULE_META[key];
-                                if (!meta) return null;
+                                if (!meta || !hasModulePermission(key)) return null;
 
                                 const ChildIcon = getModuleIcon(key, meta.icon);
                                 const active = module === key;
-                                const locked =
-                                  !enabledFeatures.includes(key.includes("walkins") ? "walkins" : key.includes("counselling") ? "counselling" : key.includes("admissions") ? "admissions" : key) ||
-                                  !hasModulePermission(key);
 
                                 return (
                                   <button
@@ -4100,12 +4146,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                       />
                                     )}
 
-                                    {locked ? (
-                                      <Lock
-                                        size={10}
-                                        className="text-slate-400"
-                                      />
-                                    ) : null}
                                   </button>
                                 );
                               })}

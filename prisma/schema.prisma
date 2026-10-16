@@ -252,6 +252,7 @@ model Company {
   nurtureEnrollments       NurtureEnrollment[]
   nurtureRunLogs           NurtureRunLog[]
   callRecords              CallRecord[]
+  leadRemarks              LeadRemark[]
 }
 
 model User {
@@ -312,6 +313,8 @@ model User {
   notificationPreference UserNotificationPreference?
   auditLogs              AuditLog[]
   assignedLeadDatasets   LeadDataset[]               @relation("LeadDatasetAssignee")
+  assignedLeads          Lead[]                      @relation("LeadAssignee")
+  leadRemarks            LeadRemark[]
   calendarEventsCreated  CalendarEvent[]             @relation("CalendarEventCreator")
   calendarEventsAssigned CalendarEvent[]             @relation("CalendarEventAssignee")
   clientSessions         ClientSession[]
@@ -677,12 +680,17 @@ model Lead {
   campaign String?
   medium   String?
 
-  assignedToName String?
+  assignedToName   String?
+  assignedToUserId String?
+  assignedToUser   User?   @relation("LeadAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  followUpAt DateTime?
 
   utmLinkId String?
   utmLink   UtmLink? @relation(fields: [utmLinkId], references: [id], onDelete: SetNull)
 
-  notes String?
+  notes   String?
+  remarks LeadRemark[]
 
   admission         Admission?
   customFieldValues CustomFieldValue[]
@@ -700,9 +708,32 @@ model Lead {
   @@index([companyId, stage])
   @@index([companyId, temperature])
   @@index([companyId, createdAt])
+  @@index([companyId, followUpAt])
+  @@index([assignedToUserId])
   @@index([utmLinkId])
   @@index([leadDatasetId])
   @@index([companyId, leadDatasetId])
+}
+
+model LeadRemark {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  leadId String
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  text String @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, leadId, createdAt])
+  @@index([userId, createdAt])
 }
 
 enum AdmissionMarket {

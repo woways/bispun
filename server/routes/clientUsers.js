@@ -6,6 +6,7 @@ import { requireClientUser } from "../middleware/clientAuth.js";
 import { writeAuditLog } from "../lib/auditLog.js";
 import {
   normalizePageAccess,
+  normalizeUserPageAccess,
   fullPageAccess,
   clampPageAccessToActor,
 } from "../lib/pageAccess.js";
@@ -44,7 +45,10 @@ async function reportsSubtreeIds(companyId, rootId) {
 function actorAccessSpec(actor) {
   return actor.role === "CLIENT_ADMIN"
     ? fullPageAccess()
-    : normalizePageAccess(actor.pageAccess);
+    : normalizeUserPageAccess(actor.pageAccess, {
+        role: actor.role,
+        canViewAnalytics: actor.canViewAnalytics,
+      });
 }
 
 /** Can `actor` view/manage `target`? (target already guaranteed non-super.) */
@@ -299,7 +303,10 @@ function formatUser(user) {
     pageAccess:
       user.role === "CLIENT_ADMIN"
         ? fullPageAccess()
-        : normalizePageAccess(user.pageAccess),
+        : normalizeUserPageAccess(user.pageAccess, {
+            role: user.role,
+            canViewAnalytics: user.canViewAnalytics,
+          }),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
@@ -432,6 +439,15 @@ router.get("/permission-tree", async (req, res) => {
       success: true,
       tree: {
         markets,
+        dashboard: { sections: [
+          "business-pulse",
+          "revenue-trend",
+          "leads-by-source",
+          "action-center",
+          "recent-admissions",
+          "admissions-by-month",
+          "team-performance",
+        ] },
         finance: { sections: ["overview", "expenses", "incentives"] },
         insights: { sections: ["overview", "comparison"] },
       },

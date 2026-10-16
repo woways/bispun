@@ -15,6 +15,15 @@
  * ONLY when `all` is true; otherwise the explicit allow-lists apply.
  */
 
+export const DASHBOARD_SECTIONS = [
+  "business-pulse",
+  "revenue-trend",
+  "leads-by-source",
+  "action-center",
+  "recent-admissions",
+  "admissions-by-month",
+  "team-performance",
+];
 export const FINANCE_SECTIONS = ["overview", "expenses", "incentives"];
 export const INSIGHTS_SECTIONS = ["overview", "comparison"];
 export const ADMISSION_MARKETS = ["DOMESTIC", "INTERNATIONAL"];
@@ -39,10 +48,15 @@ export function normalizePageAccess(raw) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
 
   const adm = source.admissions && typeof source.admissions === "object" ? source.admissions : {};
+  const dash = source.dashboard && typeof source.dashboard === "object" ? source.dashboard : {};
   const fin = source.finance && typeof source.finance === "object" ? source.finance : {};
   const ins = source.insights && typeof source.insights === "object" ? source.insights : {};
 
   return {
+    dashboard: {
+      all: dash.all === true,
+      sections: strArray(dash.sections, DASHBOARD_SECTIONS),
+    },
     admissions: {
       all: adm.all === true,
       markets: strArray(adm.markets, ADMISSION_MARKETS),
@@ -64,10 +78,36 @@ export function normalizePageAccess(raw) {
 /** A full-access spec (used for CLIENT_ADMIN and role "grant everything"). */
 export function fullPageAccess() {
   return {
+    dashboard: { all: true, sections: [...DASHBOARD_SECTIONS] },
     admissions: { all: true, markets: [], streamIds: [], collegeIds: [], branchIds: [] },
     finance: { all: true, sections: [...FINANCE_SECTIONS] },
     insights: { all: true, sections: [...INSIGHTS_SECTIONS] },
   };
+}
+
+/**
+ * Backwards-compatible user access normalizer.
+ * Older rows pre-date dashboard section controls. Preserve their previous
+ * dashboard access for existing managers only when the legacy analytics permission was already ON.
+ */
+export function normalizeUserPageAccess(
+  raw,
+  { role, canViewAnalytics = false } = {}
+) {
+  if (role === "CLIENT_ADMIN") return fullPageAccess();
+
+  const normalized = normalizePageAccess(raw);
+  const source =
+    raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+
+  if (!source.dashboard && role === "MANAGER" && canViewAnalytics === true) {
+    normalized.dashboard = {
+      all: true,
+      sections: [...DASHBOARD_SECTIONS],
+    };
+  }
+
+  return normalized;
 }
 
 function isAdmin(role) {
@@ -200,6 +240,24 @@ export function scopeAllowsBranch(scope, branch, partner) {
 }
 
 /* ------------------------------------------------------------------ *
+ * DASHBOARD: widget-level gating
+ * ------------------------------------------------------------------ */
+
+export function dashboardSectionAllowed(pageAccess, role, section) {
+  if (isAdmin(role)) return true;
+  const d = normalizePageAccess(pageAccess).dashboard;
+  return d.all || d.sections.includes(section);
+}
+
+export function allowedDashboardSections(pageAccess, role) {
+  if (isAdmin(role)) return [...DASHBOARD_SECTIONS];
+  const d = normalizePageAccess(pageAccess).dashboard;
+  return d.all
+    ? [...DASHBOARD_SECTIONS]
+    : DASHBOARD_SECTIONS.filter((section) => d.sections.includes(section));
+}
+
+/* ------------------------------------------------------------------ *
  * FINANCE / INSIGHTS: section gating
  * ------------------------------------------------------------------ */
 
@@ -260,6 +318,14 @@ export function clampPageAccessToActor(requested, actorAccess, actorRole) {
       };
   admissions.all = admAll;
 
+  const dashboard = {
+    all: own.dashboard.all && req.dashboard.all,
+    sections: intersectArrays(
+      req.dashboard.sections,
+      own.dashboard.all,
+      own.dashboard.sections
+    ),
+  };
   const finance = {
     all: own.finance.all && req.finance.all,
     sections: intersectArrays(req.finance.sections, own.finance.all, own.finance.sections),
@@ -269,5 +335,5 @@ export function clampPageAccessToActor(requested, actorAccess, actorRole) {
     sections: intersectArrays(req.insights.sections, own.insights.all, own.insights.sections),
   };
 
-  return normalizePageAccess({ admissions, finance, insights });
+  return normalizePageAccess({ dashboard, admissions, finance, insights });
 }

@@ -18,6 +18,7 @@ const EMPTY_ADMISSIONS = { all: false, markets: [], streamIds: [], collegeIds: [
 
 export function emptyPageAccess() {
   return {
+    dashboard: { all: false, sections: [] },
     admissions: { ...EMPTY_ADMISSIONS },
     finance: { all: false, sections: [] },
     insights: { all: false, sections: [] },
@@ -26,11 +27,13 @@ export function emptyPageAccess() {
 
 export function normalizeClientPageAccess(raw) {
   const s = raw && typeof raw === "object" ? raw : {};
+  const d = s.dashboard && typeof s.dashboard === "object" ? s.dashboard : {};
   const a = s.admissions && typeof s.admissions === "object" ? s.admissions : {};
   const f = s.finance && typeof s.finance === "object" ? s.finance : {};
   const i = s.insights && typeof s.insights === "object" ? s.insights : {};
   const arr = (v) => (Array.isArray(v) ? v.map(String) : []);
   return {
+    dashboard: { all: d.all === true, sections: arr(d.sections) },
     admissions: {
       all: a.all === true,
       markets: arr(a.markets),
@@ -120,6 +123,15 @@ function Check({ checked, disabled, onChange, label, muted }) {
 }
 
 const MARKET_LABELS = { DOMESTIC: "Domestic", INTERNATIONAL: "International" };
+const DASHBOARD_SECTIONS = [
+  ["business-pulse", "Business Pulse"],
+  ["revenue-trend", "Revenue Trend"],
+  ["leads-by-source", "Leads by Source"],
+  ["action-center", "Action Center"],
+  ["recent-admissions", "Recent Admissions"],
+  ["admissions-by-month", "Admissions by Month"],
+  ["team-performance", "Team Performance"],
+];
 const FINANCE_SECTIONS = [
   ["overview", "Overview"],
   ["expenses", "Expenses"],
@@ -145,6 +157,7 @@ export default function PermissionTree({
   const actor = actorPageAccess ? normalizeClientPageAccess(actorPageAccess) : null;
 
   const PAGES = [
+    { key: "dashboard", label: "Dashboard", perm: null },
     { key: "admissions", label: "Admissions", perm: "canManageAdmissions" },
     { key: "finance", label: "Finance", perm: "canManageRevenue" },
     { key: "insights", label: "Insights", perm: "canViewAnalytics" },
@@ -152,6 +165,7 @@ export default function PermissionTree({
 
   // A granter can only assign what they hold (admin actor => everything).
   const actorCoversAdmission = (node) => (actor ? admissionCovers(actor.admissions, node) : true);
+  const actorHasDashboard = (sec) => (actor ? actor.dashboard.all || actor.dashboard.sections.includes(sec) : true);
   const actorHasFinance = (sec) => (actor ? actor.finance.all || actor.finance.sections.includes(sec) : true);
   const actorHasInsights = (sec) => (actor ? actor.insights.all || actor.insights.sections.includes(sec) : true);
 
@@ -302,16 +316,16 @@ export default function PermissionTree({
     );
   }
 
-  function renderSections(pageKey, sections, actorHas) {
+  function renderSections(pageKey, sections, actorHas, pageLabel) {
     const node = access[pageKey];
     const setSections = (next) => onPageAccess({ ...access, [pageKey]: { ...node, ...next } });
     return (
       <div className="mt-1">
         <Row indent={0}>
           <Check
-            label={`Allow all ${pageKey === "finance" ? "Finance" : "Insights"}`}
+            label={`Allow all ${pageLabel}`}
             checked={node.all}
-            disabled={actor ? !(pageKey === "finance" ? actor.finance.all : actor.insights.all) : false}
+            disabled={actor ? !actor[pageKey].all : false}
             onChange={(on) => setSections({ all: on })}
           />
         </Row>
@@ -339,7 +353,7 @@ export default function PermissionTree({
   return (
     <div className="space-y-2">
       {PAGES.map((page) => {
-        const enabled = isAdminTarget || permissions?.[page.perm] === true;
+        const enabled = page.perm == null || isAdminTarget || permissions?.[page.perm] === true;
         const oid = `page-${page.key}`;
         const expanded = open[oid];
         return (
@@ -354,15 +368,19 @@ export default function PermissionTree({
                 <Chevron open={expanded && enabled} />
                 {page.label}
               </button>
-              <label className="flex items-center gap-2 text-[12px] text-slate-500">
-                <span>{enabled ? "Enabled" : "No access"}</span>
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  disabled={isAdminTarget}
-                  onChange={(e) => onPermissions(page.perm, e.target.checked)}
-                />
-              </label>
+              {page.perm ? (
+                <label className="flex items-center gap-2 text-[12px] text-slate-500">
+                  <span>{enabled ? "Enabled" : "No access"}</span>
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    disabled={isAdminTarget}
+                    onChange={(e) => onPermissions(page.perm, e.target.checked)}
+                  />
+                </label>
+              ) : (
+                <span className="text-[12px] font-medium text-slate-500">Widget access</span>
+              )}
             </div>
             {enabled && expanded && (
               <div className="px-3 pb-3">
@@ -370,12 +388,14 @@ export default function PermissionTree({
                   <div className="text-[12px] text-slate-400 py-2">
                     Client Admin has full access to everything.
                   </div>
+                ) : page.key === "dashboard" ? (
+                  renderSections("dashboard", DASHBOARD_SECTIONS, actorHasDashboard, "Dashboard")
                 ) : page.key === "admissions" ? (
                   renderAdmissions()
                 ) : page.key === "finance" ? (
-                  renderSections("finance", FINANCE_SECTIONS, actorHasFinance)
+                  renderSections("finance", FINANCE_SECTIONS, actorHasFinance, "Finance")
                 ) : (
-                  renderSections("insights", INSIGHTS_SECTIONS, actorHasInsights)
+                  renderSections("insights", INSIGHTS_SECTIONS, actorHasInsights, "Insights")
                 )}
               </div>
             )}

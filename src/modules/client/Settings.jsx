@@ -4687,10 +4687,10 @@ export default function SettingsView({
 
                 <div className="mt-4">
                   <div className="text-[13px] font-semibold text-slate-700">
-                    Page access (Admissions, Finance, Insights)
+                    Page access (Dashboard, Admissions, Finance, Insights)
                   </div>
                   <p className="mt-1 mb-2 text-[12px] leading-5 text-slate-500">
-                    Turn a page on, then expand it to grant access to specific
+                    Expand Dashboard to choose individual widgets, or turn other pages on and grant specific
                     streams, colleges, branches or sections. New colleges appear
                     here automatically.
                   </p>

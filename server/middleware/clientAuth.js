@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import prisma from "../lib/prisma.js";
 import { syncSubscriptionLifecycle } from "../lib/subscriptions.js";
 import {
-  normalizePageAccess,
+  normalizeUserPageAccess,
   fullPageAccess,
 } from "../lib/pageAccess.js";
 
@@ -232,6 +232,8 @@ export async function requireClientUser(
         user.companyId,
       role:
         user.role,
+      name:
+        user.name,
       managerId:
         user.managerId ?? null,
       sessionId:
@@ -242,7 +244,7 @@ export async function requireClientUser(
       pageAccess:
         user.role === "CLIENT_ADMIN"
           ? fullPageAccess()
-          : normalizePageAccess(user.pageAccess),
+          : normalizeUserPageAccess(user.pageAccess, { role: user.role, canViewAnalytics: user.canViewAnalytics }),
 
       permissions: {
         canManageUsers:

@@ -199,6 +199,35 @@ function formatDate(
   return formatUiDate(date);
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function followUpInputParts(value) {
+  if (!value) return { date: "", time: "" };
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { date: "", time: "" };
+
+  const pad = (number) => String(number).padStart(2, "0");
+
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+  };
+}
+
 function normalizeFilterText(value) {
   return String(value ?? "")
     .trim()
@@ -545,6 +574,8 @@ function IndividualLeadModal({
   lead = null,
   defaultType = "INDIVIDUAL",
 }) {
+  const initialFollowUp = followUpInputParts(lead?.followUpAt);
+
   const [
     saving,
     setSaving,
@@ -589,9 +620,17 @@ function IndividualLeadModal({
       temperature: lead?.temperature || "WARM",
       type: lead?.type || defaultType || "INDIVIDUAL",
       sourceName: lead?.sourceName || "",
-      assignedToUserId: "",
-      notes: lead?.notes || "",
+      assignedToUserId: lead?.assignedToUserId || "",
+      followUpDate: initialFollowUp.date,
+      followUpTime: initialFollowUp.time,
+      remark: "",
     });
+
+  const [remarks, setRemarks] = useState(lead?.remarks || []);
+  const [remarkDraft, setRemarkDraft] = useState("");
+  const [remarkSaving, setRemarkSaving] = useState(false);
+  const [editingRemarkId, setEditingRemarkId] = useState("");
+  const [editingRemarkText, setEditingRemarkText] = useState("");
 
   function update(
     field,
@@ -609,6 +648,9 @@ function IndividualLeadModal({
       (current) => ({
         ...current,
         [field]: "",
+        ...(field === "followUpDate" || field === "followUpTime"
+          ? { followUpAt: "" }
+          : {}),
       })
     );
   }
@@ -693,6 +735,82 @@ function IndividualLeadModal({
     }));
   }
 
+  async function addRemark() {
+    const text = remarkDraft.trim();
+    if (!lead?.id || !text || remarkSaving) return;
+
+    setRemarkSaving(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${lead.id}/remarks`,
+        {
+          method: "POST",
+          body: JSON.stringify({ text }),
+        }
+      );
+
+      setRemarks(data.remarks || []);
+      setRemarkDraft("");
+    } catch (error) {
+      setError(error?.data?.message || "Unable to add remark");
+    } finally {
+      setRemarkSaving(false);
+    }
+  }
+
+  async function saveRemarkEdit(remarkId) {
+    const text = editingRemarkText.trim();
+    if (!lead?.id || !remarkId || !text || remarkSaving) return;
+
+    setRemarkSaving(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${lead.id}/remarks/${remarkId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ text }),
+        }
+      );
+
+      setRemarks(data.remarks || []);
+      setEditingRemarkId("");
+      setEditingRemarkText("");
+    } catch (error) {
+      setError(error?.data?.message || "Unable to update remark");
+    } finally {
+      setRemarkSaving(false);
+    }
+  }
+
+  async function deleteRemark(remarkId) {
+    if (!lead?.id || !remarkId || remarkSaving) return;
+    if (!window.confirm("Delete this remark?")) return;
+
+    setRemarkSaving(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${lead.id}/remarks/${remarkId}`,
+        { method: "DELETE" }
+      );
+
+      setRemarks(data.remarks || []);
+      if (editingRemarkId === remarkId) {
+        setEditingRemarkId("");
+        setEditingRemarkText("");
+      }
+    } catch (error) {
+      setError(error?.data?.message || "Unable to delete remark");
+    } finally {
+      setRemarkSaving(false);
+    }
+  }
+
   async function submit(
     event
   ) {
@@ -710,6 +828,11 @@ function IndividualLeadModal({
         "Enter a valid 10-digit Indian mobile number.";
     }
 
+    if (Boolean(form.followUpDate) !== Boolean(form.followUpTime)) {
+      nextFieldErrors.followUpAt =
+        "Choose both follow-up date and time.";
+    }
+
     setFieldErrors(nextFieldErrors);
 
     if (Object.keys(nextFieldErrors).length) {
@@ -721,6 +844,18 @@ function IndividualLeadModal({
     setError("");
 
     try {
+      const followUpAt =
+        form.followUpDate && form.followUpTime
+          ? new Date(`${form.followUpDate}T${form.followUpTime}`).toISOString()
+          : null;
+
+      const {
+        followUpDate,
+        followUpTime,
+        remark,
+        ...leadForm
+      } = form;
+
       const data =
         await apiRequest(
           lead
@@ -730,9 +865,11 @@ function IndividualLeadModal({
             method: lead ? "PATCH" : "POST",
             body:
               JSON.stringify({
-                ...form,
+                ...leadForm,
                 name: form.name.trim(),
                 phone: normalizeManualLeadPhone(form.phone),
+                followUpAt,
+                remark: lead ? undefined : remark,
                 customFields:
                   customFieldValues,
               }),
@@ -963,20 +1100,50 @@ function IndividualLeadModal({
 
             <Field label="Source">
               <input
-                value={
-                  form.sourceName
-                }
-                onChange={(
-                  event
-                ) =>
-                  update(
-                    "sourceName",
-                    event.target.value
-                  )
+                value={form.sourceName}
+                onChange={(event) =>
+                  update("sourceName", event.target.value)
                 }
                 className="form-input"
                 placeholder="Justdial / Reference / College Expo"
               />
+            </Field>
+
+            <Field label="Follow-up">
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="date"
+                  value={form.followUpDate}
+                  onChange={(event) =>
+                    update("followUpDate", event.target.value)
+                  }
+                  className={`form-input ${
+                    fieldErrors.followUpAt ? "border-rose-300" : ""
+                  }`}
+                  aria-label="Follow-up date"
+                />
+                <input
+                  type="time"
+                  value={form.followUpTime}
+                  onChange={(event) =>
+                    update("followUpTime", event.target.value)
+                  }
+                  className={`form-input ${
+                    fieldErrors.followUpAt ? "border-rose-300" : ""
+                  }`}
+                  aria-label="Follow-up time"
+                />
+              </div>
+              {fieldErrors.followUpAt && (
+                <div className="mt-1 text-xs font-medium text-rose-600">
+                  {fieldErrors.followUpAt}
+                </div>
+              )}
+              {form.followUpDate && form.followUpTime && (
+                <div className="mt-1 text-[11px] text-slate-500">
+                  Reminder alerts: 2 days, 1 day, same day and 1 hour before.
+                </div>
+              )}
             </Field>
 
             <Field
@@ -1153,26 +1320,141 @@ function IndividualLeadModal({
               </div>
             ) : null}
 
-            <Field
-              label="Notes"
-              full
-            >
-              <textarea
-                rows={3}
-                value={
-                  form.notes
-                }
-                onChange={(
-                  event
-                ) =>
-                  update(
-                    "notes",
-                    event.target.value
-                  )
-                }
-                className="form-input min-h-[86px] py-2"
-              />
-            </Field>
+            {!lead ? (
+              <Field label="Remarks" full>
+                <textarea
+                  rows={3}
+                  value={form.remark}
+                  onChange={(event) =>
+                    update("remark", event.target.value)
+                  }
+                  className="form-input min-h-[86px] py-2"
+                  placeholder="Add the first remark for this lead"
+                />
+              </Field>
+            ) : (
+              <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[14px] font-bold text-slate-900">
+                      Remarks
+                    </div>
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      Latest 5 remarks are shown. New remarks are saved to this lead's history.
+                    </div>
+                  </div>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 ring-1 ring-slate-200">
+                    Last 5
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-start gap-2">
+                  <textarea
+                    rows={2}
+                    value={remarkDraft}
+                    onChange={(event) => setRemarkDraft(event.target.value)}
+                    className="form-input min-h-[68px] flex-1 py-2"
+                    placeholder="Add a new remark..."
+                  />
+                  <button
+                    type="button"
+                    onClick={addRemark}
+                    disabled={remarkSaving || !remarkDraft.trim()}
+                    className="h-10 shrink-0 rounded-lg bg-indigo-600 px-3 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                  >
+                    {remarkSaving ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Plus size={13} />
+                    )}
+                    Add
+                  </button>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {remarks.length ? (
+                    remarks.slice(0, 5).map((remark) => (
+                      <div
+                        key={remark.id}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+                      >
+                        {editingRemarkId === remark.id ? (
+                          <div>
+                            <textarea
+                              rows={2}
+                              value={editingRemarkText}
+                              onChange={(event) =>
+                                setEditingRemarkText(event.target.value)
+                              }
+                              className="form-input min-h-[68px] py-2"
+                            />
+                            <div className="mt-2 flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingRemarkId("");
+                                  setEditingRemarkText("");
+                                }}
+                                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => saveRemarkEdit(remark.id)}
+                                disabled={remarkSaving || !editingRemarkText.trim()}
+                                className="h-8 rounded-lg bg-indigo-600 px-3 text-[11px] font-semibold text-white disabled:opacity-50"
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 whitespace-pre-wrap text-[13px] leading-5 text-slate-700">
+                                {remark.text}
+                              </div>
+                              {!remark.legacy && (
+                                <div className="flex shrink-0 items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingRemarkId(remark.id);
+                                      setEditingRemarkText(remark.text || "");
+                                    }}
+                                    className="h-7 w-7 rounded-md text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center justify-center"
+                                    aria-label="Edit remark"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteRemark(remark.id)}
+                                    className="h-7 w-7 rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 inline-flex items-center justify-center"
+                                    aria-label="Delete remark"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-1.5 text-[10px] text-slate-400">
+                              {remark.createdBy || "CRM user"} · {formatDateTime(remark.updatedAt || remark.createdAt)}
+                              {remark.legacy ? " · Existing note" : ""}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-5 text-center text-[12px] text-slate-400">
+                      No remarks yet. Use + Add to save the first remark.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="md:col-span-2 bg-indigo-50/60 border border-indigo-100 rounded-lg px-3 py-2.5 text-[13px] text-indigo-800 leading-5">
               This lead is stored directly in the main CRM Leads table. We do not create a fake one-row dataset. It will immediately appear in the normal Leads module.

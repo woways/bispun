@@ -830,6 +830,73 @@ function normalizeEmail(
 
 }
 
+function parseLeadFollowUpAt(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid follow-up date or time");
+  }
+
+  return date;
+}
+
+function legacyLeadRemarkText(notes) {
+  return String(notes || "")
+    .split("\n")
+    .filter((line) =>
+      !line.startsWith("Lead Store source: ") &&
+      !line.startsWith("Lead Store type: ") &&
+      !line.startsWith("Imported from ") &&
+      line !== "Added individually from Lead Store" &&
+      !line.startsWith("Admissions origin:")
+    )
+    .join("\n")
+    .trim();
+}
+
+async function clearPendingLeadFollowUpNotifications(
+  client,
+  companyId,
+  leadId
+) {
+  await client.notification.deleteMany({
+    where: {
+      companyId,
+      read: false,
+      message: {
+        contains: `LEAD_FOLLOWUP:${leadId}:`,
+      },
+    },
+  });
+}
+
+async function getLatestLeadRemarks(client, companyId, leadId) {
+  const remarks = await client.leadRemark.findMany({
+    where: { companyId, leadId },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    include: {
+      user: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  return remarks.map((remark) => ({
+    id: remark.id,
+    text: remark.text,
+    createdAt: remark.createdAt,
+    updatedAt: remark.updatedAt,
+    createdBy: remark.user?.name || "Unknown user",
+    userId: remark.userId || null,
+    legacy: false,
+  }));
+}
+
 
 
 function formatDataset(
@@ -1860,6 +1927,40 @@ async function getAssignee(
 
 
 
+function scopeLeadWhereForEmployee(req, where) {
+  if (req.clientUser?.role !== "EMPLOYEE") return where;
+
+  const employeeScope = {
+    OR: [
+      { assignedToUserId: req.clientUser.userId },
+      {
+        assignedToName: {
+          equals: String(req.clientUser?.name || ""),
+          mode: "insensitive",
+        },
+      },
+      {
+        leadDataset: {
+          is: { assignedToUserId: req.clientUser.userId },
+        },
+      },
+    ],
+  };
+
+  const existingAnd = Array.isArray(where.AND)
+    ? where.AND
+    : where.AND
+      ? [where.AND]
+      : [];
+
+  return { ...where, AND: [...existingAnd, employeeScope] };
+}
+
+function scopeDatasetWhereForEmployee(req, where) {
+  if (req.clientUser?.role !== "EMPLOYEE") return where;
+  return { ...where, assignedToUserId: req.clientUser.userId };
+}
+
 /* =========================================================
 
    LIST DATASETS
@@ -2022,6 +2123,8 @@ router.get(
 
 
 
+      const datasetWhere = scopeDatasetWhereForEmployee(req, where);
+
       const [
 
         datasets,
@@ -2034,7 +2137,7 @@ router.get(
 
           prisma.leadDataset.findMany({
 
-            where,
+            where: datasetWhere,
 
 
 
@@ -2256,6 +2359,10 @@ router.get(
 
               req.clientUser.companyId,
 
+            ...(req.clientUser.role === "EMPLOYEE"
+              ? { id: req.clientUser.userId }
+              : {}),
+
             active:
 
               true,
@@ -2415,9 +2522,11 @@ router.get(
 
 
 
+      const scopedWhere = scopeLeadWhereForEmployee(req, where);
+
       const leads = await prisma.lead.findMany({
 
-        where,
+        where: scopedWhere,
 
         include: {
 
@@ -2459,6 +2568,16 @@ router.get(
 
             },
 
+          },
+
+          remarks: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            include: {
+              user: {
+                select: { id: true, name: true },
+              },
+            },
           },
 
         },
@@ -2562,6 +2681,8 @@ router.get(
                 ),
 
           assignedToName: lead.assignedToName,
+          assignedToUserId: lead.assignedToUserId || null,
+          followUpAt: lead.followUpAt || null,
 
           createdAt: lead.createdAt,
 
@@ -2591,23 +2712,29 @@ router.get(
 
             ?.replace("Lead Store source: ", "") || "",
 
-          notes: (lead.notes || "")
+          notes: legacyLeadRemarkText(lead.notes),
 
-            .split("\n")
-
-            .filter((line) =>
-
-              !line.startsWith("Lead Store source: ") &&
-
-              !line.startsWith("Lead Store type: ") &&
-
-              !line.startsWith("Imported from ") &&
-
-              line !== "Added individually from Lead Store"
-
-            )
-
-            .join("\n"),
+          remarks: lead.remarks?.length
+            ? lead.remarks.map((remark) => ({
+                id: remark.id,
+                text: remark.text,
+                createdAt: remark.createdAt,
+                updatedAt: remark.updatedAt,
+                createdBy: remark.user?.name || "Unknown user",
+                userId: remark.userId || null,
+                legacy: false,
+              }))
+            : (legacyLeadRemarkText(lead.notes)
+                ? [{
+                    id: `legacy-${lead.id}`,
+                    text: legacyLeadRemarkText(lead.notes),
+                    createdAt: lead.createdAt,
+                    updatedAt: lead.updatedAt,
+                    createdBy: "Existing lead note",
+                    userId: null,
+                    legacy: true,
+                  }]
+                : []),
 
           intelligence: buildLeadIntelligence({
             lead,
@@ -2668,6 +2795,13 @@ router.patch(
   async (req, res) => {
 
     try {
+
+      if (req.clientUser.role === "EMPLOYEE") {
+        return res.status(403).json({
+          success: false,
+          message: "Only managers or admins can assign Lead Store leads",
+        });
+      }
 
       const companyId =
 
@@ -2868,6 +3002,8 @@ router.patch(
             assignedToName:
 
               assignee.name,
+            assignedToUserId:
+              assignee.id,
 
           },
 
@@ -2955,7 +3091,7 @@ router.patch(
 
       const existing = await prisma.lead.findFirst({
 
-        where: {
+        where: scopeLeadWhereForEmployee(req, {
 
           id: leadId,
 
@@ -2963,7 +3099,7 @@ router.patch(
 
           source: "LEAD_STORE",
 
-        },
+        }),
 
       });
 
@@ -3002,7 +3138,17 @@ router.patch(
 
       const sourceName = cleanString(req.body?.sourceName);
 
-      const notes = cleanString(req.body?.notes);
+      const remark = cleanString(req.body?.remark ?? req.body?.notes);
+
+      let followUpAt;
+      try {
+        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error?.message || "Invalid follow-up date or time",
+        });
+      }
 
       const assignedToUserId = cleanString(req.body?.assignedToUserId);
 
@@ -3152,10 +3298,10 @@ router.patch(
             medium: type,
 
             assignedToName: assignee?.name || null,
+            assignedToUserId: assignee?.id || null,
+            followUpAt,
 
             notes: [
-
-              notes,
 
               sourceName ? `Lead Store source: ${sourceName}` : null,
 
@@ -3170,6 +3316,34 @@ router.patch(
         });
 
 
+
+        const existingRemarkCount = await tx.leadRemark.count({
+          where: { companyId, leadId },
+        });
+
+        const legacyRemark = legacyLeadRemarkText(existing.notes);
+
+        if (!existingRemarkCount && legacyRemark) {
+          await tx.leadRemark.create({
+            data: {
+              companyId,
+              leadId,
+              userId: req.clientUser.userId,
+              text: legacyRemark,
+            },
+          });
+        }
+
+        if (remark) {
+          await tx.leadRemark.create({
+            data: {
+              companyId,
+              leadId,
+              userId: req.clientUser.userId,
+              text: remark,
+            },
+          });
+        }
 
         await tx.customFieldValue.deleteMany({ where: { leadId } });
 
@@ -3198,6 +3372,18 @@ router.patch(
       });
 
 
+
+      if (
+        (existing.followUpAt?.getTime?.() || null) !==
+          (followUpAt?.getTime?.() || null) ||
+        (existing.assignedToUserId || null) !== (assignee?.id || null)
+      ) {
+        await clearPendingLeadFollowUpNotifications(
+          prisma,
+          companyId,
+          leadId
+        );
+      }
 
       return res.json({
 
@@ -3235,6 +3421,8 @@ router.patch(
           assignedToName:
 
             updated.assignedToName,
+          assignedToUserId: updated.assignedToUserId || null,
+          followUpAt: updated.followUpAt || null,
 
           createdAt:
 
@@ -3257,6 +3445,222 @@ router.patch(
 );
 
 
+
+/* =========================================================
+
+   LEAD REMARKS
+
+========================================================= */
+
+router.post(
+  "/manual/:id/remarks",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const text = cleanString(req.body?.text ?? req.body?.remark);
+
+      if (!text) {
+        return res.status(400).json({
+          success: false,
+          message: "Remark is required",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: scopeLeadWhereForEmployee(req, {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        }),
+        select: { id: true, notes: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const count = await tx.leadRemark.count({
+          where: { companyId, leadId },
+        });
+        const legacyRemark = legacyLeadRemarkText(lead.notes);
+
+        if (!count && legacyRemark) {
+          await tx.leadRemark.create({
+            data: {
+              companyId,
+              leadId,
+              userId: req.clientUser.userId,
+              text: legacyRemark,
+            },
+          });
+        }
+
+        await tx.leadRemark.create({
+          data: {
+            companyId,
+            leadId,
+            userId: req.clientUser.userId,
+            text,
+          },
+        });
+      });
+
+      const remarks = await getLatestLeadRemarks(
+        prisma,
+        companyId,
+        leadId
+      );
+
+      return res.status(201).json({
+        success: true,
+        message: "Remark added",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to add lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to add remark",
+      });
+    }
+  }
+);
+
+router.patch(
+  "/manual/:id/remarks/:remarkId",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const remarkId = String(req.params.remarkId || "").trim();
+      const text = cleanString(req.body?.text ?? req.body?.remark);
+
+      if (!text) {
+        return res.status(400).json({
+          success: false,
+          message: "Remark is required",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: scopeLeadWhereForEmployee(req, {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        }),
+        select: { id: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      const remark = await prisma.leadRemark.findFirst({
+        where: { id: remarkId, companyId, leadId },
+        select: { id: true },
+      });
+
+      if (!remark) {
+        return res.status(404).json({
+          success: false,
+          message: "Remark not found",
+        });
+      }
+
+      await prisma.leadRemark.update({
+        where: { id: remark.id },
+        data: { text },
+      });
+
+      const remarks = await getLatestLeadRemarks(
+        prisma,
+        companyId,
+        leadId
+      );
+
+      return res.json({
+        success: true,
+        message: "Remark updated",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to update lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update remark",
+      });
+    }
+  }
+);
+
+router.delete(
+  "/manual/:id/remarks/:remarkId",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const remarkId = String(req.params.remarkId || "").trim();
+
+      const lead = await prisma.lead.findFirst({
+        where: scopeLeadWhereForEmployee(req, {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        }),
+        select: { id: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      const remark = await prisma.leadRemark.findFirst({
+        where: { id: remarkId, companyId, leadId },
+        select: { id: true },
+      });
+
+      if (!remark) {
+        return res.status(404).json({
+          success: false,
+          message: "Remark not found",
+        });
+      }
+
+      await prisma.leadRemark.delete({
+        where: { id: remark.id },
+      });
+
+      const remarks = await getLatestLeadRemarks(
+        prisma,
+        companyId,
+        leadId
+      );
+
+      return res.json({
+        success: true,
+        message: "Remark deleted",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to delete lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to delete remark",
+      });
+    }
+  }
+);
 
 /* =========================================================
 
@@ -3324,14 +3728,14 @@ router.patch(
       }
 
       const lead = await prisma.lead.findFirst({
-        where: {
+        where: scopeLeadWhereForEmployee(req, {
           id: leadId,
           companyId,
           OR: [
             { source: "LEAD_STORE" },
             { notes: { contains: "Admissions origin:" } },
           ],
-        },
+        }),
         select: { id: true, name: true, stage: true },
       });
 
@@ -3422,14 +3826,14 @@ router.patch(
       }
 
       const lead = await prisma.lead.findFirst({
-        where: {
+        where: scopeLeadWhereForEmployee(req, {
           id: leadId,
           companyId,
           OR: [
             { source: "LEAD_STORE" },
             { notes: { contains: "Admissions origin:" } },
           ],
-        },
+        }),
         select: { id: true, name: true },
       });
 
@@ -3484,7 +3888,7 @@ router.delete(
 
       const lead = await prisma.lead.findFirst({
 
-        where: {
+        where: scopeLeadWhereForEmployee(req, {
 
           id: leadId,
 
@@ -3492,7 +3896,7 @@ router.delete(
 
           source: "LEAD_STORE",
 
-        },
+        }),
 
         select: {
 
@@ -3580,6 +3984,12 @@ router.delete(
 
         }
 
+      );
+
+      await clearPendingLeadFollowUpNotifications(
+        prisma,
+        companyId,
+        leadId
       );
 
 
@@ -3738,13 +4148,23 @@ router.post(
 
 
 
-      const notes =
+      const remark =
 
         cleanString(
 
-          req.body?.notes
+          req.body?.remark ?? req.body?.notes
 
         );
+
+      let followUpAt;
+      try {
+        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error?.message || "Invalid follow-up date or time",
+        });
+      }
 
 
 
@@ -4197,12 +4617,14 @@ router.post(
                   assignee?.name ||
 
                   null,
+                assignedToUserId:
+                  assignee?.id ||
+                  null,
+                followUpAt,
 
                 notes:
 
                   [
-
-                    notes,
 
                     sourceName
 
@@ -4243,6 +4665,17 @@ router.post(
             });
 
 
+
+            if (remark) {
+              await tx.leadRemark.create({
+                data: {
+                  companyId,
+                  leadId: lead.id,
+                  userId: req.clientUser.userId,
+                  text: remark,
+                },
+              });
+            }
 
             const valuesToCreate =
 
@@ -4345,6 +4778,8 @@ router.post(
             assignedToName:
 
               lead.assignedToName,
+            assignedToUserId: lead.assignedToUserId || null,
+            followUpAt: lead.followUpAt || null,
 
             createdAt:
 
@@ -5127,6 +5562,9 @@ router.post(
                       assignee?.name ||
 
                       null,
+                    assignedToUserId:
+                      assignee?.id ||
+                      null,
 
                     notes:
 
@@ -5339,6 +5777,9 @@ router.patch(
               req.params.id,
 
             companyId,
+            ...(req.clientUser.role === "EMPLOYEE"
+              ? { assignedToUserId: req.clientUser.userId }
+              : {}),
 
           },
 
@@ -5659,6 +6100,9 @@ router.patch(
                   assignee?.name ||
 
                   null,
+                assignedToUserId:
+                  assignee?.id ||
+                  null,
 
               },
 
@@ -5839,6 +6283,9 @@ router.delete(
               req.params.id,
 
             companyId,
+            ...(req.clientUser.role === "EMPLOYEE"
+              ? { assignedToUserId: req.clientUser.userId }
+              : {}),
 
           },
 

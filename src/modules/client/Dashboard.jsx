@@ -240,6 +240,7 @@ export default function Dashboard({
 
   const [data, setData] = useState({
     summary: {},
+    dashboardAccess: [],
     actionCenter: { items: [], totalPrioritySignals: 0 },
     revenueTrend: [],
     leadsBySource: [],
@@ -348,6 +349,8 @@ export default function Dashboard({
       setData({
         summary:
           result.summary || {},
+        dashboardAccess:
+          Array.isArray(result.dashboardAccess) ? result.dashboardAccess : [],
         actionCenter:
           result.actionCenter || { items: [], totalPrioritySignals: 0 },
         revenueTrend:
@@ -920,6 +923,13 @@ export default function Dashboard({
         normalizedUserName
     ) || null;
 
+  const dashboardAccess = Array.isArray(data.dashboardAccess)
+    ? data.dashboardAccess
+    : [];
+
+  const canSeeDashboardSection = (section) =>
+    user?.role === "CLIENT_ADMIN" || dashboardAccess.includes(section);
+
   const actionCenter = data.actionCenter || { items: [], totalPrioritySignals: 0 };
   const actionCenterItems = Array.isArray(actionCenter.items)
     ? actionCenter.items
@@ -1136,7 +1146,7 @@ export default function Dashboard({
                 </section>
               )}
 
-              {!isMyWorkView && (
+              {canSeeDashboardSection("business-pulse") && (
                 <>
               {/* BUSINESS PULSE */}
               <section>
@@ -1163,10 +1173,11 @@ export default function Dashboard({
                 </>
               )}
 
-              {isBusinessView && (
+              {(canSeeDashboardSection("revenue-trend") || canSeeDashboardSection("leads-by-source")) && (
                 <>
               {/* ANALYTICS CORE */}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.85fr)]">
+                {canSeeDashboardSection("revenue-trend") && (
                 <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-5">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
@@ -1279,7 +1290,9 @@ export default function Dashboard({
                     </div>
                   )}
                 </section>
+                )}
 
+                {canSeeDashboardSection("leads-by-source") && (
                 <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-5">
                   <div className="mb-3">
                     <h2 className="text-[15px] font-bold text-slate-950">
@@ -1337,7 +1350,7 @@ export default function Dashboard({
                             <div className="text-[20px] font-bold tracking-[-0.04em] text-slate-950">
                               {
                                 summary.totalLeads ||
-                                0
+                                data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
                               }
                             </div>
                             <div className="text-[13px] text-slate-400">
@@ -1396,12 +1409,14 @@ export default function Dashboard({
                     </div>
                   )}
                 </section>
+                )}
               </div>
                 </>
               )}
 
-              {!isMyWorkView && (
+              {(canSeeDashboardSection("action-center") || canSeeDashboardSection("recent-admissions") || canSeeDashboardSection("admissions-by-month")) && (
                 <>
+              {canSeeDashboardSection("action-center") && (
               <section className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
                 <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -1459,9 +1474,12 @@ export default function Dashboard({
                   })}
                 </div>
               </section>
+              )}
 
               {/* OPERATIONS ROW */}
+              {(canSeeDashboardSection("recent-admissions") || canSeeDashboardSection("admissions-by-month")) && (
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {canSeeDashboardSection("recent-admissions") && (
                 <section className="overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
                   <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                     <div>
@@ -1534,7 +1552,9 @@ export default function Dashboard({
                     </div>
                   )}
                 </section>
+                )}
 
+                {canSeeDashboardSection("admissions-by-month") && (
                 <section className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
                   <div className="mb-3">
                     <h2 className="text-[15px] font-bold text-slate-950">
@@ -1601,7 +1621,9 @@ export default function Dashboard({
                     </div>
                   )}
                 </section>
+                )}
               </div>
+              )}
                 </>
               )}
             </div>
@@ -1973,7 +1995,7 @@ export default function Dashboard({
             )}
           </div>
 
-          {!isMyWorkView && (
+          {canSeeDashboardSection("team-performance") && (
             <>
           {/* TEAM PERFORMANCE */}
 

@@ -88,6 +88,152 @@ async function ensureCalendarReminders(
   }
 }
 
+function indiaDateKey(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const map = Object.fromEntries(
+    parts.map((part) => [part.type, part.value])
+  );
+
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function formatLeadFollowUpAt(value) {
+  return new Date(value).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+async function ensureLeadFollowUpReminders(req) {
+  const companyId = req.clientUser.companyId;
+  const userId = req.clientUser.userId;
+  const userName = String(req.clientUser.name || "").trim();
+
+  const preference = await prisma.userNotificationPreference.findUnique({
+    where: { userId },
+    select: { inAppEnabled: true, leadUpdates: true },
+  });
+
+  if (
+    preference?.inAppEnabled === false ||
+    preference?.leadUpdates === false
+  ) {
+    return;
+  }
+
+  const now = new Date();
+  const horizon = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  const leads = await prisma.lead.findMany({
+    where: {
+      companyId,
+      followUpAt: {
+        gt: now,
+        lte: horizon,
+      },
+      OR: [
+        { assignedToUserId: userId },
+        ...(userName
+          ? [
+              {
+                assignedToName: {
+                  equals: userName,
+                  mode: "insensitive",
+                },
+              },
+            ]
+          : []),
+        {
+          leadDataset: {
+            is: { assignedToUserId: userId },
+          },
+        },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      followUpAt: true,
+    },
+    orderBy: { followUpAt: "asc" },
+    take: 100,
+  });
+
+  const nowDay = indiaDateKey(now);
+
+  for (const lead of leads) {
+    if (!lead.followUpAt) continue;
+
+    const followUpAt = new Date(lead.followUpAt);
+    const remainingMs = followUpAt.getTime() - now.getTime();
+    const sameDay = indiaDateKey(followUpAt) === nowDay;
+
+    let reminderKey;
+    let title;
+    let prefix;
+
+    if (remainingMs <= 60 * 60 * 1000) {
+      reminderKey = "ONE_HOUR";
+      title = "Lead follow-up in 1 hour";
+      prefix = "Follow up in about 1 hour";
+    } else if (sameDay) {
+      reminderKey = "TODAY";
+      title = "Lead follow-up today";
+      prefix = "Follow up today";
+    } else if (remainingMs <= 24 * 60 * 60 * 1000) {
+      reminderKey = "ONE_DAY";
+      title = "Lead follow-up tomorrow";
+      prefix = "Follow up tomorrow";
+    } else {
+      reminderKey = "TWO_DAYS";
+      title = "Lead follow-up in 2 days";
+      prefix = "Follow up in 2 days";
+    }
+
+    const timestampKey = followUpAt.toISOString().replace(/[^0-9A-Za-z]/g, "");
+    const marker = `LEAD_FOLLOWUP:${lead.id}:${timestampKey}:${reminderKey}`;
+
+    const exists = await prisma.notification.findFirst({
+      where: {
+        companyId,
+        userId,
+        message: { contains: marker },
+      },
+      select: { id: true },
+    });
+
+    if (exists) continue;
+
+    const contact = lead.phone ? ` · ${lead.phone}` : "";
+
+    await prisma.notification.create({
+      data: {
+        companyId,
+        userId,
+        title,
+        message:
+          `${prefix}: ${lead.name}${contact}. ` +
+          `Scheduled for ${formatLeadFollowUpAt(followUpAt)}. ${marker}`,
+        type: "LEAD",
+        actionModule: "lead-store",
+        actionLabel: "Open Lead Store",
+      },
+    });
+  }
+}
+
 async function ensureBillingRenewalReminder(
   companyId,
   userId
@@ -282,6 +428,7 @@ async function ensureDynamicNotifications(
       req.clientUser.companyId,
       req.clientUser.userId
     ),
+    ensureLeadFollowUpReminders(req),
   ]);
 }
 
