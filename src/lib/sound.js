@@ -62,10 +62,11 @@ async function playPattern(kind) {
     const now = ctx.currentTime + 0.01;
 
     if (kind === "chat") {
-      // Audible two-note incoming-chat chime for laptop/desktop speakers.
-      tone(ctx, 720, now, 0.15, 0.14, "sine");
-      tone(ctx, 960, now + 0.13, 0.18, 0.12, "sine");
+      // Soft professional two-tone chat chime: warm, brief, and distinct.
+      tone(ctx, 620, now, 0.18, 0.085, "sine");
+      tone(ctx, 820, now + 0.16, 0.22, 0.075, "sine");
     } else {
+      // Keep system notifications slightly brighter so users can tell them apart.
       tone(ctx, 780, now, 0.15, 0.13, "triangle");
       tone(ctx, 1040, now + 0.14, 0.2, 0.11, "triangle");
     }
