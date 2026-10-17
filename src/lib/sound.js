@@ -15,12 +15,12 @@ function tone(ctx, frequency, start, duration, gain = 0.12, type = "sine") {
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
   volume.gain.setValueAtTime(0.0001, start);
-  volume.gain.exponentialRampToValueAtTime(gain, start + 0.012);
+  volume.gain.exponentialRampToValueAtTime(gain, start + 0.01);
   volume.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   oscillator.connect(volume);
   volume.connect(ctx.destination);
   oscillator.start(start);
-  oscillator.stop(start + duration + 0.03);
+  oscillator.stop(start + duration + 0.04);
 }
 
 export async function unlockUiSound() {
@@ -30,9 +30,6 @@ export async function unlockUiSound() {
   try {
     if (ctx.state === "suspended") await ctx.resume();
 
-    // Warm up audio output during a real user gesture. Some browsers report a
-    // running AudioContext but keep later sounds silent until audio is touched
-    // once from that gesture.
     if (ctx.state === "running" && !unlocked) {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -62,13 +59,15 @@ async function playPattern(kind) {
     const now = ctx.currentTime + 0.01;
 
     if (kind === "chat") {
-      // Soft professional two-tone chat chime: warm, brief, and distinct.
-      tone(ctx, 620, now, 0.18, 0.085, "sine");
-      tone(ctx, 820, now + 0.16, 0.22, 0.075, "sine");
+      // Loud, short WhatsApp-style incoming-message chime (original Bispun pattern,
+      // not the proprietary WhatsApp audio file). Designed to stay audible on laptops.
+      tone(ctx, 880, now, 0.12, 0.20, "sine");
+      tone(ctx, 1175, now + 0.095, 0.16, 0.18, "sine");
+      tone(ctx, 1320, now + 0.205, 0.13, 0.12, "triangle");
     } else {
-      // Keep system notifications slightly brighter so users can tell them apart.
-      tone(ctx, 780, now, 0.15, 0.13, "triangle");
-      tone(ctx, 1040, now + 0.14, 0.2, 0.11, "triangle");
+      // System notification remains a distinct brighter two-tone sound.
+      tone(ctx, 780, now, 0.15, 0.15, "triangle");
+      tone(ctx, 1040, now + 0.14, 0.20, 0.13, "triangle");
     }
 
     return true;
