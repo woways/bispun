@@ -484,6 +484,11 @@ export default function ClientPortal({
   ] = useState(0);
 
   const [
+    unreadChatCount,
+    setUnreadChatCount,
+  ] = useState(0);
+
+  const [
     notificationsLoading,
     setNotificationsLoading,
   ] = useState(false);
@@ -496,6 +501,8 @@ export default function ClientPortal({
   const notificationRef =
     useRef(null);
   const previousUnreadNotificationCountRef = useRef(null);
+  const previousAudibleChatCountRef = useRef(null);
+  const lastChatSoundAtRef = useRef(0);
 
   const [
     profileMenuOpen,
@@ -1370,15 +1377,74 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     return () => window.clearInterval(interval);
   }, []);
 
+  async function loadUnreadChatCount({ playSound = true } = {}) {
+    try {
+      const data = await apiRequest("/api/client/chat/unread-count");
+      const nextUnreadCount = Number(data?.unreadCount || 0);
+      const nextAudibleUnreadCount = Number(
+        data?.audibleUnreadCount ?? nextUnreadCount
+      );
+      const previousAudibleUnreadCount =
+        previousAudibleChatCountRef.current;
+
+      if (
+        playSound &&
+        previousAudibleUnreadCount !== null &&
+        nextAudibleUnreadCount > previousAudibleUnreadCount
+      ) {
+        const now = Date.now();
+        if (now - lastChatSoundAtRef.current > 1200) {
+          lastChatSoundAtRef.current = now;
+          playChatSound();
+        }
+      }
+
+      previousAudibleChatCountRef.current = nextAudibleUnreadCount;
+      setUnreadChatCount(nextUnreadCount);
+    } catch (error) {
+      console.error("Unable to load unread chat count:", error);
+    }
+  }
+
   useEffect(() => {
-    const unlock = () => {
-      unlockUiSound();
+    loadUnreadChatCount({ playSound: false });
+
+    // Production fallback: the badge and sound still update even if a
+    // websocket is temporarily disconnected by the browser/network.
+    const interval = window.setInterval(() => {
+      loadUnreadChatCount();
+    }, 6000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Opening Chat marks the visible conversation as read. Refresh the global
+    // badge shortly afterwards so it clears without waiting for the poll.
+    if (module !== "chats") return undefined;
+    const timeout = window.setTimeout(() => {
+      loadUnreadChatCount({ playSound: false });
+    }, 700);
+    return () => window.clearTimeout(timeout);
+  }, [module]);
+
+  useEffect(() => {
+    let removed = false;
+
+    const unlock = async () => {
+      const ok = await unlockUiSound();
+      if (!ok || removed) return;
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
     };
 
-    window.addEventListener("pointerdown", unlock, { once: true });
-    window.addEventListener("keydown", unlock, { once: true });
+    // Do not use { once: true }: if the first browser gesture cannot unlock
+    // audio, keep trying on the next user interaction.
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
 
     return () => {
+      removed = true;
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
@@ -1395,8 +1461,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
     socket.on("conversation:activity", ({ lastMessage, isMuted }) => {
       const senderId = lastMessage?.sender?.id;
-      if (!senderId || senderId === user.id || isMuted) return;
-      playChatSound();
+      if (!senderId || senderId === user.id) return;
+
+      if (!isMuted) {
+        const now = Date.now();
+        if (now - lastChatSoundAtRef.current > 1200) {
+          lastChatSoundAtRef.current = now;
+          playChatSound();
+        }
+      }
+
+      // Refresh the count immediately; the 6-second poll above remains a
+      // fallback for environments where websocket delivery is interrupted.
+      loadUnreadChatCount({ playSound: false });
     });
 
     return () => socket.disconnect();
@@ -3971,8 +4048,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         }`}
                       >
                         {sidebarCompact ? (
-                          <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
+                          <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
                             <Icon size={20} strokeWidth={2} />
+                            {key === "chats" && unreadChatCount > 0 ? (
+                              <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
+                                {unreadChatCount > 9 ? "9+" : unreadChatCount}
+                              </span>
+                            ) : null}
                           </span>
                         ) : (
                           <Icon size={16} strokeWidth={2} className="flex-shrink-0" />
@@ -3983,6 +4065,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             <span className="flex-1 text-left text-sm font-medium">
                               {group.label}
                             </span>
+
+                            {key === "chats" && unreadChatCount > 0 ? (
+                              <span
+                                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-black ${
+                                  active
+                                    ? "bg-white text-brand-700"
+                                    : "bg-rose-500 text-white"
+                                }`}
+                                aria-label={`${unreadChatCount} unread chat messages`}
+                              >
+                                {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                              </span>
+                            ) : null}
 
                             {active ? (
                               <ChevronRight className="h-3.5 w-3.5 text-white/60" />

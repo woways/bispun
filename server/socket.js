@@ -187,6 +187,35 @@ export function attachSocketServer(httpServer, config) {
         };
 
         io.to(`conversation:${conversationId}`).emit("message:new", payload);
+
+        // If a recipient is actively viewing this conversation, keep their
+        // server-side read cursor current. This prevents the global Chats badge
+        // from showing a false unread count while the message is already open.
+        try {
+          const activeSockets = await io
+            .in(`conversation:${conversationId}`)
+            .fetchSockets();
+          const activeViewerIds = [
+            ...new Set(
+              activeSockets
+                .map((activeSocket) => activeSocket.data?.userId)
+                .filter((activeUserId) => activeUserId && activeUserId !== userId)
+            ),
+          ];
+
+          if (activeViewerIds.length) {
+            await prisma.conversationMember.updateMany({
+              where: {
+                conversationId,
+                userId: { in: activeViewerIds },
+              },
+              data: { lastReadAt: message.createdAt },
+            });
+          }
+        } catch (readError) {
+          console.error("Unable to sync active chat read state:", readError);
+        }
+
         const members = await prisma.conversationMember.findMany({
           where: { conversationId },
           select: { userId: true, isMuted: true },

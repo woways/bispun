@@ -9,22 +9,10 @@ function getAudioContext() {
   return audioContext;
 }
 
-export async function unlockUiSound() {
-  const ctx = getAudioContext();
-  if (!ctx) return false;
-  try {
-    if (ctx.state === "suspended") await ctx.resume();
-    unlocked = ctx.state === "running";
-    return unlocked;
-  } catch {
-    return false;
-  }
-}
-
-function tone(ctx, frequency, start, duration, gain = 0.045) {
+function tone(ctx, frequency, start, duration, gain = 0.12, type = "sine") {
   const oscillator = ctx.createOscillator();
   const volume = ctx.createGain();
-  oscillator.type = "sine";
+  oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
   volume.gain.setValueAtTime(0.0001, start);
   volume.gain.exponentialRampToValueAtTime(gain, start + 0.012);
@@ -32,27 +20,59 @@ function tone(ctx, frequency, start, duration, gain = 0.045) {
   oscillator.connect(volume);
   volume.connect(ctx.destination);
   oscillator.start(start);
-  oscillator.stop(start + duration + 0.02);
+  oscillator.stop(start + duration + 0.03);
+}
+
+export async function unlockUiSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return false;
+
+  try {
+    if (ctx.state === "suspended") await ctx.resume();
+
+    // Warm up audio output during a real user gesture. Some browsers report a
+    // running AudioContext but keep later sounds silent until audio is touched
+    // once from that gesture.
+    if (ctx.state === "running" && !unlocked) {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.02);
+    }
+
+    unlocked = ctx.state === "running";
+    return unlocked;
+  } catch {
+    return false;
+  }
 }
 
 async function playPattern(kind) {
   const ctx = getAudioContext();
-  if (!ctx) return;
+  if (!ctx) return false;
+
   try {
     if (ctx.state === "suspended") await ctx.resume();
-    if (ctx.state !== "running") return;
+    if (ctx.state !== "running") return false;
+
     unlocked = true;
     const now = ctx.currentTime + 0.01;
+
     if (kind === "chat") {
-      tone(ctx, 660, now, 0.11, 0.04);
-      tone(ctx, 880, now + 0.1, 0.14, 0.035);
+      // Audible two-note incoming-chat chime for laptop/desktop speakers.
+      tone(ctx, 720, now, 0.15, 0.14, "sine");
+      tone(ctx, 960, now + 0.13, 0.18, 0.12, "sine");
     } else {
-      tone(ctx, 740, now, 0.12, 0.04);
-      tone(ctx, 988, now + 0.12, 0.16, 0.035);
+      tone(ctx, 780, now, 0.15, 0.13, "triangle");
+      tone(ctx, 1040, now + 0.14, 0.2, 0.11, "triangle");
     }
+
+    return true;
   } catch {
-    // Browsers can block audio until the first user gesture. The global unlock
-    // listener in ClientPortal will enable later sounds without interrupting UX.
+    return false;
   }
 }
 

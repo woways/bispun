@@ -160,6 +160,62 @@ router.get("/", async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* GET /unread-count — lightweight global sidebar/chat sound counter   */
+/* ------------------------------------------------------------------ */
+
+router.get("/unread-count", async (req, res) => {
+  try {
+    const me = req.clientUser.userId;
+    const memberships = await prisma.conversationMember.findMany({
+      where: {
+        userId: me,
+        hiddenAt: null,
+        conversation: { companyId: req.clientUser.companyId },
+      },
+      select: {
+        conversationId: true,
+        lastReadAt: true,
+        clearedAt: true,
+        isMuted: true,
+      },
+    });
+
+    const counts = await Promise.all(
+      memberships.map(async (membership) => {
+        const baseline = [membership.lastReadAt, membership.clearedAt]
+          .filter(Boolean)
+          .sort((a, b) => b.getTime() - a.getTime())[0] || null;
+
+        const count = await prisma.chatMessage.count({
+          where: {
+            conversationId: membership.conversationId,
+            senderId: { not: me },
+            deletedForEveryoneAt: null,
+            deletions: { none: { userId: me } },
+            ...(baseline ? { createdAt: { gt: baseline } } : {}),
+          },
+        });
+
+        return { count, isMuted: Boolean(membership.isMuted) };
+      })
+    );
+
+    const unreadCount = counts.reduce((total, item) => total + item.count, 0);
+    const audibleUnreadCount = counts.reduce(
+      (total, item) => total + (item.isMuted ? 0 : item.count),
+      0
+    );
+
+    return res.json({ success: true, unreadCount, audibleUnreadCount });
+  } catch (error) {
+    console.error("Failed to fetch chat unread count:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Unable to fetch chat unread count" });
+  }
+});
+
+/* ------------------------------------------------------------------ */
 /* GET /:id/messages — paginated messages for a conversation           */
 /* ------------------------------------------------------------------ */
 
