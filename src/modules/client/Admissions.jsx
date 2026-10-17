@@ -2503,26 +2503,31 @@ function AdmissionsManager({
   }, [success]);
 
   const STREAM_GRADIENTS = {
-    blue: {
-      primary: "bg-gradient-to-br from-[#2563eb] to-[#4338ca]",
-      secondary: "bg-gradient-to-br from-[#2563eb] to-[#4338ca]",
-    },
-    orange: {
-      primary: "bg-gradient-to-br from-[#f97316] to-[#d97706]",
-      secondary: "bg-gradient-to-br from-[#f97316] to-[#d97706]",
-    },
-    purple: {
-      primary: "bg-gradient-to-br from-[#7c3aed] to-[#7e22ce]",
-      secondary: "bg-gradient-to-br from-[#7c3aed] to-[#7e22ce]",
-    },
-    green: {
-      primary: "bg-gradient-to-br from-[#059669] to-[#0f766e]",
-      secondary: "bg-gradient-to-br from-[#059669] to-[#0f766e]",
-    },
-    rose: {
-      primary: "bg-gradient-to-br from-[#e11d48] to-[#be185d]",
-      secondary: "bg-gradient-to-br from-[#e11d48] to-[#be185d]",
-    },
+    
+  blue: {
+    primary: "bg-gradient-to-br from-blue-600 to-indigo-700",
+    secondary: "bg-gradient-to-br from-blue-600 to-indigo-700",
+  },
+
+  orange: {
+    primary: "bg-gradient-to-br from-orange-500 to-amber-600",
+    secondary: "bg-gradient-to-br from-orange-500 to-amber-600",
+  },
+
+  purple: {
+    primary: "bg-gradient-to-br from-violet-600 to-purple-700",
+    secondary: "bg-gradient-to-br from-violet-600 to-purple-700",
+  },
+
+  green: {
+    primary: "bg-gradient-to-br from-emerald-600 to-teal-700",
+    secondary: "bg-gradient-to-br from-emerald-600 to-teal-700",
+  },
+
+  rose: {
+    primary: "bg-gradient-to-br from-rose-600 to-pink-700",
+    secondary: "bg-gradient-to-br from-rose-600 to-pink-700",
+  },
     slate: {
       primary: "bg-gradient-to-br from-[#334155] to-[#0f172a]",
       secondary: "bg-gradient-to-br from-[#334155] to-[#0f172a]",
