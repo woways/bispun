@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
+import { buildObjectKey, putObject, fileProxyUrl } from "../lib/s3Storage.js";
 
 const router = Router();
 
@@ -259,39 +260,67 @@ router.get("/assets", async (req, res) => {
  *   1) Is the Ideogram key configured?  If not → 503 IMAGE_GEN_DISABLED.
  *      (This is the templates-first state: page works, image button dark.)
  *   2) Is this company within its monthly quota? If not → 429 QUOTA_EXCEEDED.
- *   3) Call Ideogram, save a StoreAsset row (this is what counts toward quota),
- *      return the image URL.
+ *   3) Call Ideogram, SAVE THE IMAGE TO S3 (Ideogram's own URLs expire),
+ *      create a StoreAsset row (this is what counts toward quota),
+ *      return the permanent S3 proxy URL.
  *
- * NOTE [confirm before enabling]: the exact Ideogram request shape below is the
- * commonly documented v3 form. Once you fund the API and add the key, run one
- * test and we adjust the endpoint/fields against developer.ideogram.ai if
+ * NOTE [confirm before enabling]: the exact Ideogram v3 request shape below
+ * is the commonly documented form. Once you fund the API and add the key, run
+ * one test and we adjust the endpoint/fields against developer.ideogram.ai if
  * needed. Nothing here charges money until IDEOGRAM_API_KEY is set AND funded.
  * =============================================================================
  */
-async function callIdeogram(prompt) {
+async function callIdeogram(prompt, { companyId, occasionId }) {
   const apiKey = String(process.env.IDEOGRAM_API_KEY || "").trim();
   if (!apiKey) return { disabled: true };
 
+  // --- 1) Generate the image on Ideogram -----------------------------------
+  // ⚠️ CONFIRM THIS BLOCK against the "Generate with Ideogram" docs curl.
+  //    (endpoint URL, header name, and body field names.)
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("rendering_speed", "TURBO"); // cheapest tier
   form.append("num_images", "1"); // 1 image = 1 charge; never default to 4
 
-  const response = await fetch("https://api.ideogram.ai/v1/ideogram-v3/generate", {
-    method: "POST",
-    headers: { "Api-Key": apiKey },
-    body: form,
-  });
+  const response = await fetch(
+    "https://api.ideogram.ai/v2/image/generate/ideogram-4-5",
+    {
+      method: "POST",
+      headers: { "Api-Key": apiKey },
+      body: form,
+    }
+  );
+  // ⚠️ END CONFIRM BLOCK
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Ideogram request failed (${response.status}): ${detail.slice(0, 200)}`);
+    throw new Error(`Ideogram request failed (${response.status}): ${detail.slice(0, 300)}`);
   }
 
   const data = await response.json();
-  const url = data?.data?.[0]?.url || data?.images?.[0]?.url || null;
-  if (!url) throw new Error("Ideogram returned no image URL");
-  return { disabled: false, url };
+  const srcUrl =
+    data?.data?.[0]?.url ||
+    data?.images?.[0]?.url ||
+    data?.data?.[0]?.image_url ||
+    null;
+  if (!srcUrl) throw new Error("Ideogram returned no image URL");
+
+  // --- 2) Download it and store in S3 (Ideogram links expire) --------------
+  const imgRes = await fetch(srcUrl);
+  if (!imgRes.ok) {
+    throw new Error(`Could not download generated image (${imgRes.status})`);
+  }
+  const buffer = Buffer.from(await imgRes.arrayBuffer());
+  const contentType = imgRes.headers.get("content-type") || "image/png";
+
+  const key = buildObjectKey(
+    ["store-assets", String(companyId || "unknown"), String(occasionId || "generic")],
+    "ideogram.png"
+  );
+  await putObject({ buffer, key, contentType });
+
+  // Stable, permanent proxy URL stored in the DB (never expires)
+  return { disabled: false, url: fileProxyUrl(key), key };
 }
 
 router.post("/generate", async (req, res) => {
@@ -330,7 +359,10 @@ router.post("/generate", async (req, res) => {
       String(prompt || "").trim() ||
       `A beautiful, professional ${occasion.label} greeting poster for an education brand named "${name}". Clean modern design, festive, high quality, with elegant space for a logo.`;
 
-    const result = await callIdeogram(finalPrompt);
+    const result = await callIdeogram(finalPrompt, {
+      companyId: req.clientUser.companyId,
+      occasionId: occasion.id,
+    });
     if (result.disabled) {
       return res.status(503).json({
         success: false,
