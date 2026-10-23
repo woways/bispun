@@ -524,13 +524,14 @@ router.post("/generate", async (req, res) => {
     }
 
     const requestedPrompt = String(prompt || "").trim().slice(0, 1800);
-    const defaultPrompt = `Create a beautiful, professional ${occasion.label} greeting poster for an education brand named "${branding.name}". Clean modern design, high quality and ready for social media.`;
+    const defaultPrompt = `Create a beautiful, professional ${occasion.label} greeting poster for a modern education consultancy. Clean modern design, high quality and ready for social media.`;
     const userPrompt = requestedPrompt || defaultPrompt;
     const finalPrompt = [
       userPrompt,
-      `This artwork is for the education brand "${branding.name}".`,
       "IMPORTANT BRANDING RULE: Do not generate, imitate, draw, invent or render any logo, emblem, badge, watermark or brand mark.",
-      "Keep the top-left area clean, low-detail and free of important text/faces because Bispun will overlay the company's exact uploaded logo there after generation.",
+      "Do not add any company, school, institute, consultancy or organization name as branding, footer text, signature, creator credit or watermark.",
+      "Do not invent brand text. Branding will be applied separately by Bispun using the tenant's exact uploaded Settings > Branding logo.",
+      "Keep the top-left area clean, low-detail and free of important text or faces so the exact uploaded branding logo can be overlaid there when available.",
     ]
       .filter(Boolean)
       .join("\n");
