@@ -1209,7 +1209,7 @@ function LeakageRadarView({ radar }) {
     {
       key: "stuck",
       title: "Revenue Stuck Too Long",
-      subtitle: `Buffer-zone revenue pending for ${safeRadar.rules?.stuckRevenueDays || 60}+ days`,
+      subtitle: `Buffer revenue pending for ${safeRadar.rules?.stuckRevenueDays || 60}+ days`,
       data: safeRadar.stuckRevenue || {},
       tone: "slate",
       icon: AlertCircle,
@@ -1229,7 +1229,7 @@ function LeakageRadarView({ radar }) {
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-600">
-              Revenue Leakage Radar
+              At-Risk Revenue
             </div>
             <h3 className="mt-1 text-[18px] font-bold text-slate-950">
               Money and opportunities that need attention
@@ -1340,7 +1340,7 @@ function LeakageRadarView({ radar }) {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
-        “Overdue” currently means pending for {safeRadar.rules?.overdueCollectionDays || 30}+ days, and “stuck” means Buffer Zone revenue pending for {safeRadar.rules?.stuckRevenueDays || 60}+ days. If you later add an explicit fee due-date field, the radar can switch to that exact due date.
+        “Overdue” currently means pending for {safeRadar.rules?.overdueCollectionDays || 30}+ days, and “stuck” means Buffer revenue pending for {safeRadar.rules?.stuckRevenueDays || 60}+ days. If you later add an explicit fee due-date field, the radar can switch to that exact due date.
       </div>
     </div>
   );
@@ -1376,7 +1376,7 @@ export default function Revenue({ selectedYear = "all" }) {
       ((tab === "leakage" && !allowed.overview) ||
         (tab !== "leakage" && !allowed[tab]))
     ) {
-      const first = ["overview", "expenses", "incentives"].find(
+      const first = ["overview", "expenses"].find(
         (s) => allowed[s]
       );
       if (first) setTab(first);
@@ -1876,10 +1876,10 @@ export default function Revenue({ selectedYear = "all" }) {
             />
 
             <RevenueMetric
-              label="Buffer Zone Revenue"
+              label="Buffer Revenue"
               value={money(summary.bufferRevenue)}
               icon={Clock}
-              detail="Admission value currently in buffer zone"
+              detail="Admission value currently classified as buffer revenue"
               tone="amber"
             />
 
@@ -1895,7 +1895,7 @@ export default function Revenue({ selectedYear = "all" }) {
               label="Total Incentive Amount"
               value={money(summary.totalIncentives)}
               icon={Award}
-              detail="Approved and paid staff incentives"
+              detail="Approved and paid employee incentives"
               tone="slate"
             />
 
@@ -1927,11 +1927,10 @@ export default function Revenue({ selectedYear = "all" }) {
           <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] inline-flex gap-1">
             {[
               ["overview", "Overview"],
-              ["leakage", "Leakage Radar"],
+              ["leakage", "At-Risk Revenue"],
               ["expenses", "Expenses"],
-              ["incentives", "Incentives"],
               ["collegeSlabs", "College Revenue"],
-              ["staffIncentives", "Staff Incentives"],
+              ["staffIncentives", "Employee Incentives"],
             ]
               .filter(
                 ([item]) =>

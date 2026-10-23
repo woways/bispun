@@ -22,12 +22,16 @@ const EMPTY_FORM = {
   description: "Re-engage inactive leads with WhatsApp/email, create a follow-up task, then alert a manager when there is still no response.",
   whatsappTemplateName: "",
   whatsappLanguageCode: "en_US",
+  whatsappSendTime: "10:00",
   waitAfterWhatsappHours: 24,
   emailSubject: "Following up on your enquiry",
   emailMessage:
     "Hi {{name}},\n\nWe are following up on your enquiry about {{course}}. Please reply if you would like us to help with the next step.\n\nThank you.",
+  emailSendTime: "16:00",
   waitAfterEmailHours: 24,
+  followUpTaskTime: "11:00",
   waitBeforeManagerHours: 24,
+  managerAlertTime: "17:00",
 };
 
 function statusTone(status) {
@@ -43,6 +47,30 @@ function hoursToMinutes(value) {
   return Math.max(0, Math.round(Number(value || 0) * 60));
 }
 
+function formatPreferredTime(value) {
+  const match = String(value || "").match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return "";
+  const hour = Number(match[1]);
+  const minute = match[2];
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${suffix}`;
+}
+
+function formatDelay(minutes) {
+  const value = Math.max(0, Number(minutes || 0));
+  if (!value) return "No wait";
+  if (value % 1440 === 0) {
+    const days = value / 1440;
+    return `${days} day${days === 1 ? "" : "s"} wait`;
+  }
+  if (value % 60 === 0) {
+    const hours = value / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"} wait`;
+  }
+  return `${value} min wait`;
+}
+
 function buildSteps(form) {
   const steps = [];
   const templateName = String(form.whatsappTemplateName || "").trim();
@@ -53,6 +81,7 @@ function buildSteps(form) {
       delayMinutes: 0,
       templateName,
       languageCode: form.whatsappLanguageCode || "en_US",
+      preferredTime: form.whatsappSendTime || "10:00",
     });
   }
 
@@ -61,17 +90,20 @@ function buildSteps(form) {
     delayMinutes: templateName ? hoursToMinutes(form.waitAfterWhatsappHours) : 0,
     subject: form.emailSubject,
     message: form.emailMessage,
+    preferredTime: form.emailSendTime || "16:00",
   });
   steps.push({
     type: "FOLLOW_UP_TASK",
     delayMinutes: hoursToMinutes(form.waitAfterEmailHours),
     message: "Smart Nurture follow-up: contact {{name}}, review the communication history and record the outcome.",
     durationMinutes: 30,
+    preferredTime: form.followUpTaskTime || "11:00",
   });
   steps.push({
     type: "MANAGER_NOTIFICATION",
     delayMinutes: hoursToMinutes(form.waitBeforeManagerHours),
     message: "{{name}} has not replied after the nurture sequence. Please review this lead and intervene if needed.",
+    preferredTime: form.managerAlertTime || "17:00",
   });
 
   return steps;
@@ -171,6 +203,24 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
     }
   }
 
+  async function stopEnrollment(enrollment) {
+    setBusyId(`enrollment-${enrollment.id}`);
+    setError("");
+    setSuccess("");
+    try {
+      await apiRequest(`/api/client/nurture/enrollments/${enrollment.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
+      setSuccess(`${enrollment.leadName || "Lead"} removed from nurture. No further steps will run.`);
+      await loadData();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to stop nurture for this lead.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function toggleSequence(sequence) {
     const nextStatus = sequence.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
     setBusyId(sequence.id);
@@ -254,7 +304,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
             <form onSubmit={createSequence} className="mb-5 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="mb-4">
                 <div className="text-[14px] font-bold text-slate-900">Create nurture sequence</div>
-                <div className="mt-1 text-[11px] text-slate-500">WhatsApp is optional. If used, enter an approved Meta template name.</div>
+                <div className="mt-1 text-[11px] text-slate-500">WhatsApp is optional. Preferred send times use the company timezone.</div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -267,8 +317,16 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                   <input value={form.whatsappTemplateName} onChange={(e) => setForm((c) => ({ ...c, whatsappTemplateName: e.target.value }))} placeholder="Optional · e.g. lead_follow_up" className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">WhatsApp send time</span>
+                  <input type="time" value={form.whatsappSendTime} onChange={(e) => setForm((c) => ({ ...c, whatsappSendTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Wait after WhatsApp (hours)</span>
                   <input type="number" min="0" value={form.waitAfterWhatsappHours} onChange={(e) => setForm((c) => ({ ...c, waitAfterWhatsappHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Email send time</span>
+                  <input type="time" value={form.emailSendTime} onChange={(e) => setForm((c) => ({ ...c, emailSendTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Email subject *</span>
@@ -286,8 +344,16 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                   <input type="number" min="0" value={form.waitAfterEmailHours} onChange={(e) => setForm((c) => ({ ...c, waitAfterEmailHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Follow-up task time</span>
+                  <input type="time" value={form.followUpTaskTime} onChange={(e) => setForm((c) => ({ ...c, followUpTaskTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Wait before manager alert (hours)</span>
                   <input type="number" min="0" value={form.waitBeforeManagerHours} onChange={(e) => setForm((c) => ({ ...c, waitBeforeManagerHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Manager alert time</span>
+                  <input type="time" value={form.managerAlertTime} onChange={(e) => setForm((c) => ({ ...c, managerAlertTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
               </div>
 
@@ -331,7 +397,8 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                               {(sequence.steps || []).map((step, index) => (
                                 <span key={`${sequence.id}-${index}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">
                                   {step.type === "EMAIL" ? <Mail size={10} /> : step.type === "WHATSAPP_TEMPLATE" ? <MessageCircle size={10} /> : <Clock size={10} />}
-                                  {String(step.type || "").replaceAll("_", " ")}
+                                  <span>{String(step.type || "").replaceAll("_", " ")}</span>
+                                  <span className="font-normal text-slate-400">· {formatDelay(step.delayMinutes)}{step.preferredTime ? ` · ${formatPreferredTime(step.preferredTime)}` : ""}</span>
                                 </span>
                               ))}
                             </div>
@@ -368,7 +435,19 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                           <div className="truncate text-[12px] font-bold text-slate-900">{item.leadName || "Lead"}</div>
                           <div className="mt-0.5 truncate text-[11px] text-slate-500">{item.sequence?.name || "Sequence"}</div>
                         </div>
-                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(item.status)}`}>{item.status}</span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${statusTone(item.status)}`}>{item.status}</span>
+                          {(item.status === "ACTIVE" || item.status === "PAUSED") ? (
+                            <button
+                              type="button"
+                              onClick={() => stopEnrollment(item)}
+                              disabled={busyId === `enrollment-${item.id}`}
+                              className="h-7 rounded-md border border-rose-200 bg-white px-2 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                            >
+                              {busyId === `enrollment-${item.id}` ? "Stopping..." : "Stop"}
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="mt-2 text-[10px] text-slate-400">
                         {item.nextRunAt ? `Next: ${formatUiDateTime(item.nextRunAt)}` : item.completedAt ? `Finished: ${formatUiDateTime(item.completedAt)}` : "No pending step"}

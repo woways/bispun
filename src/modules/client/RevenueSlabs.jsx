@@ -452,13 +452,13 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
     );
   }
 
-  /* ---------------- Staff Incentives ---------------- */
+  /* ---------------- Employee Incentives ---------------- */
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="mb-1 flex items-center justify-between">
         <div>
           <div className="text-[15px] font-semibold text-slate-900">
-            Staff Incentives
+            Employee Incentives
           </div>
           <div className="text-[13px] text-slate-500">
             Each employee's admissions multiplied by their slab rate.

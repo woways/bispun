@@ -3271,7 +3271,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     if (module === "my-store") {
-      return <MyStore currentUser={user} />;
+      return <MyStore company={company} />;
     }
 
     if (

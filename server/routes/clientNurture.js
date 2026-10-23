@@ -3,6 +3,7 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import {
   firstRunAtForSteps,
+  nurtureStopReason,
   processDueNurtureEnrollments,
 } from "../lib/nurtureEngine.js";
 import {
@@ -27,6 +28,15 @@ const VALID_STEP_TYPES = new Set([
   "MANAGER_NOTIFICATION",
 ]);
 
+function normalizePreferredTime(value, index) {
+  const preferredTime = String(value || "").trim();
+  if (!preferredTime) return "";
+  if (!/^([01]\d|2[0-3]):([0-5]\d)$/.test(preferredTime)) {
+    throw new Error(`Step ${index + 1}: preferred time must use HH:mm format.`);
+  }
+  return preferredTime;
+}
+
 function normalizeStep(step, index) {
   const type = String(step?.type || "").trim().toUpperCase();
   if (!VALID_STEP_TYPES.has(type)) {
@@ -42,6 +52,9 @@ function normalizeStep(step, index) {
     type,
     delayMinutes,
   };
+
+  const preferredTime = normalizePreferredTime(step?.preferredTime, index);
+  if (preferredTime) normalized.preferredTime = preferredTime;
 
   if (type === "EMAIL") {
     const subject = String(step?.subject || "").trim();
@@ -219,17 +232,23 @@ router.post("/sequences/:id/enroll", async (req, res) => {
     const steps = Array.isArray(sequence.steps) ? sequence.steps : [];
     if (!steps.length) return res.status(400).json({ success: false, message: "Sequence has no steps." });
 
-    const leads = await prisma.lead.findMany({
-      where: { companyId: req.clientUser.companyId, id: { in: leadIds } },
-      select: { id: true, name: true, stage: true },
-    });
+    const [leads, companySettings] = await Promise.all([
+      prisma.lead.findMany({
+        where: { companyId: req.clientUser.companyId, id: { in: leadIds } },
+        select: { id: true, name: true, stage: true, leadStatus: true },
+      }),
+      prisma.companySettings.findUnique({
+        where: { companyId: req.clientUser.companyId },
+        select: { timezone: true },
+      }),
+    ]);
     if (!leads.length) return res.status(404).json({ success: false, message: "No matching leads found." });
 
     const now = new Date();
     let enrolled = 0;
     let skipped = 0;
     for (const lead of leads) {
-      if (lead.stage === "ADMITTED" || lead.stage === "LOST") {
+      if (nurtureStopReason(lead)) {
         skipped += 1;
         continue;
       }
@@ -240,7 +259,7 @@ router.post("/sequences/:id/enroll", async (req, res) => {
           createdByUserId: req.clientUser.userId,
           status: "ACTIVE",
           nextStepIndex: 0,
-          nextRunAt: firstRunAtForSteps(steps, now),
+          nextRunAt: firstRunAtForSteps(steps, now, companySettings?.timezone),
           startedAt: now,
           completedAt: null,
           lastError: null,
@@ -253,7 +272,7 @@ router.post("/sequences/:id/enroll", async (req, res) => {
           createdByUserId: req.clientUser.userId,
           status: "ACTIVE",
           nextStepIndex: 0,
-          nextRunAt: firstRunAtForSteps(steps, now),
+          nextRunAt: firstRunAtForSteps(steps, now, companySettings?.timezone),
           startedAt: now,
         },
       });
@@ -267,7 +286,7 @@ router.post("/sequences/:id/enroll", async (req, res) => {
       success: true,
       enrolled,
       skipped,
-      message: `${enrolled} lead${enrolled === 1 ? "" : "s"} enrolled${skipped ? ` · ${skipped} skipped because they are Admitted/Lost` : ""}.`,
+      message: `${enrolled} lead${enrolled === 1 ? "" : "s"} enrolled${skipped ? ` · ${skipped} skipped because they are Admitted/Lost/Closed` : ""}.`,
     });
   } catch (error) {
     console.error("Enroll nurture leads failed:", error);

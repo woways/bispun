@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
@@ -57,7 +59,6 @@ const OCCASIONS = [
     id: "teachers-day",
     label: "Teachers' Day",
     emoji: "🍎",
-    date: "09-05",
     promo:
       "🎉 Teachers' Day Special! Enrol this week and get 20% off your first course — because great teachers deserve great students. Offer ends soon.",
     message:
@@ -73,7 +74,6 @@ const OCCASIONS = [
     id: "diwali",
     label: "Diwali",
     emoji: "🪔",
-    date: "10-20",
     promo:
       "🪔 Diwali Dhamaka! Light up your career this festive season — special admission offers now open at {Company}. Limited seats.",
     message:
@@ -89,9 +89,8 @@ const OCCASIONS = [
     id: "new-year",
     label: "New Year",
     emoji: "🎊",
-    date: "01-01",
     promo:
-      "🎊 New Year, New Goals! Kickstart 2026 with {Company}. Enrol in January and unlock exclusive early-bird pricing.",
+      "🎊 New Year, New Goals! Kickstart {Year} with {Company}. Enrol in January and unlock exclusive early-bird pricing.",
     message:
       "🎉 Happy New Year from all of us at {Company}! Here's to a year of learning, growth and achieving your dreams.",
     designs: [
@@ -105,7 +104,6 @@ const OCCASIONS = [
     id: "independence-day",
     label: "Independence Day",
     emoji: "🏵️",
-    date: "08-15",
     promo:
       "🇮🇳 Freedom to Learn! Celebrate Independence Day with {Company} — special scholarships and offers on all courses this week.",
     message:
@@ -121,7 +119,6 @@ const OCCASIONS = [
     id: "childrens-day",
     label: "Children's Day",
     emoji: "🎈",
-    date: "11-14",
     promo:
       "🎈 Children's Day Special! Invest in your child's future with {Company}. Enrol now and get a free counselling session.",
     message:
@@ -137,7 +134,6 @@ const OCCASIONS = [
     id: "generic",
     label: "General Greeting",
     emoji: "✨",
-    date: null,
     promo:
       "✨ Special offer from {Company}! Enrol this week and take the next step in your career journey. Limited-time pricing.",
     message:
@@ -151,46 +147,179 @@ const OCCASIONS = [
   },
 ];
 
-function spotlight() {
-  const now = new Date();
-  const mmdd = `${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate()
-  ).padStart(2, "0")}`;
-
-  const today = OCCASIONS.find((o) => o.date === mmdd);
-  if (today) return { ...today, live: true };
-
-  // else next upcoming dated occasion
-  const dated = OCCASIONS.filter((o) => o.date)
-    .map((o) => ({ o, key: o.date }))
-    .sort((a, b) => (a.key < b.key ? -1 : 1));
-
-  const upcoming = dated.find(({ key }) => key >= mmdd) || dated[0];
-  return upcoming ? { ...upcoming.o, live: false } : { ...OCCASIONS[0], live: false };
+function fillTemplateTokens(text, { companyName, year }) {
+  return String(text || "")
+    .replaceAll("{Company}", companyName || "our team")
+    .replaceAll("{Year}", String(year || datePartsInTimezone().year));
 }
 
-function fillCompany(text, companyName) {
-  return String(text || "").replaceAll("{Company}", companyName || "our team");
+async function companyBranding(companyId) {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: {
+      brandName: true,
+      name: true,
+      logoUrl: true,
+      primaryColor: true,
+      settings: {
+        select: { logoUrl: true, primaryColor: true },
+      },
+    },
+  });
+
+  const rawName = company?.name || company?.brandName || "our team";
+  return {
+    name: String(rawName).replace(/\s*CRM$/i, "").trim() || "our team",
+    logoUrl: String(company?.settings?.logoUrl || company?.logoUrl || "").trim(),
+    primaryColor: String(
+      company?.settings?.primaryColor || company?.primaryColor || "indigo"
+    ).trim(),
+  };
 }
 
 async function companyName(companyId) {
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { brandName: true, name: true },
-  });
-  // CA-030: greetings sent to students should read the plain company name,
-  // not the internal "… CRM" brand label. Prefer name, and strip a trailing "CRM".
-  const raw = company?.name || company?.brandName || "our team";
-  return String(raw).replace(/\s*CRM$/i, "").trim() || "our team";
+  return (await companyBranding(companyId)).name;
 }
 
-// GET /api/client/store/occasions  → list + today's spotlight
+const ALLOWED_LOGO_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+]);
+const MAX_BRANDING_LOGO_BYTES = 1024 * 1024;
+
+function isPrivateIpAddress(address) {
+  const value = String(address || "").toLowerCase();
+  if (!value) return true;
+
+  if (value.includes(":")) {
+    return (
+      value === "::1" ||
+      value.startsWith("fc") ||
+      value.startsWith("fd") ||
+      value.startsWith("fe80:") ||
+      value.startsWith("::ffff:127.") ||
+      value.startsWith("::ffff:10.") ||
+      value.startsWith("::ffff:192.168.")
+    );
+  }
+
+  const parts = value.split(".").map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n))) return true;
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+async function assertSafeRemoteLogoUrl(value) {
+  const parsed = new URL(value);
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new Error("Branding logo URL must use HTTP or HTTPS");
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+    throw new Error("Local branding logo URLs are not supported");
+  }
+
+  if (isIP(hostname)) {
+    if (isPrivateIpAddress(hostname)) throw new Error("Private branding logo URLs are not supported");
+    return parsed;
+  }
+
+  const resolved = await lookup(hostname, { all: true });
+  if (!resolved.length || resolved.some((item) => isPrivateIpAddress(item.address))) {
+    throw new Error("Branding logo URL must resolve to a public address");
+  }
+
+  return parsed;
+}
+
+function normalizeDataLogo(value) {
+  const match = String(value || "").match(
+    /^data:(image\/(?:png|jpeg|webp|svg\+xml));(base64)?,(.*)$/is
+  );
+  if (!match) return null;
+
+  const contentType = match[1].toLowerCase();
+  const buffer = match[2]
+    ? Buffer.from(match[3], "base64")
+    : Buffer.from(decodeURIComponent(match[3]), "utf8");
+
+  if (!ALLOWED_LOGO_TYPES.has(contentType) || buffer.length > MAX_BRANDING_LOGO_BYTES) {
+    throw new Error("Branding logo is not a supported image or is too large");
+  }
+
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
+async function brandingLogoDataUri(logoValue) {
+  const value = String(logoValue || "").trim();
+  if (!value) return "";
+
+  if (value.startsWith("data:image/")) {
+    return normalizeDataLogo(value) || "";
+  }
+
+  let current = value;
+  for (let redirect = 0; redirect < 4; redirect += 1) {
+    await assertSafeRemoteLogoUrl(current);
+    const response = await fetch(current, { redirect: "manual" });
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (!location) throw new Error("Branding logo redirect is missing a location");
+      current = new URL(location, current).toString();
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Unable to download branding logo (${response.status})`);
+    }
+
+    const contentType = String(response.headers.get("content-type") || "")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    if (!ALLOWED_LOGO_TYPES.has(contentType)) {
+      throw new Error("Branding logo URL did not return a supported image");
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > MAX_BRANDING_LOGO_BYTES) {
+      throw new Error("Branding logo is too large");
+    }
+
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
+  }
+
+  throw new Error("Branding logo redirected too many times");
+}
+
+function buildBrandedPosterSvg({ imageBuffer, imageContentType, logoDataUri }) {
+  const background = `data:${imageContentType};base64,${imageBuffer.toString("base64")}`;
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+      <image href="${background}" x="0" y="0" width="1200" height="1200" preserveAspectRatio="xMidYMid slice"/>
+      <rect x="54" y="48" width="330" height="138" rx="24" fill="#ffffff" fill-opacity="0.94"/>
+      <image href="${logoDataUri}" x="78" y="67" width="282" height="100" preserveAspectRatio="xMinYMid meet"/>
+    </svg>`,
+    "utf8"
+  );
+}
+
+// GET /api/client/store/occasions  → static event choices for client-driven generation
 router.get("/occasions", async (req, res) => {
   try {
-    const spot = spotlight();
     res.json({
       success: true,
-      spotlight: { id: spot.id, label: spot.label, emoji: spot.emoji, live: spot.live },
       occasions: OCCASIONS.map((o) => ({
         id: o.id,
         label: o.label,
@@ -211,12 +340,18 @@ router.get("/templates/:occasionId", async (req, res) => {
       OCCASIONS.find((o) => o.id === "generic");
 
     const name = await companyName(req.clientUser.companyId);
+    const year = new Date().getFullYear();
 
     res.json({
       success: true,
-      occasion: { id: occasion.id, label: occasion.label, emoji: occasion.emoji },
-      promo: fillCompany(occasion.promo, name),
-      message: fillCompany(occasion.message, name),
+      occasion: {
+        id: occasion.id,
+        label: occasion.label,
+        emoji: occasion.emoji,
+        year,
+      },
+      promo: fillTemplateTokens(occasion.promo, { companyName: name, year }),
+      message: fillTemplateTokens(occasion.message, { companyName: name, year }),
       designs: occasion.designs,
     });
   } catch (error) {
@@ -243,7 +378,7 @@ router.get("/assets", async (req, res) => {
       where: { companyId: req.clientUser.companyId, type: "IMAGE" },
       orderBy: { createdAt: "desc" },
       take: 24,
-      select: { id: true, occasion: true, imageUrl: true, createdAt: true },
+      select: { id: true, occasion: true, imageUrl: true, prompt: true, createdAt: true },
     });
     res.json({ success: true, assets });
   } catch (error) {
@@ -264,33 +399,30 @@ router.get("/assets", async (req, res) => {
  *      create a StoreAsset row (this is what counts toward quota),
  *      return the permanent S3 proxy URL.
  *
- * NOTE [confirm before enabling]: the exact Ideogram v3 request shape below
- * is the commonly documented form. Once you fund the API and add the key, run
- * one test and we adjust the endpoint/fields against developer.ideogram.ai if
- * needed. Nothing here charges money until IDEOGRAM_API_KEY is set AND funded.
+ * Ideogram v2 uses JSON for this endpoint. Nothing is generated or billed
+ * unless IDEOGRAM_API_KEY is configured and the Ideogram account has credits.
  * =============================================================================
  */
-async function callIdeogram(prompt, { companyId, occasionId }) {
+async function callIdeogram(prompt, { companyId, occasionId, logoDataUri }) {
   const apiKey = String(process.env.IDEOGRAM_API_KEY || "").trim();
   if (!apiKey) return { disabled: true };
 
   // --- 1) Generate the image on Ideogram -----------------------------------
-  // ⚠️ CONFIRM THIS BLOCK against the "Generate with Ideogram" docs curl.
-  //    (endpoint URL, header name, and body field names.)
-  const form = new FormData();
-  form.append("prompt", prompt);
-  form.append("rendering_speed", "TURBO"); // cheapest tier
-  form.append("num_images", "1"); // 1 image = 1 charge; never default to 4
-
   const response = await fetch(
     "https://api.ideogram.ai/v2/image/generate/ideogram-4-5",
     {
       method: "POST",
-      headers: { "Api-Key": apiKey },
-      body: form,
+      headers: {
+        "Api-Key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        rendering_speed: "turbo",
+        num_images: 1,
+      }),
     }
   );
-  // ⚠️ END CONFIRM BLOCK
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -305,19 +437,41 @@ async function callIdeogram(prompt, { companyId, occasionId }) {
     null;
   if (!srcUrl) throw new Error("Ideogram returned no image URL");
 
-  // --- 2) Download it and store in S3 (Ideogram links expire) --------------
+  // --- 2) Download the artwork. If the tenant has a Branding logo, overlay
+  // that exact file after generation; otherwise store the generated artwork as-is.
+  // The AI never receives logo pixels, so it cannot redraw/distort an uploaded logo.
   const imgRes = await fetch(srcUrl);
   if (!imgRes.ok) {
     throw new Error(`Could not download generated image (${imgRes.status})`);
   }
-  const buffer = Buffer.from(await imgRes.arrayBuffer());
-  const contentType = imgRes.headers.get("content-type") || "image/png";
+  const imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const downloadedContentType = String(
+    imgRes.headers.get("content-type") || "image/png"
+  )
+    .split(";")[0]
+    .trim()
+    .toLowerCase();
+  const imageContentType = downloadedContentType.startsWith("image/")
+    ? downloadedContentType
+    : "image/png";
+  const hasBrandingLogo = Boolean(String(logoDataUri || "").trim());
+  const outputBuffer = hasBrandingLogo
+    ? buildBrandedPosterSvg({ imageBuffer, imageContentType, logoDataUri })
+    : imageBuffer;
+  const outputContentType = hasBrandingLogo ? "image/svg+xml" : imageContentType;
+  const extension = hasBrandingLogo
+    ? "svg"
+    : imageContentType === "image/jpeg"
+      ? "jpg"
+      : imageContentType === "image/webp"
+        ? "webp"
+        : "png";
 
   const key = buildObjectKey(
     ["store-assets", String(companyId || "unknown"), String(occasionId || "generic")],
-    "ideogram.png"
+    `generated-poster.${extension}`
   );
-  await putObject({ buffer, key, contentType });
+  await putObject({ buffer: outputBuffer, key, contentType: outputContentType });
 
   // Stable, permanent proxy URL stored in the DB (never expires)
   return { disabled: false, url: fileProxyUrl(key), key };
@@ -353,15 +507,38 @@ router.post("/generate", async (req, res) => {
       });
     }
 
-    // 3) generate
-    const name = await companyName(req.clientUser.companyId);
-    const finalPrompt =
-      String(prompt || "").trim() ||
-      `A beautiful, professional ${occasion.label} greeting poster for an education brand named "${name}". Clean modern design, festive, high quality, with elegant space for a logo.`;
+    // 3) Load tenant branding. A logo is optional: if one exists and can be
+    // loaded, Bispun overlays that exact file; otherwise generation continues
+    // without any logo. The AI is still told not to invent a fake brand mark.
+    const branding = await companyBranding(req.clientUser.companyId);
+    let logoDataUri = "";
+    if (branding.logoUrl) {
+      try {
+        logoDataUri = await brandingLogoDataUri(branding.logoUrl);
+      } catch (logoError) {
+        console.warn(
+          "store/generate branding logo unavailable; continuing without logo:",
+          logoError?.message || logoError
+        );
+      }
+    }
+
+    const requestedPrompt = String(prompt || "").trim().slice(0, 1800);
+    const defaultPrompt = `Create a beautiful, professional ${occasion.label} greeting poster for an education brand named "${branding.name}". Clean modern design, high quality and ready for social media.`;
+    const userPrompt = requestedPrompt || defaultPrompt;
+    const finalPrompt = [
+      userPrompt,
+      `This artwork is for the education brand "${branding.name}".`,
+      "IMPORTANT BRANDING RULE: Do not generate, imitate, draw, invent or render any logo, emblem, badge, watermark or brand mark.",
+      "Keep the top-left area clean, low-detail and free of important text/faces because Bispun will overlay the company's exact uploaded logo there after generation.",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     const result = await callIdeogram(finalPrompt, {
       companyId: req.clientUser.companyId,
       occasionId: occasion.id,
+      logoDataUri,
     });
     if (result.disabled) {
       return res.status(503).json({
@@ -376,11 +553,11 @@ router.post("/generate", async (req, res) => {
         companyId: req.clientUser.companyId,
         occasion: occasion.id,
         type: "IMAGE",
-        prompt: finalPrompt,
+        prompt: userPrompt,
         imageUrl: result.url,
         createdByUserId: req.clientUser.userId || null,
       },
-      select: { id: true, imageUrl: true, occasion: true, createdAt: true },
+      select: { id: true, imageUrl: true, occasion: true, prompt: true, createdAt: true },
     });
 
     const after = await getUsage(req.clientUser.companyId);

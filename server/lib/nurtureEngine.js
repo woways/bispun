@@ -5,6 +5,20 @@ import { decryptToken, sendTemplateMessage } from "./whatsapp.js";
 let workerTimer = null;
 let workerRunning = false;
 
+const DEFAULT_NURTURE_TIME_ZONE = "Asia/Kolkata";
+const TERMINAL_LEAD_STATUSES = new Set([
+  "lead lost",
+  "lost",
+  "admission done",
+  "admitted",
+  "closed",
+  "converted",
+  "no longer needs follow-up",
+  "do not contact",
+  "do not follow up",
+  "no follow up",
+]);
+
 function cleanSteps(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -17,6 +31,125 @@ function asDelayMinutes(value) {
 
 function addMinutes(date, minutes) {
   return new Date(date.getTime() + asDelayMinutes(minutes) * 60 * 1000);
+}
+
+function safeTimeZone(value) {
+  const timeZone = String(value || DEFAULT_NURTURE_TIME_ZONE).trim() || DEFAULT_NURTURE_TIME_ZONE;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone }).format(new Date());
+    return timeZone;
+  } catch {
+    return DEFAULT_NURTURE_TIME_ZONE;
+  }
+}
+
+function preferredTimeParts(value) {
+  const match = String(value || "").trim().match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+  if (!match) return null;
+  return { hour: Number(match[1]), minute: Number(match[2]) };
+}
+
+function zonedDateParts(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: safeTimeZone(timeZone),
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+  const values = {};
+  for (const part of formatter.formatToParts(date)) {
+    if (part.type !== "literal") values[part.type] = Number(part.value);
+  }
+  return {
+    year: values.year,
+    month: values.month,
+    day: values.day,
+    hour: values.hour,
+    minute: values.minute,
+    second: values.second,
+  };
+}
+
+function localDateTimeToUtc(parts, timeZone) {
+  const desiredWallClock = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second || 0,
+    0
+  );
+  let candidate = desiredWallClock;
+
+  // Resolve the UTC instant that renders as the requested local wall-clock time.
+  // A few passes also handle DST offsets without adding another date library.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const actual = zonedDateParts(new Date(candidate), timeZone);
+    const actualWallClock = Date.UTC(
+      actual.year,
+      actual.month - 1,
+      actual.day,
+      actual.hour,
+      actual.minute,
+      actual.second || 0,
+      0
+    );
+    const correction = desiredWallClock - actualWallClock;
+    candidate += correction;
+    if (correction === 0) break;
+  }
+  return new Date(candidate);
+}
+
+function nextLocalDate(parts) {
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1));
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
+function runAtForStep(baseDate, step, timeZone) {
+  const earliest = addMinutes(baseDate, step?.delayMinutes);
+  const preferred = preferredTimeParts(step?.preferredTime);
+  if (!preferred) return earliest;
+
+  const zone = safeTimeZone(timeZone);
+  const local = zonedDateParts(earliest, zone);
+  let localDate = { year: local.year, month: local.month, day: local.day };
+  let candidate = localDateTimeToUtc(
+    { ...localDate, hour: preferred.hour, minute: preferred.minute, second: 0 },
+    zone
+  );
+
+  // The configured clock time is a preferred slot after the delay has elapsed.
+  // If today's slot already passed, use the next local-day slot.
+  if (candidate.getTime() < earliest.getTime()) {
+    localDate = nextLocalDate(localDate);
+    candidate = localDateTimeToUtc(
+      { ...localDate, hour: preferred.hour, minute: preferred.minute, second: 0 },
+      zone
+    );
+  }
+  return candidate;
+}
+
+export function nurtureStopReason(lead) {
+  const stage = String(lead?.stage || "").trim().toUpperCase();
+  if (stage === "ADMITTED") return "the lead is admitted";
+  if (stage === "LOST") return "the lead is lost";
+
+  const leadStatus = String(lead?.leadStatus || "").trim().toLowerCase();
+  if (TERMINAL_LEAD_STATUSES.has(leadStatus)) {
+    return `lead status is ${lead?.leadStatus || "closed"}`;
+  }
+  return "";
 }
 
 function digits(value) {
@@ -253,7 +386,10 @@ async function executeStep({ enrollment, sequence, lead, stepIndex, step }) {
 export async function processNurtureEnrollment(enrollmentId) {
   const enrollment = await prisma.nurtureEnrollment.findUnique({
     where: { id: enrollmentId },
-    include: { sequence: true },
+    include: {
+      sequence: true,
+      company: { select: { settings: { select: { timezone: true } } } },
+    },
   });
   if (!enrollment || enrollment.status !== "ACTIVE") return null;
   if (enrollment.sequence.status !== "ACTIVE") return null;
@@ -290,6 +426,7 @@ export async function processNurtureEnrollment(enrollmentId) {
       email: true,
       course: true,
       stage: true,
+      leadStatus: true,
       assignedToName: true,
     },
   });
@@ -301,13 +438,14 @@ export async function processNurtureEnrollment(enrollmentId) {
     });
   }
 
-  if (lead.stage === "ADMITTED" || lead.stage === "LOST") {
+  const stopReason = nurtureStopReason(lead);
+  if (stopReason) {
     await createLog({
       enrollment,
       stepIndex: enrollment.nextStepIndex,
       stepType: "LEAD_STATE_CHECK",
       status: "SKIPPED",
-      summary: `Sequence stopped because the lead is ${lead.stage.toLowerCase()}.`,
+      summary: `Sequence stopped because ${stopReason}.`,
     });
     return prisma.nurtureEnrollment.update({
       where: { id: enrollment.id },
@@ -349,7 +487,8 @@ export async function processNurtureEnrollment(enrollmentId) {
     }
 
     const nextStep = steps[nextIndex] || {};
-    const nextRunAt = addMinutes(new Date(), nextStep.delayMinutes);
+    const timeZone = enrollment.company?.settings?.timezone || DEFAULT_NURTURE_TIME_ZONE;
+    const nextRunAt = runAtForStep(new Date(), nextStep, timeZone);
     await prisma.nurtureSequence.update({
       where: { id: enrollment.sequenceId },
       data: { lastRunAt: new Date() },
@@ -422,7 +561,7 @@ export function startNurtureWorker() {
   return workerTimer;
 }
 
-export function firstRunAtForSteps(steps, start = new Date()) {
+export function firstRunAtForSteps(steps, start = new Date(), timeZone = DEFAULT_NURTURE_TIME_ZONE) {
   const first = cleanSteps(steps)[0] || {};
-  return addMinutes(start, first.delayMinutes);
+  return runAtForStep(start, first, timeZone);
 }

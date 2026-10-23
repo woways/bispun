@@ -3365,7 +3365,7 @@ function AdmissionsManager({
           </div>
 
           <div className="mt-4">
-            <div className="text-[17px] font-bold tracking-[-0.02em]">
+            <div className="text-2xl font-bold">
               {title}
             </div>
 
