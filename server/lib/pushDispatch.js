@@ -15,6 +15,14 @@
 
 import { sendToTokens } from "./pushService.js";
 
+// Milliseconds to let any enclosing interactive transaction commit (or roll
+// back) before we treat the notification as real. Read at call time so tests
+// can set it to 0. See the existence re-check below.
+function txSettleMs() {
+  const value = Number(process.env.PUSH_TX_SETTLE_MS);
+  return Number.isFinite(value) ? value : 750;
+}
+
 /** Pure: active, de-duplicated token strings from DeviceToken rows. */
 export function selectDeliverableTokens(tokenRows) {
   return Array.from(
@@ -35,6 +43,21 @@ export async function dispatchNotificationPush(prisma, notification) {
   try {
     if (!notification || !notification.companyId || !notification.userId) {
       return; // nothing to target safely
+    }
+
+    // Transaction-safety: a notification created inside an interactive
+    // transaction can still be rolled back AFTER the create resolves. We wait
+    // briefly for the transaction to settle, then confirm the row actually
+    // persisted (a separate read sees only committed data). If it is gone, the
+    // transaction rolled back and we must NOT push. Notifications created
+    // outside a transaction commit immediately, so this simply confirms them.
+    if (notification.id) {
+      await new Promise((resolve) => setTimeout(resolve, txSettleMs()));
+      const persisted = await prisma.notification.findUnique({
+        where: { id: notification.id },
+        select: { id: true },
+      });
+      if (!persisted) return; // rolled back -> do not deliver a phantom push
     }
 
     const tokenRows = await prisma.deviceToken.findMany({

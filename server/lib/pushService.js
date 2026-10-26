@@ -23,19 +23,40 @@ export function maskToken(token) {
   return `***${value.slice(-6)}`;
 }
 
+// Notification types whose title/message are safe to preview on a device
+// lock screen (no customer/lead/financial PII). Everything NOT in this set is
+// treated as sensitive and shown with generic text — the full content stays in
+// the authenticated in-app notification, which is unchanged. Extend this set
+// deliberately, only for categories confirmed to carry no sensitive data.
+export const SAFE_PREVIEW_TYPES = new Set(["SYSTEM"]);
+
+export function isSensitiveType(type) {
+  return !SAFE_PREVIEW_TYPES.has(String(type || "").trim().toUpperCase());
+}
+
 /**
  * Build the FCM message for one token from an in-app Notification row.
- * Pure: no side effects. Keeps the payload minimal and free of sensitive
- * customer data — only what the app needs to show and navigate.
+ * Pure: no side effects. For sensitive categories the lock-screen payload is
+ * GENERIC (no names, phones, amounts, remarks or notes); the real content is
+ * only revealed after authenticated navigation inside the app. The data block
+ * carries just an id, a type and an internal module key for navigation — never
+ * customer data.
  */
 export function buildPushMessage({ notification, token }) {
-  const title = String(notification?.title || "Bispun").slice(0, 120);
-  const body = String(notification?.message || "").slice(0, 240);
+  const sensitive = isSensitiveType(notification?.type);
+
+  const title = sensitive
+    ? "Bispun"
+    : String(notification?.title || "Bispun").slice(0, 120);
+  const body = sensitive
+    ? "You have a new notification. Open Bispun to view details."
+    : String(notification?.message || "").slice(0, 240);
 
   return {
     token: String(token),
     notification: { title, body },
     // data values must be strings for FCM. Used for tap-navigation only.
+    // actionModule is an internal module key (e.g. "leads"), not customer data.
     data: {
       notificationId: String(notification?.id || ""),
       type: String(notification?.type || "INFO"),
@@ -43,7 +64,11 @@ export function buildPushMessage({ notification, token }) {
     },
     android: {
       priority: "high",
-      notification: { channelId: "bispun_default" },
+      notification: {
+        channelId: "bispun_default",
+        // Defence in depth: hide content on a locked screen for sensitive types.
+        visibility: sensitive ? "private" : "public",
+      },
     },
   };
 }

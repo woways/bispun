@@ -7,6 +7,20 @@ dist
 .env.*
 !.env.example
 
+# Firebase & mobile push secrets / credentials (never commit)
+google-services.json
+**/google-services.json
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+firebase-service-account*.json
+*serviceAccount*.json
+*service-account*.json
+
+# Android signing keystores and secrets
+*.keystore
+*.jks
+keystore.properties
+
 .vscode
 /src/generated/prisma
 .agents/
