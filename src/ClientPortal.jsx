@@ -12,6 +12,11 @@ import {
 import { io } from "socket.io-client";
 
 import {
+  initMobilePush,
+  unregisterMobilePush,
+} from "./lib/mobilePush";
+
+import {
   Bell,
   MessageSquare,
   Target,
@@ -1479,6 +1484,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     return () => socket.disconnect();
   }, [user?.id]);
 
+  // Mobile (Capacitor Android/iOS) push registration. No-op in a desktop
+  // browser: initMobilePush() returns immediately when not on a native
+  // platform, so web behaviour and routing are unchanged. Notification taps
+  // reuse the existing module navigation (setModule).
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    initMobilePush({ onNavigate: (actionModule) => setModule(actionModule) });
+    return undefined;
+  }, [user?.id]);
+
   async function signOut() {
     if (
       signingOut
@@ -1489,6 +1504,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     setSigningOut(
       true
     );
+
+    // Deactivate this device's push token before the session ends (no-op in a
+    // desktop browser). Awaited but self-contained: failures are swallowed
+    // inside unregisterMobilePush and never block logout.
+    await unregisterMobilePush();
 
     try {
       await apiRequest(
