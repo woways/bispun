@@ -225,6 +225,7 @@ model Company {
   leadDatasets            LeadDataset[]
   supportTickets          SupportTicket[]
   notifications           Notification[]
+  deviceTokens            DeviceToken[]
   payments                PaymentTransaction[]
   leadSources             LeadSourceConfig[]
   customFields            CustomField[]
@@ -309,6 +310,7 @@ model User {
 
   incentives             Incentive[]
   notifications          Notification[]
+  deviceTokens           DeviceToken[]
   payments               PaymentTransaction[]
   notificationPreference UserNotificationPreference?
   auditLogs              AuditLog[]
@@ -1226,6 +1228,36 @@ model Notification {
   @@index([companyId, createdAt])
   @@index([companyId, read])
   @@index([userId, read])
+}
+
+// Mobile push device registrations (Capacitor Android/iOS). Additive and
+// isolated: no existing model or desktop behaviour depends on this table.
+// One row per device token; a user may have several devices, and the same
+// physical device re-registers (token refresh) by updating the existing row.
+model DeviceToken {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // The FCM/APNs registration token. Unique so a re-register updates in place.
+  token    String  @unique
+  platform String  @default("android")
+
+  // Deactivated on logout or when FCM reports the token is invalid, instead of
+  // deleting, so delivery history and debugging stay possible.
+  active Boolean @default(true)
+
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([userId, active])
+  @@index([companyId, userId])
 }
 
 model CustomField {

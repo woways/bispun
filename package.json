@@ -13,7 +13,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push"
+    "prisma:push": "prisma db push",
+    "test": "node --test server/lib/pushService.test.js server/lib/pushDispatch.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.705.0",
@@ -30,6 +31,7 @@
     "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "firebase-admin": "^13.10.0",
     "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^2.5.1",
