@@ -35,6 +35,7 @@ import {
 } from "../../components/ui";
 
 import { apiRequest } from "../../lib/api";
+import VerifiedInput from "./VerifiedInput";
 
 function getAccent(primaryColor) {
   const colors = {
@@ -177,6 +178,9 @@ function OnboardClientModal({
     adminEmail: "",
     adminPassword: "",
     referralCode: "",
+    companyEmailVerificationToken: "",
+    adminEmailVerificationToken: "",
+    phoneVerificationToken: "",
   });
 
   useEffect(() => {
@@ -244,6 +248,9 @@ function OnboardClientModal({
     if (!isValidEmail(form.email)) return "Enter a valid company email";
     if (!isValidEmail(form.adminEmail)) return "Enter a valid client admin email";
     if (!isValidPhone(form.phone)) return "Enter exactly 10 digits for company phone number";
+    if (!form.companyEmailVerificationToken) return "Verify the company email with OTP first";
+    if (!form.adminEmailVerificationToken) return "Verify the admin email with OTP first";
+    if (!form.phoneVerificationToken) return "Verify the phone number with OTP first";
     if (String(form.adminPassword).length < 8) {
       return "Temporary password must be at least 8 characters";
     }
@@ -515,35 +522,29 @@ function OnboardClientModal({
                   placeholder="Owner / Founder"
                 />
 
-                <Input
+                <VerifiedInput
                   label="Company Email"
                   required
                   type="email"
+                  channel="email"
+                  purpose="company_email"
                   value={form.email}
-                  onChange={(e) =>
-                    updateField(
-                      "email",
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => updateField("email", e.target.value)}
+                  onToken={(t) => updateField("companyEmailVerificationToken", t)}
                   placeholder="info@company.com"
                 />
 
-                <Input
+                <VerifiedInput
                   label="Phone"
                   required
                   type="tel"
                   inputMode="numeric"
                   maxLength={10}
-                  pattern="[0-9]{10}"
-                  title="Enter exactly 10 digits"
+                  channel="phone"
+                  purpose="company_phone"
                   value={form.phone}
-                  onChange={(e) =>
-                    updateField(
-                      "phone",
-                      normalizePhoneInput(e.target.value)
-                    )
-                  }
+                  onChange={(e) => updateField("phone", normalizePhoneInput(e.target.value))}
+                  onToken={(t) => updateField("phoneVerificationToken", t)}
                   placeholder="9876543210"
                 />
 
@@ -908,19 +909,15 @@ function OnboardClientModal({
                   placeholder="Admin name"
                 />
 
-                <Input
+                <VerifiedInput
                   label="Admin Email"
                   required
                   type="email"
-                  value={
-                    form.adminEmail
-                  }
-                  onChange={(e) =>
-                    updateField(
-                      "adminEmail",
-                      e.target.value
-                    )
-                  }
+                  channel="email"
+                  purpose="admin_email"
+                  value={form.adminEmail}
+                  onChange={(e) => updateField("adminEmail", e.target.value)}
+                  onToken={(t) => updateField("adminEmailVerificationToken", t)}
                   placeholder="admin@company.com"
                 />
 
