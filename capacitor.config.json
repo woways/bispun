@@ -1,5 +1,12 @@
 {
   "appId": "com.bispun.crm",
   "appName": "Bispun",
-  "webDir": "dist"
+  "webDir": "dist",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "style": "LIGHT",
+      "hidden": false
+    }
+  }
 }
