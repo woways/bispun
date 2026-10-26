@@ -12,3 +12,4 @@ dist
 .agents/
 .claude/
 .windsurf/
+android/.idea/

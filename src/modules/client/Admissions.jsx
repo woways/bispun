@@ -465,9 +465,9 @@ function ModalShell({
   max = "max-w-md",
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div
-        className={`w-full ${max} overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl`}
+        className={`w-full ${max} overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
@@ -1257,8 +1257,8 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
   const folderName = (id) => folders.find((f) => f.id === id)?.name || "";
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
-      <div className="flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
@@ -3442,7 +3442,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Total Admissions"
             value={filteredAllSummary.totalAdmissions}
@@ -3950,7 +3950,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Colleges"
             value={selectedStream.totalColleges || 0}
@@ -4134,7 +4134,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Branches"
             value={selectedPartner.totalBranches || branches.length}
@@ -4322,7 +4322,7 @@ function AdmissionsManager({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Admissions"
           value={summary.totalAdmissions}
@@ -4825,7 +4825,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             Export
           </button>
         </div>
-        <div className="grid grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto] items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3">
+        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto]">
           <label className="relative min-w-0">
             <span className="sr-only">Search by student name</span>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

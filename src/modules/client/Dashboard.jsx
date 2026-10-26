@@ -2087,8 +2087,8 @@ export default function Dashboard({
       {/* EVENT MODAL */}
 
       {actionDetailOpen && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[2px]">
-          <div className="flex max-h-[86vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
+          <div className="flex max-h-[92vh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[18px] border border-slate-200 bg-white shadow-2xl sm:max-h-[86vh] sm:rounded-[18px]">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div className="min-w-0">
                 <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">

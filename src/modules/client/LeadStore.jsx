@@ -890,9 +890,9 @@ function IndividualLeadModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[92vh] overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-white rounded-t-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[94vh] overflow-hidden sm:rounded-2xl sm:max-h-[92vh]">
+        <div className="px-4 py-4 border-b border-slate-200 flex items-start justify-between gap-3 sm:px-6 sm:py-5 sm:items-center">
           <div>
             <h2 className="text-[17px] font-semibold">
               {lead ? "Edit Lead" : "Add Lead"}
@@ -927,7 +927,7 @@ function IndividualLeadModal({
           }
           className="overflow-y-auto max-h-[calc(92vh-78px)]"
         >
-          <div className="p-6 grid md:grid-cols-2 gap-4">
+          <div className="p-4 grid md:grid-cols-2 gap-4 sm:p-6">
             {error && (
               <div className="md:col-span-2 px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-[15px] text-rose-700 flex items-start gap-2">
                 <AlertCircle
@@ -1718,9 +1718,9 @@ function UploadDatasetModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-4 py-4 border-b border-slate-200 flex items-start justify-between gap-3 sm:px-6 sm:py-5 sm:items-center">
           <div>
             <h2 className="text-[17px] font-semibold">
               Import Lead Dataset
@@ -2218,9 +2218,9 @@ function EditDatasetModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-4 py-4 border-b border-slate-200 flex items-start justify-between gap-3 sm:px-6 sm:py-5 sm:items-center">
           <div>
             <h2 className="text-[17px] font-semibold">
               Edit Dataset
@@ -2252,7 +2252,7 @@ function EditDatasetModal({
             submit
           }
         >
-          <div className="p-6 grid md:grid-cols-2 gap-4">
+          <div className="p-4 grid md:grid-cols-2 gap-4 sm:p-6">
             {error && (
               <div className="md:col-span-2 px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-[15px] text-rose-700">
                 {error}
@@ -3719,7 +3719,7 @@ export default function LeadStore({ selectedYear = "all" }) {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={async () => {
@@ -4394,7 +4394,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   event.target.value
                 )
               }
-              className="h-9 min-w-[210px] rounded-lg border border-indigo-200 bg-white px-3 text-[13px] font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              className="h-9 w-full rounded-lg border border-indigo-200 bg-white px-3 text-[13px] font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 sm:w-auto sm:min-w-[210px]"
             >
               <option value="">
                 Assign to team member...
