@@ -59,10 +59,11 @@ router.post("/register", async (req, res) => {
   }
 });
 
-// Unregister the current device (called on logout). Scoped to this tenant so a
-// token can only ever be deactivated within its own company.
+// Unregister the current device (called on logout). Scoped to the owning
+// user AND company, so a user can only ever deactivate their own device token
+// (never another user's, even within the same company).
 router.post("/unregister", async (req, res) => {
-  const { companyId } = req.clientUser;
+  const { userId, companyId } = req.clientUser;
   const token = String(req.body?.token || "").trim();
 
   if (!token) {
@@ -71,7 +72,7 @@ router.post("/unregister", async (req, res) => {
 
   try {
     await prisma.deviceToken.updateMany({
-      where: { token, companyId },
+      where: { token, companyId, userId },
       data: { active: false },
     });
     return res.json({ success: true });
