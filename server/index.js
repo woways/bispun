@@ -263,13 +263,25 @@ async function reconcileSubscriptions() {
   }
 }
 
-reconcileSubscriptions();
-startNurtureWorker();
-const subscriptionLifecycleTimer = setInterval(
-  reconcileSubscriptions,
-  60 * 60 * 1000
-);
-subscriptionLifecycleTimer.unref?.();
+// Development safeguard: when DISABLE_BACKGROUND_WORKERS=true, the nurture
+// worker and the subscription-lifecycle timer do NOT auto-start. This lets a
+// backend pointed at a dev/clone database run without contacting real
+// customers (email/WhatsApp/SMS) or mutating records on a schedule. Production
+// leaves this unset, so the original behaviour is completely unchanged.
+if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
+  console.warn(
+    "[startup] DISABLE_BACKGROUND_WORKERS=true — nurture worker and " +
+      "subscription lifecycle timer are DISABLED (development mode)."
+  );
+} else {
+  reconcileSubscriptions();
+  startNurtureWorker();
+  const subscriptionLifecycleTimer = setInterval(
+    reconcileSubscriptions,
+    60 * 60 * 1000
+  );
+  subscriptionLifecycleTimer.unref?.();
+}
 
 // Attach Socket.IO for real-time chat (shares cookie-JWT auth).
 const io = attachSocketServer(server, config);
