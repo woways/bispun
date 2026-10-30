@@ -33,6 +33,7 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import { resolveListView } from "../../lib/listViewState";
 
 const TYPES = [
   {
@@ -1170,6 +1171,11 @@ export default function Help({
     setError,
   ] = useState("");
 
+  // Dedicated state for a ticket-LIST load failure, kept separate from the
+  // shared `error` so a failed fetch shows a clear error+Retry state instead of
+  // a misleading empty "0 records" view (and is not double-reported).
+  const [loadError, setLoadError] = useState("");
+
   const [
     showTicketModal,
     setShowTicketModal,
@@ -1237,6 +1243,7 @@ export default function Help({
     );
 
     setError("");
+    setLoadError("");
 
     try {
       const data =
@@ -1248,11 +1255,13 @@ export default function Help({
         data.tickets ||
           []
       );
+      setLoadError("");
     } catch (error) {
-      setError(
-        error
-          ?.data
-          ?.message ||
+      // Single source of truth for a LIST-LOAD failure: set loadError only (not
+      // the shared `error`/page banner), so the list renders a dedicated error +
+      // Retry state instead of the misleading empty "0 records" view.
+      setLoadError(
+        error?.data?.message ||
           "Unable to load support tickets"
       );
     } finally {
@@ -1772,7 +1781,11 @@ export default function Help({
 
       {/* TICKETS */}
 
-      {loading ? (
+      {resolveListView({
+        loading,
+        loadError,
+        itemCount: filteredTickets.length,
+      }) === "loading" ? (
         <div className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500">
           <Loader2
             size={16}
@@ -1780,6 +1793,25 @@ export default function Help({
           />
 
           Loading tickets...
+        </div>
+      ) : loadError ? (
+        <div
+          role="alert"
+          className="bg-white border border-rose-200 rounded-xl p-10 flex flex-col items-center justify-center gap-3 text-center"
+        >
+          <AlertCircle size={22} className="text-rose-500" aria-hidden="true" />
+          <div className="text-[15px] font-semibold text-slate-900">
+            Couldn't load your support tickets
+          </div>
+          <div className="text-[13px] text-rose-700 max-w-sm">{loadError}</div>
+          <button
+            type="button"
+            onClick={loadTickets}
+            aria-label="Retry loading support tickets"
+            className="mt-1 h-9 px-4 bg-rose-600 hover:bg-rose-700 text-white text-[13px] font-semibold rounded-lg inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            <RefreshCw size={14} aria-hidden="true" /> Retry
+          </button>
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -1805,6 +1837,9 @@ export default function Help({
             </div>
           </div>
 
+          {/* Desktop (sm+): full table. Mobile: stacked cards so the 8
+              columns never clip in the narrow WebView. Same data + states. */}
+          <div className="hidden sm:block">
           <Table
             columns={[
               "Ticket",
@@ -1913,6 +1948,72 @@ export default function Help({
               )
             )}
           />
+          </div>
+
+          {/* Mobile (below sm): card list. role="list" restores the list
+              relationship Tailwind strips, so AT still announces N items. */}
+          <div
+            className="sm:hidden divide-y divide-slate-100"
+            role="list"
+            aria-label="Support tickets"
+          >
+            {filteredTickets.length === 0 ? (
+              <div className="px-5 py-10 text-center text-[13px] text-slate-500">
+                No support tickets yet
+              </div>
+            ) : (
+              filteredTickets.map((ticket) => (
+                <div key={ticket.id} role="listitem" className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-mono font-medium text-slate-500">
+                        {ticket.ticketNumber}
+                      </div>
+                      <div className="text-[15px] font-semibold text-slate-900 break-words mt-0.5">
+                        {ticket.title}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTicket(ticket)}
+                      aria-label={`View ticket ${ticket.ticketNumber}`}
+                      className="shrink-0 h-11 min-w-[44px] px-3 rounded-lg inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    >
+                      <Eye size={14} aria-hidden="true" />
+                      View
+                    </button>
+                  </div>
+
+                  {ticket.description ? (
+                    <div className="text-[13px] text-slate-500 mt-1.5 line-clamp-2">
+                      {ticket.description}
+                    </div>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+                    <Badge tone="slate">{ticket.typeLabel}</Badge>
+                    <Badge tone={priorityTone(ticket.priority)}>
+                      {ticket.priorityLabel}
+                    </Badge>
+                    <Badge tone={ticketStatusTone(ticket.status)}>
+                      {ticket.statusLabel}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 mt-2.5 text-[12px] text-slate-500">
+                    <span className="truncate">
+                      {ticket.type === "CALL_TO_RM"
+                        ? "Relationship Manager"
+                        : ticket.department || "—"}
+                    </span>
+                    <span className="whitespace-nowrap">
+                      {formatDate(ticket.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
