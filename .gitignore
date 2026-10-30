@@ -21,6 +21,10 @@ firebase-service-account*.json
 *.jks
 keystore.properties
 
+# Temporary dev-only maintenance scripts (never commit)
+reset-dev-admin-password.mjs
+configure-dev-advanced.mjs
+
 .vscode
 /src/generated/prisma
 .agents/
