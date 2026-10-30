@@ -62,9 +62,15 @@ export function isMobilePushSupported() {
 
 function loadPlugin() {
   if (!pluginPromise) {
-    pluginPromise = import("@capacitor/push-notifications").then(
-      (mod) => mod.PushNotifications
-    );
+    // IMPORTANT: resolve to a plain, NON-thenable wrapper object — never the
+    // Capacitor plugin proxy directly. The PushNotifications proxy has a `.then`
+    // that is "not implemented on android"; if it were a Promise resolution
+    // value, Promise adoption would call that `.then` and reject, which aborted
+    // push init before register() (no FCM token was ever obtained). Wrapping it
+    // in `{ plugin }` keeps the proxy out of the promise-resolution path.
+    pluginPromise = import("@capacitor/push-notifications").then((mod) => ({
+      plugin: mod.PushNotifications,
+    }));
   }
   return pluginPromise;
 }
@@ -91,7 +97,7 @@ function handleTapAction(action) {
 
 async function ensureNavListener() {
   if (navListenerAttached || !isMobilePushSupported()) return;
-  const PushNotifications = await loadPlugin();
+  const { plugin: PushNotifications } = await loadPlugin();
   await PushNotifications.addListener(
     "pushNotificationActionPerformed",
     handleTapAction
@@ -135,7 +141,7 @@ export async function initMobilePush({ onNavigate } = {}) {
       liveOnNavigate(target);
     }
 
-    const PushNotifications = await loadPlugin();
+    const { plugin: PushNotifications } = await loadPlugin();
 
     let perm = await PushNotifications.checkPermissions();
     if (
@@ -185,7 +191,7 @@ export async function unregisterMobilePush() {
   pendingNavigation = null;
 
   try {
-    const PushNotifications = await loadPlugin();
+    const { plugin: PushNotifications } = await loadPlugin();
 
     if (currentToken) {
       try {
