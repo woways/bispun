@@ -85,10 +85,23 @@ app.use(requestId);
 app.use(securityHeaders);
 app.use(requestLogger);
 
+// Origins used by the Capacitor mobile app's WebView (Android + iOS).
+// These are the app's own built-in origins, not external websites.
+const MOBILE_APP_ORIGINS = [
+  "http://localhost",
+  "https://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
+];
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || config.clientOrigins.includes(origin)) {
+      if (
+        !origin ||
+        config.clientOrigins.includes(origin) ||
+        MOBILE_APP_ORIGINS.includes(origin)
+      ) {
         return callback(null, true);
       }
 

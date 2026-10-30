@@ -25,7 +25,7 @@ router.post("/login", loginLimiter, async (req,res)=>{
     if(!user||!user.active||user.role!=="SUPER_ADMIN") return res.status(401).json({success:false,message:"Invalid email or password"});
     if(!(await bcrypt.compare(password,user.passwordHash))) return res.status(401).json({success:false,message:"Invalid email or password"});
     const token=jwt.sign({sub:user.id,role:user.role},getJwtSecret(),{expiresIn:"8h",algorithm:"HS256"});
-    res.cookie(COOKIE_NAME,token,cookieOptions()); return res.json({success:true,user:adminResponse(user)});
+    res.cookie(COOKIE_NAME,token,cookieOptions()); return res.json({success:true,token,user:adminResponse(user)});
   }catch(error){console.error("Admin login failed:",error);return res.status(500).json({success:false,message:"Unable to sign in"});}
 });
 
