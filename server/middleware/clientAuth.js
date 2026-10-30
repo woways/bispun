@@ -6,6 +6,7 @@ import {
   normalizeUserPageAccess,
   fullPageAccess,
 } from "../lib/pageAccess.js";
+import { getBearerToken } from "../lib/authToken.js";
 
 const COOKIE_NAME =
   "cb_client_token";
@@ -32,7 +33,8 @@ export async function requireClientUser(
     const token =
       req.cookies?.[
         COOKIE_NAME
-      ];
+      ] ||
+      getBearerToken(req);
 
     if (!token) {
       return res

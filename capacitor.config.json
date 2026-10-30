@@ -2,11 +2,7 @@
   "appId": "com.bispun.crm",
   "appName": "Bispun",
   "webDir": "dist",
-  "plugins": {
-    "SystemBars": {
-      "insetsHandling": "native",
-      "style": "LIGHT",
-      "hidden": false
-    }
+  "server": {
+    "androidScheme": "http"
   }
 }

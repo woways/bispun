@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
+import { getBearerToken } from "../lib/authToken.js";
 
 const COOKIE_NAME =
   "cb_admin_token";
@@ -27,7 +28,8 @@ export async function requireSuperAdmin(
     const token =
       req.cookies?.[
         COOKIE_NAME
-      ];
+      ] ||
+      getBearerToken(req);
 
     if (!token) {
       return res
