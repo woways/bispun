@@ -79,7 +79,9 @@ import {
 import {
   API_URL,
   apiRequest,
+  clearAuthToken,
 } from "./lib/api";
+import { performLogout } from "./lib/logoutFlow";
 import {
   playChatSound,
   playNotificationSound,
@@ -508,6 +510,9 @@ export default function ClientPortal({
   const previousUnreadNotificationCountRef = useRef(null);
   const previousAudibleChatCountRef = useRef(null);
   const lastChatSoundAtRef = useRef(0);
+  // Logout + lifecycle guards for polling (P1/P2/P3).
+  const signingOutRef = useRef(false);
+  const pollActiveRef = useRef(true); // false while app is hidden/backgrounded
 
   const [
     profileMenuOpen,
@@ -1279,6 +1284,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }
 
   async function loadUnreadNotificationCount() {
+    // Never poll once logout has begun (P2).
+    if (signingOutRef.current) return;
     try {
       const data = await apiRequest(
         "/api/client/notifications/unread-count"
@@ -1374,15 +1381,20 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   useEffect(() => {
     loadUnreadNotificationCount();
 
-    const interval = window.setInterval(
-      loadUnreadNotificationCount,
-      15000
-    );
+    // P3: slower fallback poll (45s) that pauses while the app is
+    // backgrounded/hidden or signing out. Refresh-on-resume is handled by the
+    // lifecycle effect below.
+    const interval = window.setInterval(() => {
+      if (!pollActiveRef.current || signingOutRef.current) return;
+      loadUnreadNotificationCount();
+    }, 45000);
 
     return () => window.clearInterval(interval);
   }, []);
 
   async function loadUnreadChatCount({ playSound = true } = {}) {
+    // Never poll once logout has begun (P2).
+    if (signingOutRef.current) return;
     try {
       const data = await apiRequest("/api/client/chat/unread-count");
       const nextUnreadCount = Number(data?.unreadCount || 0);
@@ -1415,12 +1427,57 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     loadUnreadChatCount({ playSound: false });
 
     // Production fallback: the badge and sound still update even if a
-    // websocket is temporarily disconnected by the browser/network.
+    // websocket is temporarily disconnected by the browser/network. Socket.IO
+    // remains the primary real-time path, so a longer interval (25s) is plenty
+    // and far lighter on the backend. Pauses while hidden/signing out (P3).
     const interval = window.setInterval(() => {
+      if (!pollActiveRef.current || signingOutRef.current) return;
       loadUnreadChatCount();
-    }, 6000);
+    }, 25000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  // P3: pause polling while the app is backgrounded/hidden; refresh on resume.
+  // Uses the web Page Visibility API and the Capacitor native app lifecycle.
+  useEffect(() => {
+    let removeNative = null;
+
+    function setActive(active) {
+      pollActiveRef.current = active;
+      if (active && !signingOutRef.current) {
+        // Becoming visible again: refresh immediately so badges are current.
+        loadUnreadChatCount({ playSound: false });
+        loadUnreadNotificationCount();
+      }
+    }
+
+    function onVisibility() {
+      setActive(document.visibilityState === "visible");
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
+
+    (async () => {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (Capacitor?.isNativePlatform?.()) {
+          const { App } = await import("@capacitor/app");
+          const handle = await App.addListener(
+            "appStateChange",
+            ({ isActive }) => setActive(isActive)
+          );
+          removeNative = () => handle.remove();
+        }
+      } catch {
+        /* plugin unavailable — web visibility handling still applies */
+      }
+    })();
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (removeNative) removeNative();
+    };
   }, []);
 
   useEffect(() => {
@@ -1495,43 +1552,30 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }, [user?.id]);
 
   async function signOut() {
-    if (
-      signingOut
-    ) {
+    if (signingOut) {
       return;
     }
 
-    setSigningOut(
-      true
-    );
+    // Stop all authenticated background work immediately (P2): polls check this
+    // ref and bail out, so nothing new hits the backend during logout.
+    signingOutRef.current = true;
+    setSigningOut(true);
 
-    // Deactivate this device's push token before the session ends (no-op in a
-    // desktop browser). Awaited but self-contained: failures are swallowed
-    // inside unregisterMobilePush and never block logout.
-    await unregisterMobilePush();
-
-    try {
-      await apiRequest(
-        "/api/client/auth/logout",
-        {
-          method:
-            "POST",
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Client logout failed:",
-        error
-      );
-    } finally {
-      navigate(
-        "/login",
-        {
-          replace:
-            true,
-        }
-      );
-    }
+    // Sequenced logout (see src/lib/logoutFlow.js): the auth token is preserved
+    // until the AUTHENTICATED device-token unregister + server logout are sent
+    // (so they don't 401 on mobile), then the token is ALWAYS cleared — even on
+    // failure/timeout — before navigating, and navigation is bounded so the UI
+    // never sticks on "Signing out…".
+    await performLogout({
+      unregisterPush: unregisterMobilePush,
+      serverLogout: () =>
+        apiRequest("/api/client/auth/logout", { method: "POST", timeoutMs: 4000 }),
+      clearToken: clearAuthToken,
+      navigate: () => navigate("/login", { replace: true }),
+      onError: (stage, error) =>
+        console.error(`[logout] ${stage} failed:`, error?.message || error),
+      timeoutMs: 2500,
+    });
   }
 
   function openChangePassword() {

@@ -39,6 +39,13 @@ function setStoredToken(token) {
   }
 }
 
+// Clear the stored mobile auth token immediately (used on logout so no further
+// request can act authenticated, and a slow logout cannot be "undone" by a
+// stale in-flight response). No-op on web, where auth is a httpOnly cookie.
+export function clearAuthToken() {
+  setStoredToken(null);
+}
+
 export async function apiRequest(path, options = {}) {
   const normalizedPath = String(path).startsWith("/")
     ? String(path)
@@ -63,23 +70,41 @@ export async function apiRequest(path, options = {}) {
     ...(options.headers || {}),
   };
 
-  const response = await fetch(
-    `${API_URL}${normalizedPath}`,
-    {
-      ...options,
+  // Optional bounded timeout: pass options.timeoutMs to abort a slow request
+  // (used by logout so the UI never hangs on a cold/slow backend).
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutMs = Number(options.timeoutMs) || 0;
+  const timeoutId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
 
-      // Authentication in this app is cookie based on web. Never let an
-      // individual request accidentally disable cookie transmission.
-      credentials: "include",
+  let response;
+  try {
+    response = await fetch(
+      `${API_URL}${normalizedPath}`,
+      {
+        ...options,
 
-      // Avoid a mobile browser reusing a stale auth/session response.
-      cache:
-        options.cache ||
-        (isAuthRequest ? "no-store" : "default"),
+        // Authentication in this app is cookie based on web. Never let an
+        // individual request accidentally disable cookie transmission.
+        credentials: "include",
 
-      headers,
-    }
-  );
+        // Avoid a mobile browser reusing a stale auth/session response.
+        cache:
+          options.cache ||
+          (isAuthRequest ? "no-store" : "default"),
+
+        headers,
+
+        // Use a caller-provided abort signal, else our bounded-timeout one.
+        signal: options.signal || controller?.signal || undefined,
+      }
+    );
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   let data = null;
 
