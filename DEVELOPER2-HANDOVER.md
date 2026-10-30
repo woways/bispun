@@ -16,7 +16,7 @@ Three different things, do not conflate them:
 | Mobile QA | **QA-ready, not QA-passed** | Needs a device pass (see §6). Cards verified by tests + build only — **not yet seen on a physical device.** |
 | Production | **Not production-ready** | Background/closed-app push, tap-navigation, logout token-unregister on device, and a full CRM mobile regression are still untested. |
 
-Nothing here has been committed or pushed without explicit approval.
+All five commits are pushed to `origin/feat/mobile-notifications-handover` (see §11). Work only from that branch — never `main` or production.
 
 ---
 
@@ -34,7 +34,7 @@ Nothing here has been committed or pushed without explicit approval.
 
 ## 3. Verified this session
 
-- Unit tests: **15/15 pass** (`node --test src/lib/*.test.js`).
+- Automated tests: **26/26 pass** — frontend 15/15 (`node --test src/lib/*.test.js`: 7 logout + 3 push-plugin + 5 list-state) and server 11/11 (`npm test`: pushService + pushDispatch). See §12 for the exact commands.
 - Production build: **✓** (`npm run build`).
 - Capacitor sync: **✓** (`npx cap sync android`) — plugins `@capacitor/app`, `@capacitor/push-notifications` detected.
 - Logout: server-side session revocation confirmed on device earlier.
@@ -135,3 +135,113 @@ Test the **app reaching the API over HTTPS** — this is the real compatibility 
 - Web/mobile bundle: `npm run build` → `npx cap sync android`.
 - Dev backend: start with `.env.development` only (isolated `bispun-mobile-dev`; background workers disabled).
 - Emulator endpoint: `VITE_API_URL=http://10.0.2.2:4000`. Physical phone on same Wi-Fi: `http://<PC-LAN-IP>:4000`. Release: `https://<api-domain>`.
+
+---
+
+## 8. Project overview & architecture
+
+Bispun CRM is a **React + Vite** single-page app. The Android app is that same SPA **wrapped with Capacitor** (native WebView shell), not a separate native codebase.
+
+- **Backend:** Express + Prisma, PostgreSQL (Neon). The isolated dev database is `bispun-mobile-dev`.
+- **Auth:** web uses an httpOnly cookie; the **mobile WebView uses a Bearer token** (it can't keep a cross-origin cookie). The backend accepts either.
+- **Push:** `@capacitor/push-notifications` → FCM via `firebase-admin` on the server. Notifications are tenant-isolated and user-targeted; `SUPPORT` type uses a generic lock-screen payload (no PII).
+- **Native actions:** Android back button + Call / WhatsApp / SMS via `@capacitor/app`.
+- **Data path:** phone → **API over HTTPS** → database. The phone never talks to PostgreSQL directly (see §5c).
+
+**Repository:** `https://github.com/woways/bispun.git` · **Feature branch:** `feat/mobile-notifications-handover` (base: `main`).
+
+---
+
+## 9. Getting started (Developer 2)
+
+### 9a. Required tools
+- **Node.js** 18+ and npm.
+- **JDK 21** (Eclipse Adoptium / Temurin) — path used here: `C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot`.
+- **Android Studio** (latest) with Android SDK + an emulator or a physical device with USB debugging.
+- **Gradle** — use the project's `gradlew` wrapper (official distribution, do not replace it).
+- **Capacitor CLI** — provided via `npx cap` (installed with project deps).
+
+### 9b. Fetch & checkout
+```
+git clone https://github.com/woways/bispun.git
+cd bispun
+git fetch origin feat/mobile-notifications-handover
+git checkout feat/mobile-notifications-handover
+npm install
+```
+Never check out, merge into, or push `main`. Always work from the feature branch.
+
+### 9c. Build & install the Android app
+```
+npm run build
+npx cap sync android
+cd android
+# PowerShell: point Gradle at JDK 21 for this shell
+$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-21.0.7.6-hotspot"
+.\gradlew.bat installDebug
+```
+Or open `android/` in Android Studio and Run. After any frontend change, re-run `npm run build && npx cap sync android` before rebuilding the APK.
+
+---
+
+## 10. Secure isolated development environment
+
+- Copy the template: `.env.example` → **`.env.development`** (gitignored). Fill it with **development** values only.
+- **Never copy production secrets** into dev, and **never open, read, or reuse root `.env`.** Dev work uses `.env.development` exclusively.
+- Point the dev DB at **`bispun-mobile-dev`** (pooled URL for the app; the direct URL only for one-off maintenance). Do not run migrations, seeds, or resets against any shared/production database.
+- Run the dev backend with **background workers disabled** (`DISABLE_BACKGROUND_WORKERS=true` in `.env.development`) so scheduled jobs don't fire against dev data.
+- Set `VITE_API_URL` for how you run the app (§7) before building.
+- `google-services.json`, service-account JSON, keystores, and all `.env*` files are gitignored — keep it that way.
+
+### Database connectivity requirements
+- The dev backend needs outbound access to the Neon host on **TCP 5432 over TLS** (`sslmode=require`).
+- If a network blocks or stalls that session, use a mobile hotspot for the **laptop→DB** link (see §5). This does **not** affect the app, which only needs the **API host over 443**.
+
+---
+
+## 11. Commits pushed (this handover)
+
+Branch `feat/mobile-notifications-handover`, on top of `873bfb4`:
+
+| Commit | Scope | Files |
+|--------|-------|-------|
+| `2441d94` | `fix(mobile-auth)` reliable logout + session revocation | `ClientPortal.jsx`, `lib/api.js`, `lib/logoutFlow.js`(+test) |
+| `07a925b` | `fix(mobile-push)` plugin loading + FCM registration | `lib/mobilePush.js`(+pluginLoad test) |
+| `ced5df4` | `fix(support)` error handling + mobile ticket layout | `modules/client/Help.jsx`, `lib/listViewState.js`(+test) |
+| `664dc1a` | `chore` ignore dev maintenance scripts | `.gitignore` |
+| `9c4f990` | `docs` this handover + QA checklist | `DEVELOPER2-HANDOVER.md` |
+
+(A later docs-only commit may extend this file with §8–§13.)
+
+---
+
+## 12. Automated test commands
+
+- **Frontend libs (15):** `node --test src/lib/*.test.js`
+- **Server (11):** `npm test`  → `node --test server/lib/pushService.test.js server/lib/pushDispatch.test.js`
+- **Build gate:** `npm run build`
+- **Sync:** `npx cap sync android`
+
+Run all of these green before any commit. These are **unit/build** checks — they do **not** prove on-device behaviour.
+
+---
+
+## 13. Production safety & known release blockers
+
+### Safety precautions (always)
+- Work only on `feat/mobile-notifications-handover`; never push `main`, never force-push, never deploy from here.
+- Never touch root `.env`, production DB, production infrastructure, Firebase secrets, or real customer data.
+- No migrations, seeds, destructive operations, or Android app-storage clears against shared environments.
+- Production builds must set a real **HTTPS** `VITE_API_URL`; cleartext to real domains is blocked by `network_security_config.xml`.
+
+### Release blockers (must pass before production)
+1. **On-device Support-Ticket mobile cards** — visual pass on a real phone (not yet done).
+2. **Background / closed-app push delivery** + **notification tap → correct module**.
+3. **Real-token unregister-on-logout** verified against the server on-device.
+4. **Full CRM mobile regression** — leads, chat, dashboard, settings, billing, notifications.
+5. **§5e Wi-Fi / network matrix** (Wi-Fi, office, hotspot, mobile data, switch, reconnect).
+
+### Known limitations / dev-only notes (NOT blockers)
+- One developer Wi-Fi network stalls the **laptop→Neon** Postgres session (§5b) — use a hotspot; not an app or production issue.
+- `capacitor.config.json` uses `androidScheme: "http"` for the app's internal origin — HTTPS-hardening is optional and must be tested first.
+- Server-side pruning of expired sessions / device tokens is recommended (P2).
