@@ -4893,19 +4893,43 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         const planKey =
                           String(billingPlan.key || "").toLowerCase();
 
-                        const isProPlan = planKey === "pro";
-                        const proOfferPrice = 29500;
-                        const proListPrice = 54000;
-                        const proOfferEndsAt = new Date("2026-11-10T23:59:59+05:30").getTime();
-                        const isProOfferActive =
-                          isProPlan && Date.now() <= proOfferEndsAt;
-
-                        const selectedPrice =
-                          yearlyAvailable
-                            ? isProOfferActive
-                              ? proOfferPrice
-                              : Number(billingPlan.yearlyPrice || 0)
+                        const pricing =
+                          billingPlan.breakdown || {};
+                        const isPlanOfferActive =
+                          Boolean(pricing.offerActive);
+                        const listPrice = yearlyAvailable
+                          ? Number(
+                              pricing.listPrice ??
+                                billingPlan.yearlyPrice ??
+                                0
+                            )
+                          : 0;
+                        const selectedPrice = yearlyAvailable
+                          ? Number(
+                              pricing.subtotal ??
+                                billingPlan.yearlyPrice ??
+                                0
+                            )
+                          : 0;
+                        const offerDiscountPercent =
+                          isPlanOfferActive && listPrice > 0
+                            ? Math.round(
+                                (Number(pricing.discount || 0) /
+                                  listPrice) *
+                                  100
+                              )
                             : 0;
+                        const offerValidUntil =
+                          isPlanOfferActive && billingPlan.offerEndsAt
+                            ? new Date(
+                                billingPlan.offerEndsAt
+                              ).toLocaleDateString("en-IN", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                timeZone: "Asia/Kolkata",
+                              })
+                            : null;
 
                         const planDescriptions = {
                           basic:
@@ -5006,13 +5030,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               </div>
 
                               <div className="mt-6">
-                                {isProOfferActive && yearlyAvailable && (
+                                {isPlanOfferActive && yearlyAvailable && (
                                   <div className="mb-2 flex flex-wrap items-center gap-2">
                                     <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
-                                      ₹{proListPrice.toLocaleString("en-IN")}/year
+                                      ₹{listPrice.toLocaleString("en-IN")}/year
                                     </span>
                                     <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
-                                      ~45% OFF
+                                      ~{offerDiscountPercent}% OFF
                                     </span>
                                   </div>
                                 )}
@@ -5039,9 +5063,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
                                 </div>
 
-                                {isProOfferActive && yearlyAvailable && (
+                                {isPlanOfferActive && yearlyAvailable && offerValidUntil && (
                                   <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
-                                    Offer valid till Nov 10, 2026
+                                    Offer valid till {offerValidUntil}
                                   </div>
                                 )}
                               </div>

@@ -14,6 +14,9 @@ import {
 import {
   requireClientUser,
 } from "../middleware/clientAuth.js";
+import {
+  computeSelfServePricing,
+} from "../lib/selfServeOnboard.js";
 
 const router = Router();
 
@@ -58,22 +61,15 @@ function safeEqualHex(a, b) {
   }
 }
 
-const PRO_PROMO_PRICE = 29500;
-const PRO_PROMO_ENDS_AT = Date.parse("2026-11-10T23:59:59+05:30");
-
 function paymentAmount(plan) {
-  const planKey = String(plan?.key || "").toLowerCase();
-
-  // Promotional Pro offer: keep the stored yearly price as the list price
-  // (₹54,000), but charge ₹29,500 through Nov 10, 2026 (India time).
-  if (planKey === "pro" && Date.now() <= PRO_PROMO_ENDS_AT) {
-    return PRO_PROMO_PRICE;
+  if (plan?.yearlyPrice === null || plan?.yearlyPrice === undefined) {
+    return null;
   }
 
-  return plan.yearlyPrice !== null &&
-    plan.yearlyPrice !== undefined
-    ? Number(plan.yearlyPrice)
-    : null;
+  // Offer price and expiry are controlled by Super Admin on the Plan record.
+  // Once the configured expiry passes, computeSelfServePricing automatically
+  // falls back to the normal yearly price without a code/deploy change.
+  return Number(computeSelfServePricing(plan).subtotal);
 }
 
 router.get("/", async (req, res) => {
@@ -183,23 +179,26 @@ router.get("/", async (req, res) => {
             }
           : null,
 
-      plans: plans.map(
-        (plan) => ({
+      plans: plans.map((plan) => {
+        const pricing = computeSelfServePricing(plan);
+        return {
           id: plan.id,
           key: plan.key,
           name: plan.name,
-          tagline:
-            plan.tagline || "",
-          description:
-            plan.description || "",
+          tagline: plan.tagline || "",
+          description: plan.description || "",
           yearlyPrice:
             plan.yearlyPrice !== null
-              ? Number(
-                  plan.yearlyPrice
-                )
+              ? Number(plan.yearlyPrice)
               : null,
-        })
-      ),
+          offerPrice:
+            plan.offerPrice !== null && plan.offerPrice !== undefined
+              ? Number(plan.offerPrice)
+              : null,
+          offerEndsAt: pricing.offerActive ? plan.offerEndsAt : null,
+          breakdown: pricing,
+        };
+      }),
 
       payments: payments.map(
         (payment) => ({
