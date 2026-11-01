@@ -5065,7 +5065,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </header>
 
           {/* MAIN CONTENT */}
-          <main className="mt-[calc(56px+env(safe-area-inset-top))] min-h-[calc(100vh-56px-env(safe-area-inset-top))] bg-[#f6f7fa] px-3 pt-3 pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-4 lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
+          <main className="min-h-[100dvh] bg-[#f6f7fa] px-3 pt-[calc(56px+env(safe-area-inset-top)+12px)] pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-[calc(56px+env(safe-area-inset-top)+16px)] lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
             <div className="max-w-[1560px] mx-auto">
               {subscriptionPastDue && (
                 <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
