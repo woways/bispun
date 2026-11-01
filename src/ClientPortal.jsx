@@ -474,11 +474,6 @@ export default function ClientPortal({
   ] = useState(false);
 
   const [
-    mobileSidebarOpen,
-    setMobileSidebarOpen,
-  ] = useState(false);
-
-  const [
     notificationsOpen,
     setNotificationsOpen,
   ] = useState(false);
@@ -1010,18 +1005,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     finally { setYearSaving(false); }
   }
 
-  useEffect(() => {
-    setMobileSidebarOpen(false);
-  }, [module]);
-
   // Android hardware back closes an open overlay before navigating/exiting.
   // Each open overlay registers a close callback; the back handler runs the
   // most-recently-opened one first (LIFO). Bottom-sheet overlays register
-  // themselves; these cover the drawer and the non-sheet modals.
-  useEffect(() => {
-    if (!mobileSidebarOpen) return undefined;
-    return pushBackInterceptor(() => setMobileSidebarOpen(false));
-  }, [mobileSidebarOpen]);
+  // themselves; these cover the non-sheet modals below.
   useEffect(() => {
     if (!calendarOpen) return undefined;
     return pushBackInterceptor(() => setCalendarOpen(false));
@@ -1143,9 +1130,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     analytics: { label: "Insights", icon: Activity },
     "my-store": { label: "My Store", icon: Store },
     "my-referrals": { label: "Referrals", icon: Gift },
+    "domestic-admissions": { label: "Domestic", icon: Building2, ariaLabel: "Domestic admissions" },
+    "international-admissions": { label: "International", icon: Globe2, ariaLabel: "International admissions" },
   };
   const moreGroups = [
     { title: "Work", keys: ["chats", "goals-and-targets", "utm-leads"] },
+    { title: "Admissions", keys: ["domestic-admissions", "international-admissions"] },
     { title: "Insights", keys: ["analytics"] },
     { title: "Grow", keys: ["my-store", "my-referrals"] },
   ]
@@ -3906,9 +3896,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const timeGreeting = getTimeGreeting();
 
-  const sidebarCompact =
-    sidebarCollapsed &&
-    !mobileSidebarOpen;
+  const sidebarCompact = sidebarCollapsed;
 
   const currentPage =
     PAGE_META[module] || {
@@ -4030,51 +4018,57 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         }
       `}</style>
 
-      {/* MOBILE APP BAR */}
-      <div className="lg:hidden fixed inset-x-0 top-0 z-[60] h-14 bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3 flex items-center gap-2">
-        {/* Brand — primary nav is the bottom bar; header stays compact. */}
-        <div className="min-w-0 flex-1">
-          <div className="text-[14px] font-bold text-slate-950 truncate">
-            {company.brandName}
+      {/* MOBILE APP BAR — paddingTop reserves the Android status-bar safe area
+          (requires viewport-fit=cover in index.html); inner row stays 56px. */}
+      <div
+        className="lg:hidden fixed inset-x-0 top-0 z-[60] bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="flex h-14 items-center gap-2">
+          {/* Brand — primary nav is the bottom bar; header stays compact. */}
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px] font-bold text-slate-950 truncate">
+              {company.brandName}
+            </div>
           </div>
-        </div>
 
-        {/* Right controls: Notifications + Profile (Search/Calendar/Period live in More). */}
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={() => {
-              setNotificationsOpen(true);
-              loadNotifications();
-            }}
-            aria-label={
-              unreadNotificationCount > 0
-                ? `Notifications, ${unreadNotificationCount} unread`
-                : "Notifications"
-            }
-            aria-haspopup="dialog"
-            aria-expanded={notificationsOpen}
-            className="relative w-9 h-9 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-          >
-            <Bell size={18} aria-hidden="true" />
-            {unreadNotificationCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold leading-4 text-center">
-                {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
-              </span>
-            )}
-          </button>
+          {/* Right controls: Notifications + Profile (Search/Calendar/Period live in More). */}
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationsOpen(true);
+                loadNotifications();
+              }}
+              aria-label={
+                unreadNotificationCount > 0
+                  ? `Notifications, ${unreadNotificationCount} unread`
+                  : "Notifications"
+              }
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
+              className="relative w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Bell size={18} aria-hidden="true" />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold leading-4 text-center">
+                  {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setProfileTab("profile");
-              setModule("profile");
-            }}
-            className="w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center text-[12px] font-bold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-            aria-label="Open profile"
-          >
-            {initials}
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileTab("profile");
+                setModule("profile");
+              }}
+              className="w-11 h-11 rounded-full bg-brand-600 text-white flex items-center justify-center text-[12px] font-bold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              aria-label="Open profile"
+            >
+              {initials}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -4251,6 +4245,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       type="button"
                       data-autofocus={groupIndex === 0 && keyIndex === 0 ? "" : undefined}
                       aria-current={active ? "page" : undefined}
+                      aria-label={meta.ariaLabel}
                       onClick={() => {
                         setMobileMoreOpen(false);
                         setModule(key);
@@ -4495,7 +4490,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         aria-current={active ? "page" : undefined}
                         onClick={() => {
                           setModule(key);
-                          setMobileSidebarOpen(false);
                         }}
                         className={`relative mb-1 w-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isDragOver ? "opacity-60 " : ""}${
                           sidebarCompact
@@ -4678,7 +4672,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                     aria-current={active ? "page" : undefined}
                                     onClick={() => {
                                       setModule(key);
-                                      setMobileSidebarOpen(false);
                                     }}
                                     className={`relative w-full min-h-9 rounded-xl px-3 py-2 flex items-center gap-3 text-left transition-colors ${
                                       active
@@ -4742,7 +4735,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                         type="button"
                                         onClick={() => {
                                           setModule(section.defaultModule);
-                                          setMobileSidebarOpen(false);
                                         }}
                                         className={`relative mt-1 w-full min-h-9 rounded-lg px-2.5 py-2 flex items-center gap-2.5 text-left transition-colors ${
                                           sectionActive
@@ -4889,7 +4881,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       })
                       .slice(0, 10)
                       .map((item) => (
-                        <button key={item.key} type="button" onClick={() => { setModule(item.key); setWorkspaceSearch(""); setMobileSidebarOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50">
+                        <button key={item.key} type="button" onClick={() => { setModule(item.key); setWorkspaceSearch(""); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50">
                           <div className="min-w-0">
                             <div className="truncate text-[12px] font-semibold text-slate-900">{item.label}</div>
                             <div className="mt-0.5 text-[12px] text-slate-500">{item.groupLabel}</div>
@@ -5025,7 +5017,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </header>
 
           {/* MAIN CONTENT */}
-          <main className="mt-14 min-h-[calc(100vh-56px)] bg-[#f6f7fa] px-3 pt-3 pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-4 lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
+          <main className="mt-[calc(56px+env(safe-area-inset-top))] min-h-[calc(100vh-56px-env(safe-area-inset-top))] bg-[#f6f7fa] px-3 pt-3 pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-4 lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
             <div className="max-w-[1560px] mx-auto">
               {subscriptionPastDue && (
                 <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
