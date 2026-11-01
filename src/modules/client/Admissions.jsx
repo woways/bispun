@@ -4322,7 +4322,7 @@ function AdmissionsManager({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Admissions"
           value={summary.totalAdmissions}
@@ -4770,7 +4770,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
           {
             label: "Overall Admissions",

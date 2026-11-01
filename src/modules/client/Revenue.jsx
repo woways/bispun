@@ -1134,17 +1134,17 @@ function RevenueMetric({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div
             className={`text-[13px] font-semibold uppercase tracking-[0.09em] ${
-              featured ? "text-indigo-100" : "text-slate-400"
+              featured ? "text-indigo-100" : "text-slate-500 lg:text-slate-400"
             }`}
           >
             {label}
           </div>
 
           <div
-            className={`mt-2 text-[22px] leading-none font-bold tracking-tight ${
+            className={`mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight break-words tabular-nums ${
               featured ? "text-white" : "text-slate-950"
             }`}
           >
@@ -1850,7 +1850,7 @@ export default function Revenue({ selectedYear = "all" }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
