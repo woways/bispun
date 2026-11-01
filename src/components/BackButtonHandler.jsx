@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { App as CapApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { runTopBackInterceptor } from "../lib/backStack";
+import { runModuleBack } from "../lib/moduleBack";
 
 // Screens where "back" should exit the app, not navigate to a previous screen.
 const ROOT_PATHS = ["/app", "/admin", "/login", "/admin/login"];
@@ -20,6 +21,12 @@ export default function BackButtonHandler() {
       // An open overlay (drawer / bottom sheet / modal) consumes back FIRST, so
       // back never exits the app while something is open. LIFO: top closes first.
       if (runTopBackInterceptor()) return;
+
+      // Next, walk back through visited CRM modules (module switches are React
+      // state, not route history). Returns true only when it handled the back;
+      // at the root module (empty history) it returns false so we fall through
+      // to the exit logic below.
+      if (runModuleBack()) return;
 
       const atRoot = ROOT_PATHS.includes(location.pathname);
 

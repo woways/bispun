@@ -109,6 +109,7 @@ import { downloadInvoicePdf } from "./lib/invoicePdf";
 import BillingReceiptModal from "./components/BillingReceiptModal";
 import { BottomSheet, MobileBottomNav } from "./components/mobileUi";
 import { pushBackInterceptor } from "./lib/backStack";
+import { setModuleBackHandler } from "./lib/moduleBack";
 
 
 function SidebarIcon({
@@ -460,6 +461,53 @@ export default function ClientPortal({
   ] = useState(
     "dashboard"
   );
+
+  // --- Android hardware-Back module history (B3.1) ---------------------------
+  // Module switches are React state, not route history, so Android Back used to
+  // exit the app immediately. We keep a linear stack of previously shown modules
+  // and register a single back handler (overlays still close first via backStack;
+  // Dashboard with an empty stack is the intentional exit point).
+  const moduleHistoryRef = useRef([]);
+  const prevModuleRef = useRef(module);
+  const isPoppingRef = useRef(false);
+  const moduleRef = useRef(module);
+
+  // Track navigations to build the Back history. Skip the push when the change
+  // came from a Back pop (isPoppingRef, reset HERE inside the effect) and skip
+  // consecutive duplicates; cap the depth so it can't grow unbounded.
+  useEffect(() => {
+    if (isPoppingRef.current) {
+      isPoppingRef.current = false;
+    } else {
+      const prev = prevModuleRef.current;
+      const history = moduleHistoryRef.current;
+      if (prev !== module && history[history.length - 1] !== prev) {
+        history.push(prev);
+        if (history.length > 50) history.shift();
+      }
+    }
+    prevModuleRef.current = module;
+    moduleRef.current = module;
+  }, [module]);
+
+  // One module-back handler for the whole shell (single-slot; returning the
+  // unregister keeps exactly one live handler under StrictMode's double-invoke).
+  useEffect(() => {
+    return setModuleBackHandler(() => {
+      const history = moduleHistoryRef.current;
+      if (history.length > 0) {
+        isPoppingRef.current = true;
+        setModule(history.pop());
+        return true;
+      }
+      if (moduleRef.current !== "dashboard") {
+        isPoppingRef.current = true;
+        setModule("dashboard");
+        return true;
+      }
+      return false; // root (Dashboard, empty history) -> BackButtonHandler exits
+    });
+  }, []);
 
   const [
     signingOut,
