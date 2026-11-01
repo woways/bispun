@@ -12,6 +12,23 @@ export default function BackButtonHandler() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Escape key shares ONE dismissal path with the hardware back button: it
+  // closes the top-most open overlay (drawer / sheet / modal) if any. Runs on
+  // every platform (web + device). It yields to a more specific handler that
+  // already consumed the key (e.defaultPrevented), e.g. the composer's
+  // @mention escape, so it never double-dismisses.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (runTopBackInterceptor()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   useEffect(() => {
     // Only runs on a real device (Android). On web/desktop it does nothing.
     if (!Capacitor.isNativePlatform()) return;
