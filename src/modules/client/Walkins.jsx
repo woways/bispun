@@ -113,7 +113,7 @@ function WalkinMetric({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div>
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
             {label}
@@ -593,7 +593,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
           <div className="w-full max-w-2xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
