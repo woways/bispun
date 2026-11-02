@@ -782,6 +782,12 @@ function PlanCard({
 
         ) : null}
 
+        {form.offerPrice && Number(form.offerPrice) > 0 && form.offerEndsAt ? (
+
+          <p className="text-[11px] text-slate-400">The selected date is inclusive through 11:59 PM IST. After it expires, customers automatically see and pay the normal annual price.</p>
+
+        ) : null}
+
 
 
         <div>

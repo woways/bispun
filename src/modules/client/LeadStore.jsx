@@ -39,7 +39,6 @@ import {
   Paperclip,
   Link2,
   FileText,
-  Workflow,
 } from "lucide-react";
 
 import {
@@ -51,8 +50,6 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
-import NurtureCenter from "../../components/lead/NurtureCenter";
-import CallCenterModal from "../../components/lead/CallCenterModal";
 import { openWhatsApp, openSMS } from "../../lib/nativeActions";
 
 const TYPES = [
@@ -148,17 +145,10 @@ function temperatureSelectClass(value) {
   return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
-function intelligenceTone(score) {
-  const value = Number(score || 0);
-  if (value >= 80) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (value >= 65) return "border-indigo-200 bg-indigo-50 text-indigo-700";
-  if (value >= 45) return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-slate-200 bg-slate-50 text-slate-600";
-}
-
 
 const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "phone", label: "Phone" },
+  { key: "alternatePhone", label: "Alternative Phone" },
   { key: "email", label: "Email" },
   { key: "course", label: "Course" },
   { key: "assignedTo", label: "Assigned To" },
@@ -169,6 +159,7 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
 
 const DEFAULT_INDIVIDUAL_COLUMNS = {
   phone: true,
+  alternatePhone: true,
   email: true,
   course: true,
   assignedTo: true,
@@ -199,35 +190,6 @@ function formatDate(
   }
 
   return formatUiDate(date);
-}
-
-function formatDateTime(value) {
-  if (!value) return "—";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-
-  return date.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function followUpInputParts(value) {
-  if (!value) return { date: "", time: "" };
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return { date: "", time: "" };
-
-  const pad = (number) => String(number).padStart(2, "0");
-
-  return {
-    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
-  };
 }
 
 function normalizeFilterText(value) {
@@ -324,8 +286,13 @@ function isValidManualLeadName(value) {
   );
 }
 
+function displayLeadId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0 ? String(value) : "—";
+}
 
-function PhoneAction({ phone, name, onCopied, onDial }) {
+
+function PhoneAction({ phone, name, onCopied }) {
   const [menu, setMenu] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
@@ -421,17 +388,14 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
             <Copy size={14} />
             Copy number
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMenu(null);
-              onDial?.();
-            }}
+          <a
+            href={`tel:${phone}`}
+            onClick={() => setMenu(null)}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >
             <PhoneCall size={14} />
-            Dial & track
-          </button>
+            Dial number
+          </a>
           <button
             type="button"
             onClick={() => {
@@ -598,8 +562,6 @@ function IndividualLeadModal({
   lead = null,
   defaultType = "INDIVIDUAL",
 }) {
-  const initialFollowUp = followUpInputParts(lead?.followUpAt);
-
   const [
     saving,
     setSaving,
@@ -639,22 +601,15 @@ function IndividualLeadModal({
     useState({
       name: lead?.name || "",
       phone: lead?.phone || "",
+      alternatePhone: lead?.alternatePhone || "",
       email: lead?.email || "",
       course: lead?.course || "",
       temperature: lead?.temperature || "WARM",
       type: lead?.type || defaultType || "INDIVIDUAL",
       sourceName: lead?.sourceName || "",
-      assignedToUserId: lead?.assignedToUserId || "",
-      followUpDate: initialFollowUp.date,
-      followUpTime: initialFollowUp.time,
-      remark: "",
+      assignedToUserId: "",
+      notes: lead?.notes || "",
     });
-
-  const [remarks, setRemarks] = useState(lead?.remarks || []);
-  const [remarkDraft, setRemarkDraft] = useState("");
-  const [remarkSaving, setRemarkSaving] = useState(false);
-  const [editingRemarkId, setEditingRemarkId] = useState("");
-  const [editingRemarkText, setEditingRemarkText] = useState("");
 
   function update(
     field,
@@ -672,9 +627,6 @@ function IndividualLeadModal({
       (current) => ({
         ...current,
         [field]: "",
-        ...(field === "followUpDate" || field === "followUpTime"
-          ? { followUpAt: "" }
-          : {}),
       })
     );
   }
@@ -759,82 +711,6 @@ function IndividualLeadModal({
     }));
   }
 
-  async function addRemark() {
-    const text = remarkDraft.trim();
-    if (!lead?.id || !text || remarkSaving) return;
-
-    setRemarkSaving(true);
-    setError("");
-
-    try {
-      const data = await apiRequest(
-        `/api/client/lead-store/manual/${lead.id}/remarks`,
-        {
-          method: "POST",
-          body: JSON.stringify({ text }),
-        }
-      );
-
-      setRemarks(data.remarks || []);
-      setRemarkDraft("");
-    } catch (error) {
-      setError(error?.data?.message || "Unable to add remark");
-    } finally {
-      setRemarkSaving(false);
-    }
-  }
-
-  async function saveRemarkEdit(remarkId) {
-    const text = editingRemarkText.trim();
-    if (!lead?.id || !remarkId || !text || remarkSaving) return;
-
-    setRemarkSaving(true);
-    setError("");
-
-    try {
-      const data = await apiRequest(
-        `/api/client/lead-store/manual/${lead.id}/remarks/${remarkId}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify({ text }),
-        }
-      );
-
-      setRemarks(data.remarks || []);
-      setEditingRemarkId("");
-      setEditingRemarkText("");
-    } catch (error) {
-      setError(error?.data?.message || "Unable to update remark");
-    } finally {
-      setRemarkSaving(false);
-    }
-  }
-
-  async function deleteRemark(remarkId) {
-    if (!lead?.id || !remarkId || remarkSaving) return;
-    if (!window.confirm("Delete this remark?")) return;
-
-    setRemarkSaving(true);
-    setError("");
-
-    try {
-      const data = await apiRequest(
-        `/api/client/lead-store/manual/${lead.id}/remarks/${remarkId}`,
-        { method: "DELETE" }
-      );
-
-      setRemarks(data.remarks || []);
-      if (editingRemarkId === remarkId) {
-        setEditingRemarkId("");
-        setEditingRemarkText("");
-      }
-    } catch (error) {
-      setError(error?.data?.message || "Unable to delete remark");
-    } finally {
-      setRemarkSaving(false);
-    }
-  }
-
   async function submit(
     event
   ) {
@@ -852,9 +728,18 @@ function IndividualLeadModal({
         "Enter a valid 10-digit Indian mobile number.";
     }
 
-    if (Boolean(form.followUpDate) !== Boolean(form.followUpTime)) {
-      nextFieldErrors.followUpAt =
-        "Choose both follow-up date and time.";
+    if (form.alternatePhone && !isValidManualLeadPhone(form.alternatePhone)) {
+      nextFieldErrors.alternatePhone =
+        "Enter a valid 10-digit Indian mobile number.";
+    }
+
+    if (
+      form.alternatePhone &&
+      normalizeManualLeadPhone(form.alternatePhone) ===
+        normalizeManualLeadPhone(form.phone)
+    ) {
+      nextFieldErrors.alternatePhone =
+        "Alternative phone must be different from the primary phone.";
     }
 
     setFieldErrors(nextFieldErrors);
@@ -868,18 +753,6 @@ function IndividualLeadModal({
     setError("");
 
     try {
-      const followUpAt =
-        form.followUpDate && form.followUpTime
-          ? new Date(`${form.followUpDate}T${form.followUpTime}`).toISOString()
-          : null;
-
-      const {
-        followUpDate,
-        followUpTime,
-        remark,
-        ...leadForm
-      } = form;
-
       const data =
         await apiRequest(
           lead
@@ -889,11 +762,12 @@ function IndividualLeadModal({
             method: lead ? "PATCH" : "POST",
             body:
               JSON.stringify({
-                ...leadForm,
+                ...form,
                 name: form.name.trim(),
                 phone: normalizeManualLeadPhone(form.phone),
-                followUpAt,
-                remark: lead ? undefined : remark,
+                alternatePhone: form.alternatePhone
+                  ? normalizeManualLeadPhone(form.alternatePhone)
+                  : "",
                 customFields:
                   customFieldValues,
               }),
@@ -918,9 +792,16 @@ function IndividualLeadModal({
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[92vh] overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-semibold">
-              {lead ? "Edit Lead" : "Add Lead"}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-[17px] font-semibold">
+                {lead ? "Edit Lead" : "Add Lead"}
+              </h2>
+              {lead && (
+                <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
+                  #{displayLeadId(lead.leadNumber)}
+                </span>
+              )}
+            </div>
 
             <p className="text-[13px] text-slate-500 mt-1">
               {lead
@@ -1001,24 +882,18 @@ function IndividualLeadModal({
             >
               <input
                 required
-                value={
-                  form.phone
+                value={form.phone}
+                onChange={(event) =>
+                  update("phone", event.target.value)
                 }
-                onChange={(
-                  event
-                ) =>
-                  update(
-                    "phone",
-                    event.target.value
-                  )
-                }
+                disabled={Boolean(lead)}
                 inputMode="numeric"
                 autoComplete="tel"
                 className={`form-input ${
                   fieldErrors.phone
                     ? "border-rose-300 focus:border-rose-400"
                     : ""
-                }`}
+                } ${lead ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
                 placeholder="9876543210"
                 aria-invalid={Boolean(fieldErrors.phone)}
               />
@@ -1028,6 +903,47 @@ function IndividualLeadModal({
                   {fieldErrors.phone}
                 </div>
               )}
+
+              {lead && (
+                <div className="mt-1 text-[11px] text-slate-400">
+                  Primary phone is fixed after the lead is created.
+                </div>
+              )}
+            </Field>
+
+            <Field label="Alternative Phone">
+              <input
+                value={form.alternatePhone}
+                onChange={(event) =>
+                  update("alternatePhone", event.target.value)
+                }
+                disabled={Boolean(lead?.alternatePhone)}
+                inputMode="numeric"
+                autoComplete="tel"
+                className={`form-input ${
+                  fieldErrors.alternatePhone
+                    ? "border-rose-300 focus:border-rose-400"
+                    : ""
+                } ${lead?.alternatePhone ? "cursor-not-allowed bg-slate-50 text-slate-500" : ""}`}
+                placeholder="Optional alternate number"
+                aria-invalid={Boolean(fieldErrors.alternatePhone)}
+              />
+
+              {fieldErrors.alternatePhone && (
+                <div className="mt-1 text-xs font-medium text-rose-600">
+                  {fieldErrors.alternatePhone}
+                </div>
+              )}
+
+              {lead?.alternatePhone ? (
+                <div className="mt-1 text-[11px] text-slate-400">
+                  Alternative phone is fixed after it is saved.
+                </div>
+              ) : lead ? (
+                <div className="mt-1 text-[11px] text-slate-400">
+                  You can add an alternative phone once; after saving it becomes fixed.
+                </div>
+              ) : null}
             </Field>
 
             <Field label="Email">
@@ -1124,50 +1040,20 @@ function IndividualLeadModal({
 
             <Field label="Source">
               <input
-                value={form.sourceName}
-                onChange={(event) =>
-                  update("sourceName", event.target.value)
+                value={
+                  form.sourceName
+                }
+                onChange={(
+                  event
+                ) =>
+                  update(
+                    "sourceName",
+                    event.target.value
+                  )
                 }
                 className="form-input"
                 placeholder="Justdial / Reference / College Expo"
               />
-            </Field>
-
-            <Field label="Follow-up">
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  value={form.followUpDate}
-                  onChange={(event) =>
-                    update("followUpDate", event.target.value)
-                  }
-                  className={`form-input ${
-                    fieldErrors.followUpAt ? "border-rose-300" : ""
-                  }`}
-                  aria-label="Follow-up date"
-                />
-                <input
-                  type="time"
-                  value={form.followUpTime}
-                  onChange={(event) =>
-                    update("followUpTime", event.target.value)
-                  }
-                  className={`form-input ${
-                    fieldErrors.followUpAt ? "border-rose-300" : ""
-                  }`}
-                  aria-label="Follow-up time"
-                />
-              </div>
-              {fieldErrors.followUpAt && (
-                <div className="mt-1 text-xs font-medium text-rose-600">
-                  {fieldErrors.followUpAt}
-                </div>
-              )}
-              {form.followUpDate && form.followUpTime && (
-                <div className="mt-1 text-[11px] text-slate-500">
-                  Reminder alerts: 2 days, 1 day, same day and 1 hour before.
-                </div>
-              )}
             </Field>
 
             <Field
@@ -1344,141 +1230,26 @@ function IndividualLeadModal({
               </div>
             ) : null}
 
-            {!lead ? (
-              <Field label="Remarks" full>
-                <textarea
-                  rows={3}
-                  value={form.remark}
-                  onChange={(event) =>
-                    update("remark", event.target.value)
-                  }
-                  className="form-input min-h-[86px] py-2"
-                  placeholder="Add the first remark for this lead"
-                />
-              </Field>
-            ) : (
-              <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[14px] font-bold text-slate-900">
-                      Remarks
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      Latest 5 remarks are shown. New remarks are saved to this lead's history.
-                    </div>
-                  </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500 ring-1 ring-slate-200">
-                    Last 5
-                  </span>
-                </div>
-
-                <div className="mt-3 flex items-start gap-2">
-                  <textarea
-                    rows={2}
-                    value={remarkDraft}
-                    onChange={(event) => setRemarkDraft(event.target.value)}
-                    className="form-input min-h-[68px] flex-1 py-2"
-                    placeholder="Add a new remark..."
-                  />
-                  <button
-                    type="button"
-                    onClick={addRemark}
-                    disabled={remarkSaving || !remarkDraft.trim()}
-                    className="h-10 shrink-0 rounded-lg bg-indigo-600 px-3 text-[12px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-1.5"
-                  >
-                    {remarkSaving ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <Plus size={13} />
-                    )}
-                    Add
-                  </button>
-                </div>
-
-                <div className="mt-3 space-y-2">
-                  {remarks.length ? (
-                    remarks.slice(0, 5).map((remark) => (
-                      <div
-                        key={remark.id}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2.5"
-                      >
-                        {editingRemarkId === remark.id ? (
-                          <div>
-                            <textarea
-                              rows={2}
-                              value={editingRemarkText}
-                              onChange={(event) =>
-                                setEditingRemarkText(event.target.value)
-                              }
-                              className="form-input min-h-[68px] py-2"
-                            />
-                            <div className="mt-2 flex justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditingRemarkId("");
-                                  setEditingRemarkText("");
-                                }}
-                                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[11px] font-semibold text-slate-600"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => saveRemarkEdit(remark.id)}
-                                disabled={remarkSaving || !editingRemarkText.trim()}
-                                className="h-8 rounded-lg bg-indigo-600 px-3 text-[11px] font-semibold text-white disabled:opacity-50"
-                              >
-                                Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 whitespace-pre-wrap text-[13px] leading-5 text-slate-700">
-                                {remark.text}
-                              </div>
-                              {!remark.legacy && (
-                                <div className="flex shrink-0 items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingRemarkId(remark.id);
-                                      setEditingRemarkText(remark.text || "");
-                                    }}
-                                    className="h-7 w-7 rounded-md text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center justify-center"
-                                    aria-label="Edit remark"
-                                  >
-                                    <Pencil size={12} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteRemark(remark.id)}
-                                    className="h-7 w-7 rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 inline-flex items-center justify-center"
-                                    aria-label="Delete remark"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                            <div className="mt-1.5 text-[10px] text-slate-400">
-                              {remark.createdBy || "CRM user"} · {formatDateTime(remark.updatedAt || remark.createdAt)}
-                              {remark.legacy ? " · Existing note" : ""}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-5 text-center text-[12px] text-slate-400">
-                      No remarks yet. Use + Add to save the first remark.
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            <Field
+              label="Notes"
+              full
+            >
+              <textarea
+                rows={3}
+                value={
+                  form.notes
+                }
+                onChange={(
+                  event
+                ) =>
+                  update(
+                    "notes",
+                    event.target.value
+                  )
+                }
+                className="form-input min-h-[86px] py-2"
+              />
+            </Field>
 
             <div className="md:col-span-2 bg-indigo-50/60 border border-indigo-100 rounded-lg px-3 py-2.5 text-[13px] text-indigo-800 leading-5">
               This lead is stored directly in the main CRM Leads table. We do not create a fake one-row dataset. It will immediately appear in the normal Leads module.
@@ -1913,6 +1684,9 @@ function UploadDatasetModal({
                             Phone
                           </th>
                           <th className="px-3 py-2 text-left">
+                            Alternative Phone
+                          </th>
+                          <th className="px-3 py-2 text-left">
                             Email
                           </th>
                           <th className="px-3 py-2 text-left">
@@ -1940,6 +1714,12 @@ function UploadDatasetModal({
                               <td className="px-3 py-2 text-slate-600">
                                 {
                                   row.phone ||
+                                  "—"
+                                }
+                              </td>
+                              <td className="px-3 py-2 text-slate-600">
+                                {
+                                  row.alternatePhone ||
                                   "—"
                                 }
                               </td>
@@ -2504,7 +2284,7 @@ function StoreMetric({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
             {label}
@@ -2647,7 +2427,6 @@ export default function LeadStore({ selectedYear = "all" }) {
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
   const [leadStatusOptions, setLeadStatusOptions] = useState(FIXED_LEAD_STATUSES);
-  const [intelligenceLead, setIntelligenceLead] = useState(null);
 
   const [messageComposerOpen, setMessageComposerOpen] = useState(false);
   const [messageLeadIds, setMessageLeadIds] = useState([]);
@@ -2664,8 +2443,6 @@ export default function LeadStore({ selectedYear = "all" }) {
     message: "",
     driveLinks: "",
   });
-  const [nurtureOpen, setNurtureOpen] = useState(false);
-  const [callLead, setCallLead] = useState(null);
 
   function formatAttachmentSize(bytes) {
     const size = Number(bytes || 0);
@@ -3107,8 +2884,10 @@ export default function LeadStore({ selectedYear = "all" }) {
             const searchMatches =
               !query ||
               [
+                displayLeadId(lead.leadNumber),
                 lead.name,
                 lead.phone,
+                lead.alternatePhone,
                 lead.email,
                 lead.course,
                 lead.assignedToName,
@@ -3509,7 +3288,6 @@ export default function LeadStore({ selectedYear = "all" }) {
         )
       );
 
-      await loadIndividualLeads();
       setSuccessMessage(data?.message || "Lead temperature updated.");
     } catch (error) {
       setError(
@@ -3559,7 +3337,6 @@ export default function LeadStore({ selectedYear = "all" }) {
         );
       }
 
-      await loadIndividualLeads();
       setSuccessMessage(data?.message || "Lead status updated.");
     } catch (error) {
       setError(
@@ -3596,8 +3373,10 @@ export default function LeadStore({ selectedYear = "all" }) {
     const rows =
       filteredIndividualLeads.map(
         (lead) => [
+          displayLeadId(lead.leadNumber),
           lead.name,
           lead.phone,
+          lead.alternatePhone,
           lead.email,
           lead.course,
           leadCategoryLabel(lead),
@@ -3625,8 +3404,10 @@ export default function LeadStore({ selectedYear = "all" }) {
     downloadCsv(
       `lead-store-${sub}-${selectedYear}-${dateStamp}.csv`,
       [
+        "Lead ID",
         "Name",
         "Phone",
+        "Alternative Phone",
         "Email",
         "Course",
         "Lead Type",
@@ -3767,15 +3548,6 @@ export default function LeadStore({ selectedYear = "all" }) {
 
           <button
             type="button"
-            onClick={() => setNurtureOpen(true)}
-            className="h-9 px-3.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
-          >
-            <Workflow size={14} />
-            Smart Nurture
-          </button>
-
-          <button
-            type="button"
             onClick={() => {
               setEditingIndividual(null);
               setShowIndividual(true);
@@ -3904,7 +3676,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
-                placeholder="Search name, phone, email or course..."
+                placeholder="Search lead ID, name, phone, email or course..."
                 className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
               />
             </div>
@@ -3973,7 +3745,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                     </div>
 
                     <p className="mt-3 border-t border-slate-100 pt-3 text-[11px] leading-4 text-slate-400">
-                      Name and Actions stay pinned. Custom fields open from the lead name.
+                      Lead ID, Name and Actions stay pinned. Custom fields open from the lead name.
                     </p>
                   </div>
                 </details>
@@ -4402,15 +4174,6 @@ export default function LeadStore({ selectedYear = "all" }) {
               Send Message
             </button>
 
-            <button
-              type="button"
-              onClick={() => setNurtureOpen(true)}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
-            >
-              <Workflow size={14} />
-              Start Nurture
-            </button>
-
             <select
               value={bulkAssigneeId}
               onChange={(event) =>
@@ -4478,17 +4241,21 @@ export default function LeadStore({ selectedYear = "all" }) {
                     />
                   </th>
 
-                  <th className="sticky left-11 z-20 min-w-[220px] max-w-[220px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th className="sticky left-11 z-20 w-[72px] min-w-[72px] border-r border-slate-200 bg-slate-50/95 px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                    Lead ID
+                  </th>
+
+                  <th className="sticky left-[116px] z-20 min-w-[200px] max-w-[200px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Name
                   </th>
 
                   {individualColumns.phone && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Phone</th>}
+                  {individualColumns.alternatePhone && <th className="min-w-[155px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Alternative Phone</th>}
                   {individualColumns.email && <th className="min-w-[210px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Email</th>}
                   {individualColumns.course && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Course</th>}
                   {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
                   {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Type</th>}
                   {individualColumns.status && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
-                  <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Intelligence</th>
                   {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
 
                   <th className="sticky right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
@@ -4543,14 +4310,40 @@ export default function LeadStore({ selectedYear = "all" }) {
                             />
                           </td>
 
-                          <td className={`sticky left-11 z-10 min-w-[220px] max-w-[220px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                          <td className={`sticky left-11 z-10 w-[72px] min-w-[72px] border-r border-slate-100 px-3 text-center ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
+                              {displayLeadId(lead.leadNumber)}
+                            </span>
+                          </td>
+
+                          <td className={`sticky left-[116px] z-10 min-w-[200px] max-w-[200px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex min-w-0 items-center gap-2">
-                              <span
-                                title={lead.name || ""}
-                                className="min-w-0 flex-1 truncate whitespace-nowrap text-[14px] font-semibold text-slate-900"
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (lead.isAdmissionsSynced) return;
+                                  setEditingIndividual(lead);
+                                  setShowIndividual(true);
+                                }}
+                                title={
+                                  lead.isAdmissionsSynced
+                                    ? `${lead.name || "Lead"} · managed from Admissions`
+                                    : `Edit ${lead.name || "lead"}`
+                                }
+                                className={`min-w-0 flex-1 text-left ${
+                                  lead.isAdmissionsSynced
+                                    ? "cursor-default"
+                                    : "cursor-pointer"
+                                }`}
                               >
-                                {lead.name}
-                              </span>
+                                <span className={`block truncate whitespace-nowrap text-[14px] font-semibold ${
+                                  lead.isAdmissionsSynced
+                                    ? "text-slate-900"
+                                    : "text-slate-900 hover:text-indigo-700 hover:underline"
+                                }`}>
+                                  {lead.name}
+                                </span>
+                              </button>
 
                               {customFields.length > 0 && (
                                 <button
@@ -4583,7 +4376,15 @@ export default function LeadStore({ selectedYear = "all" }) {
                                 phone={lead.phone}
                                 name={lead.name}
                                 onCopied={setSuccessMessage}
-                                onDial={() => setCallLead(lead)}
+                              />
+                            </td>
+                          )}
+                          {individualColumns.alternatePhone && (
+                            <td className={`min-w-[155px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
+                              <PhoneAction
+                                phone={lead.alternatePhone}
+                                name={lead.name}
+                                onCopied={setSuccessMessage}
                               />
                             </td>
                           )}
@@ -4619,40 +4420,10 @@ export default function LeadStore({ selectedYear = "all" }) {
                               />
                             </td>
                           )}
-                          <td className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap`}>
-                            {lead.intelligence ? (
-                              <button
-                                type="button"
-                                onClick={() => setIntelligenceLead(lead)}
-                                title={lead.intelligence.nextBestAction || "View lead intelligence"}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-indigo-200 hover:bg-indigo-50/50"
-                              >
-                                <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-[11px] font-extrabold ${intelligenceTone(lead.intelligence.score)}`}>
-                                  {lead.intelligence.score}
-                                </span>
-                                <span>
-                                  <span className="block text-[11px] font-bold text-slate-700">{lead.intelligence.conversionChance}</span>
-                                  <span className="block text-[10px] text-slate-400">View reason</span>
-                                </span>
-                              </button>
-                            ) : (
-                              <span className="text-[12px] text-slate-400">—</span>
-                            )}
-                          </td>
                           {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 
                           <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setCallLead(lead)}
-                                title={lead.phone ? `Call ${lead.name}` : "Lead has no phone number"}
-                                disabled={!lead.phone}
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${lead.phone ? "text-emerald-600 hover:bg-emerald-50" : "text-slate-300"}`}
-                              >
-                                <PhoneCall size={14} />
-                              </button>
-
                               <button
                                 type="button"
                                 onClick={() => openMessageComposer([lead.id])}
@@ -5017,99 +4788,6 @@ export default function LeadStore({ selectedYear = "all" }) {
           )}
         </div>
       )}
-
-      {intelligenceLead && (
-        <div className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">Lead Intelligence</div>
-                <div className="mt-1 text-[18px] font-bold text-slate-950">{intelligenceLead.name}</div>
-                <div className="mt-0.5 text-[12px] text-slate-500">Score, conversion chance, reasons and the next best action.</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIntelligenceLead(null)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="space-y-4 p-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Lead Score</div>
-                  <div className="mt-2 flex items-end gap-2">
-                    <span className={`inline-flex h-12 min-w-12 items-center justify-center rounded-xl border px-2 text-[20px] font-extrabold ${intelligenceTone(intelligenceLead.intelligence?.score)}`}>
-                      {intelligenceLead.intelligence?.score ?? "—"}
-                    </span>
-                    <span className="pb-1 text-[12px] text-slate-400">/ 100</span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">Conversion Chance</div>
-                  <div className="mt-2 text-[20px] font-extrabold text-slate-950">{intelligenceLead.intelligence?.conversionChance || "—"}</div>
-                  <div className="mt-1 text-[12px] text-slate-500">Current probability signal: {intelligenceLead.intelligence?.conversionPercent ?? 0}%</div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-                <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-500">Next Best Action</div>
-                <div className="mt-2 text-[14px] font-semibold leading-6 text-indigo-950">
-                  {intelligenceLead.intelligence?.nextBestAction || "Follow up and record the next step."}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[12px] font-bold text-slate-700">Why this score</div>
-                <div className="mt-2 space-y-2">
-                  {(intelligenceLead.intelligence?.reasons || []).map((reason, index) => (
-                    <div key={`${reason}-${index}`} className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[12px] leading-5 text-slate-600">
-                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-indigo-500" />
-                      <span>{reason}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-3">
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Tracked contacts</div>
-                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.communicationCount ?? 0}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Last contact</div>
-                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.lastContactAt ? formatDate(intelligenceLead.intelligence.lastContactAt) : "—"}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Next follow-up</div>
-                  <div className="mt-1 text-[13px] font-semibold text-slate-800">{intelligenceLead.intelligence?.nextFollowUpAt ? formatDate(intelligenceLead.intelligence.nextFollowUpAt) : "Not scheduled"}</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end border-t border-slate-200 bg-slate-50/70 px-5 py-4">
-              <button type="button" onClick={() => setIntelligenceLead(null)} className="h-9 rounded-lg bg-slate-900 px-4 text-[12px] font-semibold text-white hover:bg-slate-800">
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <NurtureCenter
-        open={nurtureOpen}
-        onClose={() => setNurtureOpen(false)}
-        selectedLeadIds={selectedLeadIds}
-      />
-
-      <CallCenterModal
-        open={Boolean(callLead)}
-        onClose={() => setCallLead(null)}
-        lead={callLead}
-      />
 
       {messageComposerOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]">

@@ -668,9 +668,10 @@ model Lead {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  name  String
-  phone String
-  email String?
+  name           String
+  phone          String
+  alternatePhone String?
+  email          String?
 
   course String?
 

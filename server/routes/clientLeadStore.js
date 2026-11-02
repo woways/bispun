@@ -12,7 +12,6 @@ import { Readable } from "node:stream";
 
 
 import prisma from "../lib/prisma.js";
-import { buildLeadIntelligence } from "../lib/leadIntelligence.js";
 
 import {
 
@@ -362,6 +361,26 @@ const HEADER_ALIASES = {
 
   ],
 
+
+  alternatePhone: [
+
+    "alternate phone",
+
+    "alternative phone",
+
+    "alternate phone number",
+
+    "alternative phone number",
+
+    "alt phone",
+
+    "alt mobile",
+
+    "secondary phone",
+
+    "secondary mobile",
+
+  ],
 
 
   email: [
@@ -830,73 +849,6 @@ function normalizeEmail(
 
 }
 
-function parseLeadFollowUpAt(value) {
-  if (value === null || value === undefined || value === "") {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("Invalid follow-up date or time");
-  }
-
-  return date;
-}
-
-function legacyLeadRemarkText(notes) {
-  return String(notes || "")
-    .split("\n")
-    .filter((line) =>
-      !line.startsWith("Lead Store source: ") &&
-      !line.startsWith("Lead Store type: ") &&
-      !line.startsWith("Imported from ") &&
-      line !== "Added individually from Lead Store" &&
-      !line.startsWith("Admissions origin:")
-    )
-    .join("\n")
-    .trim();
-}
-
-async function clearPendingLeadFollowUpNotifications(
-  client,
-  companyId,
-  leadId
-) {
-  await client.notification.deleteMany({
-    where: {
-      companyId,
-      read: false,
-      message: {
-        contains: `LEAD_FOLLOWUP:${leadId}:`,
-      },
-    },
-  });
-}
-
-async function getLatestLeadRemarks(client, companyId, leadId) {
-  const remarks = await client.leadRemark.findMany({
-    where: { companyId, leadId },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-    include: {
-      user: {
-        select: { id: true, name: true },
-      },
-    },
-  });
-
-  return remarks.map((remark) => ({
-    id: remark.id,
-    text: remark.text,
-    createdAt: remark.createdAt,
-    updatedAt: remark.updatedAt,
-    createdBy: remark.user?.name || "Unknown user",
-    userId: remark.userId || null,
-    legacy: false,
-  }));
-}
-
 
 
 function formatDataset(
@@ -1213,6 +1165,16 @@ async function parseSpreadsheet(
 
       ),
 
+    alternatePhone:
+
+      findHeaderIndex(
+
+        headers,
+
+        "alternatePhone"
+
+      ),
+
     email:
 
       findHeaderIndex(
@@ -1355,6 +1317,18 @@ async function parseSpreadsheet(
 
         ),
 
+      alternatePhone:
+
+        normalizePhone(
+
+          valueAt(
+
+            indexes.alternatePhone
+
+          )
+
+        ),
+
       email:
 
         normalizeEmail(
@@ -1400,6 +1374,7 @@ async function parseSpreadsheet(
       raw.name ||
 
       raw.phone ||
+      raw.alternatePhone ||
 
       raw.email ||
 
@@ -1533,6 +1508,38 @@ function validateRows(
 
     }
 
+    if (row.alternatePhone && row.alternatePhone.length < 7) {
+
+      invalid.push({
+
+        ...row,
+
+        reason:
+
+          "Alternative phone number is invalid",
+
+      });
+
+      continue;
+
+    }
+
+    if (row.alternatePhone && row.alternatePhone === row.phone) {
+
+      invalid.push({
+
+        ...row,
+
+        reason:
+
+          "Alternative phone must be different from the primary phone",
+
+      });
+
+      continue;
+
+    }
+
 
 
     const emailKey =
@@ -1550,6 +1557,7 @@ function validateRows(
         row.phone
 
       ) ||
+      (row.alternatePhone && seenPhones.has(row.alternatePhone)) ||
 
       (
 
@@ -1580,6 +1588,12 @@ function validateRows(
       row.phone
 
     );
+
+    if (row.alternatePhone) {
+
+      seenPhones.add(row.alternatePhone);
+
+    }
 
 
 
@@ -1635,11 +1649,11 @@ async function getExistingDuplicateSets(
 
         rows
 
-          .map(
+          .flatMap(
 
             (row) =>
 
-              row.phone
+              [row.phone, row.alternatePhone]
 
           )
 
@@ -1721,17 +1735,33 @@ async function getExistingDuplicateSets(
 
   ) {
 
-    OR.push({
+    OR.push(
 
-      phone: {
+      {
 
-        in:
+        phone: {
 
-          phones,
+          in:
+
+            phones,
+
+        },
 
       },
 
-    });
+      {
+
+        alternatePhone: {
+
+          in:
+
+            phones,
+
+        },
+
+      }
+
+    );
 
   }
 
@@ -1779,6 +1809,10 @@ async function getExistingDuplicateSets(
 
           true,
 
+        alternatePhone:
+
+          true,
+
         email:
 
           true,
@@ -1797,15 +1831,17 @@ async function getExistingDuplicateSets(
 
         existing
 
-          .map(
+          .flatMap(
 
             (lead) =>
 
-              normalizePhone(
+              [
 
-                lead.phone
+                normalizePhone(lead.phone),
 
-              )
+                normalizePhone(lead.alternatePhone),
+
+              ]
 
           )
 
@@ -1926,40 +1962,6 @@ async function getAssignee(
 }
 
 
-
-function scopeLeadWhereForEmployee(req, where) {
-  if (req.clientUser?.role !== "EMPLOYEE") return where;
-
-  const employeeScope = {
-    OR: [
-      { assignedToUserId: req.clientUser.userId },
-      {
-        assignedToName: {
-          equals: String(req.clientUser?.name || ""),
-          mode: "insensitive",
-        },
-      },
-      {
-        leadDataset: {
-          is: { assignedToUserId: req.clientUser.userId },
-        },
-      },
-    ],
-  };
-
-  const existingAnd = Array.isArray(where.AND)
-    ? where.AND
-    : where.AND
-      ? [where.AND]
-      : [];
-
-  return { ...where, AND: [...existingAnd, employeeScope] };
-}
-
-function scopeDatasetWhereForEmployee(req, where) {
-  if (req.clientUser?.role !== "EMPLOYEE") return where;
-  return { ...where, assignedToUserId: req.clientUser.userId };
-}
 
 /* =========================================================
 
@@ -2123,8 +2125,6 @@ router.get(
 
 
 
-      const datasetWhere = scopeDatasetWhereForEmployee(req, where);
-
       const [
 
         datasets,
@@ -2137,7 +2137,7 @@ router.get(
 
           prisma.leadDataset.findMany({
 
-            where: datasetWhere,
+            where,
 
 
 
@@ -2359,10 +2359,6 @@ router.get(
 
               req.clientUser.companyId,
 
-            ...(req.clientUser.role === "EMPLOYEE"
-              ? { id: req.clientUser.userId }
-              : {}),
-
             active:
 
               true,
@@ -2511,6 +2507,7 @@ router.get(
             OR: [
               { name: { contains: search, mode: "insensitive" } },
               { phone: { contains: search, mode: "insensitive" } },
+              { alternatePhone: { contains: search, mode: "insensitive" } },
               { email: { contains: search, mode: "insensitive" } },
               { course: { contains: search, mode: "insensitive" } },
               { assignedToName: { contains: search, mode: "insensitive" } },
@@ -2522,11 +2519,28 @@ router.get(
 
 
 
-      const scopedWhere = scopeLeadWhereForEmployee(req, where);
+      const leadNumberRows = await prisma.lead.findMany({
+        where: {
+          companyId,
+          OR: [
+            { source: "LEAD_STORE" },
+            { notes: { contains: "Admissions origin:" } },
+          ],
+        },
+        select: { id: true },
+        orderBy: [
+          { createdAt: "asc" },
+          { id: "asc" },
+        ],
+      });
+
+      const leadNumberById = new Map(
+        leadNumberRows.map((lead, index) => [lead.id, index + 1])
+      );
 
       const leads = await prisma.lead.findMany({
 
-        where: scopedWhere,
+        where,
 
         include: {
 
@@ -2558,84 +2572,11 @@ router.get(
 
           },
 
-          admission: {
-
-            select: {
-
-              id: true,
-
-              status: true,
-
-            },
-
-          },
-
-          remarks: {
-            orderBy: { createdAt: "desc" },
-            take: 5,
-            include: {
-              user: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-
         },
 
         orderBy: { createdAt: "desc" },
 
       });
-
-      const leadIds = leads.map((lead) => lead.id);
-
-      const [communicationGroups, counsellingRows] = leadIds.length
-        ? await Promise.all([
-            prisma.leadCommunication.groupBy({
-              by: ["leadId"],
-              where: {
-                companyId,
-                leadId: { in: leadIds },
-              },
-              _count: { _all: true },
-              _max: { createdAt: true },
-            }),
-            prisma.counsellingSession.findMany({
-              where: {
-                companyId,
-                leadId: { in: leadIds },
-              },
-              select: {
-                leadId: true,
-                status: true,
-                scheduledAt: true,
-                followUpAt: true,
-              },
-            }),
-          ])
-        : [[], []];
-
-      const communicationByLead = new Map(
-        communicationGroups
-          .filter((item) => item.leadId)
-          .map((item) => [
-            item.leadId,
-            {
-              count: item._count?._all || 0,
-              lastAt: item._max?.createdAt || null,
-            },
-          ])
-      );
-
-      const counsellingByLead = new Map();
-
-      for (const session of counsellingRows) {
-        if (!session.leadId) continue;
-        if (!counsellingByLead.has(session.leadId)) {
-          counsellingByLead.set(session.leadId, []);
-        }
-        counsellingByLead.get(session.leadId).push(session);
-      }
-
 
 
 
@@ -2646,10 +2587,13 @@ router.get(
         leads: leads.map((lead) => ({
 
           id: lead.id,
+          leadNumber: leadNumberById.get(lead.id) || null,
 
           name: lead.name,
 
           phone: lead.phone,
+
+          alternatePhone: lead.alternatePhone,
 
           email: lead.email,
 
@@ -2681,8 +2625,6 @@ router.get(
                 ),
 
           assignedToName: lead.assignedToName,
-          assignedToUserId: lead.assignedToUserId || null,
-          followUpAt: lead.followUpAt || null,
 
           createdAt: lead.createdAt,
 
@@ -2712,35 +2654,23 @@ router.get(
 
             ?.replace("Lead Store source: ", "") || "",
 
-          notes: legacyLeadRemarkText(lead.notes),
+          notes: (lead.notes || "")
 
-          remarks: lead.remarks?.length
-            ? lead.remarks.map((remark) => ({
-                id: remark.id,
-                text: remark.text,
-                createdAt: remark.createdAt,
-                updatedAt: remark.updatedAt,
-                createdBy: remark.user?.name || "Unknown user",
-                userId: remark.userId || null,
-                legacy: false,
-              }))
-            : (legacyLeadRemarkText(lead.notes)
-                ? [{
-                    id: `legacy-${lead.id}`,
-                    text: legacyLeadRemarkText(lead.notes),
-                    createdAt: lead.createdAt,
-                    updatedAt: lead.updatedAt,
-                    createdBy: "Existing lead note",
-                    userId: null,
-                    legacy: true,
-                  }]
-                : []),
+            .split("\n")
 
-          intelligence: buildLeadIntelligence({
-            lead,
-            communicationSummary: communicationByLead.get(lead.id) || {},
-            counsellingSessions: counsellingByLead.get(lead.id) || [],
-          }),
+            .filter((line) =>
+
+              !line.startsWith("Lead Store source: ") &&
+
+              !line.startsWith("Lead Store type: ") &&
+
+              !line.startsWith("Imported from ") &&
+
+              line !== "Added individually from Lead Store"
+
+            )
+
+            .join("\n"),
 
           customFields: lead.customFieldValues.map((item) => ({
 
@@ -2795,13 +2725,6 @@ router.patch(
   async (req, res) => {
 
     try {
-
-      if (req.clientUser.role === "EMPLOYEE") {
-        return res.status(403).json({
-          success: false,
-          message: "Only managers or admins can assign Lead Store leads",
-        });
-      }
 
       const companyId =
 
@@ -3002,8 +2925,6 @@ router.patch(
             assignedToName:
 
               assignee.name,
-            assignedToUserId:
-              assignee.id,
 
           },
 
@@ -3091,7 +3012,7 @@ router.patch(
 
       const existing = await prisma.lead.findFirst({
 
-        where: scopeLeadWhereForEmployee(req, {
+        where: {
 
           id: leadId,
 
@@ -3099,7 +3020,7 @@ router.patch(
 
           source: "LEAD_STORE",
 
-        }),
+        },
 
       });
 
@@ -3117,6 +3038,16 @@ router.patch(
 
       const rawPhone = String(req.body?.phone ?? "").trim();
       const phone = normalizeManualLeadPhone(rawPhone);
+      const existingPhone = normalizeManualLeadPhone(existing.phone);
+
+      const rawAlternatePhone = String(req.body?.alternatePhone ?? "").trim();
+      const requestedAlternatePhone = rawAlternatePhone
+        ? normalizeManualLeadPhone(rawAlternatePhone)
+        : "";
+      const existingAlternatePhone = existing.alternatePhone
+        ? normalizeManualLeadPhone(existing.alternatePhone)
+        : "";
+      const alternatePhone = existingAlternatePhone || requestedAlternatePhone || null;
 
       const email = normalizeEmail(req.body?.email);
 
@@ -3138,17 +3069,7 @@ router.patch(
 
       const sourceName = cleanString(req.body?.sourceName);
 
-      const remark = cleanString(req.body?.remark ?? req.body?.notes);
-
-      let followUpAt;
-      try {
-        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
-      } catch (error) {
-        return res.status(400).json({
-          success: false,
-          message: error?.message || "Invalid follow-up date or time",
-        });
-      }
+      const notes = cleanString(req.body?.notes);
 
       const assignedToUserId = cleanString(req.body?.assignedToUserId);
 
@@ -3182,6 +3103,38 @@ router.patch(
         return res.status(400).json({
           success: false,
           message: "Enter a valid 10-digit Indian mobile number",
+        });
+      }
+
+      if (phone !== existingPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Primary phone number cannot be changed after the lead is created",
+        });
+      }
+
+      if (requestedAlternatePhone && !isValidManualLeadPhone(requestedAlternatePhone)) {
+        return res.status(400).json({
+          success: false,
+          message: "Enter a valid 10-digit alternative mobile number",
+        });
+      }
+
+      if (requestedAlternatePhone && requestedAlternatePhone === existingPhone) {
+        return res.status(400).json({
+          success: false,
+          message: "Alternative phone must be different from the primary phone",
+        });
+      }
+
+      if (
+        existingAlternatePhone &&
+        requestedAlternatePhone &&
+        requestedAlternatePhone !== existingAlternatePhone
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Alternative phone number cannot be changed after it is saved",
         });
       }
 
@@ -3229,13 +3182,19 @@ router.patch(
 
             { phone },
 
+            { alternatePhone: phone },
+
+            ...(alternatePhone
+              ? [{ phone: alternatePhone }, { alternatePhone }]
+              : []),
+
             ...(email ? [{ email }] : []),
 
           ],
 
         },
 
-        select: { id: true, phone: true, email: true },
+        select: { id: true, phone: true, alternatePhone: true, email: true },
 
       });
 
@@ -3249,7 +3208,11 @@ router.patch(
 
           duplicate: true,
 
-          message: `A lead already exists with this ${duplicate.phone === phone ? "phone number" : "email address"}`,
+          message: `A lead already exists with this ${
+            duplicate.email === email && email
+              ? "email address"
+              : "phone number"
+          }`,
 
         });
 
@@ -3287,7 +3250,9 @@ router.patch(
 
             name,
 
-            phone,
+            phone: existing.phone,
+
+            alternatePhone,
 
             email: email || null,
 
@@ -3298,10 +3263,10 @@ router.patch(
             medium: type,
 
             assignedToName: assignee?.name || null,
-            assignedToUserId: assignee?.id || null,
-            followUpAt,
 
             notes: [
+
+              notes,
 
               sourceName ? `Lead Store source: ${sourceName}` : null,
 
@@ -3316,34 +3281,6 @@ router.patch(
         });
 
 
-
-        const existingRemarkCount = await tx.leadRemark.count({
-          where: { companyId, leadId },
-        });
-
-        const legacyRemark = legacyLeadRemarkText(existing.notes);
-
-        if (!existingRemarkCount && legacyRemark) {
-          await tx.leadRemark.create({
-            data: {
-              companyId,
-              leadId,
-              userId: req.clientUser.userId,
-              text: legacyRemark,
-            },
-          });
-        }
-
-        if (remark) {
-          await tx.leadRemark.create({
-            data: {
-              companyId,
-              leadId,
-              userId: req.clientUser.userId,
-              text: remark,
-            },
-          });
-        }
 
         await tx.customFieldValue.deleteMany({ where: { leadId } });
 
@@ -3373,18 +3310,6 @@ router.patch(
 
 
 
-      if (
-        (existing.followUpAt?.getTime?.() || null) !==
-          (followUpAt?.getTime?.() || null) ||
-        (existing.assignedToUserId || null) !== (assignee?.id || null)
-      ) {
-        await clearPendingLeadFollowUpNotifications(
-          prisma,
-          companyId,
-          leadId
-        );
-      }
-
       return res.json({
 
         success: true,
@@ -3400,6 +3325,8 @@ router.patch(
           name: updated.name,
 
           phone: updated.phone,
+
+          alternatePhone: updated.alternatePhone,
 
           email: updated.email,
 
@@ -3421,8 +3348,6 @@ router.patch(
           assignedToName:
 
             updated.assignedToName,
-          assignedToUserId: updated.assignedToUserId || null,
-          followUpAt: updated.followUpAt || null,
 
           createdAt:
 
@@ -3445,222 +3370,6 @@ router.patch(
 );
 
 
-
-/* =========================================================
-
-   LEAD REMARKS
-
-========================================================= */
-
-router.post(
-  "/manual/:id/remarks",
-  async (req, res) => {
-    try {
-      const companyId = req.clientUser.companyId;
-      const leadId = String(req.params.id || "").trim();
-      const text = cleanString(req.body?.text ?? req.body?.remark);
-
-      if (!text) {
-        return res.status(400).json({
-          success: false,
-          message: "Remark is required",
-        });
-      }
-
-      const lead = await prisma.lead.findFirst({
-        where: scopeLeadWhereForEmployee(req, {
-          id: leadId,
-          companyId,
-          source: "LEAD_STORE",
-        }),
-        select: { id: true, notes: true },
-      });
-
-      if (!lead) {
-        return res.status(404).json({
-          success: false,
-          message: "Lead not found",
-        });
-      }
-
-      await prisma.$transaction(async (tx) => {
-        const count = await tx.leadRemark.count({
-          where: { companyId, leadId },
-        });
-        const legacyRemark = legacyLeadRemarkText(lead.notes);
-
-        if (!count && legacyRemark) {
-          await tx.leadRemark.create({
-            data: {
-              companyId,
-              leadId,
-              userId: req.clientUser.userId,
-              text: legacyRemark,
-            },
-          });
-        }
-
-        await tx.leadRemark.create({
-          data: {
-            companyId,
-            leadId,
-            userId: req.clientUser.userId,
-            text,
-          },
-        });
-      });
-
-      const remarks = await getLatestLeadRemarks(
-        prisma,
-        companyId,
-        leadId
-      );
-
-      return res.status(201).json({
-        success: true,
-        message: "Remark added",
-        remarks,
-      });
-    } catch (error) {
-      console.error("Failed to add lead remark:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Unable to add remark",
-      });
-    }
-  }
-);
-
-router.patch(
-  "/manual/:id/remarks/:remarkId",
-  async (req, res) => {
-    try {
-      const companyId = req.clientUser.companyId;
-      const leadId = String(req.params.id || "").trim();
-      const remarkId = String(req.params.remarkId || "").trim();
-      const text = cleanString(req.body?.text ?? req.body?.remark);
-
-      if (!text) {
-        return res.status(400).json({
-          success: false,
-          message: "Remark is required",
-        });
-      }
-
-      const lead = await prisma.lead.findFirst({
-        where: scopeLeadWhereForEmployee(req, {
-          id: leadId,
-          companyId,
-          source: "LEAD_STORE",
-        }),
-        select: { id: true },
-      });
-
-      if (!lead) {
-        return res.status(404).json({
-          success: false,
-          message: "Lead not found",
-        });
-      }
-
-      const remark = await prisma.leadRemark.findFirst({
-        where: { id: remarkId, companyId, leadId },
-        select: { id: true },
-      });
-
-      if (!remark) {
-        return res.status(404).json({
-          success: false,
-          message: "Remark not found",
-        });
-      }
-
-      await prisma.leadRemark.update({
-        where: { id: remark.id },
-        data: { text },
-      });
-
-      const remarks = await getLatestLeadRemarks(
-        prisma,
-        companyId,
-        leadId
-      );
-
-      return res.json({
-        success: true,
-        message: "Remark updated",
-        remarks,
-      });
-    } catch (error) {
-      console.error("Failed to update lead remark:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Unable to update remark",
-      });
-    }
-  }
-);
-
-router.delete(
-  "/manual/:id/remarks/:remarkId",
-  async (req, res) => {
-    try {
-      const companyId = req.clientUser.companyId;
-      const leadId = String(req.params.id || "").trim();
-      const remarkId = String(req.params.remarkId || "").trim();
-
-      const lead = await prisma.lead.findFirst({
-        where: scopeLeadWhereForEmployee(req, {
-          id: leadId,
-          companyId,
-          source: "LEAD_STORE",
-        }),
-        select: { id: true },
-      });
-
-      if (!lead) {
-        return res.status(404).json({
-          success: false,
-          message: "Lead not found",
-        });
-      }
-
-      const remark = await prisma.leadRemark.findFirst({
-        where: { id: remarkId, companyId, leadId },
-        select: { id: true },
-      });
-
-      if (!remark) {
-        return res.status(404).json({
-          success: false,
-          message: "Remark not found",
-        });
-      }
-
-      await prisma.leadRemark.delete({
-        where: { id: remark.id },
-      });
-
-      const remarks = await getLatestLeadRemarks(
-        prisma,
-        companyId,
-        leadId
-      );
-
-      return res.json({
-        success: true,
-        message: "Remark deleted",
-        remarks,
-      });
-    } catch (error) {
-      console.error("Failed to delete lead remark:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Unable to delete remark",
-      });
-    }
-  }
-);
 
 /* =========================================================
 
@@ -3728,14 +3437,14 @@ router.patch(
       }
 
       const lead = await prisma.lead.findFirst({
-        where: scopeLeadWhereForEmployee(req, {
+        where: {
           id: leadId,
           companyId,
           OR: [
             { source: "LEAD_STORE" },
             { notes: { contains: "Admissions origin:" } },
           ],
-        }),
+        },
         select: { id: true, name: true, stage: true },
       });
 
@@ -3826,14 +3535,14 @@ router.patch(
       }
 
       const lead = await prisma.lead.findFirst({
-        where: scopeLeadWhereForEmployee(req, {
+        where: {
           id: leadId,
           companyId,
           OR: [
             { source: "LEAD_STORE" },
             { notes: { contains: "Admissions origin:" } },
           ],
-        }),
+        },
         select: { id: true, name: true },
       });
 
@@ -3888,7 +3597,7 @@ router.delete(
 
       const lead = await prisma.lead.findFirst({
 
-        where: scopeLeadWhereForEmployee(req, {
+        where: {
 
           id: leadId,
 
@@ -3896,7 +3605,7 @@ router.delete(
 
           source: "LEAD_STORE",
 
-        }),
+        },
 
         select: {
 
@@ -3984,12 +3693,6 @@ router.delete(
 
         }
 
-      );
-
-      await clearPendingLeadFollowUpNotifications(
-        prisma,
-        companyId,
-        leadId
       );
 
 
@@ -4084,6 +3787,22 @@ router.post(
 
         );
 
+      const rawAlternatePhone =
+
+        String(
+
+          req.body?.alternatePhone ??
+
+            ""
+
+        ).trim();
+
+      const alternatePhone = rawAlternatePhone
+
+        ? normalizeManualLeadPhone(rawAlternatePhone)
+
+        : "";
+
 
 
       const email =
@@ -4148,23 +3867,13 @@ router.post(
 
 
 
-      const remark =
+      const notes =
 
         cleanString(
 
-          req.body?.remark ?? req.body?.notes
+          req.body?.notes
 
         );
-
-      let followUpAt;
-      try {
-        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
-      } catch (error) {
-        return res.status(400).json({
-          success: false,
-          message: error?.message || "Invalid follow-up date or time",
-        });
-      }
 
 
 
@@ -4267,6 +3976,43 @@ router.post(
             message:
 
               "Enter a valid 10-digit Indian mobile number",
+
+          });
+
+      }
+
+
+      if (alternatePhone && !isValidManualLeadPhone(alternatePhone)) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Enter a valid 10-digit alternative mobile number",
+
+          });
+
+      }
+
+      if (alternatePhone && alternatePhone === phone) {
+
+        return res
+
+          .status(400)
+
+          .json({
+
+            success: false,
+
+            message:
+
+              "Alternative phone must be different from the primary phone",
 
           });
 
@@ -4414,7 +4160,25 @@ router.post(
 
         },
 
+        {
+
+          alternatePhone: phone,
+
+        },
+
       ];
+
+      if (alternatePhone) {
+
+        OR.push(
+
+          { phone: alternatePhone },
+
+          { alternatePhone }
+
+        );
+
+      }
 
 
 
@@ -4451,7 +4215,7 @@ router.post(
             name: true,
 
             phone: true,
-
+            alternatePhone: true,
             email: true,
 
           },
@@ -4476,13 +4240,11 @@ router.post(
 
               `A lead already exists with this ${
 
-                duplicate.phone ===
+                duplicate.email === email && email
 
-                phone
+                  ? "email address"
 
-                  ? "phone number"
-
-                  : "email address"
+                  : "phone number"
 
               }`,
 
@@ -4584,8 +4346,11 @@ router.post(
 
                 phone,
 
-                email:
+                alternatePhone:
+                  alternatePhone ||
+                  null,
 
+                email:
                   email ||
 
                   null,
@@ -4617,14 +4382,12 @@ router.post(
                   assignee?.name ||
 
                   null,
-                assignedToUserId:
-                  assignee?.id ||
-                  null,
-                followUpAt,
 
                 notes:
 
                   [
+
+                    notes,
 
                     sourceName
 
@@ -4665,17 +4428,6 @@ router.post(
             });
 
 
-
-            if (remark) {
-              await tx.leadRemark.create({
-                data: {
-                  companyId,
-                  leadId: lead.id,
-                  userId: req.clientUser.userId,
-                  text: remark,
-                },
-              });
-            }
 
             const valuesToCreate =
 
@@ -4742,11 +4494,12 @@ router.post(
               lead.name,
 
             phone:
-
               lead.phone,
 
-            email:
+            alternatePhone:
+              lead.alternatePhone,
 
+            email:
               lead.email,
 
             course:
@@ -4778,8 +4531,6 @@ router.post(
             assignedToName:
 
               lead.assignedToName,
-            assignedToUserId: lead.assignedToUserId || null,
-            followUpAt: lead.followUpAt || null,
 
             createdAt:
 
@@ -4891,6 +4642,8 @@ router.post(
 
             ) ||
 
+            (row.alternatePhone && duplicates.phones.has(row.alternatePhone)) ||
+
             (
 
               row.email &&
@@ -4994,6 +4747,12 @@ router.post(
                 phone:
 
                   row.phone ||
+
+                  "",
+
+                alternatePhone:
+
+                  row.alternatePhone ||
 
                   "",
 
@@ -5305,6 +5064,8 @@ router.post(
 
           ) ||
 
+          (row.alternatePhone && duplicates.phones.has(row.alternatePhone)) ||
+
           (
 
             row.email &&
@@ -5529,6 +5290,10 @@ router.post(
 
                       row.phone,
 
+                    alternatePhone:
+                      row.alternatePhone ||
+                      null,
+
                     email:
 
                       row.email ||
@@ -5561,9 +5326,6 @@ router.post(
 
                       assignee?.name ||
 
-                      null,
-                    assignedToUserId:
-                      assignee?.id ||
                       null,
 
                     notes:
@@ -5777,9 +5539,6 @@ router.patch(
               req.params.id,
 
             companyId,
-            ...(req.clientUser.role === "EMPLOYEE"
-              ? { assignedToUserId: req.clientUser.userId }
-              : {}),
 
           },
 
@@ -6100,9 +5859,6 @@ router.patch(
                   assignee?.name ||
 
                   null,
-                assignedToUserId:
-                  assignee?.id ||
-                  null,
 
               },
 
@@ -6283,9 +6039,6 @@ router.delete(
               req.params.id,
 
             companyId,
-            ...(req.clientUser.role === "EMPLOYEE"
-              ? { assignedToUserId: req.clientUser.userId }
-              : {}),
 
           },
 

@@ -10,7 +10,6 @@ import {
   Image as ImageIcon,
   Loader2,
   Wand2,
-  Download,
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
@@ -113,14 +112,14 @@ function CopyEditCard({ icon: Icon, tone, title, value, onRegenerate }) {
   );
 }
 
-export default function MyStore({ company }) {
+export default function MyStore() {
   const [occasions, setOccasions] = useState([]);
+  const [spotlight, setSpotlight] = useState(null);
   const [selected, setSelected] = useState(null);
   const [tpl, setTpl] = useState(null);
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [generated, setGenerated] = useState([]); // AI images this company has made
   const [prompt, setPrompt] = useState("");
   const [toast, setToast] = useState(null);
 
@@ -134,15 +133,6 @@ export default function MyStore({ company }) {
     setTpl(data);
   }, []);
 
-  const loadAssets = useCallback(async () => {
-    try {
-      const data = await apiRequest("/api/client/store/assets");
-      setGenerated(data?.assets || []);
-    } catch {
-      /* non-fatal — gallery just stays empty */
-    }
-  }, []);
-
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -153,11 +143,11 @@ export default function MyStore({ company }) {
         ]);
         if (!alive) return;
         setOccasions(meta.occasions || []);
+        setSpotlight(meta.spotlight || null);
         setUsage(use);
-        const first = meta.occasions?.[0]?.id;
+        const first = meta.spotlight?.id || meta.occasions?.[0]?.id;
         setSelected(first);
         if (first) await loadTemplates(first);
-        await loadAssets();
       } catch {
         flash("Couldn't load My Store. Please refresh.", "error");
       } finally {
@@ -167,7 +157,7 @@ export default function MyStore({ company }) {
     return () => {
       alive = false;
     };
-  }, [loadTemplates, loadAssets]);
+  }, [loadTemplates]);
 
   const pickOccasion = async (id) => {
     setSelected(id);
@@ -184,10 +174,13 @@ export default function MyStore({ company }) {
     try {
       const res = await apiRequest("/api/client/store/generate", {
         method: "POST",
-        body: JSON.stringify({ occasionId: selected, prompt: prompt.trim() }),
+        body: JSON.stringify({
+          occasionId: selected,
+          prompt: prompt.trim(),
+        }),
       });
       if (res?.usage) setUsage(res.usage);
-      if (res?.asset) setGenerated((prev) => [res.asset, ...prev]); // show it immediately
+      setPrompt("");
       flash("Image generated.");
     } catch (error) {
       const code = error?.data?.code;
@@ -212,10 +205,8 @@ export default function MyStore({ company }) {
     );
   }
 
-  const selectedOccasion =
-    occasions.find((occasion) => occasion.id === selected) || tpl?.occasion;
-  const selectedLabel = selectedOccasion?.label || "Event";
-  const selectedEmoji = selectedOccasion?.emoji || "✨";
+  const spotLabel = spotlight?.label || tpl?.occasion?.label || "Today";
+  const spotEmoji = spotlight?.emoji || tpl?.occasion?.emoji || "✨";
 
   return (
     <div className="space-y-8">
@@ -223,7 +214,7 @@ export default function MyStore({ company }) {
 
       <SectionHeader
         title="My Store"
-        subtitle="Describe what you want and generate it with AI. If a Branding logo is available, Bispun adds that exact uploaded logo to the artwork."
+        subtitle="Beautiful occasion wish images, promos & messages — ready to share."
         action={
           usage ? (
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-600">
@@ -235,6 +226,37 @@ export default function MyStore({ company }) {
           ) : null
         }
       />
+
+      {/* spotlight strip */}
+      {spotlight && (
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white px-5 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-900 text-[22px] text-white">
+            {spotEmoji}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-black uppercase tracking-wide text-brand-500">
+                Today's spotlight
+              </span>
+              {spotlight.live && (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[13px] font-bold text-emerald-600">
+                  Live today
+                </span>
+              )}
+            </div>
+            <div className="text-[15px] font-black text-slate-900">{spotlight.label}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => pickOccasion(spotlight.id)}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-[12px] font-bold text-white shadow-sm transition hover:bg-brand-700"
+          >
+            <span className="inline-flex items-center gap-1">
+              <Sparkles size={13} /> Create now
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* occasion selector */}
       <div className="flex flex-wrap gap-2">
@@ -254,81 +276,34 @@ export default function MyStore({ company }) {
         ))}
       </div>
 
-      {/* ChatGPT-style prompt composer */}
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          generate();
-        }}
-        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
-      >
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[15px] font-black text-slate-900">Create with AI</div>
-            <div className="mt-0.5 text-[12px] text-slate-500">
-              Tell Bispun what picture you want. If a Branding logo is saved, that exact logo is added after the artwork is generated.
-            </div>
-          </div>
-
-          {company?.logoUrl ? (
-            <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-              <div className="flex h-8 w-12 items-center justify-center overflow-hidden rounded-md bg-white ring-1 ring-emerald-100">
-                <img src={company.logoUrl} alt="Branding logo" className="max-h-7 max-w-11 object-contain" />
-              </div>
-              <div>
-                <div className="text-[11px] font-black text-emerald-700">BRANDING LOGO</div>
-                <div className="text-[11px] font-semibold text-emerald-600">Used exactly as uploaded</div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-600">
-              No Branding logo — image will generate without a logo.
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100">
-          <textarea
-            value={prompt}
-            onChange={(event) => setPrompt(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                if (!generating) generate();
-              }
-            }}
-            rows={2}
-            maxLength={1800}
-            placeholder={`Example: Create a premium ${selectedLabel} poster with a modern theme, strong headline and social-media-ready design.`}
-            className="min-h-[58px] flex-1 resize-none bg-transparent px-3 py-2 text-[14px] leading-relaxed text-slate-800 outline-none placeholder:text-slate-400"
-          />
-          <button
-            type="submit"
-            disabled={generating}
-            className="inline-flex h-11 flex-shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-4 text-[13px] font-black text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {generating ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-            {generating ? "Generating…" : "Generate"}
-          </button>
-        </div>
-        <div className="mt-2 text-[11px] text-slate-400">
-          Enter to generate · Shift + Enter for a new line · AI is instructed not to invent a logo.
-        </div>
-      </form>
-
       {/* hero */}
       <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-fuchsia-600 to-orange-500 p-7 text-white shadow-brand-lg">
         <div className="flex flex-wrap items-center justify-between gap-6">
           <div className="max-w-lg">
-            <div className="inline-flex flex-wrap items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-[13px] font-black">
-              <span>{selectedEmoji} {selectedLabel}</span>
+            <div className="inline-flex rounded-full bg-white/20 px-3 py-1 text-[13px] font-black">
+              {spotEmoji} {spotLabel}
             </div>
             <div className="mt-3 text-[32px] font-extrabold leading-tight">
               Create a beautiful wish in seconds
             </div>
             <p className="mt-2 text-[14px] text-white/85">
-              Choose an event or describe any occasion in your prompt, then generate a design. Your saved Branding logo is added automatically when available.
+              Pick a design, brand it with your logo, and share.
             </p>
+            <div className="mt-4">
+              <label className="mb-1.5 block text-[12px] font-bold text-white/90">
+                Image prompt
+              </label>
+              <textarea
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                rows={3}
+                placeholder="Describe the image you want to generate..."
+                className="w-full resize-none rounded-xl border border-white/25 bg-white/15 px-3.5 py-3 text-[13px] text-white placeholder:text-white/60 outline-none backdrop-blur transition focus:border-white/50 focus:bg-white/20"
+              />
+              <div className="mt-1 text-[11px] text-white/65">
+                Prompt clears automatically after a successful generation.
+              </div>
+            </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -348,11 +323,11 @@ export default function MyStore({ company }) {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {(tpl?.designs || []).slice(0, 4).map((d, i) => (
               <div
                 key={i}
-                className="flex aspect-square w-full max-w-24 items-center justify-center rounded-2xl bg-white/12 text-[26px] backdrop-blur"
+                className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/12 text-[26px] backdrop-blur"
               >
                 {d.emoji}
               </div>
@@ -361,49 +336,9 @@ export default function MyStore({ company }) {
         </div>
       </div>
 
-      {/* AI-generated images (real Ideogram output, stored in S3) */}
-      {generated.length > 0 && (
-        <div>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[16px] font-black text-slate-900">Your generated images</div>
-            <span className="text-[12px] font-semibold text-slate-400">
-              {generated.length} saved
-            </span>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {generated.map((a) => (
-              <div
-                key={a.id}
-                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
-              >
-                <img
-                  src={a.imageUrl}
-                  alt="Generated design"
-                  loading="lazy"
-                  className="h-52 w-full object-cover transition group-hover:scale-[1.03]"
-                />
-                {a.prompt && (
-                  <div className="line-clamp-2 border-t border-slate-200 bg-white px-3 py-2 text-[11px] leading-snug text-slate-500">
-                    {a.prompt}
-                  </div>
-                )}
-                <a
-                  href={a.imageUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg bg-slate-900/80 px-2.5 py-1.5 text-[11px] font-bold text-white opacity-0 backdrop-blur transition group-hover:opacity-100"
-                >
-                  <Download size={12} /> Open
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* ready designs */}
       <div>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-3 flex items-center justify-between">
           <div className="text-[16px] font-black text-slate-900">Ready designs</div>
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
