@@ -288,13 +288,13 @@ export default function ClientLogin() {
             LOGIN PANEL
         ====================================================== */}
 
-        <section className="relative flex min-h-screen items-center justify-center bg-white px-6 py-10 sm:px-10 lg:min-h-0 lg:px-14 xl:px-20">
+        <section className="relative flex min-h-screen items-center justify-center bg-white px-4 py-6 sm:px-10 sm:py-10 lg:min-h-0 lg:px-14 xl:px-20">
 
           <div className="w-full max-w-[510px]">
 
             {/* MOBILE BRAND */}
 
-            <div className="mb-12 flex items-center lg:hidden">
+            <div className="mb-8 flex items-center sm:mb-12 lg:hidden">
               <img
                 src={bispunLogo}
                 alt="Bispun"
@@ -311,7 +311,7 @@ export default function ClientLogin() {
             {/* HEADER */}
 
             <div className="text-left lg:text-center">
-              <h2 className="text-[34px] font-bold tracking-[-0.04em] text-[#07101f] sm:text-[38px]">
+              <h2 className="text-[30px] font-bold tracking-[-0.04em] text-[#07101f] sm:text-[38px]">
                 Welcome back!
               </h2>
 
@@ -324,7 +324,7 @@ export default function ClientLogin() {
 
             <form
               onSubmit={submit}
-              className="mt-10 space-y-6"
+              className="mt-8 space-y-5 sm:mt-10 sm:space-y-6"
             >
               {/* EMAIL */}
 
@@ -411,7 +411,7 @@ export default function ClientLogin() {
 
               {/* REMEMBER / FORGOT */}
 
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <label className="inline-flex cursor-pointer items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -477,7 +477,7 @@ export default function ClientLogin() {
 
             {/* FOOTER */}
 
-            <div className="mt-14 border-t border-slate-200 pt-6">
+            <div className="mt-10 border-t border-slate-200 pt-5 sm:mt-14 sm:pt-6">
               <div className="flex flex-col items-center justify-center gap-2 text-[11px] text-slate-400 sm:flex-row sm:gap-4">
 
                 <div className="inline-flex items-center gap-2">

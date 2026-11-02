@@ -2714,7 +2714,7 @@ export default function SettingsView({
                             onClick={() => setCustomPaletteOpen(false)}
                           />
 
-                          <div className="fixed right-6 top-1/2 z-[80] w-[360px] max-w-[calc(100vw-48px)] -translate-y-1/2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)]">
+                          <div className="fixed inset-x-3 bottom-3 z-[80] max-h-[80vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-1/2 sm:w-[360px] sm:max-w-[calc(100vw-48px)] sm:-translate-y-1/2">
                             <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                               <div>
                                 <div className="text-[14px] font-bold text-slate-900">
@@ -4374,7 +4374,7 @@ export default function SettingsView({
       </div>
 
       {organizationModal && (
-        <div className="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div><div className="text-[17px] font-bold text-slate-950">Add {organizationModal === "department" ? "Department" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Set a short ID code and default permissions.</div></div>
@@ -4398,7 +4398,7 @@ export default function SettingsView({
       )}
 
       {userModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -4775,7 +4775,7 @@ export default function SettingsView({
       )}
 
       {resetPasswordUser && (
-        <div className="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -4863,7 +4863,7 @@ export default function SettingsView({
 
 
       {sourceModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
@@ -5101,7 +5101,7 @@ export default function SettingsView({
 
 
       {customFieldModalOpen && (
-        <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>

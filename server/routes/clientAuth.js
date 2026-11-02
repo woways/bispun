@@ -16,6 +16,7 @@ import {
 import {
   createRateLimiter,
 } from "../middleware/rateLimit.js";
+import { getBearerToken } from "../lib/authToken.js";
 
 const router =
   Router();
@@ -821,6 +822,10 @@ router.post(
       return res.json({
         success:
           true,
+        // Returned so the mobile app can authenticate via the
+        // Authorization header. The web app ignores this and keeps
+        // using the httpOnly cookie set above.
+        token,
         ...buildClientSession(
           freshUser
         ),
@@ -1585,7 +1590,8 @@ router.post(
     const token =
       req.cookies?.[
         COOKIE_NAME
-      ];
+      ] ||
+      getBearerToken(req);
 
     if (token) {
       try {

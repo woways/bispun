@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 import {
   AlertCircle,
   CheckCircle2,
@@ -150,6 +151,11 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
     loadData();
   }, [open]);
 
+  // Overlay dismissal + focus (Escape / Android back / focus in-and-return),
+  // consistent with CalendarModal/ChatPanel.
+  const dialogRef = useRef(null);
+  useOverlayDismiss(open, onClose, { containerRef: dialogRef });
+
   if (!open) return null;
 
   async function createSequence(event) {
@@ -254,19 +260,19 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-[2px]">
-      <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="nurture-title" className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
               <Workflow size={14} /> Smart Nurture & Re-Engagement
             </div>
-            <div className="mt-1 text-[18px] font-bold text-slate-950">Automated follow-up sequences</div>
+            <div id="nurture-title" className="mt-1 text-[18px] font-bold text-slate-950">Automated follow-up sequences</div>
             <div className="mt-1 text-[12px] text-slate-500">
               WhatsApp template → Email → Follow-up task → Manager alert if there is still no reply.
             </div>
           </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="Close Smart Nurture" className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8">
             <X size={16} />
           </button>
         </div>
@@ -290,12 +296,12 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
           </div>
 
           {error ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[12px] font-semibold text-rose-700">
+            <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[12px] font-semibold text-rose-700">
               <AlertCircle size={14} className="mt-0.5" /> {error}
             </div>
           ) : null}
           {success ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-700">
+            <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-700">
               <CheckCircle2 size={14} className="mt-0.5" /> {success}
             </div>
           ) : null}
@@ -357,7 +363,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                 </label>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
+              <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={() => setShowCreate(false)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600">Cancel</button>
                 <button type="submit" disabled={saving} className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-900 px-4 text-[12px] font-semibold text-white disabled:opacity-50">
                   {saving ? <RefreshCw size={13} className="animate-spin" /> : <Plus size={13} />} Create sequence
@@ -386,7 +392,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                     const counts = sequence.counts || {};
                     return (
                       <div key={sequence.id} className="p-4">
-                        <div className="flex items-start justify-between gap-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
                               <div className="truncate text-[13px] font-bold text-slate-900">{sequence.name}</div>
@@ -403,11 +409,11 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                               ))}
                             </div>
                           </div>
-                          <div className="flex shrink-0 gap-1.5">
+                          <div className="flex w-full shrink-0 gap-1.5 sm:w-auto">
                             <button type="button" onClick={() => toggleSequence(sequence)} disabled={busyId === sequence.id} title={sequence.status === "ACTIVE" ? "Pause" : "Resume"} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50">
                               {sequence.status === "ACTIVE" ? <Pause size={13} /> : <Play size={13} />}
                             </button>
-                            <button type="button" onClick={() => enroll(sequence)} disabled={!selectedCount || sequence.status !== "ACTIVE" || busyId === sequence.id} className="h-8 rounded-lg bg-indigo-600 px-3 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
+                            <button type="button" onClick={() => enroll(sequence)} disabled={!selectedCount || sequence.status !== "ACTIVE" || busyId === sequence.id} className="h-8 flex-1 rounded-lg bg-indigo-600 px-3 text-[11px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none">
                               {busyId === sequence.id ? "Starting..." : "Start selected"}
                             </button>
                           </div>

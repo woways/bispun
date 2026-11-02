@@ -1159,7 +1159,7 @@ function MetricCard({
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div>
           <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">
             {label}

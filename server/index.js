@@ -45,6 +45,7 @@ import clientAnalyticsRoutes from "./routes/clientAnalytics.js";
 import clientLeadStoreRoutes from "./routes/clientLeadStore.js";
 import clientSupportRoutes from "./routes/clientSupport.js";
 import clientNotificationsRoutes from "./routes/clientNotifications.js";
+import clientDeviceTokensRoutes from "./routes/clientDeviceTokens.js";
 import clientBillingRoutes from "./routes/clientBilling.js";
 import clientUsersRoutes from "./routes/clientUsers.js";
 import clientLeadSourcesRoutes from "./routes/clientLeadSources.js";
@@ -85,10 +86,23 @@ app.use(requestId);
 app.use(securityHeaders);
 app.use(requestLogger);
 
+// Origins used by the Capacitor mobile app's WebView (Android + iOS).
+// These are the app's own built-in origins, not external websites.
+const MOBILE_APP_ORIGINS = [
+  "http://localhost",
+  "https://localhost",
+  "capacitor://localhost",
+  "ionic://localhost",
+];
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || config.clientOrigins.includes(origin)) {
+      if (
+        !origin ||
+        config.clientOrigins.includes(origin) ||
+        MOBILE_APP_ORIGINS.includes(origin)
+      ) {
         return callback(null, true);
       }
 
@@ -190,6 +204,7 @@ app.use("/api/client/analytics", clientAnalyticsRoutes);
 app.use("/api/client/lead-store", clientLeadStoreRoutes);
 app.use("/api/client/support", clientSupportRoutes);
 app.use("/api/client/notifications", clientNotificationsRoutes);
+app.use("/api/client/device-tokens", clientDeviceTokensRoutes);
 app.use("/api/client/google", clientGoogleRoutes);
 app.use("/api/client/communications", clientCommunicationsRoutes);
 app.use("/api/client/billing", clientBillingRoutes);
@@ -261,13 +276,25 @@ async function reconcileSubscriptions() {
   }
 }
 
-reconcileSubscriptions();
-startNurtureWorker();
-const subscriptionLifecycleTimer = setInterval(
-  reconcileSubscriptions,
-  60 * 60 * 1000
-);
-subscriptionLifecycleTimer.unref?.();
+// Development safeguard: when DISABLE_BACKGROUND_WORKERS=true, the nurture
+// worker and the subscription-lifecycle timer do NOT auto-start. This lets a
+// backend pointed at a dev/clone database run without contacting real
+// customers (email/WhatsApp/SMS) or mutating records on a schedule. Production
+// leaves this unset, so the original behaviour is completely unchanged.
+if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
+  console.warn(
+    "[startup] DISABLE_BACKGROUND_WORKERS=true — nurture worker and " +
+      "subscription lifecycle timer are DISABLED (development mode)."
+  );
+} else {
+  reconcileSubscriptions();
+  startNurtureWorker();
+  const subscriptionLifecycleTimer = setInterval(
+    reconcileSubscriptions,
+    60 * 60 * 1000
+  );
+  subscriptionLifecycleTimer.unref?.();
+}
 
 // Attach Socket.IO for real-time chat (shares cookie-JWT auth).
 const io = attachSocketServer(server, config);

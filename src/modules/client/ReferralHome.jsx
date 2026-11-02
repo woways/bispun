@@ -118,7 +118,7 @@ export default function ReferralHome({
   return (
     <div className="space-y-7">
       {/* KPI CARDS */}
-      <section className="grid gap-5 sm:grid-cols-3">
+      <section className="grid grid-cols-2 gap-4 sm:gap-5 sm:grid-cols-3">
         <StatCard
           label="Total Referrals"
           value={stats?.total ?? 0}

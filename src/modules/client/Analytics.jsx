@@ -78,13 +78,13 @@ function AnalyticsMetric({
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div className="min-w-0">
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
+          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
             {label}
           </div>
 
-          <div className="mt-1.5 text-[24px] leading-none font-bold tracking-tight text-slate-950">
+          <div className="mt-1.5 text-[20px] sm:text-[24px] leading-tight font-bold tracking-tight text-slate-950 break-words tabular-nums">
             {value}
           </div>
 
@@ -414,7 +414,7 @@ export default function Analytics({ selectedYear = "all" }) {
             <>
           {/* KPI CARDS */}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
             <AnalyticsMetric
               label="Total Leads"
               value={

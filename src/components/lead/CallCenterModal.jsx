@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
 
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
 const OUTCOMES = [
   "Connected",
@@ -95,6 +96,10 @@ export default function CallCenterModal({ open, onClose, lead }) {
     loadData();
   }, [open, lead?.id, phone]);
 
+  // Overlay dismissal + focus (Escape / Android back / focus in-and-return).
+  const dialogRef = useRef(null);
+  useOverlayDismiss(open, onClose, { containerRef: dialogRef });
+
   if (!open) return null;
 
   async function startCall() {
@@ -168,16 +173,16 @@ export default function CallCenterModal({ open, onClose, lead }) {
 
   return (
     <div className="fixed inset-0 z-[145] flex items-center justify-center bg-slate-950/60 p-3 backdrop-blur-[2px]">
-      <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="callcenter-title" className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
               <PhoneCall size={14} /> Cloud Telephony
             </div>
-            <div className="mt-1 text-[18px] font-bold text-slate-950">{title}</div>
+            <div id="callcenter-title" className="mt-1 text-[18px] font-bold text-slate-950">{title}</div>
             <div className="mt-1 text-[12px] text-slate-500">{phone || "No phone number"}</div>
           </div>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100">
+          <button type="button" onClick={onClose} aria-label="Close call center" className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8">
             <X size={16} />
           </button>
         </div>
@@ -202,12 +207,12 @@ export default function CallCenterModal({ open, onClose, lead }) {
           </div>
 
           {error ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[12px] font-semibold text-rose-700">
+            <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-[12px] font-semibold text-rose-700">
               <AlertCircle size={14} className="mt-0.5" /> {error}
             </div>
           ) : null}
           {success ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-700">
+            <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-700">
               <CheckCircle2 size={14} className="mt-0.5" /> {success}
             </div>
           ) : null}
@@ -273,25 +278,25 @@ export default function CallCenterModal({ open, onClose, lead }) {
             ) : (
               <div className="divide-y divide-slate-100">
                 {calls.map((call) => (
-                  <button key={call.id} type="button" onClick={() => editCall(call)} className="grid w-full grid-cols-1 gap-2 px-4 py-3 text-left hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_150px_110px_auto] sm:items-center">
-                    <div className="min-w-0">
+                  <div key={call.id} className="grid w-full grid-cols-1 gap-2 px-4 py-3 hover:bg-slate-50 sm:grid-cols-[minmax(0,1fr)_150px_110px_auto] sm:items-center">
+                    <button type="button" onClick={() => editCall(call)} aria-label={`Edit call outcome for ${title}`} className="min-w-0 rounded-md text-left">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[12px] font-bold text-slate-900">{String(call.direction || "OUTBOUND").replaceAll("_", " ")}</span>
                         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone(call.status)}`}>{String(call.status || "").replaceAll("_", " ")}</span>
                       </div>
                       <div className="mt-1 truncate text-[11px] text-slate-500">{call.outcome || "No outcome recorded"}{call.notes ? ` · ${call.notes}` : ""}</div>
-                    </div>
+                    </button>
                     <div className="text-[11px] text-slate-500">{formatUiDateTime(call.startedAt)}</div>
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600"><Clock size={11} /> {formatDuration(call.durationSeconds)}</div>
                     <div className="flex items-center justify-end gap-2">
                       {call.recordingUrl ? (
-                        <a href={call.recordingUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="inline-flex h-7 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 text-[10px] font-semibold text-indigo-700">
+                        <a href={call.recordingUrl} target="_blank" rel="noreferrer" className="inline-flex h-7 items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 text-[10px] font-semibold text-indigo-700">
                           Recording <ExternalLink size={10} />
                         </a>
                       ) : null}
-                      <span className="text-[10px] font-semibold text-slate-400">Edit</span>
+                      <button type="button" onClick={() => editCall(call)} className="rounded-md px-1 text-[10px] font-semibold text-slate-600 hover:text-slate-900">Edit</button>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}

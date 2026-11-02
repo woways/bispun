@@ -137,25 +137,25 @@ export default function Referrals({ currentUser }) {
 
       {tab === "earnings" && (
         <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <CheckCircle2 size={18} className="text-emerald-600" />
-              <div className="mt-3 text-[28px] font-bold text-slate-950">{rewardProgram.summary?.successfulCount || 0}</div>
+              <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">{rewardProgram.summary?.successfulCount || 0}</div>
               <div className="text-[13px] text-slate-500">Successful CRM referrals</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <BadgeIndianRupee size={18} className="text-indigo-600" />
-              <div className="mt-3 text-[28px] font-bold text-slate-950">{money(rewardProgram.summary?.totalEarnings)}</div>
+              <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">{money(rewardProgram.summary?.totalEarnings)}</div>
               <div className="text-[13px] text-slate-500">Total earned</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <Wallet size={18} className="text-emerald-600" />
-              <div className="mt-3 text-[28px] font-bold text-emerald-700">{money(rewardProgram.summary?.paidAmount)}</div>
+              <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-emerald-700">{money(rewardProgram.summary?.paidAmount)}</div>
               <div className="text-[13px] text-slate-500">Paid to you</div>
             </div>
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm">
               <TrendingUp size={18} className="text-indigo-600" />
-              <div className="mt-3 text-[28px] font-bold text-indigo-700">{money(rewardProgram.summary?.availableToRedeem)}</div>
+              <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-indigo-700">{money(rewardProgram.summary?.availableToRedeem)}</div>
               <div className="text-[13px] text-slate-600">Available to redeem</div>
             </div>
           </div>

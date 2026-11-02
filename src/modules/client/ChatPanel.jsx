@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 
 import { apiRequest, API_URL } from "../../lib/api";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -543,6 +544,60 @@ export default function ChatPanel({
   const activeIdRef = useRef(null);
   const targetConversationHandledRef = useRef(null);
 
+  // Mobile layout + keyboard-safe height (below lg only; desktop keeps the
+  // Tailwind h-[calc(100vh-104px)] class untouched).
+  const rootRef = useRef(null);
+  const prevMsgCountRef = useRef(0);
+  const [isMobileChat, setIsMobileChat] = useState(false);
+  const [mobileChatHeight, setMobileChatHeight] = useState(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [liveMessage, setLiveMessage] = useState("");
+
+  const newChatRef = useRef(null);
+  const messageInfoRef = useRef(null);
+  const forwardRef = useRef(null);
+
+  // Hardware-back + Escape dismissal (and focus for the dialogs) for every
+  // overlay, plus the mobile thread (back returns to the conversation list).
+  useOverlayDismiss(newOpen, () => setNewOpen(false), {
+    containerRef: newChatRef,
+  });
+  useOverlayDismiss(
+    messageInfoOpen,
+    () => {
+      setMessageInfoOpen(false);
+      setMessageInfoData(null);
+    },
+    { containerRef: messageInfoRef }
+  );
+  useOverlayDismiss(
+    !!forwardingMessageItem,
+    () => {
+      setForwardingMessageItem(null);
+      setForwardSelectedIds([]);
+      setForwardSearch("");
+    },
+    { containerRef: forwardRef }
+  );
+  useOverlayDismiss(emojiOpen, () => setEmojiOpen(false), {
+    manageFocus: false,
+  });
+  useOverlayDismiss(headerMenuOpen, () => setHeaderMenuOpen(false), {
+    manageFocus: false,
+  });
+  useOverlayDismiss(!!messageMenuId, closeMessageMenu, { manageFocus: false });
+  useOverlayDismiss(
+    threadSearchOpen,
+    () => {
+      setThreadSearchOpen(false);
+      setThreadSearch("");
+    },
+    { manageFocus: false }
+  );
+  useOverlayDismiss(isMobileChat && !!activeId, () => setActiveId(null), {
+    manageFocus: false,
+  });
+
   activeIdRef.current = activeId;
 
   useEffect(() => {
@@ -746,9 +801,92 @@ export default function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
+  // Auto-scroll to the newest message ONLY when the user is already at/near the
+  // bottom or the latest message is their own send. When they are reading older
+  // messages, leave the scroll position alone and surface a "jump to latest"
+  // affordance instead. Also announce genuinely new inbound messages politely.
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const el = threadScrollRef.current;
+    const last = messages[messages.length - 1];
+    const grew =
+      prevMsgCountRef.current !== 0 && messages.length > prevMsgCountRef.current;
+    prevMsgCountRef.current = messages.length;
+    if (!last) {
+      setShowJumpToLatest(false);
+      return;
+    }
+    const mineLast = last.sender?.id === myId;
+    const nearBottom = el
+      ? el.scrollHeight - el.scrollTop - el.clientHeight < 140
+      : true;
+    if (mineLast || nearBottom) {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      setShowJumpToLatest(false);
+    } else {
+      setShowJumpToLatest(true);
+    }
+    if (!mineLast && grew) {
+      setLiveMessage(
+        `${last.sender?.name || "New message"}: ${last.body || ""}`
+      );
+    }
+  }, [messages, myId]);
+
+  // Hide the "jump to latest" pill once the user scrolls back to the bottom.
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const nearBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+      if (nearBottom) setShowJumpToLatest(false);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [activeId]);
+
+  // Keyboard-safe, viewport-accurate height for the chat on mobile. Tracks the
+  // visual viewport so that when the Android soft keyboard opens, the panel
+  // shrinks (and its composer stays visible) instead of being covered. On
+  // desktop (>= lg) it clears the inline height and the Tailwind class wins.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const vv = window.visualViewport;
+    const recompute = () => {
+      if (!mq.matches) {
+        setIsMobileChat(false);
+        setMobileChatHeight(null);
+        return;
+      }
+      setIsMobileChat(true);
+      const el = rootRef.current;
+      if (!el) return;
+      const rectTop = el.getBoundingClientRect().top;
+      const vpH = vv ? vv.height : window.innerHeight;
+      const vpTop = vv ? vv.offsetTop : 0;
+      const keyboardOpen = window.innerHeight - vpH > 120;
+      // Reserve room for the fixed bottom nav + safe area only while the
+      // keyboard is closed; when it's open the nav is already behind it.
+      const bottomReserve = keyboardOpen ? 8 : 76;
+      const available = vpTop + vpH - rectTop - bottomReserve;
+      const clamped = Math.max(220, Math.min(available, vpH - 8));
+      setMobileChatHeight(Math.round(clamped));
+    };
+    recompute();
+    const onChange = () => recompute();
+    mq.addEventListener?.("change", onChange);
+    vv?.addEventListener("resize", recompute);
+    vv?.addEventListener("scroll", recompute);
+    window.addEventListener("resize", recompute);
+    window.addEventListener("orientationchange", recompute);
+    return () => {
+      mq.removeEventListener?.("change", onChange);
+      vv?.removeEventListener("resize", recompute);
+      vv?.removeEventListener("scroll", recompute);
+      window.removeEventListener("resize", recompute);
+      window.removeEventListener("orientationchange", recompute);
+    };
+  }, []);
 
   function insertEmoji(emoji) {
     setDraft((current) => current + emoji);
@@ -821,7 +959,9 @@ export default function ChatPanel({
       }
     }
 
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Enter sends, Shift+Enter inserts a newline. Never send mid-IME
+    // composition (e.g. an on-screen keyboard still composing a character).
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent?.isComposing) {
       e.preventDefault();
       sendMessage();
     }
@@ -1314,7 +1454,19 @@ export default function ChatPanel({
 
 
   return (
-    <div className="flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-[#f5f5f4]">
+    <div
+      ref={rootRef}
+      className="flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-[#f5f5f4]"
+      style={
+        isMobileChat && mobileChatHeight
+          ? { height: `${mobileChatHeight}px` }
+          : undefined
+      }
+    >
+      {/* Polite live region: announces genuinely new inbound messages to AT. */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {liveMessage}
+      </div>
       <style>{`
         .cb-bubble { transition: transform .15s ease, box-shadow .15s ease; }
         .cb-bubble:hover { transform: translateY(-1px); }
@@ -1329,7 +1481,7 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="mx-5 mb-5 flex min-h-0 flex-1 overflow-hidden rounded-[16px] border border-neutral-200 bg-white shadow-[0_2px_8px_rgba(0,0,0,0.05)] sm:mx-7">
+      <div className="m-0 flex min-h-0 flex-1 overflow-hidden rounded-none border-0 bg-white shadow-none lg:mx-7 lg:mb-5 lg:rounded-[16px] lg:border lg:border-neutral-200 lg:shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
         {/* LEFT NAV + CHAT LIST */}
         <div className={`w-full flex-shrink-0 border-r border-slate-200 bg-white lg:flex lg:w-[350px] lg:flex-col ${activeId ? "hidden" : "flex flex-col"}`}>
           <div className="flex h-[66px] items-center justify-between border-b border-neutral-200 px-4">
@@ -1391,8 +1543,9 @@ export default function ChatPanel({
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search chats, people and messages"
                 placeholder="Search chats, people and messages..."
-                className="h-10 w-full rounded-[9px] border border-neutral-400 bg-white pl-9 pr-3 text-[14px] font-medium text-neutral-800 outline-none placeholder:text-neutral-500 focus:border-neutral-700"
+                className="h-11 w-full rounded-[9px] border border-neutral-400 bg-white pl-9 pr-3 text-[16px] font-medium text-neutral-800 outline-none placeholder:text-neutral-500 focus:border-neutral-700 lg:h-10 lg:text-[14px]"
               />
             </div>
           </div>
@@ -1403,7 +1556,7 @@ export default function ChatPanel({
                 <Loader2 size={14} className="animate-spin" /> Loading...
               </div>
             ) : filteredConversations.length === 0 ? (
-              <div className="px-5 py-12 text-center text-xs leading-5 text-slate-400">
+              <div className="px-5 py-12 text-center text-xs leading-5 text-slate-500 lg:text-slate-400">
                 No chats found.
               </div>
             ) : (
@@ -1429,7 +1582,7 @@ export default function ChatPanel({
                       </div>
                     </div>
                     <div className="flex flex-shrink-0 flex-col items-end gap-1">
-                      {c.lastMessage && <span className="text-[12px] font-medium text-slate-400">{formatTime(c.lastMessage.createdAt)}</span>}
+                      {c.lastMessage && <span className="text-[12px] font-medium text-slate-500 lg:text-slate-400">{formatTime(c.lastMessage.createdAt)}</span>}
                       <div className="flex items-center gap-1.5">
                         {c.isFavorite && <Star size={12} className="fill-amber-400 text-amber-400" />}
                         {(c.unreadCount || 0) > 0 && !c.isMuted && (
@@ -1447,12 +1600,12 @@ export default function ChatPanel({
         </div>
 
         {/* CENTER THREAD */}
-        <div className={`min-h-0 min-w-0 flex-1 flex-col ${activeId ? "flex" : "hidden lg:flex"}`}>
+        <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${activeId ? "flex" : "hidden lg:flex"}`}>
           {activeConversation ? (
             <>
               <div className="flex h-[66px] flex-shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4">
-                <button type="button" onClick={() => setActiveId(null)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Back">
-                  <ChevronLeft size={17} />
+                <button type="button" onClick={() => setActiveId(null)} className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Back to conversations">
+                  <ChevronLeft size={19} />
                 </button>
                 <span className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white shadow-sm ${activeConversation.isGroup ? "bg-gradient-to-br from-violet-500 to-purple-600" : `bg-gradient-to-br ${avatarGradient(activeConversation.title)}`}`}>
                   {activeConversation.isGroup ? (activeConversation.avatarUrl ? <img src={activeConversation.avatarUrl} alt="" className="h-full w-full object-cover" /> : <Users size={16} />) : activeConversation.avatarUrl ? <img src={activeConversation.avatarUrl} alt="" className="h-full w-full object-cover" /> : initialsOf(activeConversation.title)}
@@ -1478,7 +1631,7 @@ export default function ChatPanel({
                     setThreadSearchOpen((open) => !open);
                     setHeaderMenuOpen(false);
                   }}
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-indigo-600 lg:h-9 lg:w-9"
                   aria-label="Search this chat"
                   title="Search this chat"
                 >
@@ -1488,8 +1641,10 @@ export default function ChatPanel({
                   <button
                     type="button"
                     onClick={() => setHeaderMenuOpen((open) => !open)}
-                    className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-9 lg:w-9"
                     aria-label="Chat options"
+                    aria-haspopup="true"
+                    aria-expanded={headerMenuOpen}
                     title="Chat options"
                   >
                     <MoreVertical size={17} />
@@ -1513,7 +1668,7 @@ export default function ChatPanel({
               {threadSearchOpen && (
                 <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
                   <Search size={14} className="text-slate-400" />
-                  <input autoFocus value={threadSearch} onChange={(e) => setThreadSearch(e.target.value)} placeholder="Search messages in this chat" className="h-9 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-[13px] outline-none focus:border-indigo-400" />
+                  <input autoFocus value={threadSearch} onChange={(e) => setThreadSearch(e.target.value)} aria-label="Search messages in this chat" placeholder="Search messages in this chat" className="h-10 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-[16px] outline-none focus:border-indigo-400 lg:h-9 lg:text-[13px]" />
                   <span className="whitespace-nowrap text-[11px] font-semibold text-slate-500">{visibleMessages.length} found</span>
                   <button type="button" onClick={() => { setThreadSearchOpen(false); setThreadSearch(""); }} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white" aria-label="Close chat search"><X size={14} /></button>
                 </div>
@@ -1532,12 +1687,12 @@ export default function ChatPanel({
                 {loadingThread ? (
                   <div className="flex items-center justify-center gap-2 py-10 text-xs text-slate-500"><Loader2 size={14} className="animate-spin" /> Loading messages...</div>
                 ) : messages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-400">
+                  <div className="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-500 lg:text-slate-400">
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><MessageSquare size={21} strokeWidth={1.6} /></span>
                     <div><div className="text-sm font-bold text-slate-600">Start the conversation</div><div className="mt-1 text-[13px]">Send a message or start a meeting.</div></div>
                   </div>
                 ) : visibleMessages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-400">
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-slate-500 lg:text-slate-400">
                     <Search size={21} />
                     <div className="text-sm font-semibold text-slate-600">No matching messages</div>
                     <div className="text-[12px]">Try another word or sender name.</div>
@@ -1896,6 +2051,19 @@ export default function ChatPanel({
                 )}
               </div>
 
+              {showJumpToLatest && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    setShowJumpToLatest(false);
+                  }}
+                  className="absolute bottom-24 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-indigo-700 shadow-[0_6px_20px_rgba(79,70,229,0.18)] hover:bg-indigo-50"
+                >
+                  <ChevronLeft size={14} className="-rotate-90" /> New messages
+                </button>
+              )}
+
               <div className="border-t border-neutral-200 bg-white p-3">
                 {replyTo && (
                   <div className="mb-2 flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2">
@@ -1909,16 +2077,17 @@ export default function ChatPanel({
                     <button
                       type="button"
                       onClick={() => setReplyTo(null)}
-                      className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
+                      aria-label="Cancel reply"
+                      className="flex h-9 w-9 items-center justify-center rounded-md text-slate-500 hover:bg-white hover:text-slate-700 lg:h-6 lg:w-6 lg:text-slate-400"
                     >
-                      <X size={12} />
+                      <X size={14} />
                     </button>
                   </div>
                 )}
 
                 <div className="flex min-h-[46px] items-end gap-1 rounded-[9px] border border-neutral-400 bg-white p-1.5 transition focus-within:border-indigo-400">
                   <div className="relative">
-                    <button type="button" onClick={() => setEmojiOpen((o) => !o)} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600" aria-label="Emoji"><Smile size={17} /></button>
+                    <button type="button" onClick={() => setEmojiOpen((o) => !o)} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 lg:h-9 lg:w-9" aria-label="Emoji" aria-haspopup="true" aria-expanded={emojiOpen}><Smile size={17} /></button>
                     {emojiOpen && (
                       <>
                         <button
@@ -1935,6 +2104,8 @@ export default function ChatPanel({
                                   key={`composer-${category}`}
                                   type="button"
                                   onClick={() => setComposerEmojiCategory(category)}
+                                  aria-label={category}
+                                  aria-pressed={composerEmojiCategory === category}
                                   className={`flex h-8 min-w-8 items-center justify-center rounded-lg text-base transition ${
                                     composerEmojiCategory === category
                                       ? "bg-indigo-50 ring-1 ring-indigo-100"
@@ -1968,7 +2139,7 @@ export default function ChatPanel({
                   <button
                     type="button"
                     onClick={startMeeting}
-                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 lg:h-9 lg:w-9"
                     aria-label="Start meeting"
                     title="Start meeting"
                   >
@@ -2032,18 +2203,19 @@ export default function ChatPanel({
                       onChange={handleDraftChange}
                       onKeyDown={handleComposerKeyDown}
                       rows={1}
+                      aria-label="Message"
                       placeholder="Type a message..."
-                      className="max-h-28 min-h-[36px] w-full resize-none bg-transparent px-2 py-2 text-[14px] font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                      className="max-h-28 min-h-[40px] w-full resize-none bg-transparent px-2 py-2 text-[16px] font-medium text-slate-800 outline-none placeholder:text-slate-500 lg:min-h-[36px] lg:text-[14px] lg:placeholder:text-slate-400"
                     />
                   </div>
-                  <button type="button" onClick={sendMessage} disabled={sending || !draft.trim()} className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40" aria-label="Send">
+                  <button type="button" onClick={sendMessage} disabled={sending || !draft.trim()} className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40 lg:h-9 lg:w-9" aria-label="Send">
                     {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   </button>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.055),_transparent_30%)] text-slate-400">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.055),_transparent_30%)] text-slate-500 lg:text-slate-400">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><MessageSquare size={25} strokeWidth={1.5} /></span>
               <div className="text-center"><div className="text-sm font-bold text-slate-600">Select a conversation</div><div className="mt-1 text-[13px]">Choose a chat from the left to start messaging.</div></div>
             </div>
@@ -2056,17 +2228,17 @@ export default function ChatPanel({
 
       {newOpen && (
         <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
-          <div className="flex max-h-[80vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+          <div ref={newChatRef} role="dialog" aria-modal="true" aria-labelledby="newchat-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-              <div className="text-[14px] font-semibold text-slate-950">New chat</div>
-              <button type="button" onClick={() => setNewOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={16} /></button>
+              <div id="newchat-title" className="text-[14px] font-semibold text-slate-950">New chat</div>
+              <button type="button" onClick={() => setNewOpen(false)} aria-label="Close new chat" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
             </div>
             <div className="border-b border-slate-100 p-3">
               <div className="relative">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search people" className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-indigo-400" />
+                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} aria-label="Search people" placeholder="Search people" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[16px] font-medium text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />
               </div>
-              {selectedIds.length > 1 && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Group name" className="mt-2 h-9 w-full rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-400" />}
+              {selectedIds.length > 1 && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} aria-label="Group name" placeholder="Group name" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[16px] font-semibold text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />}
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
               {filteredUsers.length === 0 ? <div className="px-3 py-8 text-center text-xs text-slate-500">No people found.</div> : filteredUsers.map((u) => {
@@ -2100,10 +2272,10 @@ export default function ChatPanel({
             className="absolute inset-0 cursor-default"
           />
 
-          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+          <div ref={messageInfoRef} role="dialog" aria-modal="true" aria-labelledby="msginfo-title" className="relative z-10 w-full max-w-md overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <div className="text-[15px] font-bold text-slate-950">Message info</div>
+                <div id="msginfo-title" className="text-[15px] font-bold text-slate-950">Message info</div>
                 <div className="mt-0.5 text-[12px] text-slate-500">
                   Sent and read details for this message
                 </div>
@@ -2245,10 +2417,10 @@ export default function ChatPanel({
             className="absolute inset-0 cursor-default"
           />
 
-          <div className="relative z-10 flex max-h-[78vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+          <div ref={forwardRef} role="dialog" aria-modal="true" aria-labelledby="forward-title" className="relative z-10 flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <div className="text-[15px] font-bold text-slate-950">Forward message</div>
+                <div id="forward-title" className="text-[15px] font-bold text-slate-950">Forward message</div>
                 <div className="mt-0.5 text-[12px] text-slate-500">
                   Select up to 5 chats
                 </div>
@@ -2262,7 +2434,8 @@ export default function ChatPanel({
                   setForwardSelectedIds([]);
                   setForwardSearch("");
                 }}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+                aria-label="Close forward dialog"
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50 lg:h-8 lg:w-8"
               >
                 <X size={16} />
               </button>
@@ -2278,8 +2451,9 @@ export default function ChatPanel({
                   autoFocus
                   value={forwardSearch}
                   onChange={(event) => setForwardSearch(event.target.value)}
+                  aria-label="Search chats to forward to"
                   placeholder="Search chats"
-                  className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[13px] font-medium text-slate-700 outline-none focus:border-indigo-400"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[16px] font-medium text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-[13px]"
                 />
               </div>
             </div>
