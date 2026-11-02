@@ -371,7 +371,7 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
         ref={triggerRef}
         type="button"
         onClick={openMenu}
-        className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+        className="inline-flex min-h-[44px] items-center font-semibold text-indigo-600 hover:text-indigo-800 hover:underline lg:min-h-0"
         title="Copy or dial this number"
       >
         {phone}
@@ -404,6 +404,7 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
               type="button"
               onClick={() => {
                 setMenu(null);
+                triggerRef.current?.focus();
                 onDial();
               }}
               aria-label={`Dial and track call with ${name}`}
@@ -4278,7 +4279,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                     Lead ID
                   </th>
 
-                  <th className="sticky left-[116px] z-20 min-w-[200px] max-w-[200px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th className="lg:sticky lg:left-[116px] z-20 min-w-[200px] max-w-[200px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Name
                   </th>
 
@@ -4291,7 +4292,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                   {individualColumns.status && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
                   {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
 
-                  <th className="sticky right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th className="lg:sticky lg:right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Actions
                   </th>
                 </tr>
@@ -4349,7 +4350,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                             </span>
                           </td>
 
-                          <td className={`sticky left-[116px] z-10 min-w-[200px] max-w-[200px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                          <td className={`lg:sticky lg:left-[116px] z-10 min-w-[200px] max-w-[200px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex min-w-0 items-center gap-2">
                               <button
                                 type="button"
@@ -4457,7 +4458,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                           )}
                           {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 
-                          <td className={`sticky right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                          <td className={`lg:sticky lg:right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 type="button"
