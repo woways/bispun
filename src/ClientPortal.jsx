@@ -12,6 +12,11 @@ import {
 import { io } from "socket.io-client";
 
 import {
+  initMobilePush,
+  unregisterMobilePush,
+} from "./lib/mobilePush";
+
+import {
   Bell,
   MessageSquare,
   Target,
@@ -60,6 +65,7 @@ import {
   Activity,
   CircleHelp,
   Menu,
+  MoreHorizontal,
 } from "lucide-react";
 
 import {
@@ -74,7 +80,9 @@ import {
 import {
   API_URL,
   apiRequest,
+  clearAuthToken,
 } from "./lib/api";
+import { performLogout } from "./lib/logoutFlow";
 import {
   playChatSound,
   playNotificationSound,
@@ -99,6 +107,9 @@ import MyStore from "./modules/client/MyStore";
 import { applyBrandTheme } from "./lib/brandTheme";
 import { downloadInvoicePdf } from "./lib/invoicePdf";
 import BillingReceiptModal from "./components/BillingReceiptModal";
+import { BottomSheet, MobileBottomNav } from "./components/mobileUi";
+import { pushBackInterceptor } from "./lib/backStack";
+import { setModuleBackHandler } from "./lib/moduleBack";
 
 
 function SidebarIcon({
@@ -451,6 +462,53 @@ export default function ClientPortal({
     "dashboard"
   );
 
+  // --- Android hardware-Back module history (B3.1) ---------------------------
+  // Module switches are React state, not route history, so Android Back used to
+  // exit the app immediately. We keep a linear stack of previously shown modules
+  // and register a single back handler (overlays still close first via backStack;
+  // Dashboard with an empty stack is the intentional exit point).
+  const moduleHistoryRef = useRef([]);
+  const prevModuleRef = useRef(module);
+  const isPoppingRef = useRef(false);
+  const moduleRef = useRef(module);
+
+  // Track navigations to build the Back history. Skip the push when the change
+  // came from a Back pop (isPoppingRef, reset HERE inside the effect) and skip
+  // consecutive duplicates; cap the depth so it can't grow unbounded.
+  useEffect(() => {
+    if (isPoppingRef.current) {
+      isPoppingRef.current = false;
+    } else {
+      const prev = prevModuleRef.current;
+      const history = moduleHistoryRef.current;
+      if (prev !== module && history[history.length - 1] !== prev) {
+        history.push(prev);
+        if (history.length > 50) history.shift();
+      }
+    }
+    prevModuleRef.current = module;
+    moduleRef.current = module;
+  }, [module]);
+
+  // One module-back handler for the whole shell (single-slot; returning the
+  // unregister keeps exactly one live handler under StrictMode's double-invoke).
+  useEffect(() => {
+    return setModuleBackHandler(() => {
+      const history = moduleHistoryRef.current;
+      if (history.length > 0) {
+        isPoppingRef.current = true;
+        setModule(history.pop());
+        return true;
+      }
+      if (moduleRef.current !== "dashboard") {
+        isPoppingRef.current = true;
+        setModule("dashboard");
+        return true;
+      }
+      return false; // root (Dashboard, empty history) -> BackButtonHandler exits
+    });
+  }, []);
+
   const [
     signingOut,
     setSigningOut,
@@ -461,11 +519,6 @@ export default function ClientPortal({
   const [
     sidebarCollapsed,
     setSidebarCollapsed,
-  ] = useState(false);
-
-  const [
-    mobileSidebarOpen,
-    setMobileSidebarOpen,
   ] = useState(false);
 
   const [
@@ -503,6 +556,9 @@ export default function ClientPortal({
   const previousUnreadNotificationCountRef = useRef(null);
   const previousAudibleChatCountRef = useRef(null);
   const lastChatSoundAtRef = useRef(0);
+  // Logout + lifecycle guards for polling (P1/P2/P3).
+  const signingOutRef = useRef(false);
+  const pollActiveRef = useRef(true); // false while app is hidden/backgrounded
 
   const [
     profileMenuOpen,
@@ -647,6 +703,34 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       : uiPreferences.appearance;
 
   const [workspaceSearch, setWorkspaceSearch] = useState("");
+  // Mobile top-bar overlays (all lg:hidden; desktop header is unchanged).
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  // Same portal search results the desktop header computes, for the mobile sheet.
+  const mobileSearchResults = useMemo(() => {
+    const query = workspaceSearch.trim().toLowerCase();
+    if (!query) return [];
+    return NAV_GROUPS.flatMap((group) =>
+      group.items.map((key) => ({
+        key,
+        groupLabel: group.label,
+        label:
+          key === "dashboard"
+            ? "Dashboard"
+            : key === "settings"
+            ? "Settings"
+            : MODULE_META[key]?.label || group.label || key,
+      }))
+    )
+      .filter((item, index, all) => all.findIndex((c) => c.key === item.key) === index)
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(query) ||
+          item.groupLabel.toLowerCase().includes(query) ||
+          item.key.toLowerCase().includes(query)
+      )
+      .slice(0, 12);
+  }, [workspaceSearch]);
 
   const profileMenuRef =
     useRef(null);
@@ -969,9 +1053,22 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     finally { setYearSaving(false); }
   }
 
+  // Android hardware back closes an open overlay before navigating/exiting.
+  // Each open overlay registers a close callback; the back handler runs the
+  // most-recently-opened one first (LIFO). Bottom-sheet overlays register
+  // themselves; these cover the non-sheet modals below.
   useEffect(() => {
-    setMobileSidebarOpen(false);
-  }, [module]);
+    if (!calendarOpen) return undefined;
+    return pushBackInterceptor(() => setCalendarOpen(false));
+  }, [calendarOpen]);
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    return pushBackInterceptor(() => setNotificationsOpen(false));
+  }, [notificationsOpen]);
+  useEffect(() => {
+    if (!addYearOpen) return undefined;
+    return pushBackInterceptor(() => setAddYearOpen(false));
+  }, [addYearOpen]);
 
   useEffect(() => {
     setLiveCompany(
@@ -1050,6 +1147,51 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       ] === true
     );
   }
+
+  // Mobile bottom-nav primary items (permission-filtered) + which one is active.
+  const bottomNavItems = [
+    { key: "dashboard", label: "Dashboard", icon: Home },
+    { key: "lead-store", label: "Leads", icon: ShoppingBag },
+    { key: "admissions", label: "Admissions", icon: GraduationCap },
+    { key: "revenue", label: "Finance", icon: CircleDollarSign },
+  ].filter((item) => hasModulePermission(item.key));
+
+  const bottomNavActiveKey =
+    module === "dashboard"
+      ? "dashboard"
+      : module === "lead-store"
+      ? "lead-store"
+      : module === "revenue"
+      ? "revenue"
+      : ["admissions", "walkins", "counselling"].includes(module) ||
+        module.startsWith("domestic-") ||
+        module.startsWith("international-")
+      ? "admissions"
+      : null;
+
+  // "More" sheet: remaining authorized modules, grouped. Labels/icons mirror
+  // the sidebar; permission filtering uses the same hasModulePermission check.
+  const MORE_ITEM_META = {
+    chats: { label: "Chats", icon: MessageSquare },
+    "goals-and-targets": { label: "Goals", icon: Target },
+    "utm-leads": { label: "UTM Leads", icon: GitFork },
+    analytics: { label: "Insights", icon: Activity },
+    "my-store": { label: "My Store", icon: Store },
+    "my-referrals": { label: "Referrals", icon: Gift },
+    "domestic-admissions": { label: "Domestic", icon: Building2, ariaLabel: "Domestic admissions" },
+    "international-admissions": { label: "International", icon: Globe2, ariaLabel: "International admissions" },
+  };
+  const moreGroups = [
+    { title: "Work", keys: ["chats", "goals-and-targets", "utm-leads"] },
+    { title: "Admissions", keys: ["domestic-admissions", "international-admissions"] },
+    { title: "Insights", keys: ["analytics"] },
+    { title: "Grow", keys: ["my-store", "my-referrals"] },
+  ]
+    .map((group) => ({
+      ...group,
+      keys: group.keys.filter((key) => hasModulePermission(key)),
+    }))
+    .filter((group) => group.keys.length > 0);
 
   function permissionMessage(
     moduleKey
@@ -1274,6 +1416,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }
 
   async function loadUnreadNotificationCount() {
+    // Never poll once logout has begun (P2).
+    if (signingOutRef.current) return;
     try {
       const data = await apiRequest(
         "/api/client/notifications/unread-count"
@@ -1369,15 +1513,20 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   useEffect(() => {
     loadUnreadNotificationCount();
 
-    const interval = window.setInterval(
-      loadUnreadNotificationCount,
-      15000
-    );
+    // P3: slower fallback poll (45s) that pauses while the app is
+    // backgrounded/hidden or signing out. Refresh-on-resume is handled by the
+    // lifecycle effect below.
+    const interval = window.setInterval(() => {
+      if (!pollActiveRef.current || signingOutRef.current) return;
+      loadUnreadNotificationCount();
+    }, 45000);
 
     return () => window.clearInterval(interval);
   }, []);
 
   async function loadUnreadChatCount({ playSound = true } = {}) {
+    // Never poll once logout has begun (P2).
+    if (signingOutRef.current) return;
     try {
       const data = await apiRequest("/api/client/chat/unread-count");
       const nextUnreadCount = Number(data?.unreadCount || 0);
@@ -1410,12 +1559,57 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     loadUnreadChatCount({ playSound: false });
 
     // Production fallback: the badge and sound still update even if a
-    // websocket is temporarily disconnected by the browser/network.
+    // websocket is temporarily disconnected by the browser/network. Socket.IO
+    // remains the primary real-time path, so a longer interval (25s) is plenty
+    // and far lighter on the backend. Pauses while hidden/signing out (P3).
     const interval = window.setInterval(() => {
+      if (!pollActiveRef.current || signingOutRef.current) return;
       loadUnreadChatCount();
-    }, 6000);
+    }, 25000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  // P3: pause polling while the app is backgrounded/hidden; refresh on resume.
+  // Uses the web Page Visibility API and the Capacitor native app lifecycle.
+  useEffect(() => {
+    let removeNative = null;
+
+    function setActive(active) {
+      pollActiveRef.current = active;
+      if (active && !signingOutRef.current) {
+        // Becoming visible again: refresh immediately so badges are current.
+        loadUnreadChatCount({ playSound: false });
+        loadUnreadNotificationCount();
+      }
+    }
+
+    function onVisibility() {
+      setActive(document.visibilityState === "visible");
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
+
+    (async () => {
+      try {
+        const { Capacitor } = await import("@capacitor/core");
+        if (Capacitor?.isNativePlatform?.()) {
+          const { App } = await import("@capacitor/app");
+          const handle = await App.addListener(
+            "appStateChange",
+            ({ isActive }) => setActive(isActive)
+          );
+          removeNative = () => handle.remove();
+        }
+      } catch {
+        /* plugin unavailable — web visibility handling still applies */
+      }
+    })();
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (removeNative) removeNative();
+    };
   }, []);
 
   useEffect(() => {
@@ -1479,39 +1673,41 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     return () => socket.disconnect();
   }, [user?.id]);
 
+  // Mobile (Capacitor Android/iOS) push registration. No-op in a desktop
+  // browser: initMobilePush() returns immediately when not on a native
+  // platform, so web behaviour and routing are unchanged. Notification taps
+  // reuse the existing module navigation (setModule).
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    initMobilePush({ onNavigate: (actionModule) => setModule(actionModule) });
+    return undefined;
+  }, [user?.id]);
+
   async function signOut() {
-    if (
-      signingOut
-    ) {
+    if (signingOut) {
       return;
     }
 
-    setSigningOut(
-      true
-    );
+    // Stop all authenticated background work immediately (P2): polls check this
+    // ref and bail out, so nothing new hits the backend during logout.
+    signingOutRef.current = true;
+    setSigningOut(true);
 
-    try {
-      await apiRequest(
-        "/api/client/auth/logout",
-        {
-          method:
-            "POST",
-        }
-      );
-    } catch (error) {
-      console.error(
-        "Client logout failed:",
-        error
-      );
-    } finally {
-      navigate(
-        "/login",
-        {
-          replace:
-            true,
-        }
-      );
-    }
+    // Sequenced logout (see src/lib/logoutFlow.js): the auth token is preserved
+    // until the AUTHENTICATED device-token unregister + server logout are sent
+    // (so they don't 401 on mobile), then the token is ALWAYS cleared — even on
+    // failure/timeout — before navigating, and navigation is bounded so the UI
+    // never sticks on "Signing out…".
+    await performLogout({
+      unregisterPush: unregisterMobilePush,
+      serverLogout: () =>
+        apiRequest("/api/client/auth/logout", { method: "POST", timeoutMs: 4000 }),
+      clearToken: clearAuthToken,
+      navigate: () => navigate("/login", { replace: true }),
+      onError: (stage, error) =>
+        console.error(`[logout] ${stage} failed:`, error?.message || error),
+      timeoutMs: 2500,
+    });
   }
 
   function openChangePassword() {
@@ -3748,9 +3944,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const timeGreeting = getTimeGreeting();
 
-  const sidebarCompact =
-    sidebarCollapsed &&
-    !mobileSidebarOpen;
+  const sidebarCompact = sidebarCollapsed;
 
   const currentPage =
     PAGE_META[module] || {
@@ -3872,67 +4066,374 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         }
       `}</style>
 
-      {/* MOBILE APP BAR */}
-      <div className="lg:hidden fixed inset-x-0 top-0 z-[60] h-14 bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() =>
-            setMobileSidebarOpen(
-              (current) => !current
-            )
-          }
-          className="w-10 h-10 rounded-xl border border-slate-200 bg-white text-slate-700 flex items-center justify-center shadow-sm active:scale-[0.98]"
-          aria-label={
-            mobileSidebarOpen
-              ? "Close navigation"
-              : "Open navigation"
-          }
-        >
-          {mobileSidebarOpen ? (
-            <X size={19} />
-          ) : (
-            <Menu size={20} />
-          )}
-        </button>
+      {/* MOBILE APP BAR — paddingTop reserves the Android status-bar safe area
+          (requires viewport-fit=cover in index.html); inner row stays 56px. */}
+      <div
+        className="lg:hidden fixed inset-x-0 top-0 z-[60] bg-[#f6f7fb]/95 backdrop-blur-xl border-b border-slate-200/70 px-3"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
+        <div className="flex h-14 items-center gap-2">
+          {/* Brand — primary nav is the bottom bar; header stays compact. */}
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px] font-bold text-slate-950 truncate">
+              {company.brandName}
+            </div>
+          </div>
 
-        <div className="absolute left-1/2 max-w-[58vw] -translate-x-1/2 text-center">
-          <div className="text-[13px] font-bold text-slate-950 truncate">
-            {company.brandName}
+          {/* Right controls: Notifications + Profile (Search/Calendar/Period live in More). */}
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationsOpen(true);
+                loadNotifications();
+              }}
+              aria-label={
+                unreadNotificationCount > 0
+                  ? `Notifications, ${unreadNotificationCount} unread`
+                  : "Notifications"
+              }
+              aria-haspopup="dialog"
+              aria-expanded={notificationsOpen}
+              className="relative w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Bell size={18} aria-hidden="true" />
+              {unreadNotificationCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-brand-600 text-white text-[10px] font-bold leading-4 text-center">
+                  {unreadNotificationCount > 9 ? "9+" : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setProfileTab("profile");
+                setModule("profile");
+              }}
+              className="w-11 h-11 rounded-full bg-brand-600 text-white flex items-center justify-center text-[12px] font-bold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              aria-label="Open profile"
+            >
+              {initials}
+            </button>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setMobileSidebarOpen(false);
-            setProfileTab("profile");
-            setModule("profile");
-          }}
-          className="relative w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center text-[12px] font-bold shadow-sm"
-          aria-label="Open profile"
-        >
-          {initials}
-          {unreadNotificationCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-rose-500 border-2 border-[#f6f7fb]" />
-          )}
-        </button>
       </div>
 
-      {mobileSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={() => setMobileSidebarOpen(false)}
-          className="lg:hidden fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[1px]"
-        />
-      )}
+      {/* MOBILE: bottom navigation (primary). Desktop sidebar is unchanged. */}
+      <MobileBottomNav
+        items={bottomNavItems}
+        activeKey={bottomNavActiveKey}
+        onSelect={(key) => setModule(key)}
+        onMore={() => setMobileMoreOpen(true)}
+        moreOpen={mobileMoreOpen}
+      />
+
+      {/* MOBILE: search sheet (reuses the desktop portal search + results). */}
+      <BottomSheet
+        open={mobileSearchOpen}
+        onClose={() => setMobileSearchOpen(false)}
+        title="Search"
+      >
+        <div className="p-4">
+          <label htmlFor="mobile-portal-search" className="sr-only">
+            Search portal
+          </label>
+          <div className="relative">
+            <Search
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <input
+              id="mobile-portal-search"
+              data-autofocus=""
+              value={workspaceSearch}
+              onChange={(event) => setWorkspaceSearch(event.target.value)}
+              placeholder="Search portal..."
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-[15px] font-medium text-slate-800 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+            />
+            {workspaceSearch && (
+              <button
+                type="button"
+                onClick={() => setWorkspaceSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                aria-label="Clear search"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          <p className="sr-only" role="status" aria-live="polite">
+            {workspaceSearch.trim()
+              ? `${mobileSearchResults.length} results`
+              : ""}
+          </p>
+
+          {workspaceSearch.trim() && (
+            <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
+              {mobileSearchResults.length === 0 ? (
+                <div className="px-3 py-6 text-center text-[13px] text-slate-500">
+                  No matches
+                </div>
+              ) : (
+                mobileSearchResults.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setModule(item.key);
+                      setWorkspaceSearch("");
+                      setMobileSearchOpen(false);
+                    }}
+                    className="flex w-full items-center justify-between border-b border-slate-100 px-3 py-3 text-left last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-[14px] font-semibold text-slate-900">
+                        {item.label}
+                      </div>
+                      <div className="mt-0.5 text-[12px] text-slate-500">
+                        {item.groupLabel}
+                      </div>
+                    </div>
+                    <ChevronRight
+                      size={16}
+                      className="text-slate-300"
+                      aria-hidden="true"
+                    />
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* MOBILE: notifications sheet (same data/handlers as the desktop dropdown). */}
+      <BottomSheet
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        title="Notifications"
+      >
+        <div>
+          {unreadNotificationCount > 0 && (
+            <div className="px-4 py-2 border-b border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={markAllNotificationsRead}
+                className="text-[13px] font-semibold text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded"
+              >
+                Mark all read
+              </button>
+            </div>
+          )}
+          {notificationsLoading ? (
+            <div className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500">
+              <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+              Loading...
+            </div>
+          ) : notificationError ? (
+            <div className="p-4 text-xs text-rose-600" role="alert">
+              {notificationError}
+            </div>
+          ) : notifications.length === 0 ? (
+            <div className="py-10 text-center text-xs text-slate-500">
+              No notifications yet.
+            </div>
+          ) : (
+            notifications.map((notification) => (
+              <button
+                key={notification.id}
+                type="button"
+                onClick={() => markNotificationRead(notification)}
+                className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
+                  notification.read ? "bg-white" : "bg-indigo-50/30"
+                }`}
+              >
+                <div className="text-xs font-bold text-slate-900">
+                  {notification.title}
+                </div>
+                <div className="mt-1 text-[13px] leading-5 text-slate-500 break-words">
+                  {notification.message}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* MOBILE: "More" sheet — remaining authorized modules + quick actions. */}
+      <BottomSheet
+        open={mobileMoreOpen}
+        onClose={() => setMobileMoreOpen(false)}
+        title="More"
+      >
+        <div className="p-4 space-y-5">
+          {moreGroups.map((group, groupIndex) => (
+            <section
+              key={group.title}
+              role="group"
+              aria-labelledby={`more-h-${group.title}`}
+            >
+              <h3
+                id={`more-h-${group.title}`}
+                className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
+              >
+                {group.title}
+              </h3>
+              <div className="grid grid-cols-3 gap-2">
+                {group.keys.map((key, keyIndex) => {
+                  const meta = MORE_ITEM_META[key];
+                  const MoreIcon = meta.icon;
+                  const active = module === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      data-autofocus={groupIndex === 0 && keyIndex === 0 ? "" : undefined}
+                      aria-current={active ? "page" : undefined}
+                      aria-label={meta.ariaLabel}
+                      onClick={() => {
+                        setMobileMoreOpen(false);
+                        setModule(key);
+                      }}
+                      className={`min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                        active
+                          ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <MoreIcon size={20} aria-hidden="true" />
+                      <span className="text-[12px] font-medium leading-tight">
+                        {meta.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+
+          <section role="group" aria-labelledby="more-h-quick">
+            <h3
+              id="more-h-quick"
+              className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
+            >
+              Quick actions
+            </h3>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  setMobileSearchOpen(true);
+                }}
+                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                <Search size={20} aria-hidden="true" />
+                <span className="text-[12px] font-medium leading-tight">Search</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMoreOpen(false);
+                  setCalendarOpen(true);
+                }}
+                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                <CalendarDays size={20} aria-hidden="true" />
+                <span className="text-[12px] font-medium leading-tight">Calendar</span>
+              </button>
+            </div>
+            <div className="mt-3">
+              <label
+                htmlFor="more-period-year"
+                className="block text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-1.5"
+              >
+                Period / Year
+              </label>
+              <select
+                id="more-period-year"
+                value={selectedYear}
+                onChange={(event) => {
+                  if (event.target.value === "__add_year__") {
+                    setYearError("");
+                    setNewWorkspaceYear("");
+                    setMobileMoreOpen(false);
+                    setAddYearOpen(true);
+                    return;
+                  }
+                  setSelectedYear(event.target.value);
+                }}
+                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-700 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={String(year)}>
+                    {year}
+                  </option>
+                ))}
+                <option value="all">All Time</option>
+                <option value="__add_year__">+ Add Year</option>
+              </select>
+            </div>
+          </section>
+
+          {(hasModulePermission("settings") || hasModulePermission("help")) && (
+            <section role="group" aria-labelledby="more-h-account">
+              <h3
+                id="more-h-account"
+                className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
+              >
+                Account
+              </h3>
+              <div className="grid grid-cols-2 gap-2">
+                {hasModulePermission("settings") && (
+                  <button
+                    type="button"
+                    aria-current={module === "settings" ? "page" : undefined}
+                    onClick={() => {
+                      setMobileMoreOpen(false);
+                      setModule("settings");
+                    }}
+                    className={`min-h-[52px] flex items-center justify-center gap-2 rounded-xl border p-2 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      module === "settings"
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <Settings size={18} aria-hidden="true" />
+                    Settings
+                  </button>
+                )}
+                {hasModulePermission("help") && (
+                  <button
+                    type="button"
+                    aria-current={module === "help" ? "page" : undefined}
+                    onClick={() => {
+                      setMobileMoreOpen(false);
+                      setModule("help");
+                    }}
+                    className={`min-h-[52px] flex items-center justify-center gap-2 rounded-xl border p-2 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      module === "help"
+                        ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <CircleHelp size={18} aria-hidden="true" />
+                    Help &amp; Support
+                  </button>
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      </BottomSheet>
 
       <div className="flex">
         {/* FIXED LIGHT SIDEBAR */}
         <aside
-          className={`fixed inset-y-0 left-0 z-[70] overflow-visible border-r border-white/[0.07] bg-[#0f172a] transition-[width,transform,box-shadow] duration-200 ease-out ${
-            mobileSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-          } ${
+          className={`hidden lg:block fixed inset-y-0 left-0 z-[70] overflow-visible border-r border-white/[0.07] bg-[#0f172a] transition-[width,transform,box-shadow] duration-200 ease-out lg:translate-x-0 ${
             sidebarCompact
               ? "w-[72px] shadow-[5px_0_18px_rgba(2,8,23,0.08)]"
               : "w-[82vw] max-w-[292px] lg:w-[252px] lg:max-w-none shadow-[8px_0_28px_rgba(2,8,23,0.10)]"
@@ -3996,6 +4497,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             )}
 
             <nav
+              aria-label="Main"
               className={`relative mx-2 mb-3 flex-1 min-h-0 overflow-hidden ${
                 sidebarCompact
                   ? "px-1.5 py-2"
@@ -4033,9 +4535,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         onDrop={() => handleNavDrop(navIndex)}
                         onDragEnd={handleNavDragEnd}
                         title={sidebarCompact ? group.label : undefined}
+                        aria-current={active ? "page" : undefined}
                         onClick={() => {
                           setModule(key);
-                          setMobileSidebarOpen(false);
                         }}
                         className={`relative mb-1 w-full transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isDragOver ? "opacity-60 " : ""}${
                           sidebarCompact
@@ -4215,16 +4717,24 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   <button
                                     key={key}
                                     type="button"
+                                    aria-current={active ? "page" : undefined}
                                     onClick={() => {
                                       setModule(key);
-                                      setMobileSidebarOpen(false);
                                     }}
                                     className={`relative w-full min-h-9 rounded-xl px-3 py-2 flex items-center gap-3 text-left transition-colors ${
                                       active
-                                        ? "text-white"
+                                        ? "bg-white/[0.06] text-white lg:bg-transparent"
                                         : "text-slate-400 hover:text-white"
                                     }`}
                                   >
+                                    {/* Mobile-only active accent (lg:hidden) — desktop keeps its
+                                        original appearance; aria-current still exposes active state. */}
+                                    {active && (
+                                      <span
+                                        className="lg:hidden absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-indigo-400"
+                                        aria-hidden="true"
+                                      />
+                                    )}
                                     <ChildIcon size={16} strokeWidth={2} className="flex-shrink-0" />
 
                                     <span className="flex-1 text-[13px] font-medium">
@@ -4273,7 +4783,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                         type="button"
                                         onClick={() => {
                                           setModule(section.defaultModule);
-                                          setMobileSidebarOpen(false);
                                         }}
                                         className={`relative mt-1 w-full min-h-9 rounded-lg px-2.5 py-2 flex items-center gap-2.5 text-left transition-colors ${
                                           sectionActive
@@ -4420,7 +4929,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       })
                       .slice(0, 10)
                       .map((item) => (
-                        <button key={item.key} type="button" onClick={() => { setModule(item.key); setWorkspaceSearch(""); setMobileSidebarOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50">
+                        <button key={item.key} type="button" onClick={() => { setModule(item.key); setWorkspaceSearch(""); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left hover:bg-slate-50">
                           <div className="min-w-0">
                             <div className="truncate text-[12px] font-semibold text-slate-900">{item.label}</div>
                             <div className="mt-0.5 text-[12px] text-slate-500">{item.groupLabel}</div>
@@ -4556,7 +5065,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </header>
 
           {/* MAIN CONTENT */}
-          <main className="mt-14 min-h-[calc(100vh-56px)] bg-[#f6f7fa] px-3 pt-3 pb-4 sm:px-5 sm:pt-4 sm:pb-5 lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
+          <main className="min-h-[100dvh] bg-[#f6f7fa] px-3 pt-[calc(56px+env(safe-area-inset-top)+12px)] pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-[calc(56px+env(safe-area-inset-top)+16px)] lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
             <div className="max-w-[1560px] mx-auto">
               {subscriptionPastDue && (
                 <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">

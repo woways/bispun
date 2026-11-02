@@ -46,6 +46,8 @@ import {
 
 import { apiRequest } from "../../lib/api";
 
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
+
 
 
 /* ------------------------------------------------------------------ */
@@ -374,6 +376,19 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
 
   const [now, setNow] = useState(() => new Date());
+
+  const calendarRef = useRef(null);
+
+  const editorRef = useRef(null);
+
+  // Hardware-back + Escape dismissal and focus management. When the event
+  // editor is open it owns dismissal (Escape closes the editor only); otherwise
+  // the whole calendar does.
+  useOverlayDismiss(open && !editorOpen, onClose, { containerRef: calendarRef });
+
+  useOverlayDismiss(editorOpen, () => setEditorOpen(false), {
+    containerRef: editorRef,
+  });
 
 
 
@@ -929,7 +944,12 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
     <div className="fixed inset-0 z-[130] flex items-stretch justify-center bg-slate-950/35 p-0 backdrop-blur-[1px] sm:items-center sm:p-3">
 
-      <div className="flex h-full w-full max-w-[1500px] flex-col overflow-hidden border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,.22)] sm:h-[94vh] sm:rounded-[22px]">
+      <div ref={calendarRef} role="dialog" aria-modal="true" aria-labelledby="calendar-title" className="flex h-[100dvh] w-full max-w-[1500px] flex-col overflow-hidden border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,.22)] pt-[env(safe-area-inset-top)] sm:h-[94vh] sm:rounded-[22px] sm:pt-0">
+
+        {/* Polite announcement of the visible month for assistive tech. */}
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {formatMonthYear(anchorDate)}
+        </div>
 
         {/* HEADER */}
 
@@ -945,7 +965,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
             <div>
 
-              <div className="text-[17px] font-extrabold tracking-[-0.02em] text-slate-950">Calendar</div>
+              <div id="calendar-title" className="text-[17px] font-extrabold tracking-[-0.02em] text-slate-950">Calendar</div>
 
               <div className="mt-0.5 text-[12px] font-medium text-slate-500">
 
@@ -983,7 +1003,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
               onClick={onClose}
 
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100"
+              className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 lg:h-9 lg:w-9"
 
               aria-label="Close calendar"
 
@@ -1019,7 +1039,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
           {/* LEFT PANEL */}
 
-          <div className="flex w-full flex-shrink-0 flex-col overflow-y-auto border-b border-slate-200 bg-white lg:w-[300px] lg:border-b-0 lg:border-r">
+          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto border-b border-slate-200 bg-white lg:w-[300px] lg:flex-none lg:flex-shrink-0 lg:border-b-0 lg:border-r">
 
             {/* Mini-month */}
 
@@ -1041,7 +1061,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                     onClick={() => setAnchorDate((d) => addMonths(d, -1))}
 
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-7 lg:w-7"
 
                     aria-label="Previous month"
 
@@ -1057,7 +1077,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                     onClick={() => setAnchorDate((d) => addMonths(d, 1))}
 
-                    className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-7 lg:w-7"
 
                     aria-label="Next month"
 
@@ -1081,7 +1101,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                     key={i}
 
-                    className="py-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400"
+                    className="py-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400"
 
                   >
 
@@ -1121,7 +1141,27 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                       }}
 
-                      className={`relative flex h-10 items-center justify-center rounded-xl text-[12px] font-bold transition-colors ${
+                      aria-label={`${day.toLocaleDateString("en-IN", {
+
+                        weekday: "long",
+
+                        day: "numeric",
+
+                        month: "long",
+
+                        year: "numeric",
+
+                      })}${isToday ? ", today" : ""}${
+
+                        hasEvents ? ", has events" : ""
+
+                      }`}
+
+                      aria-current={isToday ? "date" : undefined}
+
+                      aria-pressed={isSelected}
+
+                      className={`relative flex h-11 items-center justify-center rounded-xl text-[12px] font-bold transition-colors lg:h-10 ${
 
                         isSelected
 
@@ -1135,7 +1175,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                           ? "text-slate-700 hover:bg-slate-100"
 
-                          : "text-slate-300 hover:bg-slate-50"
+                          : "text-slate-500 hover:bg-slate-50 lg:text-slate-300"
 
                       }`}
 
@@ -1145,7 +1185,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                       {hasEvents && !isSelected && (
 
-                        <span className="absolute bottom-1 h-1 w-1 rounded-full bg-brand-500" />
+                        <span aria-hidden="true" className="absolute bottom-1 h-1 w-1 rounded-full bg-brand-500" />
 
                       )}
 
@@ -1189,7 +1229,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
             <div className="border-t border-slate-200 px-4 py-3.5">
 
-              <div className="mb-3 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+              <div className="mb-3 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400">
 
                 {selectedDate.toLocaleDateString("en-IN", {
 
@@ -1289,9 +1329,10 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
 
 
-          {/* RIGHT: WEEK GRID */}
+          {/* RIGHT: WEEK GRID (desktop only — mobile uses the month picker +
+              selected-day agenda in the left panel above). */}
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="hidden min-h-0 min-w-0 flex-1 flex-col lg:flex">
 
             {/* View toolbar */}
 
@@ -1543,11 +1584,11 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
         <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
 
-          <div className="w-full max-w-md overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="event-editor-title" className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl lg:block lg:max-h-none">
 
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3.5">
 
-              <div className="text-[22px] font-extrabold tracking-[-0.025em] text-slate-950">
+              <div id="event-editor-title" className="text-[22px] font-extrabold tracking-[-0.025em] text-slate-950">
 
                 {editingEvent.id ? "Edit event" : "New event"}
 
@@ -1565,7 +1606,9 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
                 }}
 
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                aria-label="Close event editor"
+
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"
 
               >
 
@@ -1577,7 +1620,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
 
 
-            <div className="max-h-[70vh] space-y-3.5 overflow-y-auto p-5">
+            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-5 lg:max-h-[70vh] lg:flex-none">
 
               {/* Title */}
 
@@ -1997,7 +2040,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
             {/* Editor footer */}
 
-            <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
+            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
 
               {editingEvent.id ? (
 

@@ -348,11 +348,11 @@ export default function MyStore({ company }) {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             {(tpl?.designs || []).slice(0, 4).map((d, i) => (
               <div
                 key={i}
-                className="flex h-24 w-24 items-center justify-center rounded-2xl bg-white/12 text-[26px] backdrop-blur"
+                className="flex aspect-square w-full max-w-24 items-center justify-center rounded-2xl bg-white/12 text-[26px] backdrop-blur"
               >
                 {d.emoji}
               </div>
@@ -364,7 +364,7 @@ export default function MyStore({ company }) {
       {/* AI-generated images (real Ideogram output, stored in S3) */}
       {generated.length > 0 && (
         <div>
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="text-[16px] font-black text-slate-900">Your generated images</div>
             <span className="text-[12px] font-semibold text-slate-400">
               {generated.length} saved
@@ -403,7 +403,7 @@ export default function MyStore({ company }) {
 
       {/* ready designs */}
       <div>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="text-[16px] font-black text-slate-900">Ready designs</div>
         </div>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">

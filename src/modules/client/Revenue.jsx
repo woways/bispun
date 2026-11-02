@@ -345,8 +345,8 @@ function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-white rounded-t-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[94vh] overflow-hidden flex flex-col sm:rounded-2xl sm:max-h-[92vh]">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-indigo-500">
@@ -740,7 +740,7 @@ function ExpenseDetails({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {details.map(([label, value]) => (
               <div
                 key={label}
@@ -1134,17 +1134,17 @@ function RevenueMetric({
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <div
             className={`text-[13px] font-semibold uppercase tracking-[0.09em] ${
-              featured ? "text-indigo-100" : "text-slate-400"
+              featured ? "text-indigo-100" : "text-slate-500 lg:text-slate-400"
             }`}
           >
             {label}
           </div>
 
           <div
-            className={`mt-2 text-[22px] leading-none font-bold tracking-tight ${
+            className={`mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight break-words tabular-nums ${
               featured ? "text-white" : "text-slate-950"
             }`}
           >
@@ -1239,7 +1239,7 @@ function LeakageRadarView({ radar }) {
             </p>
           </div>
 
-          <div className="min-w-[210px] rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 sm:text-right">
+          <div className="w-full rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 sm:w-auto sm:min-w-[210px] sm:text-right">
             <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-rose-500">
               Revenue at risk
             </div>
@@ -1850,7 +1850,7 @@ export default function Revenue({ selectedYear = "all" }) {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}

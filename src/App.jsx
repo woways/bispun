@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
 import { apiRequest } from "./lib/api";
+import BackButtonHandler from "./components/BackButtonHandler";
 
 const ClientPortal = lazy(() => import("./ClientPortal"));
 const SuperAdmin = lazy(() => import("./SuperAdmin"));
@@ -586,6 +587,7 @@ function AdminRoute({
 export default function App() {
   return (
     <BrowserRouter>
+      <BackButtonHandler />
       <Suspense fallback={<DashboardLoadingScreen />}>
       <Routes>
         <Route

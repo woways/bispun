@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+      Allow plain HTTP (cleartext) ONLY to local development servers:
+        - 10.0.2.2  = the host PC, as seen from the Android emulator
+        - localhost = the device itself
+      Production API domains are NOT listed here, so all real traffic
+      stays HTTPS-only. This is safe to keep in the project.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

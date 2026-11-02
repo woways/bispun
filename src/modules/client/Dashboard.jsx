@@ -44,6 +44,8 @@ import {
 import { apiRequest } from "../../lib/api";
 import { brandColor } from "../../lib/brandTheme";
 import { formatUiDate, formatUiTime, formatUiDateTime } from "../../lib/uiPreferences";
+import { MobileRecordCard } from "../../components/mobileUi";
+import { Badge, statusTone } from "../../components/ui";
 
 const PIE_COLORS = [
   "#1d4ed8",
@@ -124,25 +126,26 @@ function MetricCard({
   const bar = tones[accent] || tones.indigo;
 
   return (
-    <div className="group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
-      <div className="flex items-center gap-3">
+    <div className="group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+      <div className="flex items-center gap-2.5 sm:gap-3">
         <div
-          className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-white ${bar}`}
+          className={`flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl text-white ${bar}`}
         >
-          <Icon size={20} />
+          <Icon size={18} className="sm:hidden" />
+          <Icon size={20} className="hidden sm:block" />
         </div>
 
-        <div className="min-w-0 text-[16px] font-bold text-slate-800 break-words">
+        <div className="min-w-0 text-[14px] sm:text-[16px] font-bold text-slate-800 break-words">
           {label}
         </div>
       </div>
 
-      <div className="mt-3 text-[22px] leading-none font-extrabold tracking-tight text-slate-900 break-words">
+      <div className="mt-2.5 sm:mt-3 text-[18px] sm:text-[22px] leading-none font-extrabold tracking-tight tabular-nums text-slate-900 break-words">
         {value}
       </div>
 
       {detail ? (
-        <div className="mt-2 text-[12px] text-slate-400 break-words">
+        <div className="mt-2 text-[12px] text-slate-500 break-words">
           {detail}
         </div>
       ) : null}
@@ -1030,7 +1033,7 @@ export default function Dashboard({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         {uiPreferences?.showGreeting !== false ? (
           <div>
-            <h1 className="text-[40px] font-bold leading-[1.2] tracking-[-0.01em] text-slate-950" style={{ fontFamily: "'Newsreader', Georgia, serif" }}>
+            <h1 className="text-[28px] sm:text-[40px] font-bold leading-[1.2] tracking-[-0.01em] text-slate-950" style={{ fontFamily: "'Newsreader', Georgia, serif" }}>
               {(() => {
                 const hour = new Date().getHours();
                 if (hour < 12) return "Good Morning";
@@ -1048,7 +1051,7 @@ export default function Dashboard({
           </div>
         ) : (
           <div>
-            <h1 className="text-[40px] font-normal leading-[1.2] tracking-[-0.01em] text-slate-950" style={{ fontFamily: "'Newsreader', Georgia, serif" }}>Dashboard</h1>
+            <h1 className="text-[28px] sm:text-[40px] font-normal leading-[1.2] tracking-[-0.01em] text-slate-950" style={{ fontFamily: "'Newsreader', Georgia, serif" }}>Dashboard</h1>
             <p className="mt-1.5 text-[15px] font-medium text-slate-500">{formatUiDate(new Date())}</p>
           </div>
         )}
@@ -1110,7 +1113,7 @@ export default function Dashboard({
                   </div>
 
                   {myPerformance ? (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3">
                       <MetricCard
                         label="My Leads"
                         value={myPerformance.leads || 0}
@@ -1160,7 +1163,7 @@ export default function Dashboard({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
                   {(isTeamView ? pulseMetrics.slice(0, 4) : pulseMetrics).map((metric) => (
                     <MetricCard
                       key={metric.label}
@@ -1404,7 +1407,7 @@ export default function Dashboard({
                       </div>
                     </>
                   ) : (
-                    <div className="flex h-[260px] items-center justify-center text-xs text-slate-400">
+                    <div className="flex h-[190px] items-center justify-center text-xs text-slate-400">
                       No lead data yet.
                     </div>
                   )}
@@ -1465,7 +1468,7 @@ export default function Dashboard({
                           </div>
                         </div>
                         <div className="mt-3 text-[11px] leading-4 text-slate-500">{item.detail}</div>
-                        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-80 transition group-hover:opacity-100">
+                        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
                           View details
                           <ChevronRight size={12} />
                         </div>
@@ -1493,7 +1496,8 @@ export default function Dashboard({
                   </div>
 
                   {recentAdmissionsData.length ? (
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="hidden lg:block overflow-x-auto">
                       <table className="w-full min-w-[620px] text-left">
                         <thead>
                           <tr className="border-b border-slate-100 bg-slate-50/60 text-[12px] font-bold uppercase tracking-[0.06em] text-slate-500">
@@ -1540,6 +1544,70 @@ export default function Dashboard({
                         </tbody>
                       </table>
                     </div>
+
+                    <div
+                      className="lg:hidden divide-y divide-slate-100"
+                      role="list"
+                      aria-label="Recent admissions"
+                    >
+                      {recentAdmissionsData.slice(0, 5).map((item, index) => {
+                        const student =
+                          item.studentName || item.leadName || item.name || "—";
+                        const status = item.revenueStatus || item.status || "";
+                        return (
+                          <MobileRecordCard
+                            key={item.id || `${student}-${index}`}
+                            title={student}
+                            badges={
+                              status
+                                ? [{ tone: statusTone(status), label: status }]
+                                : []
+                            }
+                            fields={[
+                              {
+                                label: "College",
+                                value:
+                                  item.collegeName ||
+                                  item.universityName ||
+                                  item.college ||
+                                  "—",
+                              },
+                              {
+                                label: "Counsellor",
+                                value:
+                                  item.counsellorName ||
+                                  item.admissionDoneBy ||
+                                  item.assignedTo ||
+                                  "—",
+                              },
+                              {
+                                label: "Date",
+                                value:
+                                  item.dateOfAdmission ||
+                                  item.admissionDate ||
+                                  item.createdAt
+                                    ? formatUiDate(
+                                        item.dateOfAdmission ||
+                                          item.admissionDate ||
+                                          item.createdAt
+                                      )
+                                    : "—",
+                              },
+                              {
+                                label: "Amount",
+                                value:
+                                  item.amount != null
+                                    ? money(item.amount)
+                                    : item.revenue != null
+                                    ? money(item.revenue)
+                                    : "—",
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                    </div>
+                    </>
                   ) : (
                     <div className="flex h-[220px] flex-col items-center justify-center text-center">
                       <UserCheck size={20} className="text-slate-300" />
@@ -2087,8 +2155,8 @@ export default function Dashboard({
       {/* EVENT MODAL */}
 
       {actionDetailOpen && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-[2px]">
-          <div className="flex max-h-[86vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[18px] border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed inset-0 z-[130] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
+          <div className="flex max-h-[92vh] w-full max-w-[880px] flex-col overflow-hidden rounded-t-[18px] border border-slate-200 bg-white shadow-2xl sm:max-h-[86vh] sm:rounded-[18px]">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div className="min-w-0">
                 <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">

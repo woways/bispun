@@ -234,8 +234,8 @@ function LeadModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-white rounded-t-2xl shadow-xl w-full max-w-2xl max-h-[94vh] overflow-hidden sm:rounded-xl sm:max-h-[92vh]">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h2 className="text-[17px] font-semibold text-slate-900">
@@ -575,8 +575,8 @@ function ImportInternalLeadsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+      <div className="w-full max-w-lg overflow-hidden rounded-t-2xl border border-white/70 bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <h2 className="text-[17px] font-semibold text-slate-900">
@@ -851,8 +851,8 @@ function LinkModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden">
+    <div className="fixed inset-0 z-[90] bg-slate-950/50 backdrop-blur-sm flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-white rounded-t-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden sm:rounded-2xl">
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
           <div>
             <h2 className="text-[17px] font-bold text-slate-950">

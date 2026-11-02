@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const configuredApiUrl = String(
   import.meta.env.VITE_API_URL || ""
 ).trim();
@@ -9,6 +11,40 @@ if (import.meta.env.PROD && !configuredApiUrl) {
 export const API_URL = (
   configuredApiUrl || "http://localhost:4000"
 ).replace(/\/+$/, "");
+
+// --- Mobile (Capacitor) token auth ------------------------------------
+// The web app authenticates with an httpOnly cookie and is UNCHANGED.
+// A mobile WebView cannot keep a cross-origin cookie, so on native
+// platforms we also store the JWT returned by /auth/login and send it
+// in the Authorization header. On web, none of this runs.
+const TOKEN_KEY = "cb_auth_token";
+const isNative = Capacitor?.isNativePlatform?.() === true;
+
+function getStoredToken() {
+  if (!isNative) return null;
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredToken(token) {
+  if (!isNative) return;
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* storage unavailable — ignore */
+  }
+}
+
+// Clear the stored mobile auth token immediately (used on logout so no further
+// request can act authenticated, and a slow logout cannot be "undone" by a
+// stale in-flight response). No-op on web, where auth is a httpOnly cookie.
+export function clearAuthToken() {
+  setStoredToken(null);
+}
 
 export async function apiRequest(path, options = {}) {
   const normalizedPath = String(path).startsWith("/")
@@ -23,30 +59,52 @@ export async function apiRequest(path, options = {}) {
     typeof FormData !== "undefined" &&
     options.body instanceof FormData;
 
+  const token = getStoredToken();
+
   const headers = {
     ...(options.body && !isFormDataBody
       ? { "Content-Type": "application/json" }
       : {}),
+    // Mobile only: carry the JWT when the cookie can't travel.
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers || {}),
   };
 
-  const response = await fetch(
-    `${API_URL}${normalizedPath}`,
-    {
-      ...options,
+  // Optional bounded timeout: pass options.timeoutMs to abort a slow request
+  // (used by logout so the UI never hangs on a cold/slow backend).
+  const controller =
+    typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeoutMs = Number(options.timeoutMs) || 0;
+  const timeoutId =
+    controller && timeoutMs > 0
+      ? setTimeout(() => controller.abort(), timeoutMs)
+      : null;
 
-      // Authentication in this app is cookie based. Never let an
-      // individual request accidentally disable cookie transmission.
-      credentials: "include",
+  let response;
+  try {
+    response = await fetch(
+      `${API_URL}${normalizedPath}`,
+      {
+        ...options,
 
-      // Avoid a mobile browser reusing a stale auth/session response.
-      cache:
-        options.cache ||
-        (isAuthRequest ? "no-store" : "default"),
+        // Authentication in this app is cookie based on web. Never let an
+        // individual request accidentally disable cookie transmission.
+        credentials: "include",
 
-      headers,
-    }
-  );
+        // Avoid a mobile browser reusing a stale auth/session response.
+        cache:
+          options.cache ||
+          (isAuthRequest ? "no-store" : "default"),
+
+        headers,
+
+        // Use a caller-provided abort signal, else our bounded-timeout one.
+        signal: options.signal || controller?.signal || undefined,
+      }
+    );
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 
   let data = null;
 
@@ -62,6 +120,21 @@ export async function apiRequest(path, options = {}) {
     }
   } catch {
     data = null;
+  }
+
+  // Mobile only: capture the token on login, drop it on logout or 401.
+  if (isNative) {
+    if (
+      normalizedPath.endsWith("/auth/login") &&
+      response.ok &&
+      data?.token
+    ) {
+      setStoredToken(data.token);
+    } else if (normalizedPath.endsWith("/auth/logout")) {
+      setStoredToken(null);
+    } else if (response.status === 401) {
+      setStoredToken(null);
+    }
   }
 
   if (!response.ok) {

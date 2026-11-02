@@ -31,6 +31,7 @@ import {
   Mail,
   Send,
   MessageCircle,
+  MessageSquare,
   Smartphone,
   History,
   Copy,
@@ -52,6 +53,7 @@ import {
 import { formatUiDate } from "../../lib/uiPreferences";
 import NurtureCenter from "../../components/lead/NurtureCenter";
 import CallCenterModal from "../../components/lead/CallCenterModal";
+import { openWhatsApp, openSMS } from "../../lib/nativeActions";
 
 const TYPES = [
   {
@@ -388,7 +390,7 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
     const rect = event.currentTarget.getBoundingClientRect();
     const menuWidth = 178;
     setMenu({
-      top: Math.min(rect.bottom + 6, window.innerHeight - 112),
+      top: Math.min(rect.bottom + 6, window.innerHeight - 220),
       left: Math.min(Math.max(8, rect.left), window.innerWidth - menuWidth - 8),
     });
   }
@@ -429,6 +431,28 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
           >
             <PhoneCall size={14} />
             Dial & track
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMenu(null);
+              openWhatsApp(phone);
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-emerald-700 hover:bg-emerald-50"
+          >
+            <MessageCircle size={14} />
+            WhatsApp
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMenu(null);
+              openSMS(phone);
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <MessageSquare size={14} />
+            Message (SMS)
           </button>
         </div>
       ) : null}
@@ -2481,12 +2505,12 @@ function StoreMetric({
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
             {label}
           </div>
 
-          <div className="mt-2 text-[22px] leading-none font-bold tracking-tight text-slate-950">
+          <div className="mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 break-words tabular-nums">
             {value}
           </div>
         </div>
@@ -3781,7 +3805,7 @@ export default function LeadStore({ selectedYear = "all" }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StoreMetric
           label="Datasets"
           value={
