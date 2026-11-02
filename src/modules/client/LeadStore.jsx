@@ -284,13 +284,9 @@ function isValidManualLeadName(value) {
   );
 }
 
-function displayLeadId(id) {
-  const token = String(id || "")
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(-10)
-    .toUpperCase();
-
-  return token ? `BSP-${token}` : "—";
+function displayLeadId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0 ? String(value) : "—";
 }
 
 
@@ -820,7 +816,7 @@ function IndividualLeadModal({
               <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Lead ID</span>
                 <span className="ml-2 font-mono text-[13px] font-bold text-slate-700">
-                  {displayLeadId(lead.id)}
+                  {displayLeadId(lead.leadNumber)}
                 </span>
               </div>
             )}
@@ -2866,7 +2862,7 @@ export default function LeadStore({ selectedYear = "all" }) {
             const searchMatches =
               !query ||
               [
-                displayLeadId(lead.id),
+                displayLeadId(lead.leadNumber),
                 lead.name,
                 lead.phone,
                 lead.alternatePhone,
@@ -3355,7 +3351,7 @@ export default function LeadStore({ selectedYear = "all" }) {
     const rows =
       filteredIndividualLeads.map(
         (lead) => [
-          displayLeadId(lead.id),
+          displayLeadId(lead.leadNumber),
           lead.name,
           lead.phone,
           lead.alternatePhone,
@@ -4316,7 +4312,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                                   {lead.name}
                                 </span>
                                 <span className="mt-0.5 block truncate font-mono text-[10px] font-semibold tracking-[0.04em] text-slate-400">
-                                  {displayLeadId(lead.id)}
+                                  {displayLeadId(lead.leadNumber)}
                                 </span>
                               </button>
 

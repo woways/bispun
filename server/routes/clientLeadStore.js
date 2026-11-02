@@ -2519,6 +2519,25 @@ router.get(
 
 
 
+      const leadNumberRows = await prisma.lead.findMany({
+        where: {
+          companyId,
+          OR: [
+            { source: "LEAD_STORE" },
+            { notes: { contains: "Admissions origin:" } },
+          ],
+        },
+        select: { id: true },
+        orderBy: [
+          { createdAt: "asc" },
+          { id: "asc" },
+        ],
+      });
+
+      const leadNumberById = new Map(
+        leadNumberRows.map((lead, index) => [lead.id, index + 1])
+      );
+
       const leads = await prisma.lead.findMany({
 
         where,
@@ -2568,6 +2587,7 @@ router.get(
         leads: leads.map((lead) => ({
 
           id: lead.id,
+          leadNumber: leadNumberById.get(lead.id) || null,
 
           name: lead.name,
 
