@@ -39,6 +39,7 @@ import {
   Paperclip,
   Link2,
   FileText,
+  Sparkles,
 } from "lucide-react";
 
 import {
@@ -50,6 +51,8 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
+import NurtureCenter from "../../components/lead/NurtureCenter";
+import CallCenterModal from "../../components/lead/CallCenterModal";
 import { openWhatsApp, openSMS } from "../../lib/nativeActions";
 
 const TYPES = [
@@ -292,7 +295,7 @@ function displayLeadId(leadNumber) {
 }
 
 
-function PhoneAction({ phone, name, onCopied }) {
+function PhoneAction({ phone, name, onCopied, onDial }) {
   const [menu, setMenu] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
@@ -396,6 +399,20 @@ function PhoneAction({ phone, name, onCopied }) {
             <PhoneCall size={14} />
             Dial number
           </a>
+          {onDial ? (
+            <button
+              type="button"
+              onClick={() => {
+                setMenu(null);
+                onDial();
+              }}
+              aria-label={`Dial and track call with ${name}`}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              <PhoneCall size={14} />
+              {"Dial & track"}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -2404,6 +2421,11 @@ export default function LeadStore({ selectedYear = "all" }) {
     setSelectedLeadIds,
   ] = useState([]);
 
+  // Restored features: Smart Nurture (bulk follow-up over selected leads) and
+  // Dial & Track (per-lead call-center modal).
+  const [nurtureOpen, setNurtureOpen] = useState(false);
+  const [callLead, setCallLead] = useState(null);
+
   const [
     page,
     setPage,
@@ -3548,6 +3570,17 @@ export default function LeadStore({ selectedYear = "all" }) {
 
           <button
             type="button"
+            onClick={() => setNurtureOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={nurtureOpen}
+            className="h-9 min-h-[44px] lg:min-h-0 px-3.5 border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
+          >
+            <Sparkles size={14} />
+            Smart Nurture
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               setEditingIndividual(null);
               setShowIndividual(true);
@@ -4376,6 +4409,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                                 phone={lead.phone}
                                 name={lead.name}
                                 onCopied={setSuccessMessage}
+                                onDial={() => setCallLead(lead)}
                               />
                             </td>
                           )}
@@ -4385,6 +4419,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                                 phone={lead.alternatePhone}
                                 name={lead.name}
                                 onCopied={setSuccessMessage}
+                                onDial={() => setCallLead(lead)}
                               />
                             </td>
                           )}
@@ -5073,6 +5108,18 @@ export default function LeadStore({ selectedYear = "all" }) {
           }}
         />
       )}
+
+      <NurtureCenter
+        open={nurtureOpen}
+        onClose={() => setNurtureOpen(false)}
+        selectedLeadIds={selectedLeadIds}
+      />
+
+      <CallCenterModal
+        open={Boolean(callLead)}
+        onClose={() => setCallLead(null)}
+        lead={callLead}
+      />
     </div>
   );
 }
