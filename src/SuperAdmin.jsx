@@ -130,6 +130,35 @@ const MENU = [
     icon: Settings,
   },
 ];
+
+const ADMIN_SECTION_KEYS = new Set(MENU.map((item) => item.key));
+
+function getAdminRouteState() {
+  if (typeof window === "undefined") {
+    return { section: "dashboard", selectedClient: null };
+  }
+
+  const parts = window.location.pathname.split("/").filter(Boolean);
+
+  if (parts[0] !== "admin") {
+    return { section: "dashboard", selectedClient: null };
+  }
+
+  if (parts[1] === "client" && parts[2]) {
+    return {
+      section: "clients",
+      selectedClient: decodeURIComponent(parts[2]),
+    };
+  }
+
+  const candidate = parts[1] ? decodeURIComponent(parts[1]) : "dashboard";
+
+  return {
+    section: ADMIN_SECTION_KEYS.has(candidate) ? candidate : "dashboard",
+    selectedClient: null,
+  };
+}
+
 import bispunLogo from "./assets/bispun-logo.svg";
 
 const ADMIN_ALERT_READ_STORAGE_KEY = "bispun.superAdmin.readAlerts.v1";
@@ -160,17 +189,35 @@ export default function SuperAdmin() {
   const nav =
     useNavigate();
 
+  const initialRouteState = getAdminRouteState();
+
   const [
     section,
     setSection,
   ] = useState(
-    "dashboard"
+    initialRouteState.section
   );
 
   const [
     selectedClient,
     setSelectedClient,
-  ] = useState(null);
+  ] = useState(initialRouteState.selectedClient);
+
+  useEffect(() => {
+    const targetPath = selectedClient
+      ? `/admin/client/${encodeURIComponent(selectedClient)}`
+      : section === "dashboard"
+        ? "/admin"
+        : `/admin/${encodeURIComponent(section)}`;
+
+    if (window.location.pathname !== targetPath) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${targetPath}${window.location.search}${window.location.hash}`
+      );
+    }
+  }, [section, selectedClient]);
 
   const [
     sidebarCollapsed,

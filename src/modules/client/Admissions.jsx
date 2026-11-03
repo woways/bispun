@@ -2256,6 +2256,7 @@ function AdmissionModal({
 
 function ImportModal({
   branch,
+  market = "DOMESTIC",
   onClose,
   onImported,
 }) {
@@ -4609,6 +4610,7 @@ function AdmissionsManager({
       {showImport ? (
         <ImportModal
           branch={selectedBranch}
+          market={activeMarket === "ALL" ? "DOMESTIC" : activeMarket}
           onClose={() => setShowImport(false)}
           onImported={async (data) => {
             setShowImport(false);

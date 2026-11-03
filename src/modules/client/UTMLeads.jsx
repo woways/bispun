@@ -2124,7 +2124,10 @@ export default function UTMLeads({
         <div className="mt-4 space-y-4">
           {rows.slice(0, 6).map((row) => {
             const value = Number(row.leads || 0);
-            const width = Math.max(8, (value / max) * 100);
+            const width =
+              value <= 0
+                ? 0
+                : Math.max(8, (value / max) * 100);
 
             return (
               <div key={row[labelKey]}>

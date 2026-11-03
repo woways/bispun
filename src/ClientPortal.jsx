@@ -351,6 +351,27 @@ const PAGE_META = {
   profile: { label: "My Profile" },
 };
 
+const CLIENT_MODULE_KEYS = new Set(Object.keys(PAGE_META));
+
+function getClientModuleFromPath() {
+  if (typeof window === "undefined") return "dashboard";
+
+  const match = window.location.pathname.match(/^\/app\/([^/]+)/);
+  const candidate = match?.[1]
+    ? decodeURIComponent(match[1])
+    : "dashboard";
+
+  return CLIENT_MODULE_KEYS.has(candidate)
+    ? candidate
+    : "dashboard";
+}
+
+function getClientModulePath(moduleKey) {
+  return moduleKey === "dashboard"
+    ? "/app"
+    : `/app/${encodeURIComponent(moduleKey)}`;
+}
+
 const MODULE_ICON_OVERRIDES = {
   revenue: CircleDollarSign,
   analytics: Activity,
@@ -459,8 +480,22 @@ export default function ClientPortal({
     module,
     setModule,
   ] = useState(
-    "dashboard"
+    () => getClientModuleFromPath()
   );
+
+  // Keep the selected module in the URL so browser refreshes and mobile web
+  // reloads return to the same CRM page instead of resetting to Dashboard.
+  useEffect(() => {
+    const targetPath = getClientModulePath(module);
+
+    if (window.location.pathname !== targetPath) {
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${targetPath}${window.location.search}${window.location.hash}`
+      );
+    }
+  }, [module]);
 
   // --- Android hardware-Back module history (B3.1) ---------------------------
   // Module switches are React state, not route history, so Android Back used to
