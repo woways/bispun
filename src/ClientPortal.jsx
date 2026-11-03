@@ -157,20 +157,20 @@ class ModuleErrorBoundary extends Component {
           role="alert"
           className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-8 text-center"
         >
-          <h2
+          <h1
             ref={this.headingRef}
             tabIndex={-1}
             className="text-base font-bold text-slate-900 outline-none"
           >
             Couldn&apos;t load this section
-          </h2>
+          </h1>
           <p className="max-w-sm text-sm text-slate-500">
             Check your connection and try again.
           </p>
           <button
             type="button"
             onClick={() => this.setState({ failed: false })}
-            className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           >
             Try again
           </button>
