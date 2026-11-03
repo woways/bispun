@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// --- Release signing -------------------------------------------------------
+// Credentials are read from a LOCAL, gitignored android/keystore.properties
+// (see android/keystore.properties.example). No secrets are stored in this file.
+// Release builds FAIL CLOSED when credentials are missing (see the taskGraph
+// guard below) so an unsigned or debug-signed release artifact is never produced.
+// Debug builds are unaffected and keep using the default debug signing.
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "com.bispun.crm"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -16,11 +29,44 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Populated only when a real keystore.properties is present. When absent this
+            // config stays empty and is never attached to a build (see buildTypes.release).
+            if (hasReleaseKeystore) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            // Attach the release signing config ONLY when real credentials exist.
+            // Never fall back to the debug signing config for a release build.
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+// Fail closed: refuse to assemble/bundle a release without a configured keystore,
+// instead of silently emitting an unsigned or debug-signed artifact. This guard
+// never triggers for debug builds or Gradle sync (no release task in the graph).
+gradle.taskGraph.whenReady { taskGraph ->
+    def wantsRelease = taskGraph.allTasks.any { t ->
+        def n = t.name.toLowerCase()
+        n.contains('assemblerelease') || n.contains('bundlerelease')
+    }
+    if (wantsRelease && !hasReleaseKeystore) {
+        throw new GradleException(
+            "Release signing is not configured. Copy android/keystore.properties.example to " +
+            "android/keystore.properties and point it at a real release keystore before building a " +
+            "release. Refusing to produce an unsigned or debug-signed release artifact.")
     }
 }
 
