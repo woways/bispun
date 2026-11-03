@@ -82,24 +82,6 @@ export default function ClientLogin() {
         }),
       });
 
-      // Do not treat a 200 login response as a complete sign-in until
-      // the browser proves that it kept and can resend the session cookie.
-      try {
-        await apiRequest("/api/client/auth/me", {
-          cache: "no-store",
-        });
-      } catch (sessionError) {
-        const browserSessionError = new Error(
-          "Your credentials were accepted, but this browser did not keep the secure login session. Please allow cookies for this site and try again."
-        );
-        browserSessionError.status = sessionError?.status;
-        browserSessionError.data = {
-          message:
-            "Your credentials were accepted, but this browser did not keep the secure login session. Please allow cookies for this site and try again.",
-        };
-        throw browserSessionError;
-      }
-
       if (rememberMe) {
         localStorage.setItem(
           "cb_remembered_email",
@@ -109,7 +91,12 @@ export default function ClientLogin() {
         localStorage.removeItem("cb_remembered_email");
       }
 
-      nav("/app", { replace: true });
+      // Start the authenticated workspace with a clean document load. The
+      // app performs the single session check after navigation, avoiding a
+      // duplicate /auth/me request during sign-in while preserving the
+      // blank-screen fix.
+      window.location.replace("/app");
+      return;
     } catch (error) {
       setError(
         error?.data?.message ||
@@ -197,16 +184,14 @@ export default function ClientLogin() {
 
             {/* BRAND */}
 
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-white px-3 py-2 shadow-[0_8px_30px_rgba(37,99,235,0.15)]">
-                <img
-                  src={bispunLogo}
-                  alt="Bispun"
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
+            <div className="ml-4 mt-1 inline-flex w-fit flex-col items-center gap-1 xl:ml-5 xl:mt-2">
+              <img
+                src={bispunLogo}
+                alt="Bispun"
+                className="h-[52px] w-auto rounded-[10px] object-contain opacity-[0.97] shadow-[0_10px_28px_rgba(0,0,0,0.16)] ring-1 ring-white/10 xl:h-[59px]"
+              />
 
-              <div className="text-[9px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+              <div className="mt-0.5 text-center text-[10px] font-semibold uppercase tracking-[0.3em] text-slate-300/95 xl:text-[11px]">
                 CRM made simple
               </div>
             </div>
@@ -298,7 +283,7 @@ export default function ClientLogin() {
               <img
                 src={bispunLogo}
                 alt="Bispun"
-                className="h-11 w-auto object-contain"
+                className="h-10 w-auto rounded-lg object-contain opacity-[0.97] shadow-sm ring-1 ring-slate-200/60"
               />
             </div>
 

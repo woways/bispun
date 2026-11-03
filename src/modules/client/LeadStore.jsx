@@ -902,11 +902,16 @@ function IndividualLeadModal({
                 required
                 value={form.phone}
                 onChange={(event) =>
-                  update("phone", event.target.value)
+                  update(
+                    "phone",
+                    event.target.value.replace(/\D/g, "").slice(0, 10)
+                  )
                 }
                 disabled={Boolean(lead)}
                 inputMode="numeric"
                 autoComplete="tel"
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
                 className={`form-input ${
                   fieldErrors.phone
                     ? "border-rose-300 focus:border-rose-400"
@@ -933,11 +938,16 @@ function IndividualLeadModal({
               <input
                 value={form.alternatePhone}
                 onChange={(event) =>
-                  update("alternatePhone", event.target.value)
+                  update(
+                    "alternatePhone",
+                    event.target.value.replace(/\D/g, "").slice(0, 10)
+                  )
                 }
                 disabled={Boolean(lead?.alternatePhone)}
                 inputMode="numeric"
                 autoComplete="tel"
+                maxLength={10}
+                pattern="[6-9][0-9]{9}"
                 className={`form-input ${
                   fieldErrors.alternatePhone
                     ? "border-rose-300 focus:border-rose-400"

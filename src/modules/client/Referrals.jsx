@@ -23,7 +23,13 @@ function payoutStatusClass(status) {
 }
 
 export default function Referrals({ currentUser }) {
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState(() => {
+    if (typeof window === "undefined") return "home";
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    return ["home", "referrals", "earnings"].includes(requested)
+      ? requested
+      : "home";
+  });
   const [code, setCode] = useState("");
   const [stats, setStats] = useState({ total: 0, admitted: 0, inProgress: 0 });
   const [rewardProgram, setRewardProgram] = useState({
@@ -60,6 +66,22 @@ export default function Referrals({ currentUser }) {
   useEffect(() => {
     loadSummary();
   }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+
+    if (tab === "home") {
+      url.searchParams.delete("tab");
+    } else {
+      url.searchParams.set("tab", tab);
+    }
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${url.pathname}${url.search}${url.hash}`
+    );
+  }, [tab]);
 
   async function requestRedemption(event) {
     event.preventDefault();
@@ -204,13 +226,13 @@ export default function Referrals({ currentUser }) {
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
               <h2 className="text-[17px] font-semibold text-slate-950">Current Slab</h2>
-              <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-950 px-4 py-4 text-white">
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-indigo-600 px-4 py-4 text-white shadow-sm">
                 <div>
-                  <div className="text-[11px] uppercase tracking-[0.12em] text-slate-400">{rewardProgram.summary?.slab?.label || "No slab yet"}</div>
+                  <div className="text-[11px] uppercase tracking-[0.12em] text-indigo-100">{rewardProgram.summary?.slab?.label || "No slab yet"}</div>
                   <div className="mt-1 text-2xl font-bold">{money(rewardProgram.summary?.rate)}</div>
-                  <div className="text-[11px] text-slate-400">per successful referral</div>
+                  <div className="text-[11px] text-indigo-100">per successful referral</div>
                 </div>
-                <TrendingUp size={24} className="text-indigo-300" />
+                <TrendingUp size={24} className="text-indigo-100" />
               </div>
               <p className="mt-3 text-[12px] leading-5 text-slate-500">Your current slab rate is applied to all successful CRM referrals when calculating total earnings.</p>
             </div>
