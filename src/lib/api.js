@@ -102,6 +102,12 @@ export async function apiRequest(path, options = {}) {
         signal: options.signal || controller?.signal || undefined,
       }
     );
+  } catch (networkError) {
+    // fetch rejects on a network failure or an aborted (timed-out) request.
+    // Tag it so the auth bootstrap can treat it as transient (retry) instead
+    // of a real "unauthorized" — the cause of the refresh-dependent logout bug.
+    networkError.isNetworkError = true;
+    throw networkError;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
@@ -150,4 +156,16 @@ export async function apiRequest(path, options = {}) {
   }
 
   return data;
+}
+
+// Classify an error thrown by apiRequest, for the auth bootstrap guards:
+//  - "maintenance"     : backend is in maintenance (503 + { maintenance: true })
+//  - "unauthenticated" : a real auth failure (401/403) -> send to login
+//  - "transient"       : network / timeout / 429 / 5xx / unknown -> retry, and
+//                        never silently log the user out (the refresh-fixes-it bug)
+export function classifyAuthError(error) {
+  const status = error?.status;
+  if (status === 503 && error?.data?.maintenance === true) return "maintenance";
+  if (status === 401 || status === 403) return "unauthenticated";
+  return "transient";
 }

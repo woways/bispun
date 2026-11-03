@@ -1,8 +1,8 @@
-import { cloneElement, lazy, Suspense, useEffect, useState } from "react";
+import { cloneElement, lazy, Suspense, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
-import { apiRequest } from "./lib/api";
+import { apiRequest, classifyAuthError } from "./lib/api";
 import BackButtonHandler from "./components/BackButtonHandler";
 
 const ClientPortal = lazy(() => import("./ClientPortal"));
@@ -15,7 +15,7 @@ function SkeletonBlock({ className = "" }) {
     <div
       className={`relative overflow-hidden bg-slate-200/80 rounded-lg ${className}`}
     >
-      <div className="absolute inset-0 -translate-x-full animate-[skeletonShimmer_1.7s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full animate-[skeletonShimmer_1.7s_infinite] motion-reduce:animate-none bg-gradient-to-r from-transparent via-white/60 to-transparent" />
     </div>
   );
 }
@@ -26,7 +26,7 @@ function LoadingDots() {
       {Array.from({ length: 9 }).map((_, index) => (
         <span
           key={index}
-          className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-pulse"
+          className="w-1.5 h-1.5 rounded-full bg-slate-500 animate-pulse motion-reduce:animate-none"
           style={{
             animationDelay: `${index * 90}ms`,
           }}
@@ -39,8 +39,20 @@ function LoadingDots() {
 function DashboardLoadingScreen({
   admin = false,
 }) {
+  const headingRef = useRef(null);
+  useEffect(() => {
+    // Keep focus oriented when this screen (re)mounts — e.g. after a Retry from
+    // the error screen — so keyboard/SR users aren't stranded on <body> in silence.
+    headingRef.current?.focus();
+  }, []);
+
   return (
-    <div className="min-h-screen bg-slate-100 overflow-hidden relative">
+    <div
+      className="min-h-screen bg-slate-100 overflow-hidden relative"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
       <style>{`
         @keyframes skeletonShimmer {
           100% {
@@ -56,9 +68,19 @@ function DashboardLoadingScreen({
             transform: translateY(-3px);
           }
         }
+
+        .auth-loading-card {
+          animation: loadingFloat 2.6s ease-in-out infinite;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .auth-loading-card {
+            animation: none;
+          }
+        }
       `}</style>
 
-      <div className="absolute inset-0">
+      <div className="absolute inset-0" aria-hidden="true">
         <div className="flex min-h-screen">
           <aside
             className={`hidden md:flex w-[230px] flex-col border-r ${
@@ -263,26 +285,25 @@ function DashboardLoadingScreen({
         </div>
       </div>
 
-      <div className="absolute inset-0 bg-white/72 backdrop-blur-[1px]" />
+      <div className="absolute inset-0 bg-white/72 backdrop-blur-[1px]" aria-hidden="true" />
 
       <div className="relative min-h-screen flex items-center justify-center p-6">
-        <div
-          className="w-full max-w-[430px] bg-white border border-slate-200 rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.16)] px-6 py-5"
-          style={{
-            animation: "loadingFloat 2.6s ease-in-out infinite",
-          }}
-        >
+        <div className="auth-loading-card w-full max-w-[430px] bg-white border border-slate-200 rounded-2xl shadow-[0_24px_80px_rgba(15,23,42,0.16)] px-6 py-5">
           <div className="flex items-center gap-4">
             <div className="flex-shrink-0">
               <LoadingDots />
             </div>
 
             <div className="min-w-0">
-              <div className="text-[15px] font-bold tracking-tight text-slate-950">
+              <h1
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-[15px] font-bold tracking-tight text-slate-950 outline-none"
+              >
                 {admin
                   ? "Getting the control center ready."
                   : "Getting your workspace ready."}
-              </div>
+              </h1>
 
               <div className="mt-1 text-xs leading-5 text-slate-500">
                 {admin
@@ -297,288 +318,221 @@ function DashboardLoadingScreen({
   );
 }
 
-function FullScreenMessage({
+// Accessible full-screen status for the maintenance and "can't reach server"
+// states. Renders a real <h1>, an appropriate live region (assertive for the
+// error, polite for maintenance), moves focus to the heading on appearance, and
+// updates the document title. Never auto-redirects — the error offers Retry.
+function AuthMessageScreen({
+  variant,
   title,
   message,
+  onRetry,
+  attempt = 0,
 }) {
-  return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
-      <div className="w-full max-w-md text-center">
-        <div className="text-lg font-bold text-white">
-          {title}
-        </div>
+  const headingRef = useRef(null);
+  const isError = variant === "error";
 
-        <div className="mt-2 text-sm leading-6 text-slate-400">
+  useEffect(() => {
+    if (headingRef.current) headingRef.current.focus();
+    const previousTitle = document.title;
+    document.title = `${title} — Bispun`;
+    return () => {
+      document.title = previousTitle;
+    };
+    // attempt is included so a repeated failure re-focuses and re-announces.
+  }, [title, attempt]);
+
+  return (
+    <div
+      className="min-h-screen bg-slate-950 flex items-center justify-center px-6"
+      role={isError ? "alert" : "status"}
+      aria-live={isError ? "assertive" : "polite"}
+      aria-atomic="true"
+    >
+      <div className="w-full max-w-md text-center">
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-lg font-bold text-white outline-none"
+        >
+          {title}
+        </h1>
+
+        <p className="mt-2 text-sm leading-6 text-slate-400">
           {message}
-        </div>
+        </p>
+
+        {isError && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-6 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+          >
+            Try again
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function ClientRoute({
-  children,
-}) {
-  const [
-    status,
-    setStatus,
-  ] =
-    useState(
-      "checking"
-    );
+// Shared auth bootstrap: calls /auth/me, and distinguishes a real auth failure
+// (401/403 -> unauthenticated) from a transient one (network/timeout/429/5xx),
+// which it retries with bounded backoff before surfacing an explicit error
+// state. This stops a cold Render/Neon start from falsely logging a user out.
+const AUTH_MAX_RETRIES = 2;
+const AUTH_BACKOFF_MS = [1000, 3000];
+const AUTH_TIMEOUT_MS = 30000;
 
-  const [
-    session,
-    setSession,
-  ] =
-    useState(null);
-
-  const [
-    message,
-    setMessage,
-  ] =
-    useState("");
+function useAuthBootstrap(path) {
+  const [state, setState] = useState({
+    status: "checking",
+    session: null,
+    message: "",
+  });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    let active =
-      true;
+    let active = true;
+    let timer = null;
 
-    async function verifyClient() {
+    setState({ status: "checking", session: null, message: "" });
+
+    async function run(tryIndex) {
       try {
-        const data =
-          await apiRequest(
-            "/api/client/auth/me"
-          );
-
-        if (active) {
-          setSession(
-            data
-          );
-
-          setStatus(
-            "authenticated"
-          );
-        }
+        const data = await apiRequest(path, { timeoutMs: AUTH_TIMEOUT_MS });
+        if (active) setState({ status: "authenticated", session: data, message: "" });
       } catch (error) {
-        if (!active) {
+        if (!active) return;
+        const kind = classifyAuthError(error);
+
+        if (kind === "maintenance") {
+          setState({
+            status: "maintenance",
+            session: null,
+            message:
+              error?.data?.message ||
+              "Bispun is temporarily under maintenance.",
+          });
           return;
         }
 
-        if (
-          error?.status ===
-            503 &&
-          error?.data
-            ?.maintenance ===
-            true
-        ) {
-          setMessage(
-            error.data
-              ?.message ||
-              "Bispun is temporarily under maintenance."
-          );
-
-          setStatus(
-            "maintenance"
-          );
-
+        if (kind === "unauthenticated") {
+          setState({ status: "unauthenticated", session: null, message: "" });
           return;
         }
 
-        setSession(
-          null
-        );
-
-        setStatus(
-          "unauthenticated"
-        );
+        // transient — retry with bounded backoff, then surface an error screen.
+        if (tryIndex < AUTH_MAX_RETRIES) {
+          timer = setTimeout(
+            () => active && run(tryIndex + 1),
+            AUTH_BACKOFF_MS[tryIndex] || 3000
+          );
+        } else {
+          setState({ status: "error", session: null, message: "" });
+        }
       }
     }
 
-    verifyClient();
+    run(0);
 
     return () => {
-      active =
-        false;
+      active = false;
+      if (timer) clearTimeout(timer);
     };
-  }, []);
+  }, [path, attempt]);
 
-  if (
-    status ===
-    "checking"
-  ) {
-    return (
-      <DashboardLoadingScreen />
-    );
-  }
+  const retry = () => setAttempt((n) => n + 1);
 
-  if (
-    status ===
-    "maintenance"
-  ) {
-    return (
-      <FullScreenMessage
-        title="Scheduled Maintenance"
-        message={
-          message
-        }
-      />
-    );
-  }
-
-  if (
-    status ===
-    "unauthenticated"
-  ) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    );
-  }
-
-  return cloneElement(
-    children,
-    {
-      clientSession:
-        session,
-    }
-  );
+  return { ...state, attempt, retry };
 }
 
-function AdminGuestRoute({
-  children,
-}) {
-  const [
-    status,
-    setStatus,
-  ] =
-    useState(
-      "checking"
-    );
+function ClientRoute({ children }) {
+  const { status, session, message, attempt, retry } = useAuthBootstrap(
+    "/api/client/auth/me"
+  );
 
-  useEffect(() => {
-    let active =
-      true;
+  if (status === "checking") {
+    return <DashboardLoadingScreen />;
+  }
 
-    async function verifyAdminSession() {
-      try {
-        await apiRequest(
-          "/api/admin/auth/me"
-        );
-
-        if (active) {
-          setStatus(
-            "authenticated"
-          );
-        }
-      } catch {
-        if (active) {
-          setStatus(
-            "unauthenticated"
-          );
-        }
-      }
-    }
-
-    verifyAdminSession();
-
-    return () => {
-      active =
-        false;
-    };
-  }, []);
-
-  if (
-    status ===
-    "checking"
-  ) {
+  if (status === "maintenance") {
     return (
-      <DashboardLoadingScreen
-        admin
+      <AuthMessageScreen
+        variant="maintenance"
+        title="Scheduled Maintenance"
+        message={message}
+        attempt={attempt}
       />
     );
   }
 
-  if (
-    status ===
-    "authenticated"
-  ) {
+  if (status === "error") {
     return (
-      <Navigate
-        to="/admin"
-        replace
+      <AuthMessageScreen
+        variant="error"
+        title="Can't reach the server"
+        message="We couldn't load your workspace. Check your connection, then try again."
+        onRetry={retry}
+        attempt={attempt}
       />
     );
+  }
+
+  if (status === "unauthenticated") {
+    return <Navigate to="/login" replace />;
+  }
+
+  return cloneElement(children, { clientSession: session });
+}
+
+function AdminGuestRoute({ children }) {
+  const { status, attempt, retry } = useAuthBootstrap("/api/admin/auth/me");
+
+  if (status === "checking") {
+    return <DashboardLoadingScreen admin />;
+  }
+
+  if (status === "error") {
+    return (
+      <AuthMessageScreen
+        variant="error"
+        title="Can't reach the server"
+        message="We couldn't verify your session. Check your connection, then try again."
+        onRetry={retry}
+        attempt={attempt}
+      />
+    );
+  }
+
+  if (status === "authenticated") {
+    return <Navigate to="/admin" replace />;
   }
 
   return children;
 }
 
-function AdminRoute({
-  children,
-}) {
-  const [
-    status,
-    setStatus,
-  ] =
-    useState(
-      "checking"
-    );
+function AdminRoute({ children }) {
+  const { status, attempt, retry } = useAuthBootstrap("/api/admin/auth/me");
 
-  useEffect(() => {
-    let active =
-      true;
+  if (status === "checking") {
+    return <DashboardLoadingScreen admin />;
+  }
 
-    async function verifyAdmin() {
-      try {
-        await apiRequest(
-          "/api/admin/auth/me"
-        );
-
-        if (active) {
-          setStatus(
-            "authenticated"
-          );
-        }
-      } catch {
-        if (active) {
-          setStatus(
-            "unauthenticated"
-          );
-        }
-      }
-    }
-
-    verifyAdmin();
-
-    return () => {
-      active =
-        false;
-    };
-  }, []);
-
-  if (
-    status ===
-    "checking"
-  ) {
+  if (status === "error") {
     return (
-      <DashboardLoadingScreen
-        admin
+      <AuthMessageScreen
+        variant="error"
+        title="Can't reach the server"
+        message="We couldn't verify your session. Check your connection, then try again."
+        onRetry={retry}
+        attempt={attempt}
       />
     );
   }
 
-  if (
-    status ===
-    "unauthenticated"
-  ) {
-    return (
-      <Navigate
-        to="/admin/login"
-        replace
-      />
-    );
+  if (status === "unauthenticated") {
+    return <Navigate to="/admin/login" replace />;
   }
 
   return children;
