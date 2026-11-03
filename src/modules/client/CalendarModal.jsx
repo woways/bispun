@@ -1093,7 +1093,10 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
 
 
-              <div className="grid grid-cols-7 gap-0.5 text-center">
+              <div
+                key={`${anchorDate.getFullYear()}-${anchorDate.getMonth()}`}
+                className="cb-fade-in grid grid-cols-7 gap-0.5 text-center"
+              >
 
                 {WEEKDAYS_MINI.map((d, i) => (
 
