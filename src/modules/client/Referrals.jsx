@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BadgeIndianRupee,
   CheckCircle2,
@@ -51,6 +51,7 @@ export default function Referrals({ currentUser }) {
   const [redeeming, setRedeeming] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const redeemInputRef = useRef(null);
 
   async function loadSummary() {
     try {
@@ -92,10 +93,12 @@ export default function Referrals({ currentUser }) {
 
     if (!Number.isInteger(amount) || amount <= 0) {
       setError("Enter a valid amount in whole rupees.");
+      redeemInputRef.current?.focus();
       return;
     }
     if (amount > available) {
       setError(`You can currently redeem up to ${money(available)}.`);
+      redeemInputRef.current?.focus();
       return;
     }
 
@@ -134,7 +137,8 @@ export default function Referrals({ currentUser }) {
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className={`rounded-lg px-4 py-2 text-[13px] font-semibold transition ${
+              aria-current={tab === t.key ? "page" : undefined}
+              className={`rounded-lg px-4 py-2 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
                 tab === t.key
                   ? "bg-indigo-600 text-white shadow-sm"
                   : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
@@ -151,7 +155,10 @@ export default function Referrals({ currentUser }) {
           currentUser={currentUser}
           code={code}
           stats={stats}
+          rewardProgram={rewardProgram}
+          referrals={rewardProgram?.referrals || []}
           onGoReferrals={() => setTab("referrals")}
+          onRedeem={() => setTab("earnings")}
         />
       )}
 
@@ -161,22 +168,22 @@ export default function Referrals({ currentUser }) {
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <CheckCircle2 size={18} className="text-emerald-600" />
+              <CheckCircle2 size={18} aria-hidden="true" className="text-emerald-600" />
               <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">{rewardProgram.summary?.successfulCount || 0}</div>
               <div className="text-[13px] text-slate-500">Successful CRM referrals</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <BadgeIndianRupee size={18} className="text-indigo-600" />
+              <BadgeIndianRupee size={18} aria-hidden="true" className="text-indigo-600" />
               <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">{money(rewardProgram.summary?.totalEarnings)}</div>
               <div className="text-[13px] text-slate-500">Total earned</div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <Wallet size={18} className="text-emerald-600" />
+              <Wallet size={18} aria-hidden="true" className="text-emerald-600" />
               <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-emerald-700">{money(rewardProgram.summary?.paidAmount)}</div>
               <div className="text-[13px] text-slate-500">Paid to you</div>
             </div>
             <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm">
-              <TrendingUp size={18} className="text-indigo-600" />
+              <TrendingUp size={18} aria-hidden="true" className="text-indigo-600" />
               <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-indigo-700">{money(rewardProgram.summary?.availableToRedeem)}</div>
               <div className="text-[13px] text-slate-600">Available to redeem</div>
             </div>
@@ -202,10 +209,14 @@ export default function Referrals({ currentUser }) {
                   <div className="flex h-11 items-center rounded-xl border border-slate-200 bg-white px-3 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
                     <span className="mr-2 text-sm font-semibold text-slate-500">₹</span>
                     <input
+                      id="redeem-amount"
+                      ref={redeemInputRef}
                       value={redeemAmount}
                       onChange={(e) => setRedeemAmount(e.target.value.replace(/[^0-9]/g, ""))}
                       placeholder="Enter amount"
                       inputMode="numeric"
+                      aria-describedby="redeem-balance-hint"
+                      aria-invalid={error ? "true" : undefined}
                       className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none"
                     />
                   </div>
@@ -219,9 +230,9 @@ export default function Referrals({ currentUser }) {
                 </button>
               </form>
 
-              <div className="mt-2 text-[11px] text-slate-400">Available balance: {money(rewardProgram.summary?.availableToRedeem)}</div>
-              {message && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-medium text-emerald-700">{message}</div>}
-              {error && <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] font-medium text-rose-700">{error}</div>}
+              <div id="redeem-balance-hint" className="mt-2 text-[11px] text-slate-600">Available balance: {money(rewardProgram.summary?.availableToRedeem)}</div>
+              {message && <div role="status" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-medium text-emerald-700">{message}</div>}
+              {error && <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[12px] font-medium text-rose-700">{error}</div>}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -232,7 +243,7 @@ export default function Referrals({ currentUser }) {
                   <div className="mt-1 text-2xl font-bold">{money(rewardProgram.summary?.rate)}</div>
                   <div className="text-[11px] text-indigo-100">per successful referral</div>
                 </div>
-                <TrendingUp size={24} className="text-indigo-100" />
+                <TrendingUp size={24} aria-hidden="true" className="text-indigo-100" />
               </div>
               <p className="mt-3 text-[12px] leading-5 text-slate-500">Your current slab rate is applied to all successful CRM referrals when calculating total earnings.</p>
             </div>
@@ -261,7 +272,7 @@ export default function Referrals({ currentUser }) {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-2">
-              <Clock3 size={17} className="text-indigo-600" />
+              <Clock3 size={17} aria-hidden="true" className="text-indigo-600" />
               <h2 className="text-[17px] font-semibold text-slate-950">Payout History</h2>
             </div>
             {(rewardProgram.payouts || []).length === 0 ? (
@@ -270,7 +281,7 @@ export default function Referrals({ currentUser }) {
               <div className="mt-4 overflow-x-auto">
                 <table className="min-w-full text-left text-xs">
                   <thead className="border-b border-slate-200 text-slate-500">
-                    <tr><th className="px-2 py-3">Requested</th><th className="px-2 py-3">Amount</th><th className="px-2 py-3">Status</th><th className="px-2 py-3">Payment reference</th></tr>
+                    <tr><th scope="col" className="px-2 py-3">Requested</th><th scope="col" className="px-2 py-3">Amount</th><th scope="col" className="px-2 py-3">Status</th><th scope="col" className="px-2 py-3">Payment reference</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rewardProgram.payouts.map((item) => (
