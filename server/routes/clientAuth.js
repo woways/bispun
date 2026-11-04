@@ -18,6 +18,64 @@ import {
 } from "../middleware/rateLimit.js";
 import { getBearerToken } from "../lib/authToken.js";
 
+// Serverless Postgres (Neon) autosuspends its compute; the first query after an
+// idle period has to wake it, which can be slow or occasionally time out. These
+// are transient connectivity failures, NOT authentication failures — we retry
+// them briefly so a cold start does not surface as a hard login error, and map
+// a persistent failure to a retry-friendly 503 instead of a generic 500.
+const TRANSIENT_DB_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EPIPE",
+  "EAI_AGAIN",
+  "P1001", // can't reach database server
+  "P1002", // database server reached but timed out
+  "P1008", // operation timed out
+  "P1017", // server closed the connection
+  "P2024", // timed out fetching a connection from the pool
+]);
+
+function isTransientDbError(error) {
+  if (!error) return false;
+  const code = error.code || error?.errorCode;
+  if (code && TRANSIENT_DB_CODES.has(code)) return true;
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("timed out") ||
+    message.includes("timeout") ||
+    message.includes("can't reach database") ||
+    message.includes("connection terminated") ||
+    message.includes("connection closed") ||
+    message.includes("terminating connection")
+  );
+}
+
+// Retry a DB operation on transient connectivity errors only. A warm database
+// succeeds on the first attempt (no added latency); a cold start gets a couple
+// of extra chances while the compute finishes waking. Auth/validation errors
+// are never retried (they are not thrown here — they are explicit responses).
+async function withDbRetry(
+  operation,
+  { retries = 2, baseDelayMs = 600 } = {}
+) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientDbError(error) || attempt === retries) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, baseDelayMs * (attempt + 1))
+      );
+    }
+  }
+  throw lastError;
+}
+
 const router =
   Router();
 
@@ -582,39 +640,41 @@ router.post(
       }
 
       const user =
-        await prisma.user.findUnique({
-          where: {
-            email,
-          },
+        await withDbRetry(() =>
+          prisma.user.findUnique({
+            where: {
+              email,
+            },
 
-          include: {
-            company: {
-              include: {
-                settings:
-                  true,
+            include: {
+              company: {
+                include: {
+                  settings:
+                    true,
 
-                subscriptions: {
-                  include: {
-                    plan:
-                      true,
+                  subscriptions: {
+                    include: {
+                      plan:
+                        true,
+                    },
+
+                    orderBy: {
+                      createdAt:
+                        "desc",
+                    },
                   },
 
-                  orderBy: {
-                    createdAt:
-                      "desc",
-                  },
-                },
-
-                companyModules: {
-                  include: {
-                    module:
-                      true,
+                  companyModules: {
+                    include: {
+                      module:
+                        true,
+                    },
                   },
                 },
               },
             },
-          },
-        });
+          })
+        );
 
       if (
         !user ||
@@ -831,6 +891,25 @@ router.post(
         ),
       });
     } catch (error) {
+      if (isTransientDbError(error)) {
+        // Database connectivity/cold-start problem — not the user's fault and
+        // not a credential error. Ask them to retry; do not leak internals.
+        console.error(
+          "Client login unavailable (transient DB error):",
+          error?.code || error?.message
+        );
+
+        return res
+          .status(503)
+          .set("Retry-After", "5")
+          .json({
+            success: false,
+            code: "SERVICE_UNAVAILABLE",
+            message:
+              "We couldn't reach the server just now. Please wait a moment and try again.",
+          });
+      }
+
       console.error(
         "Client login failed:",
         error
