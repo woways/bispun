@@ -5,6 +5,7 @@ import { resolveMx } from "node:dns/promises";
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
+import { createRateLimiter } from "../middleware/rateLimit.js";
 import {
   assertContactVerified,
   ContactVerificationError,
@@ -1592,5 +1593,111 @@ router.patch("/:id/settings", async (req, res) => {
     });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Secure Super Admin recovery: reset a Client Admin's password.
+// SUPER_ADMIN only (router.use(requireSuperAdmin) above). Targets a single
+// Client Admin scoped to its company, enforces a strong password, hashes with
+// bcrypt cost 12, invalidates the user's existing sessions, audit-logs the
+// action, and never returns or logs the password or any hash.
+// ---------------------------------------------------------------------------
+const clientAdminPasswordResetLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyPrefix: "admin-client-admin-pw-reset",
+  message:
+    "Too many password reset attempts. Please try again later.",
+});
+
+router.post(
+  "/:companyId/client-admins/:userId/reset-password",
+  clientAdminPasswordResetLimiter,
+  async (req, res) => {
+    try {
+      const actor = await getAdminActor(req);
+      const { companyId, userId } = req.params;
+
+      const newPassword = String(req.body?.newPassword || "");
+      const confirmPassword = String(req.body?.confirmPassword || "");
+
+      if (
+        newPassword.length < 8 ||
+        !/[A-Z]/.test(newPassword) ||
+        !/[a-z]/.test(newPassword) ||
+        !/[0-9]/.test(newPassword)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "New password must be at least 8 characters and include uppercase, lowercase and a number",
+        });
+      }
+
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "New password and confirmation do not match",
+        });
+      }
+
+      // Target must be a CLIENT_ADMIN that belongs to the named company —
+      // this enforces tenant scoping and avoids cross-company resets.
+      const target = await prisma.user.findFirst({
+        where: { id: userId, companyId, role: "CLIENT_ADMIN" },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          company: { select: { id: true, name: true } },
+        },
+      });
+
+      if (!target) {
+        return res.status(404).json({
+          success: false,
+          message: "Client admin not found for this company",
+        });
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 12);
+
+      // Update the hash and end all existing sessions for this user so the old
+      // credential can no longer be used anywhere.
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: target.id },
+          data: { passwordHash },
+        }),
+        prisma.clientSession.deleteMany({
+          where: { userId: target.id },
+        }),
+      ]);
+
+      await writeSuperAdminAudit({
+        req,
+        actor,
+        action: "CLIENT_ADMIN_PASSWORD_RESET",
+        entityType: "USER",
+        entityId: target.id,
+        companyId: target.company.id,
+        companyName: target.company.name,
+        summary: `${actor?.name || "Super Admin"} reset the password for client admin ${target.email}.`,
+        metadata: { clientAdminEmail: target.email },
+      });
+
+      return res.json({
+        success: true,
+        message:
+          "Client admin password has been reset. Existing sessions were ended; the user must sign in with the new password.",
+      });
+    } catch (error) {
+      console.error("Client admin password reset failed:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to reset client admin password",
+      });
+    }
+  }
+);
 
 export default router;
