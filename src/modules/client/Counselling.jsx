@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Pencil,
   Trash2,
+  PhoneCall,
   X,
   Loader2,
   AlertCircle,
@@ -30,6 +31,7 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import CallCenterModal from "../../components/lead/CallCenterModal";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -186,6 +188,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
   const [formError, setFormError] = useState("");
   const [actionId, setActionId] = useState("");
   const [copiedId, setCopiedId] = useState("");
+  const [callLead, setCallLead] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -606,6 +609,15 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       type="button"
+                      title="Call student"
+                      onClick={() => setCallLead({ id: session.leadId || null, name: session.student, phone: session.phone })}
+                      disabled={!session.phone}
+                      className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 disabled:text-slate-300 disabled:hover:bg-transparent"
+                    >
+                      <PhoneCall size={14} />
+                    </button>
+                    <button
+                      type="button"
                       title="Edit"
                       onClick={() => openEdit(session)}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
@@ -632,6 +644,12 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           ))
         )}
       </div>
+
+      <CallCenterModal
+        open={Boolean(callLead)}
+        onClose={() => setCallLead(null)}
+        lead={callLead}
+      />
 
       {modalOpen ? (
         <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">

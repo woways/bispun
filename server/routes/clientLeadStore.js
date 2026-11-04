@@ -13,6 +13,8 @@ import { Readable } from "node:stream";
 
 import prisma from "../lib/prisma.js";
 
+import { buildLeadIntelligence } from "../lib/leadIntelligence.js";
+
 import {
 
   requireClientUser,
@@ -26,6 +28,77 @@ import {
 const router =
 
   Router();
+
+/* =========================================================
+   LEAD FOLLOW-UP + REMARK HELPERS (restored feature)
+========================================================= */
+
+function parseLeadFollowUpAt(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Invalid follow-up date or time");
+  }
+
+  return date;
+}
+
+function legacyLeadRemarkText(notes) {
+  return String(notes || "")
+    .split("\n")
+    .filter((line) =>
+      !line.startsWith("Lead Store source: ") &&
+      !line.startsWith("Lead Store type: ") &&
+      !line.startsWith("Imported from ") &&
+      line !== "Added individually from Lead Store" &&
+      !line.startsWith("Admissions origin:")
+    )
+    .join("\n")
+    .trim();
+}
+
+async function clearPendingLeadFollowUpNotifications(
+  client,
+  companyId,
+  leadId
+) {
+  await client.notification.deleteMany({
+    where: {
+      companyId,
+      read: false,
+      message: {
+        contains: `LEAD_FOLLOWUP:${leadId}:`,
+      },
+    },
+  });
+}
+
+async function getLatestLeadRemarks(client, companyId, leadId) {
+  const remarks = await client.leadRemark.findMany({
+    where: { companyId, leadId },
+    orderBy: { createdAt: "desc" },
+    take: 5,
+    include: {
+      user: {
+        select: { id: true, name: true },
+      },
+    },
+  });
+
+  return remarks.map((remark) => ({
+    id: remark.id,
+    text: remark.text,
+    createdAt: remark.createdAt,
+    updatedAt: remark.updatedAt,
+    createdBy: remark.user?.name || "Unknown user",
+    userId: remark.userId || null,
+    legacy: false,
+  }));
+}
 
 
 
@@ -2572,11 +2645,71 @@ router.get(
 
           },
 
+          remarks: {
+            orderBy: { createdAt: "desc" },
+            take: 5,
+            include: {
+              user: {
+                select: { id: true, name: true },
+              },
+            },
+          },
+
         },
 
         orderBy: { createdAt: "desc" },
 
       });
+
+      const leadIds = leads.map((lead) => lead.id);
+
+      const [communicationGroups, counsellingRows] = leadIds.length
+        ? await Promise.all([
+            prisma.leadCommunication.groupBy({
+              by: ["leadId"],
+              where: {
+                companyId,
+                leadId: { in: leadIds },
+              },
+              _count: { _all: true },
+              _max: { createdAt: true },
+            }),
+            prisma.counsellingSession.findMany({
+              where: {
+                companyId,
+                leadId: { in: leadIds },
+              },
+              select: {
+                leadId: true,
+                status: true,
+                scheduledAt: true,
+                followUpAt: true,
+              },
+            }),
+          ])
+        : [[], []];
+
+      const communicationByLead = new Map(
+        communicationGroups
+          .filter((item) => item.leadId)
+          .map((item) => [
+            item.leadId,
+            {
+              count: item._count?._all || 0,
+              lastAt: item._max?.createdAt || null,
+            },
+          ])
+      );
+
+      const counsellingByLead = new Map();
+
+      for (const session of counsellingRows) {
+        if (!session.leadId) continue;
+        if (!counsellingByLead.has(session.leadId)) {
+          counsellingByLead.set(session.leadId, []);
+        }
+        counsellingByLead.get(session.leadId).push(session);
+      }
 
 
 
@@ -2625,6 +2758,8 @@ router.get(
                 ),
 
           assignedToName: lead.assignedToName,
+          assignedToUserId: lead.assignedToUserId || null,
+          followUpAt: lead.followUpAt || null,
 
           createdAt: lead.createdAt,
 
@@ -2671,6 +2806,34 @@ router.get(
             )
 
             .join("\n"),
+
+          remarks: lead.remarks?.length
+            ? lead.remarks.map((remark) => ({
+                id: remark.id,
+                text: remark.text,
+                createdAt: remark.createdAt,
+                updatedAt: remark.updatedAt,
+                createdBy: remark.user?.name || "Unknown user",
+                userId: remark.userId || null,
+                legacy: false,
+              }))
+            : (legacyLeadRemarkText(lead.notes)
+                ? [{
+                    id: `legacy-${lead.id}`,
+                    text: legacyLeadRemarkText(lead.notes),
+                    createdAt: lead.createdAt,
+                    updatedAt: lead.updatedAt,
+                    createdBy: "Existing lead note",
+                    userId: null,
+                    legacy: true,
+                  }]
+                : []),
+
+          intelligence: buildLeadIntelligence({
+            lead,
+            communicationSummary: communicationByLead.get(lead.id) || {},
+            counsellingSessions: counsellingByLead.get(lead.id) || [],
+          }),
 
           customFields: lead.customFieldValues.map((item) => ({
 
@@ -3144,6 +3307,16 @@ router.patch(
         return res.status(400).json({ success: false, message: "Invalid lead temperature" });
       }
 
+      let followUpAt;
+      try {
+        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error?.message || "Invalid follow-up date or time",
+        });
+      }
+
 
 
       const assignee = await getAssignee(companyId, assignedToUserId);
@@ -3264,6 +3437,8 @@ router.patch(
 
             assignedToName: assignee?.name || null,
 
+            followUpAt,
+
             notes: [
 
               notes,
@@ -3308,7 +3483,16 @@ router.patch(
 
       });
 
-
+      if (
+        (existing.followUpAt?.getTime?.() || null) !==
+          (followUpAt?.getTime?.() || null)
+      ) {
+        await clearPendingLeadFollowUpNotifications(
+          prisma,
+          companyId,
+          leadId
+        );
+      }
 
       return res.json({
 
@@ -3348,6 +3532,8 @@ router.patch(
           assignedToName:
 
             updated.assignedToName,
+
+          followUpAt: updated.followUpAt || null,
 
           createdAt:
 
@@ -3725,6 +3911,210 @@ router.delete(
 
 /* =========================================================
 
+   LEAD REMARKS (restored feature)
+
+========================================================= */
+
+router.post(
+  "/manual/:id/remarks",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const text = cleanString(req.body?.text ?? req.body?.remark);
+
+      if (!text) {
+        return res.status(400).json({
+          success: false,
+          message: "Remark is required",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        },
+        select: { id: true, notes: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const count = await tx.leadRemark.count({
+          where: { companyId, leadId },
+        });
+        const legacyRemark = legacyLeadRemarkText(lead.notes);
+
+        if (!count && legacyRemark) {
+          await tx.leadRemark.create({
+            data: {
+              companyId,
+              leadId,
+              userId: req.clientUser.userId,
+              text: legacyRemark,
+            },
+          });
+        }
+
+        await tx.leadRemark.create({
+          data: {
+            companyId,
+            leadId,
+            userId: req.clientUser.userId,
+            text,
+          },
+        });
+      });
+
+      const remarks = await getLatestLeadRemarks(prisma, companyId, leadId);
+
+      return res.status(201).json({
+        success: true,
+        message: "Remark added",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to add lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to add remark",
+      });
+    }
+  }
+);
+
+router.patch(
+  "/manual/:id/remarks/:remarkId",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const remarkId = String(req.params.remarkId || "").trim();
+      const text = cleanString(req.body?.text ?? req.body?.remark);
+
+      if (!text) {
+        return res.status(400).json({
+          success: false,
+          message: "Remark is required",
+        });
+      }
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        },
+        select: { id: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      const remark = await prisma.leadRemark.findFirst({
+        where: { id: remarkId, companyId, leadId },
+        select: { id: true },
+      });
+
+      if (!remark) {
+        return res.status(404).json({
+          success: false,
+          message: "Remark not found",
+        });
+      }
+
+      await prisma.leadRemark.update({
+        where: { id: remark.id },
+        data: { text },
+      });
+
+      const remarks = await getLatestLeadRemarks(prisma, companyId, leadId);
+
+      return res.json({
+        success: true,
+        message: "Remark updated",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to update lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update remark",
+      });
+    }
+  }
+);
+
+router.delete(
+  "/manual/:id/remarks/:remarkId",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const remarkId = String(req.params.remarkId || "").trim();
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          source: "LEAD_STORE",
+        },
+        select: { id: true },
+      });
+
+      if (!lead) {
+        return res.status(404).json({
+          success: false,
+          message: "Lead not found",
+        });
+      }
+
+      const remark = await prisma.leadRemark.findFirst({
+        where: { id: remarkId, companyId, leadId },
+        select: { id: true },
+      });
+
+      if (!remark) {
+        return res.status(404).json({
+          success: false,
+          message: "Remark not found",
+        });
+      }
+
+      await prisma.leadRemark.delete({
+        where: { id: remark.id },
+      });
+
+      const remarks = await getLatestLeadRemarks(prisma, companyId, leadId);
+
+      return res.json({
+        success: true,
+        message: "Remark deleted",
+        remarks,
+      });
+    } catch (error) {
+      console.error("Failed to delete lead remark:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to delete remark",
+      });
+    }
+  }
+);
+
+/* =========================================================
+
    ADD INDIVIDUAL LEAD
 
    Single leads are stored directly in the main Lead table.
@@ -4074,6 +4464,18 @@ router.post(
 
       }
 
+      const remark = cleanString(req.body?.remark);
+
+      let followUpAt;
+      try {
+        followUpAt = parseLeadFollowUpAt(req.body?.followUpAt);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: error?.message || "Invalid follow-up date or time",
+        });
+      }
+
 
 
       const assignee =
@@ -4383,6 +4785,8 @@ router.post(
 
                   null,
 
+                followUpAt,
+
                 notes:
 
                   [
@@ -4426,6 +4830,19 @@ router.post(
               },
 
             });
+
+
+
+            if (remark) {
+              await tx.leadRemark.create({
+                data: {
+                  companyId,
+                  leadId: lead.id,
+                  userId: req.clientUser.userId,
+                  text: remark,
+                },
+              });
+            }
 
 
 

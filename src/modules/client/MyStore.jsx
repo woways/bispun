@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Wand2,
+  Download,
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
@@ -120,6 +121,7 @@ export default function MyStore() {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [generated, setGenerated] = useState([]); // AI images this company has made
   const [prompt, setPrompt] = useState("");
   const [toast, setToast] = useState(null);
 
@@ -131,6 +133,15 @@ export default function MyStore() {
   const loadTemplates = useCallback(async (occasionId) => {
     const data = await apiRequest(`/api/client/store/templates/${occasionId}`);
     setTpl(data);
+  }, []);
+
+  const loadAssets = useCallback(async () => {
+    try {
+      const data = await apiRequest("/api/client/store/assets");
+      setGenerated(data?.assets || []);
+    } catch {
+      /* non-fatal — gallery just stays empty */
+    }
   }, []);
 
   useEffect(() => {
@@ -148,6 +159,7 @@ export default function MyStore() {
         const first = meta.spotlight?.id || meta.occasions?.[0]?.id;
         setSelected(first);
         if (first) await loadTemplates(first);
+        await loadAssets();
       } catch {
         flash("Couldn't load My Store. Please refresh.", "error");
       } finally {
@@ -157,7 +169,7 @@ export default function MyStore() {
     return () => {
       alive = false;
     };
-  }, [loadTemplates]);
+  }, [loadTemplates, loadAssets]);
 
   const pickOccasion = async (id) => {
     setSelected(id);
@@ -180,6 +192,7 @@ export default function MyStore() {
         }),
       });
       if (res?.usage) setUsage(res.usage);
+      if (res?.asset) setGenerated((prev) => [res.asset, ...prev]); // show it immediately
       setPrompt("");
       flash("Image generated.");
     } catch (error) {
@@ -377,6 +390,46 @@ export default function MyStore() {
           onRegenerate={() => selected && loadTemplates(selected)}
         />
       </div>
+
+      {/* AI-generated images (real Ideogram output, stored in S3) */}
+      {generated.length > 0 && (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[16px] font-black text-slate-900">Your generated images</div>
+            <span className="text-[12px] font-semibold text-slate-400">
+              {generated.length} saved
+            </span>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {generated.map((a) => (
+              <div
+                key={a.id}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+              >
+                <img
+                  src={a.imageUrl}
+                  alt="Generated design"
+                  loading="lazy"
+                  className="h-52 w-full object-cover transition group-hover:scale-[1.03]"
+                />
+                {a.prompt && (
+                  <div className="line-clamp-2 border-t border-slate-200 bg-white px-3 py-2 text-[11px] leading-snug text-slate-500">
+                    {a.prompt}
+                  </div>
+                )}
+                <a
+                  href={a.imageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-lg bg-slate-900/80 px-2.5 py-1.5 text-[11px] font-bold text-white opacity-0 backdrop-blur transition group-hover:opacity-100"
+                >
+                  <Download size={12} /> Open
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <p className="flex items-center justify-center gap-1.5 text-center text-[13px] text-slate-400">
         <ImageIcon size={12} /> Templates are free to use. Live image generation activates once
