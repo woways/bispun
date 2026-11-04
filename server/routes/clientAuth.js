@@ -747,6 +747,10 @@ router.post(
       // CA-010: concurrent sessions are allowed, but alert the account when a
       // new sign-in happens while another session is still active, so the user
       // sees that a different tab/browser/device logged in with their account.
+      // PERF: run DETACHED so the count + notification DB round-trips never block
+      // the login response. This is an advisory side-effect only — it does not
+      // affect authentication, the session, or the response payload.
+      void (async () => {
       try {
         const otherActiveSessions =
           await prisma.clientSession.count({
@@ -791,6 +795,7 @@ router.post(
           notifyError
         );
       }
+      })();
 
       const token =
         jwt.sign(
