@@ -47,7 +47,7 @@ export const StatCard = ({
   icon: Icon,
   tone = "indigo",
 }) => (
-  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
+  <div className="cb-fade-in bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-[border-color,box-shadow] duration-200">
     <div className="flex flex-row-reverse items-start justify-end gap-3">
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-400">

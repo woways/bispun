@@ -4470,13 +4470,35 @@ export default function LeadStore({ selectedYear = "all" }) {
 
                           <td className={`lg:sticky lg:right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
+                              {lead.phone ? (
+                                <a
+                                  href={`tel:${lead.phone}`}
+                                  title={`Call ${lead.name}`}
+                                  aria-label={`Call ${lead.name}`}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50"
+                                >
+                                  <PhoneCall size={14} aria-hidden="true" />
+                                </a>
+                              ) : (
+                                <span
+                                  title="Lead has no phone number"
+                                  aria-label="Call unavailable: lead has no phone number"
+                                  role="img"
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300"
+                                >
+                                  <PhoneCall size={14} aria-hidden="true" />
+                                </span>
+                              )}
+
                               <button
                                 type="button"
                                 onClick={() => openMessageComposer([lead.id])}
-                                title={lead.email ? `Email ${lead.name}` : "Lead has no email address"}
+                                disabled={!lead.email}
+                                title={lead.email ? `Send message to ${lead.name}` : "Lead has no email address"}
+                                aria-label={lead.email ? `Send message to ${lead.name}` : "Send message unavailable: lead has no email address"}
                                 className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${lead.email ? "text-indigo-600 hover:bg-indigo-50" : "text-slate-300 hover:bg-slate-50"}`}
                               >
-                                <Mail size={14} />
+                                <MessageSquare size={14} aria-hidden="true" />
                               </button>
 
                               {lead.isAdmissionsSynced ? (
@@ -4495,9 +4517,10 @@ export default function LeadStore({ selectedYear = "all" }) {
                                       setShowIndividual(true);
                                     }}
                                     title="Edit lead"
+                                    aria-label={`Edit ${lead.name}`}
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
                                   >
-                                    <Pencil size={14} />
+                                    <Pencil size={14} aria-hidden="true" />
                                   </button>
 
                                   <button
@@ -4527,9 +4550,10 @@ export default function LeadStore({ selectedYear = "all" }) {
                                       }
                                     }}
                                     title="Delete lead"
+                                    aria-label={`Delete ${lead.name}`}
                                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-rose-500 transition-colors hover:bg-rose-50 hover:text-rose-700"
                                   >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={14} aria-hidden="true" />
                                   </button>
                                 </>
                               )}

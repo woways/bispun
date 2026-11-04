@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -44,6 +46,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -128,6 +131,61 @@ function statusTone(status) {
   return "amber";
 }
 
+// Accessible-modal helper: moves focus into the dialog on open, traps Tab,
+// closes on Escape, locks body scroll, and restores focus to the opener on
+// close. Keeps the historical modal visuals unchanged.
+const FOCUSABLE_SELECTOR =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+function useModalA11y(onClose) {
+  const panelRef = useRef(null);
+  const restoreRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    restoreRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const panel = panelRef.current;
+    const first = panel?.querySelector(FOCUSABLE_SELECTOR);
+    (first || panel)?.focus?.();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      restoreRef.current?.focus?.();
+    };
+  }, []);
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onCloseRef.current?.();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const items = panel.querySelectorAll(FOCUSABLE_SELECTOR);
+    if (!items.length) {
+      event.preventDefault();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  return { panelRef, onKeyDown };
+}
+
 function Field({
   label,
   value,
@@ -138,18 +196,20 @@ function Field({
   min,
   max,
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-[13px] font-medium text-slate-600 mb-1">
+      <label htmlFor={id} className="block text-[13px] font-medium text-slate-600 mb-1">
         {label}
         {required && (
-          <span className="text-rose-500 ml-0.5">
+          <span className="text-rose-500 ml-0.5" aria-hidden="true">
             *
           </span>
         )}
       </label>
 
       <input
+        id={id}
         type={type}
         required={required}
         value={value}
@@ -172,6 +232,10 @@ function ExpenseModal({
   onClose,
   onSaved,
 }) {
+  const headingId = useId();
+  const descId = useId();
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+
   const [saving, setSaving] =
     useState(false);
 
@@ -345,15 +409,23 @@ function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white rounded-t-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[94vh] overflow-hidden flex flex-col focus:outline-none sm:rounded-2xl sm:max-h-[92vh]"
+      >
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-indigo-500">
               Finance / Expense Claim
             </div>
 
-            <h2 className="mt-1 text-xl font-bold text-slate-950">
+            <h2 id={headingId} className="mt-1 text-xl font-bold text-slate-950">
               {expense ? "Edit Expense" : "Add Expense"}
             </h2>
 
@@ -367,9 +439,10 @@ function ExpenseModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center justify-center text-slate-500"
+            aria-label="Close"
+            className="w-9 h-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 inline-flex items-center justify-center text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -379,14 +452,14 @@ function ExpenseModal({
         >
           <div className="p-6 overflow-y-auto space-y-5">
             {error && (
-              <div className="bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-3 py-2 text-[15px]">
+              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-3 py-2 text-[15px]">
                 {error}
               </div>
             )}
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
               <div className="flex items-center gap-2 mb-4">
-                <Receipt size={15} className="text-indigo-600" />
+                <Receipt size={15} aria-hidden="true" className="text-indigo-600" />
                 <div className="text-[15px] font-bold text-slate-900">
                   Expense Details
                 </div>
@@ -455,11 +528,12 @@ function ExpenseModal({
                 />
 
                 <div className="md:col-span-2">
-                  <label className="block text-[13px] font-medium text-slate-600 mb-1">
+                  <label htmlFor={descId} className="block text-[13px] font-medium text-slate-600 mb-1">
                     Description
                   </label>
 
                   <textarea
+                    id={descId}
                     rows={3}
                     value={
                       form.description
@@ -479,7 +553,7 @@ function ExpenseModal({
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-2 mb-4">
-                <CreditCard size={15} className="text-indigo-600" />
+                <CreditCard size={15} aria-hidden="true" className="text-indigo-600" />
                 <div className="text-[15px] font-bold text-slate-900">
                   Vendor & Payment
                 </div>
@@ -546,7 +620,7 @@ function ExpenseModal({
 
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
               <div className="flex items-center gap-2 mb-2">
-                <FileText size={15} className="text-indigo-600" />
+                <FileText size={15} aria-hidden="true" className="text-indigo-600" />
                 <div className="text-[15px] font-bold text-slate-900">
                   Receipt / Invoice / Proof
                 </div>
@@ -575,7 +649,8 @@ function ExpenseModal({
                       <>
                         <Loader2
                           size={24}
-                          className="mx-auto text-indigo-600 animate-spin"
+                          aria-hidden="true"
+                          className="mx-auto text-indigo-600 animate-spin motion-reduce:animate-none"
                         />
 
                         <div className="mt-3 text-[15px] font-semibold text-slate-800">
@@ -585,7 +660,7 @@ function ExpenseModal({
                     ) : (
                       <>
                         <div className="w-11 h-11 mx-auto rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                          <Upload size={19} />
+                          <Upload size={19} aria-hidden="true" />
                         </div>
 
                         <div className="mt-3 text-[15px] font-semibold text-slate-800">
@@ -603,7 +678,7 @@ function ExpenseModal({
                 <div className="rounded-xl bg-white border border-indigo-100 p-3">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
-                      <FileText size={17} />
+                      <FileText size={17} aria-hidden="true" />
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -620,10 +695,11 @@ function ExpenseModal({
                       href={form.receiptUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 inline-flex items-center justify-center"
+                      aria-label="Preview proof document (opens in new tab)"
+                      className="w-8 h-8 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                       title="Preview"
                     >
-                      <Eye size={13} />
+                      <Eye size={13} aria-hidden="true" />
                     </a>
 
                     <button
@@ -637,10 +713,11 @@ function ExpenseModal({
                           ""
                         );
                       }}
-                      className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                      aria-label="Remove proof document"
+                      className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                       title="Remove"
                     >
-                      <X size={13} />
+                      <X size={13} aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -662,9 +739,9 @@ function ExpenseModal({
               className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-[13px] font-semibold shadow-sm inline-flex items-center gap-2"
             >
               {saving ? (
-                <Loader2 size={13} className="animate-spin" />
+                <Loader2 size={13} aria-hidden="true" className="animate-spin motion-reduce:animate-none" />
               ) : (
-                <Plus size={13} />
+                <Plus size={13} aria-hidden="true" />
               )}
 
               {saving
@@ -687,6 +764,9 @@ function ExpenseDetails({
   onClose,
   onStatus,
 }) {
+  const headingId = useId();
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+
   if (!expense) return null;
 
   const details = [
@@ -702,14 +782,22 @@ function ExpenseDetails({
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950/45 backdrop-blur-[2px] flex justify-end">
-      <div className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-white shadow-2xl border-l border-slate-200 flex flex-col focus:outline-none"
+      >
         <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
           <div>
-            <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-slate-400">
+            <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-slate-500">
               Expense Details
             </div>
 
-            <h2 className="mt-1 text-xl font-bold text-slate-950">
+            <h2 id={headingId} className="mt-1 text-xl font-bold text-slate-950">
               {expense.title}
             </h2>
 
@@ -723,9 +811,10 @@ function ExpenseDetails({
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center text-slate-500"
+            aria-label="Close"
+            className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-50 inline-flex items-center justify-center text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -740,13 +829,13 @@ function ExpenseDetails({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {details.map(([label, value]) => (
               <div
                 key={label}
                 className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
               >
-                <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-500">
                   {label}
                 </div>
 
@@ -775,7 +864,7 @@ function ExpenseDetails({
             {expense.receiptUrl ? (
               <div className="mt-2 rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
                 <div className="flex items-center gap-2">
-                  <FileText size={15} className="text-indigo-600" />
+                  <FileText size={15} aria-hidden="true" className="text-indigo-600" />
 
                   <div className="min-w-0 flex-1 text-[13px] font-mono text-slate-600 truncate">
                     {expense.receiptUrl}
@@ -787,10 +876,11 @@ function ExpenseDetails({
                     href={expense.receiptUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold inline-flex items-center gap-1.5"
+                    className="h-8 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
-                    <Eye size={12} />
+                    <Eye size={12} aria-hidden="true" />
                     Preview
+                    <span className="sr-only"> (opens in new tab)</span>
                   </a>
 
                   <a
@@ -798,10 +888,11 @@ function ExpenseDetails({
                     download
                     target="_blank"
                     rel="noreferrer"
-                    className="h-8 px-3 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-xs font-semibold inline-flex items-center gap-1.5"
+                    className="h-8 px-3 rounded-lg border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-xs font-semibold inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
-                    <Download size={12} />
+                    <Download size={12} aria-hidden="true" />
                     Download
+                    <span className="sr-only"> (opens in new tab)</span>
                   </a>
                 </div>
               </div>
@@ -818,18 +909,18 @@ function ExpenseDetails({
             <button
               type="button"
               onClick={() => onStatus(expense.id, "REJECTED")}
-              className="flex-1 h-10 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 text-[13px] font-semibold inline-flex items-center justify-center gap-2"
+              className="flex-1 h-10 rounded-xl border border-rose-200 bg-white hover:bg-rose-50 text-rose-700 text-[13px] font-semibold inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
-              <Ban size={14} />
+              <Ban size={14} aria-hidden="true" />
               Reject
             </button>
 
             <button
               type="button"
               onClick={() => onStatus(expense.id, "APPROVED")}
-              className="flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold inline-flex items-center justify-center gap-2"
+              className="flex-1 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
-              <Check size={14} />
+              <Check size={14} aria-hidden="true" />
               Approve
             </button>
           </div>
@@ -844,6 +935,11 @@ function IncentiveModal({
   onClose,
   onSaved,
 }) {
+  const headingId = useId();
+  const descId = useId();
+  const employeeId = useId();
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+
   const [saving, setSaving] =
     useState(false);
 
@@ -936,10 +1032,18 @@ function IncentiveModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-lg overflow-hidden">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-lg overflow-hidden focus:outline-none"
+      >
         <div className="px-6 py-5 border-b border-slate-200 flex justify-between">
           <div>
-            <h2 className="font-semibold">
+            <h2 id={headingId} className="font-semibold">
               {incentive ? "Edit Incentive" : "Add Incentive"}
             </h2>
 
@@ -951,29 +1055,33 @@ function IncentiveModal({
           </div>
 
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close"
+            className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <X size={17} />
+            <X size={17} aria-hidden="true" />
           </button>
         </div>
 
         <form onSubmit={submit}>
           <div className="p-6 space-y-4">
             {error && (
-              <div className="bg-rose-50 text-rose-700 border border-rose-200 rounded p-2 text-[15px]">
+              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded p-2 text-[15px]">
                 {error}
               </div>
             )}
 
             {users.length > 0 ? (
               <div>
-                <label className="block text-[13px] font-medium text-slate-600 mb-1">
+                <label htmlFor={employeeId} className="block text-[13px] font-medium text-slate-600 mb-1">
                   Employee / Counsellor
-                  <span className="text-rose-500 ml-0.5">
+                  <span className="text-rose-500 ml-0.5" aria-hidden="true">
                     *
                   </span>
                 </label>
                 <select
+                  id={employeeId}
                   required
                   value={form.employeeName}
                   onChange={(event) =>
@@ -1060,11 +1168,12 @@ function IncentiveModal({
             />
 
             <div>
-              <label className="block text-[13px] font-medium text-slate-600 mb-1">
+              <label htmlFor={descId} className="block text-[13px] font-medium text-slate-600 mb-1">
                 Description
               </label>
 
               <textarea
+                id={descId}
                 rows={3}
                 value={
                   form.description
@@ -1133,11 +1242,11 @@ function RevenueMetric({
           : "bg-white border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
       }`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div
             className={`text-[13px] font-semibold uppercase tracking-[0.09em] ${
-              featured ? "text-indigo-100" : "text-slate-500 lg:text-slate-400"
+              featured ? "text-indigo-100" : "text-slate-500"
             }`}
           >
             {label}
@@ -1159,7 +1268,7 @@ function RevenueMetric({
               : tones[tone] || tones.indigo
           }`}
         >
-          <Icon size={17} />
+          <Icon size={17} aria-hidden="true" />
         </div>
       </div>
 
@@ -1176,6 +1285,176 @@ function RevenueMetric({
   );
 }
 
+
+function LeakageRadarView({ radar }) {
+  const safeRadar = radar || {};
+  const summary = safeRadar.summary || {};
+
+  const categories = [
+    {
+      key: "overdue",
+      title: "Overdue Collections",
+      subtitle: `Pending for ${safeRadar.rules?.overdueCollectionDays || 30}+ days`,
+      data: safeRadar.overdueCollections || {},
+      tone: "rose",
+      icon: Clock,
+    },
+    {
+      key: "pending",
+      title: "Admissions with Pending Fee",
+      subtitle: "Admissions where collection is still incomplete",
+      data: safeRadar.pendingFees || {},
+      tone: "amber",
+      icon: CreditCard,
+    },
+    {
+      key: "leads",
+      title: "High-value Leads · No Follow-up",
+      subtitle: "Hot / qualified / high-scoring leads without a next step",
+      data: safeRadar.highValueNoFollowUp || {},
+      tone: "indigo",
+      icon: UserCheck,
+    },
+    {
+      key: "stuck",
+      title: "Revenue Stuck Too Long",
+      subtitle: `Buffer revenue pending for ${safeRadar.rules?.stuckRevenueDays || 60}+ days`,
+      data: safeRadar.stuckRevenue || {},
+      tone: "slate",
+      icon: AlertCircle,
+    },
+  ];
+
+  const toneClass = {
+    rose: "border-rose-100 bg-rose-50/60 text-rose-700",
+    amber: "border-amber-100 bg-amber-50/60 text-amber-700",
+    indigo: "border-indigo-100 bg-indigo-50/60 text-indigo-700",
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+  };
+
+  return (
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-rose-600">
+              At-Risk Revenue
+            </div>
+            <h2 className="mt-1 text-[18px] font-bold text-slate-950">
+              Money and opportunities that need attention
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Uses existing admission, payment and lead activity to surface recovery priorities.
+            </p>
+          </div>
+
+          <div className="w-full rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 sm:w-auto sm:min-w-[210px] sm:text-right">
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-rose-500">
+              Revenue at risk
+            </div>
+            <div className="mt-1 text-[24px] font-extrabold tracking-tight text-rose-700">
+              {money(summary.atRiskAmount)}
+            </div>
+            <div className="mt-1 text-[12px] text-rose-600/80">
+              {Number(summary.atRiskAdmissions || 0).toLocaleString("en-IN")} admission{Number(summary.atRiskAdmissions || 0) === 1 ? "" : "s"} need collection attention
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
+          {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
+            <div key={key} className="bg-white p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-bold text-slate-900">{title}</div>
+                  <div className="mt-1 text-[12px] leading-5 text-slate-500">{subtitle}</div>
+                </div>
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${toneClass[tone]}`}>
+                  <Icon size={16} aria-hidden="true" />
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Cases</div>
+                  <div className="mt-1 text-[22px] font-extrabold text-slate-950">{Number(data.count || 0).toLocaleString("en-IN")}</div>
+                </div>
+                {data.amount !== undefined ? (
+                  <div className="text-right">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Value</div>
+                    <div className="mt-1 text-[15px] font-bold text-slate-800">{money(data.amount)}</div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {categories.map(({ key, title, data }) => {
+          const items = Array.isArray(data.items) ? data.items : [];
+          return (
+            <section key={`list-${key}`} className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+                <div>
+                  <h3 className="text-[14px] font-bold text-slate-900">{title}</h3>
+                  <p className="mt-0.5 text-[12px] text-slate-500">Top priority cases</p>
+                </div>
+                <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                  {Number(data.count || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+
+              {items.length ? (
+                <div className="divide-y divide-slate-100">
+                  {items.slice(0, 5).map((item) => (
+                    <div key={`${key}-${item.id}`} className="flex items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-[13px] font-semibold text-slate-900">
+                          {item.studentName || item.leadName || "—"}
+                        </div>
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          {key === "leads"
+                            ? `${item.conversionChance || "—"} chance · Score ${item.score ?? "—"}`
+                            : `${item.college || "College not set"} · ${item.ageDays || 0} days`}
+                        </div>
+                        {key === "leads" && item.nextBestAction ? (
+                          <div className="mt-1 line-clamp-2 text-[11px] leading-4 text-indigo-600">
+                            {item.nextBestAction}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {item.pendingAmount !== undefined ? (
+                        <div className="shrink-0 text-right text-[13px] font-bold text-slate-800">
+                          {money(item.pendingAmount)}
+                        </div>
+                      ) : (
+                        <div className="shrink-0 text-[11px] font-semibold text-slate-500">
+                          {item.assignedToName || "Unassigned"}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-4 py-8 text-center text-[12px] text-slate-500">
+                  No cases in this category.
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
+        “Overdue” currently means pending for {safeRadar.rules?.overdueCollectionDays || 30}+ days, and “stuck” means Buffer revenue pending for {safeRadar.rules?.stuckRevenueDays || 60}+ days. If you later add an explicit fee due-date field, the radar can switch to that exact due date.
+      </div>
+    </div>
+  );
+}
+
 export default function Revenue({ selectedYear = "all" }) {
   const [tab, setTab] =
     useState("overview");
@@ -1184,6 +1463,7 @@ export default function Revenue({ selectedYear = "all" }) {
     useState({
       summary: {},
       monthlyRevenue: [],
+      leakageRadar: null,
       expenses: [],
       incentives: [],
     });
@@ -1202,9 +1482,10 @@ export default function Revenue({ selectedYear = "all" }) {
       allowed &&
       tab !== "collegeSlabs" &&
       tab !== "staffIncentives" &&
-      !allowed[tab]
+      ((tab === "leakage" && !allowed.overview) ||
+        (tab !== "leakage" && !allowed[tab]))
     ) {
-      const first = ["overview", "expenses", "incentives"].find(
+      const first = ["overview", "expenses"].find(
         (s) => allowed[s]
       );
       if (first) setTab(first);
@@ -1634,7 +1915,7 @@ export default function Revenue({ selectedYear = "all" }) {
     <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Finance / Revenue management
           </div>
 
@@ -1655,24 +1936,26 @@ export default function Revenue({ selectedYear = "all" }) {
         >
           <RefreshCw
             size={13}
-            className={loading ? "animate-spin" : ""}
+            aria-hidden="true"
+            className={loading ? "animate-spin motion-reduce:animate-none" : ""}
           />
           Refresh data
         </button>
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-[15px]">
-          <AlertCircle size={15} />
+        <div role="alert" className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-[15px]">
+          <AlertCircle size={15} aria-hidden="true" />
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500">
+        <div role="status" aria-live="polite" className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500">
           <Loader2
             size={16}
-            className="animate-spin"
+            aria-hidden="true"
+            className="animate-spin motion-reduce:animate-none"
           />
           Loading revenue...
         </div>
@@ -1704,10 +1987,10 @@ export default function Revenue({ selectedYear = "all" }) {
             />
 
             <RevenueMetric
-              label="Buffer Zone Revenue"
+              label="Buffer Revenue"
               value={money(summary.bufferRevenue)}
               icon={Clock}
-              detail="Admission value currently in buffer zone"
+              detail="Admission value currently classified as buffer revenue"
               tone="amber"
             />
 
@@ -1723,7 +2006,7 @@ export default function Revenue({ selectedYear = "all" }) {
               label="Total Incentive Amount"
               value={money(summary.totalIncentives)}
               icon={Award}
-              detail="Approved and paid staff incentives"
+              detail="Approved and paid employee incentives"
               tone="slate"
             />
 
@@ -1755,22 +2038,26 @@ export default function Revenue({ selectedYear = "all" }) {
           <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] inline-flex gap-1">
             {[
               ["overview", "Overview"],
+              ["leakage", "At-Risk Revenue"],
               ["expenses", "Expenses"],
               ["incentives", "Incentives"],
               ["collegeSlabs", "College Revenue"],
-              ["staffIncentives", "Staff Incentives"],
+              ["staffIncentives", "Employee Incentives"],
             ]
               .filter(
                 ([item]) =>
                   item === "collegeSlabs" ||
                   item === "staffIncentives" ||
                   !data.allowedSections ||
-                  data.allowedSections[item]
+                  (item === "leakage"
+                    ? data.allowedSections.overview
+                    : data.allowedSections[item])
               )
               .map(([item, label]) => (
               <button
                 key={item}
                 type="button"
+                aria-pressed={tab === item}
                 onClick={() => setTab(item)}
                 className={`h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors ${
                   tab === item
@@ -1783,76 +2070,111 @@ export default function Revenue({ selectedYear = "all" }) {
             ))}
           </div>
 
+          {tab === "leakage" && (
+            <LeakageRadarView radar={data.leakageRadar} />
+          )}
+
           {tab ===
             "overview" && (
             <div className="grid lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <h3 className="font-semibold text-[15px] text-slate-900 mb-1">
+                <h2 className="font-semibold text-[15px] text-slate-900 mb-1">
                   Monthly Revenue
-                </h3>
+                </h2>
 
                 <div className="text-[13px] text-slate-500 mb-5">
                   Potential versus collected revenue by month
                 </div>
 
-                <ResponsiveContainer
-                  width="100%"
-                  height={280}
+                <div
+                  role="img"
+                  aria-label="Line chart of monthly revenue: potential versus collected revenue by month. A text table of the same data follows."
                 >
-                  <LineChart
-                    data={
-                      data.monthlyRevenue
-                    }
+                  <ResponsiveContainer
+                    width="100%"
+                    height={280}
                   >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#e2e8f0"
-                    />
-
-                    <XAxis
-                      dataKey="m"
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: "#64748b" }}
-                    />
-
-                    <YAxis
-                      tickFormatter={
-                        axisMoney
+                    <LineChart
+                      accessibilityLayer
+                      data={
+                        data.monthlyRevenue
                       }
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fontSize: 11, fill: "#64748b" }}
-                    />
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#e2e8f0"
+                      />
 
-                    <Tooltip
-                      formatter={
-                        money
-                      }
-                    />
+                      <XAxis
+                        dataKey="m"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                      />
 
-                    <Line
-                      type="monotone"
-                      dataKey="potential"
-                      name="Potential"
-                      stroke="#cbd5e1"
-                    />
+                      <YAxis
+                        tickFormatter={
+                          axisMoney
+                        }
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 11, fill: "#64748b" }}
+                      />
 
-                    <Line
-                      type="monotone"
-                      dataKey="received"
-                      name="Received"
-                      stroke="#6366f1"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                      <Tooltip
+                        formatter={
+                          money
+                        }
+                      />
+
+                      <Legend />
+
+                      <Line
+                        type="monotone"
+                        dataKey="potential"
+                        name="Potential"
+                        stroke="#64748b"
+                        strokeDasharray="5 5"
+                      />
+
+                      <Line
+                        type="monotone"
+                        dataKey="received"
+                        name="Received"
+                        stroke="#6366f1"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <table className="sr-only">
+                  <caption>
+                    Monthly revenue: potential versus received
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Month</th>
+                      <th scope="col">Potential</th>
+                      <th scope="col">Received</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.monthlyRevenue || []).map((row, index) => (
+                      <tr key={index}>
+                        <th scope="row">{row.m}</th>
+                        <td>{money(row.potential)}</td>
+                        <td>{money(row.received)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <h3 className="font-semibold text-[15px] text-slate-900 mb-1">
+                <h2 className="font-semibold text-[15px] text-slate-900 mb-1">
                   Breakdown
-                </h3>
+                </h2>
 
                 <div className="text-[13px] text-slate-500 mb-5">
                   Current financial position
@@ -1943,10 +2265,13 @@ export default function Revenue({ selectedYear = "all" }) {
                 <div className="relative flex-1 max-w-lg">
                   <Search
                     size={14}
+                    aria-hidden="true"
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                   />
 
                   <input
+                    type="search"
+                    aria-label="Search expenses"
                     value={expenseSearch}
                     onChange={(event) =>
                       setExpenseSearch(
@@ -1962,10 +2287,12 @@ export default function Revenue({ selectedYear = "all" }) {
                   <div className="relative">
                     <Filter
                       size={13}
+                      aria-hidden="true"
                       className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
                     />
 
                     <select
+                      aria-label="Filter by status"
                       value={expenseStatusFilter}
                       onChange={(event) =>
                         setExpenseStatusFilter(
@@ -1990,6 +2317,7 @@ export default function Revenue({ selectedYear = "all" }) {
                   </div>
 
                   <select
+                    aria-label="Filter by category"
                     value={expenseCategoryFilter}
                     onChange={(event) =>
                       setExpenseCategoryFilter(
@@ -2020,7 +2348,7 @@ export default function Revenue({ selectedYear = "all" }) {
                     disabled={!filteredExpenses.length}
                     className="h-9 px-3 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 rounded-xl text-[13px] font-semibold text-slate-700 inline-flex items-center gap-2"
                   >
-                    <Download size={13} />
+                    <Download size={13} aria-hidden="true" />
                     Export
                   </button>
 
@@ -2031,7 +2359,7 @@ export default function Revenue({ selectedYear = "all" }) {
                     }
                     className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
                   >
-                    <Plus size={14} />
+                    <Plus size={14} aria-hidden="true" />
                     Add Expense
                   </button>
                 </div>
@@ -2052,30 +2380,33 @@ export default function Revenue({ selectedYear = "all" }) {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-[15px]">
+                    <caption className="sr-only">
+                      Expense claims
+                    </caption>
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Expense
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Category
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Vendor
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Amount
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Date
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Proof
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Status
                         </th>
-                        <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Actions
                         </th>
                       </tr>
@@ -2136,8 +2467,9 @@ export default function Revenue({ selectedYear = "all" }) {
                                   }
                                   className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-600 hover:text-indigo-700"
                                 >
-                                  <FileText size={13} />
+                                  <FileText size={13} aria-hidden="true" />
                                   View
+                                  <span className="sr-only"> (opens in new tab)</span>
                                 </a>
                               ) : (
                                 <span className="text-[13px] text-slate-400">
@@ -2170,10 +2502,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                       expense
                                     )
                                   }
-                                  className="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 inline-flex items-center justify-center"
+                                  className="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-500 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                   title="View details"
+                                  aria-label="View expense details"
                                 >
-                                  <Eye size={14} />
+                                  <Eye size={14} aria-hidden="true" />
                                 </button>
 
                                 <button
@@ -2182,10 +2515,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                     setEditingExpense(expense);
                                     setShowExpense(true);
                                   }}
-                                  className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center"
+                                  className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                   title="Edit expense"
+                                  aria-label="Edit expense"
                                 >
-                                  <Pencil size={14} />
+                                  <Pencil size={14} aria-hidden="true" />
                                 </button>
 
                                 <button
@@ -2193,10 +2527,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                   onClick={() =>
                                     deleteExpense(expense)
                                   }
-                                  className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                  className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                   title="Delete expense"
+                                  aria-label="Delete expense"
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={14} aria-hidden="true" />
                                 </button>
 
                                 {expense.status ===
@@ -2210,10 +2545,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                           "APPROVED"
                                         )
                                       }
-                                      className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center"
+                                      className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                       title="Approve"
+                                      aria-label="Approve expense"
                                     >
-                                      <Check size={15} />
+                                      <Check size={15} aria-hidden="true" />
                                     </button>
 
                                     <button
@@ -2224,10 +2560,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                           "REJECTED"
                                         )
                                       }
-                                      className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                      className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                       title="Reject"
+                                      aria-label="Reject expense"
                                     >
-                                      <Ban size={15} />
+                                      <Ban size={15} aria-hidden="true" />
                                     </button>
                                   </>
                                 )}
@@ -2244,7 +2581,7 @@ export default function Revenue({ selectedYear = "all" }) {
                             className="p-12 text-center"
                           >
                             <div className="w-11 h-11 mx-auto rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center">
-                              <Receipt size={18} />
+                              <Receipt size={18} aria-hidden="true" />
                             </div>
 
                             <div className="mt-3 text-[15px] font-semibold text-slate-700">
@@ -2277,37 +2614,41 @@ export default function Revenue({ selectedYear = "all" }) {
             <div className="space-y-3">
               <div className="flex justify-end">
                 <button
+                  type="button"
                   onClick={() => {
                     setEditingIncentive(null);
                     setShowIncentive(true);
                   }}
-                  className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
+                  className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                 >
-                  <Plus size={14} />
+                  <Plus size={14} aria-hidden="true" />
                   Add Incentive
                 </button>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
                 <table className="w-full text-[15px]">
+                  <caption className="sr-only">
+                    Employee incentives
+                  </caption>
                   <thead className="bg-slate-50/80">
                     <tr>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Employee
                       </th>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Title
                       </th>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Amount
                       </th>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Date
                       </th>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Status
                       </th>
-                      <th className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Actions
                       </th>
                     </tr>
@@ -2365,10 +2706,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                   setEditingIncentive(incentive);
                                   setShowIncentive(true);
                                 }}
-                                className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center"
+                                className="w-8 h-8 rounded-lg border border-indigo-100 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 title="Edit incentive"
+                                aria-label="Edit incentive"
                               >
-                                <Pencil size={14} />
+                                <Pencil size={14} aria-hidden="true" />
                               </button>
 
                               <button
@@ -2376,10 +2718,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                 onClick={() =>
                                   deleteIncentive(incentive)
                                 }
-                                className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 title="Delete incentive"
+                                aria-label="Delete incentive"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={14} aria-hidden="true" />
                               </button>
 
                               {incentive.status ===
@@ -2393,10 +2736,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                         "APPROVED"
                                       )
                                     }
-                                    className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center"
+                                    className="w-8 h-8 rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                     title="Approve"
+                                    aria-label="Approve incentive"
                                   >
-                                    <Check size={16} />
+                                    <Check size={16} aria-hidden="true" />
                                   </button>
 
                                   <button
@@ -2407,10 +2751,11 @@ export default function Revenue({ selectedYear = "all" }) {
                                         "REJECTED"
                                       )
                                     }
-                                    className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center"
+                                    className="w-8 h-8 rounded-lg border border-rose-100 bg-rose-50 hover:bg-rose-100 text-rose-600 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                     title="Reject"
+                                    aria-label="Reject incentive"
                                   >
-                                    <Ban size={16} />
+                                    <Ban size={16} aria-hidden="true" />
                                   </button>
                                 </>
                               )}
@@ -2425,9 +2770,9 @@ export default function Revenue({ selectedYear = "all" }) {
                                       "PAID"
                                     )
                                   }
-                                  className="h-8 px-2.5 text-[13px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded-lg inline-flex items-center gap-1.5"
+                                  className="h-8 px-2.5 text-[13px] font-semibold bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded-lg inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                 >
-                                  <Wallet size={12} />
+                                  <Wallet size={12} aria-hidden="true" />
                                   Mark Paid
                                 </button>
                               )}

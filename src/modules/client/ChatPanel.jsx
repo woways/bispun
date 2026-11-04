@@ -1718,7 +1718,7 @@ export default function ChatPanel({
                           )}
 
                           <div className={`flex max-w-[76%] flex-col sm:max-w-[70%] ${mine ? "items-end" : "items-start"}`}>
-                            <div className={`cb-bubble relative px-4 py-2.5 text-[14px] leading-5.5 ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-50 text-neutral-900" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
+                            <div className={`cb-bubble cb-fade-in-up relative px-4 py-2.5 text-[14px] leading-5.5 ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-50 text-neutral-900" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
                               {!mine && activeConversation.isGroup && <div className="mb-1 text-[13px] font-semibold text-indigo-600">{m.sender?.name}</div>}
 
                               {m.replyTo && (

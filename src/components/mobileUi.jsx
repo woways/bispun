@@ -113,7 +113,7 @@ export function BottomSheet({
         aria-label="Close"
         tabIndex={-1}
         onClick={() => onClose?.()}
-        className="absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]"
+        className="cb-backdrop-in absolute inset-0 bg-slate-950/45 backdrop-blur-[1px]"
       />
       <div
         ref={panelRef}
@@ -122,7 +122,7 @@ export function BottomSheet({
         {...(title ? { "aria-labelledby": titleId } : { "aria-label": ariaLabel })}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`relative w-full ${maxWidth} max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.22)] focus:outline-none`}
+        className={`cb-sheet-in relative w-full ${maxWidth} max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-[0_-8px_40px_rgba(15,23,42,0.22)] focus:outline-none`}
       >
         {title && (
           <div className="sticky top-0 z-10 bg-white px-4 py-3 border-b border-slate-100 flex items-center justify-between">
@@ -311,7 +311,7 @@ export function MobileFilterSheet({ activeCount = 0, title = "Filters", children
  */
 export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreOpen }) {
   const cell =
-    "relative flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+    "relative flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 transition-[color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
   return (
     <nav
       aria-label="Primary"
@@ -333,7 +333,7 @@ export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreO
               {active && (
                 <span
                   aria-hidden="true"
-                  className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-brand-600"
+                  className="cb-fade-in absolute top-0 left-1/2 -translate-x-1/2 h-0.5 w-8 rounded-full bg-brand-600"
                 />
               )}
               <Icon size={20} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />

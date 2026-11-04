@@ -131,3 +131,52 @@ textarea {
   line-height: 1.5 !important;
   color: #64748b !important;
 }
+
+/* ---------------------------------------------------------------------------
+   Lightweight motion system (mobile polish). Opacity/transform only — GPU
+   cheap, no layout thrash. Durations/easing are tokens so motion is consistent
+   app-wide. Reviewed by accessibility-lead; honours prefers-reduced-motion.
+   --------------------------------------------------------------------------- */
+:root {
+  --cb-ease: cubic-bezier(0.2, 0, 0, 1);
+  --cb-dur-fast: 120ms;
+  --cb-dur-base: 200ms;
+  --cb-dur-slow: 280ms;
+}
+
+@keyframes cbFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes cbFadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes cbSheetIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes cbBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.cb-fade-in      { animation: cbFadeIn var(--cb-dur-base) var(--cb-ease) both; }
+.cb-fade-in-up   { animation: cbFadeInUp var(--cb-dur-base) var(--cb-ease) both; }
+.cb-sheet-in     { animation: cbSheetIn var(--cb-dur-slow) var(--cb-ease) both; }
+.cb-backdrop-in  { animation: cbBackdropIn var(--cb-dur-base) var(--cb-ease) both; }
+
+/* Accessibility: honour the OS "reduce motion" setting app-wide. Near-zeros
+   every transition/animation AND forces looping animations (skeleton shimmer,
+   pulse) to run once then stop so they are static, not fast-strobing; also
+   disables smooth scrolling. (accessibility-lead requirement.) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -126,7 +126,7 @@ function MetricCard({
   const bar = tones[accent] || tones.indigo;
 
   return (
-    <div className="group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-all duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+    <div className="cb-fade-in group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
       <div className="flex items-center gap-2.5 sm:gap-3">
         <div
           className={`flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl text-white ${bar}`}

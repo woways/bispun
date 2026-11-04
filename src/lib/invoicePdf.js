@@ -1,7 +1,11 @@
 // Client-side GST invoice generator (no server/PDF service needed).
 // Used by the client portal receipt and the public /pay page so the invoice
 // looks identical however the payment was made.
-import { jsPDF } from "jspdf";
+//
+// jsPDF (and its transitive html2canvas / dompurify, ~700KB) is loaded lazily
+// via dynamic import() inside each exporter, so it is NOT in the eager bundle —
+// it only downloads the first time a user actually generates a PDF. This keeps
+// the authenticated app (and Android WebView) startup light.
 
 function inr(n) {
   const v = Number(n || 0);
@@ -27,9 +31,10 @@ function fmtDate(value) {
  * Build and download a PDF invoice from a receipt object
  * (the shape returned by /api/client/billing/receipts and /api/public/pay).
  */
-export function downloadInvoicePdf(receipt) {
+export async function downloadInvoicePdf(receipt) {
   if (!receipt) return;
 
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const left = 46;
@@ -185,9 +190,10 @@ export function downloadInvoicePdf(receipt) {
  * separate documents: the invoice shows the tax breakdown, while this confirms
  * the money received and the Razorpay reference.
  */
-export function downloadPaymentReceiptPdf(receipt) {
+export async function downloadPaymentReceiptPdf(receipt) {
   if (!receipt) return;
 
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const left = 46;
@@ -328,9 +334,10 @@ export function downloadPaymentReceiptPdf(receipt) {
  *   listPrice, discountAmount, subtotal, gstRate, gstAmount, finalAmount
  * }
  */
-export function downloadProformaPdf(data) {
+export async function downloadProformaPdf(data) {
   if (!data) return;
 
+  const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();

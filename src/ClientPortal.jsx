@@ -1,4 +1,8 @@
 import {
+  Component,
+  createRef,
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -89,18 +93,93 @@ import {
   unlockUiSound,
 } from "./lib/sound";
 
-import Dashboard from "./modules/client/Dashboard";
-import UTMLeads from "./modules/client/UTMLeads";
-import Admissions from "./modules/client/Admissions";
-import Revenue from "./modules/client/Revenue";
-import LeadStore from "./modules/client/LeadStore";
-import Walkins from "./modules/client/Walkins";
-import Counselling from "./modules/client/Counselling";
-import Analytics from "./modules/client/Analytics";
-import Help from "./modules/client/Help";
-import SettingsView from "./modules/client/Settings";
 import CalendarModal from "./modules/client/CalendarModal";
-import ChatPanel from "./modules/client/ChatPanel";
+
+// Route-level client modules are code-split (React.lazy) so the authenticated
+// shell (header + bottom nav) paints immediately and each module's JS downloads
+// on demand. CalendarModal stays static — it's an always-mounted overlay, not a
+// route view. See ModuleFallback / ModuleErrorBoundary below for the loading and
+// chunk-load-failure UIs, and the Suspense boundary around renderModule().
+const Dashboard = lazy(() => import("./modules/client/Dashboard"));
+const UTMLeads = lazy(() => import("./modules/client/UTMLeads"));
+const Admissions = lazy(() => import("./modules/client/Admissions"));
+const Revenue = lazy(() => import("./modules/client/Revenue"));
+const LeadStore = lazy(() => import("./modules/client/LeadStore"));
+const Walkins = lazy(() => import("./modules/client/Walkins"));
+const Counselling = lazy(() => import("./modules/client/Counselling"));
+const Analytics = lazy(() => import("./modules/client/Analytics"));
+const Help = lazy(() => import("./modules/client/Help"));
+const SettingsView = lazy(() => import("./modules/client/Settings"));
+const ChatPanel = lazy(() => import("./modules/client/ChatPanel"));
+
+// Accessible Suspense fallback for a loading module chunk. Scoped to the module
+// body; the header/nav stay mounted. role=status + aria-busy, visible text, and
+// it never steals focus (the nav tap keeps focus). (accessibility-lead reqs.)
+function ModuleFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-8"
+    >
+      <span
+        aria-hidden="true"
+        className="h-8 w-8 rounded-full border-2 border-slate-200 border-t-brand-600 animate-spin motion-reduce:animate-none"
+      />
+      <span className="text-sm font-medium text-slate-500">Loading…</span>
+    </div>
+  );
+}
+
+// Catches a rejected dynamic import() (e.g. a stale/offline chunk) — Suspense
+// alone does not. Shows an accessible error with a user-initiated Retry (no auto
+// retry loop). Parent keys this by module so navigating away mounts a fresh
+// boundary and clears the error.
+class ModuleErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+    this.headingRef = createRef();
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidUpdate(_prevProps, prevState) {
+    if (this.state.failed && !prevState.failed) {
+      this.headingRef.current?.focus();
+    }
+  }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div
+          role="alert"
+          className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-8 text-center"
+        >
+          <h1
+            ref={this.headingRef}
+            tabIndex={-1}
+            className="text-base font-bold text-slate-900 outline-none"
+          >
+            Couldn&apos;t load this section
+          </h1>
+          <p className="max-w-sm text-sm text-slate-500">
+            Check your connection and try again.
+          </p>
+          <button
+            type="button"
+            onClick={() => this.setState({ failed: false })}
+            className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import GoalsAndTargets from "./modules/client/GoalsAndTargets";
 import Referrals from "./modules/client/Referrals";
 import MyStore from "./modules/client/MyStore";
@@ -483,8 +562,32 @@ export default function ClientPortal({
     () => getClientModuleFromPath()
   );
 
+  // Phase B: orientation + preload for the code-split modules. The document
+  // title tracks the active module (the mobile nav's aria-current="page" already
+  // confirms the selection synchronously, and the Suspense fallback announces
+  // loading — so we deliberately do NOT also move focus or add a second live
+  // region). We warm the most common module chunk (Lead Store) during idle so
+  // its first open is instant, without blocking the shell.
+  useEffect(() => {
+    const label = PAGE_META[module]?.label;
+    document.title = label ? `${label} — Bispun` : "Bispun";
+  }, [module]);
+
+  useEffect(() => {
+    const warm = () => {
+      import("./modules/client/LeadStore").catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warm);
+      return () => window.cancelIdleCallback?.(id);
+    }
+    const timer = setTimeout(warm, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Keep the selected module in the URL so browser refreshes and mobile web
-  // reloads return to the same CRM page instead of resetting to Dashboard.
+  // reloads return to the same CRM page instead of resetting to Dashboard
+  // (from origin/main #2219749).
   useEffect(() => {
     const targetPath = getClientModulePath(module);
 
@@ -5134,7 +5237,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   )}
                 </div>
               )}
-              {renderModule()}
+              <ModuleErrorBoundary key={module}>
+                <Suspense fallback={<ModuleFallback />}>
+                  {renderModule()}
+                </Suspense>
+              </ModuleErrorBoundary>
             </div>
           </main>
         </div>
