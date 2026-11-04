@@ -98,10 +98,24 @@ export default function ClientLogin() {
       window.location.replace("/app");
       return;
     } catch (error) {
-      setError(
-        error?.data?.message ||
-          "Unable to sign in"
-      );
+      // Show an accurate, non-enumerating message for each failure class:
+      //  - 400/401/403/503 carry a safe server message (invalid credentials,
+      //    company unavailable, service warming up) -> show it verbatim.
+      //  - network failure / timeout / 5xx with no body -> retry-friendly.
+      //  - anything else -> generic sign-in error.
+      let message;
+      if (error?.data?.message) {
+        message = error.data.message;
+      } else if (
+        error?.isNetworkError ||
+        (typeof error?.status === "number" && error.status >= 500)
+      ) {
+        message =
+          "We couldn't reach the server. Please check your connection and try again in a moment.";
+      } else {
+        message = "Unable to sign in. Please try again.";
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -426,9 +440,13 @@ export default function ClientLogin() {
               {/* ERROR */}
 
               {error ? (
-                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-[12px] leading-5 text-rose-700">
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-[12px] leading-5 text-rose-700"
+                >
                   <AlertCircle
                     size={15}
+                    aria-hidden="true"
                     className="mt-0.5 flex-shrink-0"
                   />
 
