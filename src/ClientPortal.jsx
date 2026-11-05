@@ -4,6 +4,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -549,6 +550,36 @@ function getAccent(
 import bispunLogo from "./assets/bispun-logo.svg";
 import bispunIcon from "./assets/bispun-icon.svg";
 
+// --- Phase 1 mobile perf: bounded module keep-alive --------------------------
+// Switching modules used to fully unmount + remount the active module, which
+// re-ran every mount effect and re-fetched all of that module's data (spinner +
+// network wait on every tap). We now keep a BOUNDED set of recently-visited,
+// collision-safe modules mounted at once; only the active one is visible (others
+// use the `hidden` attribute, which removes them from layout, the tab order and
+// the accessibility tree). Returning to a kept module is instant with no refetch
+// and preserves its in-module state (filters, pagination, inputs) and scroll.
+//
+// Eligibility is restricted to modules verified free of static DOM id collisions
+// (Dashboard/LeadStore/Admissions have none; Revenue/Analytics use useId), so
+// mounting several at once cannot cross-bind labels/aria to a hidden copy.
+// Forms/transient or id-bearing modules (settings, help, chats, utm-leads,
+// my-store, my-referrals, goals-and-targets, profile) keep the single-mount
+// behaviour. Nothing here touches APIs, the DB, permissions or desktop layout.
+const KEEPALIVE_ELIGIBLE = new Set([
+  "dashboard",
+  "lead-store",
+  "revenue",
+  "admissions",
+  "analytics",
+  "walkins",
+  "counselling",
+]);
+// Active module + up to 4 recently-visited kept mounted (LRU-evicted beyond).
+const MAX_ALIVE_MODULES = 5;
+// Returning to a kept module after this long triggers a fresh remount
+// (background revalidation); within it, the switch is instant and reuses data.
+const KEEPALIVE_REVALIDATE_MS = 90000;
+
 export default function ClientPortal({
   clientSession,
 }) {
@@ -561,6 +592,27 @@ export default function ClientPortal({
   ] = useState(
     () => getClientModuleFromPath()
   );
+
+  // Keep-alive bookkeeping (see KEEPALIVE_ELIGIBLE above). `aliveModules` is an
+  // LRU list of currently-mounted eligible modules (most-recent first).
+  const [aliveModules, setAliveModules] = useState(() =>
+    KEEPALIVE_ELIGIBLE.has(getClientModuleFromPath())
+      ? [getClientModuleFromPath()]
+      : []
+  );
+  // Per-module remount nonce (bumped to force a fresh fetch after the TTL) and
+  // the timestamp each module was last shown.
+  const keepAliveEpochRef = useRef({});
+  const keepAliveLastShownRef = useRef({});
+  // Saved page-scroll position per module, restored on return (goal: preserve
+  // scroll where appropriate).
+  const keepAliveScrollRef = useRef({});
+  // The wrapper of the active module, used only to recover focus if hiding the
+  // outgoing module would otherwise drop focus to <body>.
+  const activeModuleWrapperRef = useRef(null);
+  // Shell-level polite live region announcing module changes (kept outside every
+  // swappable module so announcements never land in a hidden subtree).
+  const [moduleAnnouncement, setModuleAnnouncement] = useState("");
 
   // Phase B: orientation + preload for the code-split modules. The document
   // title tracks the active module (the mobile nav's aria-current="page" already
@@ -597,6 +649,79 @@ export default function ClientPortal({
         "",
         `${targetPath}${window.location.search}${window.location.hash}`
       );
+    }
+  }, [module]);
+
+  // Keep-alive LRU + background revalidation + view-change announcement.
+  useEffect(() => {
+    const label = PAGE_META[module]?.label || "";
+    setModuleAnnouncement(label);
+
+    if (!KEEPALIVE_ELIGIBLE.has(module)) return;
+
+    const now = Date.now();
+    const last = keepAliveLastShownRef.current[module];
+    // Returning after the TTL → bump the module's nonce so it remounts and
+    // refetches fresh data (stale-after-idle revalidation). Quick revisits skip
+    // this and reuse the mounted instance instantly.
+    if (last && now - last > KEEPALIVE_REVALIDATE_MS) {
+      keepAliveEpochRef.current[module] =
+        (keepAliveEpochRef.current[module] || 0) + 1;
+    }
+    keepAliveLastShownRef.current[module] = now;
+
+    setAliveModules((prev) => {
+      const next = [module, ...prev.filter((m) => m !== module)].slice(
+        0,
+        MAX_ALIVE_MODULES
+      );
+      const kept = new Set(next);
+      // forget bookkeeping for evicted modules so they refetch fresh next time
+      for (const k of Object.keys(keepAliveScrollRef.current)) {
+        if (!kept.has(k)) delete keepAliveScrollRef.current[k];
+      }
+      for (const k of Object.keys(keepAliveEpochRef.current)) {
+        if (!kept.has(k)) delete keepAliveEpochRef.current[k];
+      }
+      for (const k of Object.keys(keepAliveLastShownRef.current)) {
+        if (!kept.has(k)) delete keepAliveLastShownRef.current[k];
+      }
+      return next;
+    });
+  }, [module]);
+
+  // Record the active module's page-scroll position so we can restore it on
+  // return (kept modules are hidden with the `hidden` attribute, which drops
+  // layout/scroll).
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        keepAliveScrollRef.current[module] = window.scrollY;
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [module]);
+
+  // Restore saved scroll on module change (before paint to avoid a jump).
+  useLayoutEffect(() => {
+    const y = keepAliveScrollRef.current[module];
+    window.scrollTo(0, typeof y === "number" ? y : 0);
+  }, [module]);
+
+  // If hiding the outgoing module dropped focus to <body>, recover it to the
+  // active module container (without stealing focus from the nav button the user
+  // just clicked).
+  useEffect(() => {
+    const ae = document.activeElement;
+    if ((!ae || ae === document.body) && activeModuleWrapperRef.current) {
+      activeModuleWrapperRef.current.focus({ preventScroll: true });
     }
   }, [module]);
 
@@ -1242,6 +1367,22 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const isClientAdmin =
     user?.role === "CLIENT_ADMIN";
+
+  // Safety: if the signed-in user or company ever changes within this mounted
+  // portal, discard every kept-alive module instance and its cached data so no
+  // module state can leak across users, companies or roles. (The portal also
+  // remounts on a full re-auth; this is defence-in-depth.)
+  useEffect(() => {
+    keepAliveEpochRef.current = {};
+    keepAliveLastShownRef.current = {};
+    keepAliveScrollRef.current = {};
+    setAliveModules(
+      KEEPALIVE_ELIGIBLE.has(moduleRef.current)
+        ? [moduleRef.current]
+        : []
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, company?.id]);
 
   const permissions =
     user?.permissions ||
@@ -3587,30 +3728,33 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     );
   }
 
-  function renderModule() {
-    if (module === "profile") {
+  // Accepts the module key to render so the keep-alive layer can render several
+  // eligible modules at once (only the active one visible). Defaults to the
+  // active `module` for the single-mount (non-eligible) path.
+  function renderModuleContent(moduleKey = module) {
+    if (moduleKey === "profile") {
       return renderProfile();
     }
 
-    if (module === "chats") {
+    if (moduleKey === "chats") {
       return <ChatPanel currentUser={user} />;
     }
 
-    if (module === "goals-and-targets") {
+    if (moduleKey === "goals-and-targets") {
       return <GoalsAndTargets currentUser={user} selectedYear={selectedYear} />;
     }
 
-    if (module === "my-referrals") {
+    if (moduleKey === "my-referrals") {
       return <Referrals currentUser={user} />;
     }
 
-    if (module === "my-store") {
+    if (moduleKey === "my-store") {
       return <MyStore company={company} />;
     }
 
     if (
       !hasModulePermission(
-        module
+        moduleKey
       )
     ) {
       return (
@@ -3629,7 +3773,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             <div className="mt-2 text-sm leading-6 text-slate-500">
               {
                 permissionMessage(
-                  module
+                  moduleKey
                 )
               }
             </div>
@@ -3643,13 +3787,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     const featureKeyForModule =
-      module.includes("walkins")
+      moduleKey.includes("walkins")
         ? "walkins"
-        : module.includes("counselling")
+        : moduleKey.includes("counselling")
           ? "counselling"
-          : module.includes("admissions")
+          : moduleKey.includes("admissions")
             ? "admissions"
-            : module;
+            : moduleKey;
 
     if (
       !enabledFeatures.includes(
@@ -3674,7 +3818,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     switch (
-      module
+      moduleKey
     ) {
       case "chats":
         return <ChatPanel currentUser={user} />;
@@ -3700,7 +3844,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "domestic-walkins":
         return renderAdmissionsMarketWorkspace({
           market: "DOMESTIC",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Walkins
               selectedYear={selectedYear}
@@ -3712,7 +3856,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "domestic-counselling":
         return renderAdmissionsMarketWorkspace({
           market: "DOMESTIC",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Counselling
               selectedYear={selectedYear}
@@ -3724,7 +3868,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "domestic-admissions":
         return renderAdmissionsMarketWorkspace({
           market: "DOMESTIC",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Admissions
               selectedYear={selectedYear}
@@ -3736,7 +3880,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "international-walkins":
         return renderAdmissionsMarketWorkspace({
           market: "INTERNATIONAL",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Walkins
               selectedYear={selectedYear}
@@ -3748,7 +3892,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "international-counselling":
         return renderAdmissionsMarketWorkspace({
           market: "INTERNATIONAL",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Counselling
               selectedYear={selectedYear}
@@ -3760,7 +3904,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       case "international-admissions":
         return renderAdmissionsMarketWorkspace({
           market: "INTERNATIONAL",
-          activeModule: module,
+          activeModule: moduleKey,
           children: (
             <Admissions
               selectedYear={selectedYear}
@@ -5237,11 +5381,51 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   )}
                 </div>
               )}
-              <ModuleErrorBoundary key={module}>
-                <Suspense fallback={<ModuleFallback />}>
-                  {renderModule()}
-                </Suspense>
-              </ModuleErrorBoundary>
+              {/* Shell-level polite announcement of the active module (kept
+                  outside every module so it never lands in a hidden subtree). */}
+              <p className="sr-only" role="status" aria-live="polite">
+                {moduleAnnouncement}
+              </p>
+              {/* Keep-alive: eligible modules stay mounted (bounded LRU); only
+                  the active one is visible. Each kept module has its own error
+                  boundary + Suspense so one module's error/suspense cannot blank
+                  the others. Inactive ones use `hidden` (removed from layout, tab
+                  order and the a11y tree). */}
+              {aliveModules.map((key) => {
+                const isActive = key === module;
+                return (
+                  <div
+                    key={key}
+                    ref={isActive ? activeModuleWrapperRef : null}
+                    hidden={!isActive}
+                    tabIndex={isActive ? -1 : undefined}
+                    className={isActive ? "cb-fade-in outline-none" : undefined}
+                  >
+                    <ModuleErrorBoundary
+                      key={`eb:${key}:${keepAliveEpochRef.current[key] || 0}`}
+                    >
+                      <Suspense fallback={<ModuleFallback />}>
+                        {renderModuleContent(key)}
+                      </Suspense>
+                    </ModuleErrorBoundary>
+                  </div>
+                );
+              })}
+              {/* Non-eligible modules keep single-mount behaviour (fresh each
+                  visit). */}
+              {!KEEPALIVE_ELIGIBLE.has(module) && (
+                <div
+                  ref={activeModuleWrapperRef}
+                  tabIndex={-1}
+                  className="cb-fade-in outline-none"
+                >
+                  <ModuleErrorBoundary key={module}>
+                    <Suspense fallback={<ModuleFallback />}>
+                      {renderModuleContent(module)}
+                    </Suspense>
+                  </ModuleErrorBoundary>
+                </div>
+              )}
             </div>
           </main>
         </div>
