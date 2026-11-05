@@ -13,6 +13,8 @@ import {
   Plus,
   Search,
   X,
+  Clock3,
+  CheckCircle2,
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
@@ -77,64 +79,42 @@ function HowItWorks() {
   const Step = HOW_STEPS[active];
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-      <div className="flex items-center justify-between bg-gradient-to-r from-brand-700 to-brand-900 px-6 py-5 text-white">
-        <div>
-          <div className="text-[13px] font-semibold uppercase tracking-[0.14em] text-brand-100">
-            How referral works
-          </div>
-          <div className="text-[20px] font-semibold tracking-tight">
-            From share to reward in 4 steps
-          </div>
-        </div>
-        <div className="hidden rounded-full bg-white/10 px-4 py-2 text-[12px] font-semibold text-brand-100 sm:block">
-          Tap a step to learn more
-        </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="text-[17px] font-semibold text-slate-950">How referral works</h2>
+      <p className="mt-1 text-[13px] text-slate-500">From share to reward in 4 steps — tap a step to learn more.</p>
+
+      <div className="mt-5 grid grid-cols-4 gap-2">
+        {HOW_STEPS.map((s, i) => {
+          const Icon = s.icon;
+          const on = i === active;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setActive(i)}
+              aria-current={on ? "step" : undefined}
+              className="group flex flex-col items-center gap-3 text-center focus-visible:outline-none"
+            >
+              <span
+                className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
+                  on
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+                    : "border-slate-200 bg-slate-50 text-slate-400 group-hover:border-slate-300 group-hover:text-slate-500"
+                }`}
+              >
+                <Icon size={18} aria-hidden="true" />
+              </span>
+              <span className={`text-[12.5px] font-semibold ${on ? "text-indigo-700" : "text-slate-600"}`}>
+                {s.label}
+              </span>
+            </button>
+          );
+        })}
       </div>
-      <div className="px-6 py-9 sm:px-10">
-        <div className="relative">
-          {/* connector segments between nodes */}
-          <div className="pointer-events-none absolute top-[23px] hidden h-1 sm:block" style={{ left: "19%", width: "12%" }}>
-            <div className="h-1 w-full rounded-full bg-brand-500" />
-          </div>
-          <div className="pointer-events-none absolute top-[23px] hidden h-1 sm:block" style={{ left: "44%", width: "12%" }}>
-            <div className="h-1 w-full rounded-full bg-brand-500" />
-          </div>
-          <div className="pointer-events-none absolute top-[23px] hidden h-1 sm:block" style={{ left: "69%", width: "12%" }}>
-            <div className="h-1 w-full rounded-full bg-brand-500" />
-          </div>
 
-          <div className="relative z-10 grid grid-cols-4 gap-2">
-            {HOW_STEPS.map((s, i) => {
-              const Icon = s.icon;
-              const on = i === active;
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => setActive(i)}
-                  className="group flex flex-col items-center gap-4 text-center"
-                >
-                  <span
-                    className={`flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm transition ${
-                      on ? "scale-110 opacity-100 shadow-[0_12px_30px_rgba(79,70,229,.35)]" : "opacity-60 group-hover:scale-105 group-hover:opacity-90"
-                    }`}
-                  >
-                    <Icon size={18} />
-                  </span>
-                  <span className={`text-[13px] font-semibold ${on ? "text-brand-700" : "text-slate-900"}`}>
-                    {s.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-8 rounded-2xl border border-brand-100 bg-brand-50/60 p-5">
-            <div className="text-[15px] font-semibold text-brand-800">{Step.title}</div>
-            <div className="mt-1 text-[13px] text-slate-600">{Step.body}</div>
-          </div>
-        </div>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="text-[14px] font-semibold text-slate-900">{Step.title}</div>
+        <div className="mt-1 text-[13px] leading-5 text-slate-600">{Step.body}</div>
       </div>
     </div>
   );
@@ -265,31 +245,32 @@ export default function MyReferrals({ currentUser }) {
 
       {/* SHARE STRIP */}
       <div className="grid gap-5 lg:grid-cols-[1.5fr_auto]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-          <div className="text-[20px] font-semibold tracking-[-0.015em] text-slate-950">Share &amp; earn</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-[17px] font-semibold text-slate-950">Share &amp; earn</h2>
+          <p className="mt-1 text-[13px] text-slate-500">Copy your code or link and share it anywhere.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Referral code</div>
               <div className="mt-1 flex items-center justify-between gap-2">
-                <span className="text-[16px] font-bold tracking-wide text-slate-900">{code || "…"}</span>
+                <span className="text-[16px] font-bold tracking-[0.12em] text-slate-900">{code || "…"}</span>
                 <button
                   type="button"
                   onClick={() => copy(code, "code")}
-                  className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-3 py-1 text-[13px] font-semibold text-white hover:bg-brand-700"
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
                 >
                   {copied === "code" ? <Check size={12} /> : <Copy size={12} />}
                   {copied === "code" ? "Copied" : "Copy"}
                 </button>
               </div>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
               <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Referral link</div>
               <div className="mt-1 flex items-center justify-between gap-2">
                 <span className="truncate text-[13px] font-semibold text-slate-700">{link || "…"}</span>
                 <button
                   type="button"
                   onClick={() => copy(link, "link")}
-                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-slate-200 px-3 py-1 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700"
                 >
                   {copied === "link" ? <Check size={12} /> : <Copy size={12} />}
                   {copied === "link" ? "Copied" : "Copy"}
@@ -302,13 +283,13 @@ export default function MyReferrals({ currentUser }) {
               href={`https://wa.me/?text=${encodeURIComponent(`Check this out: ${link}`)}`}
               target="_blank"
               rel="noreferrer"
-              className="flex-1 rounded-xl bg-brand-600 py-2.5 text-center text-[12px] font-semibold text-white hover:bg-brand-700"
+              className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-center text-[13px] font-semibold text-white transition hover:bg-indigo-700"
             >
               Share on WhatsApp
             </a>
             <a
               href={`mailto:?subject=${encodeURIComponent("My referral link")}&body=${encodeURIComponent(link)}`}
-              className="flex-1 rounded-xl border border-slate-200 py-2.5 text-center text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+              className="flex-1 rounded-xl border border-slate-200 bg-white py-2.5 text-center text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               Share via Email
             </a>
@@ -316,8 +297,8 @@ export default function MyReferrals({ currentUser }) {
         </div>
 
         {/* QR card */}
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-          <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Scan to refer</div>
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
+          <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Scan to refer</div>
           <div className="mt-3 rounded-xl border border-slate-200 p-2">
             {link ? (
               <img src={qrUrl(link)} alt="Referral QR" width="132" height="132" className="rounded" />
@@ -331,7 +312,7 @@ export default function MyReferrals({ currentUser }) {
             href={link ? qrUrl(link) : "#"}
             target="_blank"
             rel="noreferrer"
-            className="mt-3 text-[13px] font-semibold text-brand-600 hover:text-brand-700"
+            className="mt-3 text-[13px] font-semibold text-indigo-600 transition hover:text-indigo-700"
           >
             Open QR
           </a>
@@ -340,33 +321,33 @@ export default function MyReferrals({ currentUser }) {
 
       {/* STATS */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Referrals</div>
-              <div className="mt-2 space-y-1 text-[13px]">
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-brand-500" />Total <b className="ml-auto text-slate-900">{stats.total}</b></div>
-                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" />Admitted <b className="ml-auto text-slate-900">{stats.admitted}</b></div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[13px] text-slate-500">Referrals</div>
+              <div className="mt-3 space-y-1.5 text-[13px]">
+                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-indigo-500" />Total <b className="ml-auto tabular-nums text-slate-900">{stats.total}</b></div>
+                <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-500" />Admitted <b className="ml-auto tabular-nums text-slate-900">{stats.admitted}</b></div>
               </div>
             </div>
-            <div className="relative h-20 w-20">
+            <div className="relative h-20 w-20 flex-shrink-0">
               <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#eef2ff" strokeWidth="4" />
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#4f46e5" strokeWidth="4" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - convRate} />
               </svg>
-              <div className="absolute inset-0 flex items-center justify-center text-[14px] font-bold text-slate-900">{convRate}%</div>
+              <div className="absolute inset-0 flex items-center justify-center text-[14px] font-bold tabular-nums text-slate-900">{convRate}%</div>
             </div>
           </div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-          <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">In progress</div>
-          <div className="mt-2 text-[34px] font-bold leading-none text-brand-600">{stats.inProgress}</div>
-          <div className="mt-1 text-[14px] text-slate-400">Moving through stages</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <Clock3 size={18} aria-hidden="true" className="text-amber-600" />
+          <div className="mt-3 text-[28px] font-bold leading-none tabular-nums text-slate-950">{stats.inProgress}</div>
+          <div className="mt-1.5 text-[13px] text-slate-500">In progress · moving through stages</div>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-          <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Admitted</div>
-          <div className="mt-2 text-[34px] font-bold leading-none text-emerald-600">{stats.admitted}</div>
-          <div className="mt-1 text-[14px] text-slate-400">Reached final stage</div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <CheckCircle2 size={18} aria-hidden="true" className="text-emerald-600" />
+          <div className="mt-3 text-[28px] font-bold leading-none tabular-nums text-emerald-700">{stats.admitted}</div>
+          <div className="mt-1.5 text-[13px] text-slate-500">Admitted · reached final stage</div>
         </div>
       </div>
 
@@ -374,8 +355,9 @@ export default function MyReferrals({ currentUser }) {
       <HowItWorks />
 
       {/* REFERRAL LIST with live stages */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_8px_22px_rgba(79,70,229,0.08)]">
-        <div className="text-[15px] font-semibold text-slate-900">Your referrals</div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-[17px] font-semibold text-slate-950">Your referrals</h2>
+        <p className="mt-1 text-[13px] text-slate-500">Track how each referral is moving through the stages.</p>
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
             <Loader2 size={16} className="animate-spin" /> Loading...
@@ -388,9 +370,9 @@ export default function MyReferrals({ currentUser }) {
         ) : (
           <div className="mt-5 space-y-4">
             {referrals.map((r) => (
-              <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-100 hover:shadow-[0_6px_18px_rgba(79,70,229,0.08)]">
+              <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-[12px] font-semibold text-white">
+                  <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">
                     {initialsOf(r.lead.name)}
                   </span>
                   <div className="min-w-0 flex-1">
