@@ -717,8 +717,15 @@ export default function ClientPortal({
 
   // If hiding the outgoing module dropped focus to <body>, recover it to the
   // active module container (without stealing focus from the nav button the user
-  // just clicked).
+  // just clicked). Skipped on the INITIAL mount so first paint keeps the natural
+  // entry point (skip link / shell header) and does not jump a screen reader or
+  // keyboard user into the middle of the document (a11y: WCAG 2.4.3 focus order).
+  const didMountFocusRef = useRef(false);
   useEffect(() => {
+    if (!didMountFocusRef.current) {
+      didMountFocusRef.current = true;
+      return;
+    }
     const ae = document.activeElement;
     if ((!ae || ae === document.body) && activeModuleWrapperRef.current) {
       activeModuleWrapperRef.current.focus({ preventScroll: true });
