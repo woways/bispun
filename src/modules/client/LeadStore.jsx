@@ -40,6 +40,7 @@ import {
   Link2,
   FileText,
   Sparkles,
+  GripVertical,
 } from "lucide-react";
 
 import {
@@ -171,6 +172,48 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   status: true,
   created: false,
 };
+
+const DEFAULT_INDIVIDUAL_COLUMN_ORDER = [
+  "leadId",
+  "name",
+  "phone",
+  "alternatePhone",
+  "email",
+  "course",
+  "assignedTo",
+  "temperature",
+  "status",
+  "intelligence",
+  "created",
+];
+
+const INDIVIDUAL_COLUMN_LABELS = {
+  leadId: "Lead ID",
+  name: "Name",
+  phone: "Phone",
+  alternatePhone: "Alternative Phone",
+  email: "Email",
+  course: "Course",
+  assignedTo: "Assigned To",
+  temperature: "Lead Type",
+  status: "Status",
+  intelligence: "Lead Intelligence",
+  created: "Created",
+};
+
+function normalizeIndividualColumnOrder(value) {
+  const requested = Array.isArray(value) ? value : [];
+  const valid = requested.filter(
+    (key, index) =>
+      DEFAULT_INDIVIDUAL_COLUMN_ORDER.includes(key) &&
+      requested.indexOf(key) === index
+  );
+
+  return [
+    ...valid,
+    ...DEFAULT_INDIVIDUAL_COLUMN_ORDER.filter((key) => !valid.includes(key)),
+  ];
+}
 
 
 function formatDate(
@@ -2661,7 +2704,7 @@ function StoreMetric({
   );
 }
 
-export default function LeadStore({ selectedYear = "all" }) {
+export default function LeadStore({ selectedYear = "all", currentUser = null }) {
   const [
     sub,
     setSub,
@@ -2739,6 +2782,16 @@ export default function LeadStore({ selectedYear = "all" }) {
     "compact"
   );
 
+  const canReorderColumns = ["CLIENT_ADMIN", "MANAGER"].includes(
+    String(currentUser?.role || "").toUpperCase()
+  );
+
+  const [individualColumnOrder, setIndividualColumnOrder] = useState(
+    DEFAULT_INDIVIDUAL_COLUMN_ORDER
+  );
+  const [draggedColumn, setDraggedColumn] = useState("");
+  const [columnOrderSaving, setColumnOrderSaving] = useState(false);
+
   const [
     expandedCustomFields,
     setExpandedCustomFields,
@@ -2794,6 +2847,82 @@ export default function LeadStore({ selectedYear = "all" }) {
     message: "",
     driveLinks: "",
   });
+
+  useEffect(() => {
+    let active = true;
+
+    if (!canReorderColumns) {
+      setIndividualColumnOrder(DEFAULT_INDIVIDUAL_COLUMN_ORDER);
+      return undefined;
+    }
+
+    apiRequest("/api/client/lead-store/column-preferences")
+      .then((data) => {
+        if (active) {
+          setIndividualColumnOrder(
+            normalizeIndividualColumnOrder(data?.columnOrder)
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Unable to load Lead Store column arrangement:", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canReorderColumns, currentUser?.id]);
+
+  async function saveColumnOrder(nextOrder) {
+    if (!canReorderColumns) return;
+
+    setColumnOrderSaving(true);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        "/api/client/lead-store/column-preferences",
+        {
+          method: "PATCH",
+          body: JSON.stringify({ columnOrder: nextOrder }),
+        }
+      );
+
+      setIndividualColumnOrder(
+        normalizeIndividualColumnOrder(data?.columnOrder || nextOrder)
+      );
+    } catch (error) {
+      setError(error?.data?.message || "Unable to save column arrangement");
+    } finally {
+      setColumnOrderSaving(false);
+    }
+  }
+
+  function moveDraggedColumn(targetColumn) {
+    if (
+      !canReorderColumns ||
+      !draggedColumn ||
+      draggedColumn === targetColumn
+    ) {
+      setDraggedColumn("");
+      return;
+    }
+
+    const nextOrder = [...individualColumnOrder];
+    const fromIndex = nextOrder.indexOf(draggedColumn);
+    const targetIndex = nextOrder.indexOf(targetColumn);
+
+    if (fromIndex < 0 || targetIndex < 0) {
+      setDraggedColumn("");
+      return;
+    }
+
+    nextOrder.splice(fromIndex, 1);
+    nextOrder.splice(targetIndex, 0, draggedColumn);
+    setIndividualColumnOrder(nextOrder);
+    setDraggedColumn("");
+    saveColumnOrder(nextOrder);
+  }
 
   function formatAttachmentSize(bytes) {
     const size = Number(bytes || 0);
@@ -3452,12 +3581,20 @@ export default function LeadStore({ selectedYear = "all" }) {
       [individualLeads]
     );
 
+  const visibleOrderedColumnKeys = useMemo(
+    () =>
+      individualColumnOrder.filter(
+        (key) =>
+          key === "leadId" ||
+          key === "name" ||
+          key === "intelligence" ||
+          Boolean(individualColumns[key])
+      ),
+    [individualColumnOrder, individualColumns]
+  );
 
   const visibleIndividualColumnCount =
-    4 +
-    INDIVIDUAL_COLUMN_OPTIONS.filter(
-      (column) => individualColumns[column.key]
-    ).length;
+    2 + visibleOrderedColumnKeys.length;
 
   const individualCellPadding =
     individualDensity === "compact"
@@ -3868,6 +4005,201 @@ export default function LeadStore({ selectedYear = "all" }) {
       0
     );
 
+  function renderColumnHeader(columnKey) {
+    const widthClass = {
+      leadId: "min-w-[88px] text-center",
+      name: "min-w-[200px] max-w-[200px]",
+      phone: "min-w-[145px]",
+      alternatePhone: "min-w-[155px]",
+      email: "min-w-[210px]",
+      course: "min-w-[145px]",
+      assignedTo: "min-w-[170px]",
+      temperature: "min-w-[125px]",
+      status: "min-w-[170px]",
+      intelligence: "min-w-[150px]",
+      created: "min-w-[150px]",
+    }[columnKey] || "min-w-[140px]";
+
+    return (
+      <th
+        key={columnKey}
+        draggable={canReorderColumns && !columnOrderSaving}
+        onDragStart={(event) => {
+          if (!canReorderColumns) return;
+          setDraggedColumn(columnKey);
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", columnKey);
+        }}
+        onDragOver={(event) => {
+          if (canReorderColumns) {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          moveDraggedColumn(columnKey);
+        }}
+        onDragEnd={() => setDraggedColumn("")}
+        title={canReorderColumns ? `Drag ${INDIVIDUAL_COLUMN_LABELS[columnKey]} to rearrange` : undefined}
+        className={`${widthClass} px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${
+          draggedColumn === columnKey
+            ? "bg-indigo-100 text-indigo-700 opacity-70"
+            : "text-slate-500"
+        } ${canReorderColumns ? "cursor-grab active:cursor-grabbing select-none" : ""}`}
+      >
+        <span className={`inline-flex items-center gap-1.5 ${columnKey === "leadId" ? "justify-center" : ""}`}>
+          {canReorderColumns && (
+            <GripVertical size={12} className="text-slate-400" aria-hidden="true" />
+          )}
+          {INDIVIDUAL_COLUMN_LABELS[columnKey]}
+        </span>
+      </th>
+    );
+  }
+
+  function renderLeadColumnCell(lead, columnKey, customFields, customFieldsOpen) {
+    if (columnKey === "leadId") {
+      return (
+        <td key={columnKey} className={`min-w-[88px] px-3 text-center ${individualCellPadding}`}>
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
+            {displayLeadId(lead.leadNumber)}
+          </span>
+        </td>
+      );
+    }
+
+    if (columnKey === "name") {
+      return (
+        <td key={columnKey} className={`min-w-[200px] max-w-[200px] px-4 ${individualCellPadding}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDetailsLead(lead)}
+              title={`View ${lead.name || "lead"} details`}
+              className="min-w-0 flex-1 cursor-pointer text-left"
+            >
+              <span className="block truncate whitespace-nowrap text-[14px] font-semibold text-slate-900 hover:text-indigo-700 hover:underline">
+                {lead.name}
+              </span>
+            </button>
+
+            {customFields.length > 0 && (
+              <button
+                type="button"
+                onClick={() => toggleCustomFields(lead.id)}
+                title={customFieldsOpen ? "Hide custom fields" : "Show custom fields"}
+                aria-expanded={customFieldsOpen}
+                className="inline-flex h-7 flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-500 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                {customFieldsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                {customFields.length}
+              </button>
+            )}
+          </div>
+        </td>
+      );
+    }
+
+    if (columnKey === "phone" || columnKey === "alternatePhone") {
+      const phone = columnKey === "phone" ? lead.phone : lead.alternatePhone;
+      return (
+        <td key={columnKey} className={`${columnKey === "phone" ? "min-w-[145px]" : "min-w-[155px]"} px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
+          <PhoneAction
+            phone={phone}
+            name={lead.name}
+            onCopied={setSuccessMessage}
+            onDial={() => setCallLead(lead)}
+          />
+        </td>
+      );
+    }
+
+    if (["email", "course", "assignedTo"].includes(columnKey)) {
+      const value =
+        columnKey === "email"
+          ? lead.email
+          : columnKey === "course"
+            ? lead.course
+            : lead.assignedToName || "Unassigned";
+      const width =
+        columnKey === "email"
+          ? "min-w-[210px] max-w-[240px]"
+          : columnKey === "course"
+            ? "min-w-[145px] max-w-[170px]"
+            : "min-w-[170px] max-w-[190px]";
+      return (
+        <td key={columnKey} className={`${width} px-4 ${individualCellPadding}`}>
+          <div title={value || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">
+            {value || "—"}
+          </div>
+        </td>
+      );
+    }
+
+    if (columnKey === "temperature") {
+      return (
+        <td key={columnKey} className={`min-w-[125px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+          <select
+            value={lead.temperature || "WARM"}
+            disabled={temperatureUpdatingId === lead.id}
+            onChange={(event) => updateLeadTemperature(lead.id, event.target.value)}
+            className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${temperatureSelectClass(lead.temperature || "WARM")}`}
+            aria-label={`Lead type for ${lead.name}`}
+          >
+            {LEAD_TEMPERATURES.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
+        </td>
+      );
+    }
+
+    if (columnKey === "status") {
+      return (
+        <td key={columnKey} className={`min-w-[170px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+          <LeadStatusSelect
+            lead={lead}
+            options={individualStatusOptions}
+            disabled={statusUpdatingId === lead.id}
+            onChangeStatus={updateLeadStatus}
+          />
+        </td>
+      );
+    }
+
+    if (columnKey === "intelligence") {
+      return (
+        <td key={columnKey} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+          {lead.intelligence ? (
+            <button
+              type="button"
+              onClick={() => setIntelligenceLead(lead)}
+              title={lead.intelligence.nextBestAction || "View lead intelligence"}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-indigo-200 hover:bg-indigo-50/50"
+            >
+              <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-[11px] font-extrabold ${intelligenceTone(lead.intelligence.score)}`}>
+                {lead.intelligence.score}
+              </span>
+              <span>
+                <span className="block text-[11px] font-bold text-slate-700">{lead.intelligence.conversionChance}</span>
+                <span className="block text-[10px] text-slate-400">View reason</span>
+              </span>
+            </button>
+          ) : (
+            <span className="text-[12px] text-slate-400">—</span>
+          )}
+        </td>
+      );
+    }
+
+    return (
+      <td key={columnKey} title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>
+        {formatDate(lead.createdAt)}
+      </td>
+    );
+  }
+
   const individualModal = showIndividual ? (
     <IndividualLeadModal
       assignees={assignees}
@@ -4226,7 +4558,9 @@ export default function LeadStore({ selectedYear = "all" }) {
                     </div>
 
                     <p className="mt-3 border-t border-slate-100 pt-3 text-[11px] leading-4 text-slate-400">
-                      Lead ID, Name and Actions stay pinned. Custom fields open from the lead name.
+                      {canReorderColumns
+                        ? "Drag table column names to rearrange them. Your order is saved to your account."
+                        : "Column order follows the company default. Custom fields open from the lead name."}
                     </p>
                   </div>
                 </details>
@@ -4727,23 +5061,7 @@ export default function LeadStore({ selectedYear = "all" }) {
                     />
                   </th>
 
-                  <th className="sticky left-11 z-20 w-[72px] min-w-[72px] border-r border-slate-200 bg-slate-50/95 px-3 py-3 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
-                    Lead ID
-                  </th>
-
-                  <th className="lg:sticky lg:left-[116px] z-20 min-w-[200px] max-w-[200px] border-r border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                    Name
-                  </th>
-
-                  {individualColumns.phone && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Phone</th>}
-                  {individualColumns.alternatePhone && <th className="min-w-[155px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Alternative Phone</th>}
-                  {individualColumns.email && <th className="min-w-[210px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Email</th>}
-                  {individualColumns.course && <th className="min-w-[145px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Course</th>}
-                  {individualColumns.assignedTo && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Assigned To</th>}
-                  {individualColumns.temperature && <th className="min-w-[125px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Type</th>}
-                  {individualColumns.status && <th className="min-w-[170px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Status</th>}
-                  <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Lead Intelligence</th>
-                  {individualColumns.created && <th className="min-w-[150px] px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">Created</th>}
+                  {visibleOrderedColumnKeys.map(renderColumnHeader)}
 
                   <th className="lg:sticky lg:right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Actions
@@ -4797,123 +5115,14 @@ export default function LeadStore({ selectedYear = "all" }) {
                             />
                           </td>
 
-                          <td className={`sticky left-11 z-10 w-[72px] min-w-[72px] border-r border-slate-100 px-3 text-center ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
-                            <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
-                              {displayLeadId(lead.leadNumber)}
-                            </span>
-                          </td>
-
-                          <td className={`lg:sticky lg:left-[116px] z-10 min-w-[200px] max-w-[200px] border-r border-slate-100 px-4 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
-                            <div className="flex min-w-0 items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setDetailsLead(lead)}
-                                title={`View ${lead.name || "lead"} details`}
-                                className="min-w-0 flex-1 cursor-pointer text-left"
-                              >
-                                <span className="block truncate whitespace-nowrap text-[14px] font-semibold text-slate-900 hover:text-indigo-700 hover:underline">
-                                  {lead.name}
-                                </span>
-                              </button>
-
-                              {customFields.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    toggleCustomFields(
-                                      lead.id
-                                    )
-                                  }
-                                  title={
-                                    customFieldsOpen
-                                      ? "Hide custom fields"
-                                      : "Show custom fields"
-                                  }
-                                  aria-expanded={
-                                    customFieldsOpen
-                                  }
-                                  className="inline-flex h-7 flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-500 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-                                >
-                                  {customFieldsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                                  {customFields.length}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-
-                          {individualColumns.phone && (
-                            <td className={`min-w-[145px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
-                              <PhoneAction
-                                phone={lead.phone}
-                                name={lead.name}
-                                onCopied={setSuccessMessage}
-                                onDial={() => setCallLead(lead)}
-                              />
-                            </td>
+                          {visibleOrderedColumnKeys.map((columnKey) =>
+                            renderLeadColumnCell(
+                              lead,
+                              columnKey,
+                              customFields,
+                              customFieldsOpen
+                            )
                           )}
-                          {individualColumns.alternatePhone && (
-                            <td className={`min-w-[155px] px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
-                              <PhoneAction
-                                phone={lead.alternatePhone}
-                                name={lead.name}
-                                onCopied={setSuccessMessage}
-                                onDial={() => setCallLead(lead)}
-                              />
-                            </td>
-                          )}
-                          {individualColumns.email && <td className={`min-w-[210px] max-w-[240px] px-4 ${individualCellPadding}`}><div title={lead.email || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.email || "—"}</div></td>}
-                          {individualColumns.course && <td className={`min-w-[145px] max-w-[170px] px-4 ${individualCellPadding}`}><div title={lead.course || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.course || "—"}</div></td>}
-                          {individualColumns.assignedTo && <td className={`min-w-[170px] max-w-[190px] px-4 ${individualCellPadding}`}><div title={lead.assignedToName || "Unassigned"} className="truncate whitespace-nowrap text-[14px] text-slate-600">{lead.assignedToName || "Unassigned"}</div></td>}
-                          {individualColumns.temperature && (
-                            <td className={`min-w-[125px] px-4 ${individualCellPadding} whitespace-nowrap`}>
-                              <select
-                                value={lead.temperature || "WARM"}
-                                disabled={temperatureUpdatingId === lead.id}
-                                onChange={(event) =>
-                                  updateLeadTemperature(lead.id, event.target.value)
-                                }
-                                className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${temperatureSelectClass(lead.temperature || "WARM")}`}
-                                aria-label={`Lead type for ${lead.name}`}
-                              >
-                                {LEAD_TEMPERATURES.map((item) => (
-                                  <option key={item.value} value={item.value}>
-                                    {item.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                          )}
-                          {individualColumns.status && (
-                            <td className={`min-w-[170px] px-4 ${individualCellPadding} whitespace-nowrap`}>
-                              <LeadStatusSelect
-                                lead={lead}
-                                options={individualStatusOptions}
-                                disabled={statusUpdatingId === lead.id}
-                                onChangeStatus={updateLeadStatus}
-                              />
-                            </td>
-                          )}
-                          <td className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap`}>
-                            {lead.intelligence ? (
-                              <button
-                                type="button"
-                                onClick={() => setIntelligenceLead(lead)}
-                                title={lead.intelligence.nextBestAction || "View lead intelligence"}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left transition hover:border-indigo-200 hover:bg-indigo-50/50"
-                              >
-                                <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-[11px] font-extrabold ${intelligenceTone(lead.intelligence.score)}`}>
-                                  {lead.intelligence.score}
-                                </span>
-                                <span>
-                                  <span className="block text-[11px] font-bold text-slate-700">{lead.intelligence.conversionChance}</span>
-                                  <span className="block text-[10px] text-slate-400">View reason</span>
-                                </span>
-                              </button>
-                            ) : (
-                              <span className="text-[12px] text-slate-400">—</span>
-                            )}
-                          </td>
-                          {individualColumns.created && <td title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>{formatDate(lead.createdAt)}</td>}
 
                           <td className={`lg:sticky lg:right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">

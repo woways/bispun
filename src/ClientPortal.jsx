@@ -3776,7 +3776,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       case "lead-store":
         return (
-          <LeadStore selectedYear={selectedYear} />
+          <LeadStore selectedYear={selectedYear} currentUser={user} />
         );
 
       case "walkins":

@@ -275,6 +275,7 @@ model User {
   customRoleName String?
 
   sidebarOrder String[] @default([])
+  leadStoreColumnOrder String[] @default([])
 
   canManageUsers      Boolean @default(false)
   canManageSettings   Boolean @default(false)
