@@ -3235,32 +3235,45 @@ export default function LeadStore({ selectedYear = "all" }) {
             search
           );
 
+        const exactLeadIdMatchExists =
+          /^\d+$/.test(query) &&
+          currentTypeLeads.some(
+            (lead) =>
+              normalizeFilterText(
+                displayLeadId(lead.leadNumber)
+              ) === query
+          );
+
         return currentTypeLeads.filter(
           (lead) => {
             const searchMatches =
               !query ||
-              [
-                displayLeadId(lead.leadNumber),
-                lead.name,
-                lead.phone,
-                lead.alternatePhone,
-                lead.email,
-                lead.course,
-                lead.assignedToName,
-                lead.sourceName,
-                lead.leadStatus,
-                lead.stage,
-                lead.temperature,
-              ]
-                .filter(Boolean)
-                .some(
-                  (value) =>
-                    normalizeFilterText(
-                      value
-                    ).includes(
-                      query
-                    )
-                );
+              (exactLeadIdMatchExists
+                ? normalizeFilterText(
+                    displayLeadId(lead.leadNumber)
+                  ) === query
+                : [
+                    displayLeadId(lead.leadNumber),
+                    lead.name,
+                    lead.phone,
+                    lead.alternatePhone,
+                    lead.email,
+                    lead.course,
+                    lead.assignedToName,
+                    lead.sourceName,
+                    lead.leadStatus,
+                    lead.stage,
+                    lead.temperature,
+                  ]
+                    .filter(Boolean)
+                    .some(
+                      (value) =>
+                        normalizeFilterText(
+                          value
+                        ).includes(
+                          query
+                        )
+                    ));
 
             const statusMatches =
               !filters.status ||
@@ -3549,6 +3562,16 @@ export default function LeadStore({ selectedYear = "all" }) {
         );
       }
     );
+  }
+
+  function openSelectedMessageComposer() {
+    if (!selectedLeadIds.length) {
+      setError("Select at least one lead to send a message.");
+      return;
+    }
+
+    setError("");
+    openMessageComposer(selectedLeadIds);
   }
 
   async function assignSelectedLeads() {
@@ -4217,6 +4240,20 @@ export default function LeadStore({ selectedYear = "all" }) {
                 <Download size={14} />
                 Export CSV
               </button>
+
+              <button
+                type="button"
+                onClick={openSelectedMessageComposer}
+                className="h-9 px-3.5 rounded-lg bg-indigo-600 text-[13px] font-semibold text-white inline-flex items-center justify-center gap-2 shadow-sm hover:bg-indigo-700"
+              >
+                <Mail size={14} />
+                Send Message
+                {selectedLeadIds.length > 0 && (
+                  <span className="inline-flex min-w-5 h-5 items-center justify-center rounded-full bg-white/20 px-1 text-[11px] font-bold text-white">
+                    {selectedLeadIds.length}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -4623,15 +4660,6 @@ export default function LeadStore({ selectedYear = "all" }) {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => openMessageComposer(selectedLeadIds)}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-white px-4 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
-            >
-              <Mail size={14} />
-              Send Message
-            </button>
-
             <select
               value={bulkAssigneeId}
               onChange={(event) =>
@@ -4908,17 +4936,6 @@ export default function LeadStore({ selectedYear = "all" }) {
                                   <PhoneCall size={14} aria-hidden="true" />
                                 </span>
                               )}
-
-                              <button
-                                type="button"
-                                onClick={() => openMessageComposer([lead.id])}
-                                disabled={!lead.email}
-                                title={lead.email ? `Send message to ${lead.name}` : "Lead has no email address"}
-                                aria-label={lead.email ? `Send message to ${lead.name}` : "Send message unavailable: lead has no email address"}
-                                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${lead.email ? "text-indigo-600 hover:bg-indigo-50" : "text-slate-300 hover:bg-slate-50"}`}
-                              >
-                                <MessageSquare size={14} aria-hidden="true" />
-                              </button>
 
                               {lead.isAdmissionsSynced ? (
                                 <span
