@@ -4668,14 +4668,17 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             </div>
           </section>
 
-          {(hasModulePermission("settings") || hasModulePermission("help")) && (
-            <section role="group" aria-labelledby="more-h-account">
-              <h3
-                id="more-h-account"
-                className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
-              >
-                Account
-              </h3>
+          {/* Account: Settings/Help are permission-gated, but Log out must ALWAYS
+              be reachable on mobile (the desktop logout lives in the lg-only
+              sidebar). Reuses the exact desktop signOut()/performLogout handler. */}
+          <section role="group" aria-labelledby="more-h-account">
+            <h3
+              id="more-h-account"
+              className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
+            >
+              Account
+            </h3>
+            {(hasModulePermission("settings") || hasModulePermission("help")) && (
               <div className="grid grid-cols-2 gap-2">
                 {hasModulePermission("settings") && (
                   <button
@@ -4714,8 +4717,24 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   </button>
                 )}
               </div>
-            </section>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMoreOpen(false);
+                signOut();
+              }}
+              disabled={signingOut}
+              className="mt-2 min-h-[52px] w-full flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 p-2 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:opacity-50"
+            >
+              {signingOut ? (
+                <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+              ) : (
+                <LogOut size={18} aria-hidden="true" />
+              )}
+              {signingOut ? "Signing out…" : "Log out"}
+            </button>
+          </section>
         </div>
       </BottomSheet>
 
