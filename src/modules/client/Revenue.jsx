@@ -2040,7 +2040,6 @@ export default function Revenue({ selectedYear = "all" }) {
               ["overview", "Overview"],
               ["leakage", "At-Risk Revenue"],
               ["expenses", "Expenses"],
-              ["incentives", "Incentives"],
               ["collegeSlabs", "College Revenue"],
               ["staffIncentives", "Employee Incentives"],
             ]
