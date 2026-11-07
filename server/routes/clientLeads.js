@@ -1579,6 +1579,26 @@ router.post(
           sourceKey
         );
 
+      // Optional UTM attribution for the whole import batch. Mirrors the
+      // validated single-create path so imported UTM registrations actually show
+      // up in UTM Analytics (previously imports never set utmLinkId, so analytics
+      // counted zero leads for every link).
+      const importUtmLinkId = String(req.body?.utmLinkId || "").trim();
+      let validImportUtmLinkId = null;
+      if (importUtmLinkId) {
+        const link = await prisma.utmLink.findFirst({
+          where: { id: importUtmLinkId, companyId },
+          select: { id: true },
+        });
+        if (!link) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid UTM link for this company",
+          });
+        }
+        validImportUtmLinkId = link.id;
+      }
+
       const rows =
         await parseInternalLeadFile(
           req.file
@@ -1667,6 +1687,7 @@ router.post(
           assignedToName:
             row.assignedToName,
           notes: row.notes,
+          utmLinkId: validImportUtmLinkId,
         })),
       });
 
