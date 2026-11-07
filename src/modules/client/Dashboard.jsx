@@ -230,6 +230,7 @@ export default function Dashboard({
   user,
   selectedYear = "all",
   uiPreferences,
+  onOpenLead,
 }) {
   const accentColor = brandColor(600);
   const pieColors = [
@@ -1302,14 +1303,18 @@ export default function Dashboard({
                       Leads by Source
                     </h2>
                     <p className="mt-1 text-[13px] text-slate-500">
-                      Source mix for the selected period
+                      Where leads came from this period. The total includes direct
+                      admissions and leads with no recorded source.
                     </p>
                   </div>
 
                   {data.leadsBySource
                     .length ? (
                     <>
-                      <div className="relative">
+                      {/* Chart + center total are decorative for AT; the legend
+                          below is the accessible data (and reconciles to the
+                          total). */}
+                      <div className="relative" aria-hidden="true">
                         <ResponsiveContainer
                           width="100%"
                           height={190}
@@ -1363,7 +1368,14 @@ export default function Dashboard({
                         </div>
                       </div>
 
-                      <div className="mt-2 space-y-2">
+                      <p className="sr-only">
+                        {`Total ${
+                          summary.totalLeads ||
+                          data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
+                        } leads for the period.`}
+                      </p>
+
+                      <ul className="mt-2 space-y-2">
                         {data.leadsBySource
                           .slice(0, 5)
                           .map(
@@ -1371,14 +1383,14 @@ export default function Dashboard({
                               source,
                               index
                             ) => (
-                              <div
-                                key={
-                                  source.name
-                                }
+                              <li
+                                key={source.name}
+                                aria-label={`${source.name}: ${source.value} leads`}
                                 className="flex items-center justify-between gap-3 text-[12px]"
                               >
-                                <div className="flex min-w-0 items-center gap-2">
+                                <span className="flex min-w-0 items-center gap-2">
                                   <span
+                                    aria-hidden="true"
                                     className="h-2 w-2 flex-shrink-0 rounded-full"
                                     style={{
                                       background:
@@ -1390,21 +1402,35 @@ export default function Dashboard({
                                   />
 
                                   <span className="truncate text-slate-600">
-                                    {
-                                      source.name
-                                    }
+                                    {source.name}
                                   </span>
-                                </div>
+                                </span>
 
                                 <span className="font-semibold text-slate-800">
-                                  {
-                                    source.value
-                                  }
+                                  {source.value}
                                 </span>
-                              </div>
+                              </li>
                             )
                           )}
-                      </div>
+                        {data.leadsBySource.length > 5 && (
+                          <li
+                            aria-label={`Others: ${data.leadsBySource
+                              .slice(5)
+                              .reduce((sum, item) => sum + Number(item.value || 0), 0)} leads`}
+                            className="flex items-center justify-between gap-3 text-[12px]"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span aria-hidden="true" className="h-2 w-2 flex-shrink-0 rounded-full bg-slate-300" />
+                              <span className="truncate text-slate-600">Others</span>
+                            </span>
+                            <span className="font-semibold text-slate-800">
+                              {data.leadsBySource
+                                .slice(5)
+                                .reduce((sum, item) => sum + Number(item.value || 0), 0)}
+                            </span>
+                          </li>
+                        )}
+                      </ul>
                     </>
                   ) : (
                     <div className="flex h-[190px] items-center justify-center text-xs text-slate-400">
@@ -2214,11 +2240,18 @@ export default function Dashboard({
                 </div>
               ) : Array.isArray(actionDetailData?.items) && actionDetailData.items.length ? (
                 <div className="space-y-2.5">
-                  {actionDetailData.items.map((record) => (
-                    <div
-                      key={`${record.kind || "item"}-${record.id}`}
-                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]"
-                    >
+                  {actionDetailData.items.map((record) => {
+                    // Lead-referencing rows open the exact lead detail (Task 9):
+                    // "lead" rows carry the lead id directly; "followup" rows
+                    // carry it as leadId.
+                    const leadIdForRecord =
+                      record.kind === "lead"
+                        ? record.id
+                        : record.kind === "followup"
+                          ? record.leadId
+                          : null;
+                    const rowKey = `${record.kind || "item"}-${record.id}`;
+                    const rowInner = (
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
@@ -2278,8 +2311,37 @@ export default function Dashboard({
                           </div>
                         ) : null}
                       </div>
-                    </div>
-                  ))}
+                    );
+
+                    if (leadIdForRecord && onOpenLead) {
+                      return (
+                        <button
+                          key={rowKey}
+                          type="button"
+                          aria-label={`Open lead ${record.primary || ""}`.trim()}
+                          onClick={() => {
+                            onOpenLead(leadIdForRecord);
+                            setActionDetailOpen(false);
+                            setActionDetailItem(null);
+                            setActionDetailData(null);
+                            setActionDetailError("");
+                          }}
+                          className="block w-full text-left rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)] hover:border-indigo-300 hover:bg-indigo-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                        >
+                          {rowInner}
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={rowKey}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]"
+                      >
+                        {rowInner}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">

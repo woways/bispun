@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -104,6 +104,14 @@ export default function LeadDetailsView({
   onEdit,
   onLeadChange,
 }) {
+  // Move focus to the detail heading when the view opens (covers both a normal
+  // row click and a deep-link from a notification / dashboard), so keyboard and
+  // screen-reader users land in the detail instead of at document top.
+  const headingRef = useRef(null);
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+
   const [tab, setTab] = useState("activity");
   const [remarks, setRemarks] = useState(lead?.remarks || []);
   const [remarkDraft, setRemarkDraft] = useState("");
@@ -287,7 +295,7 @@ export default function LeadDetailsView({
             <ArrowLeft size={15} />
             Back to Leads
           </button>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">Lead Details</h1>
+          <h1 ref={headingRef} tabIndex={-1} className="mt-2 text-2xl font-bold tracking-tight text-slate-950 outline-none">Lead Details</h1>
         </div>
 
         {onEdit ? (

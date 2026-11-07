@@ -614,6 +614,16 @@ export default function ClientPortal({
   // swappable module so announcements never land in a hidden subtree).
   const [moduleAnnouncement, setModuleAnnouncement] = useState("");
 
+  // Deep-link target: open a specific lead's detail in Lead Store (used by
+  // notification clicks and dashboard lead rows). Lead Store opens the detail
+  // and calls back to clear this so it doesn't re-fire on list refreshes.
+  const [leadFocusTarget, setLeadFocusTarget] = useState(null);
+  function openLeadDetail(leadId) {
+    if (!leadId) return;
+    setLeadFocusTarget(String(leadId));
+    setModule("lead-store");
+  }
+
   // Phase B: orientation + preload for the code-split modules. The document
   // title tracks the active module (the mobile nav's aria-current="page" already
   // confirms the selection synchronously, and the Suspense fallback announces
@@ -1762,8 +1772,26 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       }
     }
 
-    if (notification.actionModule) {
-      setModule(notification.actionModule);
+    // Resolve a deep-link target so the click opens the exact record, not just
+    // the module. Lead id may be embedded in the message (LEAD_FOLLOWUP:<id>:)
+    // or encoded on actionModule as "lead-store#lead:<id>".
+    const rawModule = String(notification.actionModule || "");
+    const [moduleKey, encodedTarget] = rawModule.split("#");
+    let leadId = null;
+    const followUpMatch = String(notification.message || "").match(
+      /LEAD_FOLLOWUP:([^:]+):/
+    );
+    if (followUpMatch) {
+      leadId = followUpMatch[1];
+    } else if (encodedTarget) {
+      const targetMatch = encodedTarget.match(/^lead:(.+)$/);
+      if (targetMatch) leadId = targetMatch[1];
+    }
+
+    if (leadId) {
+      openLeadDetail(leadId);
+    } else if (moduleKey) {
+      setModule(moduleKey);
     }
 
     setNotificationsOpen(false);
@@ -3837,6 +3865,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             user={user}
             selectedYear={selectedYear}
             uiPreferences={uiPreferences}
+            onOpenLead={openLeadDetail}
           />
         );
 
@@ -3927,7 +3956,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       case "lead-store":
         return (
-          <LeadStore selectedYear={selectedYear} />
+          <LeadStore
+            selectedYear={selectedYear}
+            focusLeadId={leadFocusTarget}
+            onFocusConsumed={() => setLeadFocusTarget(null)}
+          />
         );
 
       case "walkins":
