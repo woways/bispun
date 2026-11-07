@@ -59,15 +59,19 @@ async function playPattern(kind) {
     const now = ctx.currentTime + 0.01;
 
     if (kind === "chat") {
-      // Loud, short WhatsApp-style incoming-message chime (original Bispun pattern,
-      // not the proprietary WhatsApp audio file). Designed to stay audible on laptops.
-      tone(ctx, 880, now, 0.12, 0.20, "sine");
-      tone(ctx, 1175, now + 0.095, 0.16, 0.18, "sine");
-      tone(ctx, 1320, now + 0.205, 0.13, 0.12, "triangle");
+      // Louder, short WhatsApp-style incoming-message chime (original Bispun
+      // pattern, not the proprietary WhatsApp audio file). Gains raised for
+      // clear audibility on laptop speakers; tones stay sequential and peak
+      // well below 1.0 so there is no clipping/distortion.
+      tone(ctx, 880, now, 0.13, 0.34, "sine");
+      tone(ctx, 1175, now + 0.1, 0.17, 0.3, "sine");
+      tone(ctx, 1320, now + 0.22, 0.15, 0.22, "triangle");
     } else {
-      // System notification remains a distinct brighter two-tone sound.
-      tone(ctx, 780, now, 0.15, 0.15, "triangle");
-      tone(ctx, 1040, now + 0.14, 0.20, 0.13, "triangle");
+      // System notification: a distinct, brighter three-step rising tone, louder
+      // than before so it is not missed, still clean (no clipping).
+      tone(ctx, 740, now, 0.14, 0.3, "triangle");
+      tone(ctx, 990, now + 0.13, 0.16, 0.28, "triangle");
+      tone(ctx, 1240, now + 0.29, 0.18, 0.24, "triangle");
     }
 
     return true;

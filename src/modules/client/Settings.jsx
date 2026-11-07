@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -661,6 +662,7 @@ export default function SettingsView({
 
   const [organization, setOrganization] = useState({ departments: [], roles: [] });
   const [organizationLoading, setOrganizationLoading] = useState(false);
+  const departmentSelectRef = useRef(null);
   const [organizationModal, setOrganizationModal] = useState(null);
   const [organizationSaving, setOrganizationSaving] = useState(false);
   const emptyOrganizationForm = {
@@ -4489,23 +4491,53 @@ export default function SettingsView({
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Department <span className="text-rose-500">*</span></label>
+                  <label htmlFor="add-user-department" className="block text-[13px] font-semibold text-slate-600 mb-1.5">Department <span className="text-rose-500" aria-hidden="true">*</span></label>
                   <select
+                    id="add-user-department"
+                    ref={departmentSelectRef}
                     required
                     aria-invalid={Boolean(userFormErrors.department)}
+                    aria-describedby={
+                      userFormErrors.department
+                        ? "add-user-department-error"
+                        : (!organizationLoading && organization.departments.length === 0
+                            ? "add-user-department-empty"
+                            : undefined)
+                    }
+                    aria-busy={organizationLoading}
+                    disabled={organizationLoading}
                     value={userForm.department}
                     onChange={(event) => setUserDepartment(event.target.value)}
-                    className={`w-full h-10 px-3 border rounded-lg bg-white text-[15px] ${
+                    className={`w-full h-10 px-3 border rounded-lg bg-white text-[15px] disabled:bg-slate-50 disabled:text-slate-500 ${
                       userFormErrors.department
                         ? "border-rose-300 focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
                         : "border-slate-200"
                     }`}
                   >
-                    <option value="">Select department</option>
+                    <option value="">
+                      {organizationLoading ? "Loading departments…" : "Select department"}
+                    </option>
                     {organization.departments.map((department) => <option key={department.id} value={department.name}>{department.name} ({department.code})</option>)}
                   </select>
+                  {!organizationLoading && organization.departments.length === 0 && !userFormErrors.department && (
+                    <div className="mt-1 text-[12px] text-amber-600">
+                      <p id="add-user-department-empty" role="status">
+                        No departments loaded. Add one in the Departments tab, or retry.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await loadOrganization();
+                          departmentSelectRef.current?.focus();
+                        }}
+                        className="underline font-semibold hover:text-amber-700"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
                   {userFormErrors.department && (
-                    <p className="mt-1 text-[12px] text-rose-600">
+                    <p id="add-user-department-error" className="mt-1 text-[12px] text-rose-600" role="alert">
                       {userFormErrors.department}
                     </p>
                   )}

@@ -2,6 +2,10 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
+import {
+  getLeadVisibilityScope,
+  canViewLead,
+} from "../lib/leadVisibility.js";
 
 const router = Router();
 
@@ -164,9 +168,21 @@ router.post("/calls", async (req, res) => {
     if (leadId) {
       lead = await prisma.lead.findFirst({
         where: { id: leadId, companyId },
-        select: { id: true, name: true, phone: true, email: true },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
       if (!lead) return res.status(404).json({ success: false, message: "Lead not found." });
+      // Security: a user can only call leads within their visibility scope.
+      const scope = await getLeadVisibilityScope(prisma, companyId, req.clientUser);
+      if (!canViewLead(scope, lead)) {
+        return res.status(404).json({ success: false, message: "Lead not found." });
+      }
       phone = digits(lead.phone) || phone;
       leadName = lead.name || leadName;
     }

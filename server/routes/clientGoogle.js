@@ -133,12 +133,25 @@ router.post("/meet", requireClientUser, async (req, res) => {
       attendees: Array.isArray(req.body?.attendees) ? req.body.attendees : [],
     });
     if (!result.meetLink) {
-      return res.status(502).json({
+      // The event was created, but Google is still provisioning the Meet
+      // conference. Report a genuine pending state (never a fake link); the
+      // client can show "generating…" and the link resolves on reconcile.
+      return res.status(202).json({
         success: false,
-        message: "Google did not return a Meet link. Try again.",
+        pending: Boolean(result.pending),
+        eventId: result.eventId || null,
+        htmlLink: result.htmlLink || null,
+        message: result.pending
+          ? "Your meeting was created. The Google Meet link is still being generated — please refresh in a moment."
+          : "Google did not return a Meet link. Try again.",
       });
     }
-    return res.json({ success: true, meetLink: result.meetLink });
+    return res.json({
+      success: true,
+      meetLink: result.meetLink,
+      eventId: result.eventId || null,
+      htmlLink: result.htmlLink || null,
+    });
   } catch (error) {
     const notConnected = /not connected/i.test(String(error?.message || ""));
     console.error("Create Meet failed:", error?.message || error);

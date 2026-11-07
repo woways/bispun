@@ -1427,14 +1427,18 @@ export default function Dashboard({
                       Leads by Source
                     </h2>
                     <p className="mt-1 text-[13px] text-slate-500">
-                      Source mix for the selected period
+                      Where leads came from this period. The total includes direct
+                      admissions and leads with no recorded source.
                     </p>
                   </div>
 
                   {data.leadsBySource
                     .length ? (
                     <>
-                      <div className="relative">
+                      {/* Chart + center total are decorative for AT; the legend
+                          below is the accessible data (and reconciles to the
+                          total). */}
+                      <div className="relative" aria-hidden="true">
                         <ResponsiveContainer
                           width="100%"
                           height={190}
@@ -1488,7 +1492,14 @@ export default function Dashboard({
                         </div>
                       </div>
 
-                      <div className="mt-2 space-y-2">
+                      <p className="sr-only">
+                        {`Total ${
+                          summary.totalLeads ||
+                          data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
+                        } leads for the period.`}
+                      </p>
+
+                      <ul className="mt-2 space-y-2">
                         {data.leadsBySource
                           .slice(0, 5)
                           .map(
@@ -1496,14 +1507,14 @@ export default function Dashboard({
                               source,
                               index
                             ) => (
-                              <div
-                                key={
-                                  source.name
-                                }
+                              <li
+                                key={source.name}
+                                aria-label={`${source.name}: ${source.value} leads`}
                                 className="flex items-center justify-between gap-3 text-[12px]"
                               >
-                                <div className="flex min-w-0 items-center gap-2">
+                                <span className="flex min-w-0 items-center gap-2">
                                   <span
+                                    aria-hidden="true"
                                     className="h-2 w-2 flex-shrink-0 rounded-full"
                                     style={{
                                       background:
@@ -1515,21 +1526,35 @@ export default function Dashboard({
                                   />
 
                                   <span className="truncate text-slate-600">
-                                    {
-                                      source.name
-                                    }
+                                    {source.name}
                                   </span>
-                                </div>
+                                </span>
 
                                 <span className="font-semibold text-slate-800">
-                                  {
-                                    source.value
-                                  }
+                                  {source.value}
                                 </span>
-                              </div>
+                              </li>
                             )
                           )}
-                      </div>
+                        {data.leadsBySource.length > 5 && (
+                          <li
+                            aria-label={`Others: ${data.leadsBySource
+                              .slice(5)
+                              .reduce((sum, item) => sum + Number(item.value || 0), 0)} leads`}
+                            className="flex items-center justify-between gap-3 text-[12px]"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span aria-hidden="true" className="h-2 w-2 flex-shrink-0 rounded-full bg-slate-300" />
+                              <span className="truncate text-slate-600">Others</span>
+                            </span>
+                            <span className="font-semibold text-slate-800">
+                              {data.leadsBySource
+                                .slice(5)
+                                .reduce((sum, item) => sum + Number(item.value || 0), 0)}
+                            </span>
+                          </li>
+                        )}
+                      </ul>
                     </>
                   ) : (
                     <div className="flex h-[190px] items-center justify-center text-xs text-slate-400">

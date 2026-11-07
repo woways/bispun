@@ -373,6 +373,18 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
   const [deleting, setDeleting] = useState(false);
 
+  // Google account connection (for in-place "Connect your Google account"
+  // dialog — works for employees too, without needing Settings access).
+  const [googleStatus, setGoogleStatus] = useState({
+    configured: true,
+    connected: false,
+    email: null,
+    loaded: false,
+  });
+  const [connectDialogOpen, setConnectDialogOpen] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [pendingMeetNotice, setPendingMeetNotice] = useState("");
+
 
 
   const [now, setNow] = useState(() => new Date());
@@ -381,13 +393,25 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
   const editorRef = useRef(null);
 
-  // Hardware-back + Escape dismissal and focus management. When the event
-  // editor is open it owns dismissal (Escape closes the editor only); otherwise
-  // the whole calendar does.
-  useOverlayDismiss(open && !editorOpen, onClose, { containerRef: calendarRef });
+  const connectDialogRef = useRef(null);
 
-  useOverlayDismiss(editorOpen, () => setEditorOpen(false), {
+  const connectBtnRef = useRef(null);
+
+  // Hardware-back + Escape dismissal and focus management. The topmost open
+  // overlay owns dismissal: connect dialog > event editor > calendar. Each
+  // stands down while a higher one is open so a single Escape closes only the
+  // topmost.
+  useOverlayDismiss(open && !editorOpen && !connectDialogOpen, onClose, {
+    containerRef: calendarRef,
+  });
+
+  useOverlayDismiss(editorOpen && !connectDialogOpen, () => setEditorOpen(false), {
     containerRef: editorRef,
+  });
+
+  useOverlayDismiss(connectDialogOpen, () => setConnectDialogOpen(false), {
+    containerRef: connectDialogRef,
+    initialFocusRef: connectBtnRef,
   });
 
 
@@ -494,6 +518,60 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
   }
 
+  async function loadGoogleStatus() {
+    try {
+      const data = await apiRequest("/api/client/google/status");
+      setGoogleStatus({
+        configured: data?.configured !== false,
+        connected: Boolean(data?.connected),
+        email: data?.email || null,
+        loaded: true,
+      });
+      return Boolean(data?.connected);
+    } catch (err) {
+      // Non-fatal — treat as not-connected; the connect dialog still guides the user.
+      setGoogleStatus((c) => ({ ...c, loaded: true }));
+      return false;
+    }
+  }
+
+  function closeConnectDialog() {
+    setConnectDialogOpen(false);
+    setConnecting(false);
+  }
+
+  // Start the existing, secure OAuth flow for THIS user (any role). Opens the
+  // Google consent screen in a popup and polls status until connected, so the
+  // calendar modal state (and the user's in-progress event) is preserved.
+  async function startGoogleConnect() {
+    if (connecting) return;
+    setConnecting(true);
+    try {
+      const data = await apiRequest("/api/client/google/connect");
+      const url = data?.url;
+      if (!url) {
+        setConnecting(false);
+        return;
+      }
+      const popup = window.open(url, "bispun-google-connect", "width=520,height=640");
+      const startedAt = Date.now();
+      const poll = window.setInterval(async () => {
+        const connected = await loadGoogleStatus();
+        const timedOut = Date.now() - startedAt > 2 * 60 * 1000;
+        if (connected || timedOut || (popup && popup.closed && Date.now() - startedAt > 1500)) {
+          window.clearInterval(poll);
+          setConnecting(false);
+          if (connected) {
+            try { popup && popup.close(); } catch { /* cross-origin — ignore */ }
+            setConnectDialogOpen(false);
+          }
+        }
+      }, 2000);
+    } catch (err) {
+      setConnecting(false);
+    }
+  }
+
 
 
   useEffect(() => {
@@ -515,6 +593,8 @@ export default function CalendarModal({ open, onClose, currentUser }) {
     if (open) {
 
       loadUsers();
+
+      loadGoogleStatus();
 
     }
 
@@ -687,6 +767,7 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
   setSaving(true);
   setError("");
+  setPendingMeetNotice("");
 
 
 
@@ -701,6 +782,14 @@ export default function CalendarModal({ open, onClose, currentUser }) {
       : "";
 
     if (editingEvent.hasMeeting && !/^https?:\/\//i.test(meetingRoomValue)) {
+
+      // A Meet link is requested but Google isn't connected → guide the user to
+      // connect in place (employees included) instead of failing.
+      if (googleStatus.loaded && !googleStatus.connected) {
+        setSaving(false);
+        setConnectDialogOpen(true);
+        return;
+      }
 
       try {
 
@@ -731,23 +820,35 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
         if (!meetingRoomValue) {
 
-          setError("Couldn't create a Google Meet link. Try again.");
-
-          setSaving(false);
-
-          return;
+          if (meet?.pending) {
+            // Google is still provisioning the conference. Save the event now
+            // (no fake link) and tell the user it's on the way.
+            setPendingMeetNotice(
+              "Your meeting was saved. The Google Meet link is still being generated — reopen the event in a moment to copy it."
+            );
+          } else {
+            setError("Couldn't create a Google Meet link. Try again.");
+            setSaving(false);
+            return;
+          }
 
         }
 
       } catch (error) {
 
-        setError(
+        const msg = String(error?.data?.message || error?.message || "");
+        // Not connected / token revoked → open the connect dialog in place.
+        if (
+          error?.status === 401 ||
+          /connect/i.test(msg) ||
+          /not connected/i.test(msg)
+        ) {
+          setSaving(false);
+          setConnectDialogOpen(true);
+          return;
+        }
 
-          error?.data?.message ||
-
-            "Couldn't create a Google Meet link. Connect Google in Settings → Integrations."
-
-        );
+        setError(msg || "Couldn't create a Google Meet link. Try again.");
 
         setSaving(false);
 
@@ -1021,11 +1122,23 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
         {error && (
 
-          <div className="flex items-start gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700">
+          <div role="alert" className="flex items-start gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-semibold text-rose-700">
 
             <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
 
             {error}
+
+          </div>
+
+        )}
+
+        {pendingMeetNotice && (
+
+          <div role="status" className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800">
+
+            <Video size={14} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+
+            {pendingMeetNotice}
 
           </div>
 
@@ -1291,6 +1404,16 @@ export default function CalendarModal({ open, onClose, currentUser }) {
                         {event.allDay ? "All day" : formatTimeLabel(event.startAt)}
 
                       </div>
+
+                      {(event.assignedToUser?.name || event.createdBy?.name) && (
+                        <div className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold opacity-80">
+                          <UserRound size={11} aria-hidden="true" />
+                          <span>
+                            <span className="sr-only">Organizer: </span>
+                            {event.assignedToUser?.name || event.createdBy?.name}
+                          </span>
+                        </div>
+                      )}
 
                       {event.meetingRoom && (
 
@@ -2133,7 +2256,71 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
       )}
 
+      {/* CONNECT GOOGLE ACCOUNT DIALOG — in-place connect (works for employees,
+          no Settings access needed). Uses the existing secure OAuth flow. */}
+      {connectDialogOpen && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4"
+          onClick={closeConnectDialog}
+        >
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- Escape + buttons provide the keyboard path */}
+          <div
+            ref={connectDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gconnect-title"
+            aria-describedby="gconnect-desc"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="gconnect-title" className="text-lg font-bold text-slate-900">
+              Connect your Google account
+            </h2>
+            <p id="gconnect-desc" className="mt-2 text-sm text-slate-600">
+              Connect your Google account to create Google Calendar events and
+              Google Meet links.
+            </p>
 
+            {googleStatus.configured === false ? (
+              <p role="alert" className="mt-4 text-sm text-amber-800">
+                Google isn't set up on this server yet. Ask your administrator to
+                configure Google integration.
+              </p>
+            ) : connecting ? (
+              <p role="status" className="mt-4 text-sm text-slate-700">
+                Waiting for Google… finish sign-in in the opened window, then
+                return here.
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeConnectDialog}
+                className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Not now
+              </button>
+              {googleStatus.configured !== false && (
+                <button
+                  ref={connectBtnRef}
+                  type="button"
+                  onClick={() => {
+                    if (!connecting) startGoogleConnect();
+                  }}
+                  aria-disabled={connecting}
+                  aria-busy={connecting}
+                  className={`h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-bold ${
+                    connecting ? "opacity-50" : "hover:bg-indigo-700"
+                  }`}
+                >
+                  {connecting ? "Connecting…" : "Connect your Google account"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
 

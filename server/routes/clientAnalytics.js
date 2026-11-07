@@ -623,15 +623,30 @@ router.get("/dashboard", async (req, res) => {
     const sourceCounts = {};
 
     for (const lead of leads) {
-      const source =
+      const rawSource =
         SOURCE_LABELS[lead.source] || lead.source;
+      // Leads with no recorded source go to a named bucket instead of an empty
+      // legend row, so every lead is represented.
+      const source =
+        rawSource && String(rawSource).trim()
+          ? String(rawSource).trim()
+          : "Unspecified";
       sourceCounts[source] =
         (sourceCounts[source] || 0) + 1;
     }
 
-    const leadsBySource = Object.entries(sourceCounts).map(
-      ([name, value]) => ({ name, value })
-    );
+    // Direct admissions are included in `totalLeads` but have no lead row, so
+    // they were missing from the source breakdown — which made the donut's
+    // center total (e.g. 13) exceed the legend sum (e.g. 11). Surface them as
+    // their own bucket so the breakdown reconciles with the total.
+    if (directAdmissionLeadCount > 0) {
+      sourceCounts["Direct Admission"] =
+        (sourceCounts["Direct Admission"] || 0) + directAdmissionLeadCount;
+    }
+
+    const leadsBySource = Object.entries(sourceCounts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
     const teamMap = new Map();
 

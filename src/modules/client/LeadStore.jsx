@@ -660,6 +660,7 @@ function IndividualLeadModal({
   onSaved,
   lead = null,
   defaultType = "INDIVIDUAL",
+  courseOptions = [],
 }) {
   const [
     saving,
@@ -1194,8 +1195,18 @@ function IndividualLeadModal({
                   )
                 }
                 className="form-input"
+                list="course-interest-options"
+                autoComplete="off"
                 placeholder="B.Tech / MBA / NEET"
               />
+              {/* Searchable suggestions from the company's existing courses; a
+                  custom value can still be typed (native combobox, no schema
+                  change). */}
+              <datalist id="course-interest-options">
+                {courseOptions.map((option) => (
+                  <option key={option} value={option} />
+                ))}
+              </datalist>
             </Field>
 
             <Field
@@ -2711,6 +2722,8 @@ export default function LeadStore({
   onInitialLeadOpened = null,
   initialDashboardFilter = null,
   onInitialDashboardFilterApplied = null,
+  focusLeadId = null,
+  onFocusConsumed,
 }) {
   const [
     sub,
@@ -3147,6 +3160,32 @@ export default function LeadStore({
     detailsLead,
     setDetailsLead,
   ] = useState(null);
+
+  // Deep-link target (from a notification or a dashboard lead click): open the
+  // exact lead's detail once the list is loaded, or show an accessible notice if
+  // it isn't visible to this user.
+  const [focusNotice, setFocusNotice] = useState("");
+  const focusNoticeRef = useRef(null);
+
+  useEffect(() => {
+    if (!focusLeadId || loading) return;
+    const lead = individualLeads.find(
+      (item) => String(item.id) === String(focusLeadId)
+    );
+    if (lead) {
+      setDetailsLead(lead);
+      setFocusNotice("");
+    } else {
+      setFocusNotice("That lead isn't available to you.");
+    }
+    // Clear the token in BOTH branches so list refreshes/keep-alive don't re-fire.
+    onFocusConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusLeadId, loading, individualLeads]);
+
+  useEffect(() => {
+    if (focusNotice) focusNoticeRef.current?.focus();
+  }, [focusNotice]);
 
   const [
     showUpload,
@@ -4283,6 +4322,7 @@ export default function LeadStore({
     <IndividualLeadModal
       assignees={assignees}
       lead={editingIndividual}
+      courseOptions={individualCourseOptions}
       defaultType={
         selectedType?.api === "ALL"
           ? "INDIVIDUAL"
@@ -5041,6 +5081,28 @@ export default function LeadStore({
             size={15}
           />
           {successMessage}
+        </div>
+      )}
+
+      {focusNotice && (
+        <div
+          role="alert"
+          tabIndex={-1}
+          ref={focusNoticeRef}
+          className="flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-[15px] outline-none"
+        >
+          <span className="flex items-center gap-2">
+            <AlertCircle size={15} aria-hidden="true" />
+            {focusNotice}
+          </span>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setFocusNotice("")}
+            className="rounded p-1 hover:bg-amber-100"
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
         </div>
       )}
 
