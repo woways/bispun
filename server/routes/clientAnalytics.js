@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import { backfillAdmissionsLeads } from "../lib/admissionsLeadSync.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -250,6 +251,32 @@ async function getDashboardAccessScope(companyId, userId) {
   };
 }
 
+async function getLeadNumberMap(companyId) {
+  const rows = await prisma.lead.findMany({
+    where: { companyId },
+    select: { id: true, source: true, notes: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+
+  // Preserve the numbering users already saw for Lead Store / Admissions-origin
+  // records, then append any other company leads that previously had no display ID.
+  const previouslyNumbered = rows.filter(
+    (lead) =>
+      lead.source === "LEAD_STORE" ||
+      String(lead.notes || "").includes("Admissions origin:")
+  );
+  const previouslyNumberedIds = new Set(previouslyNumbered.map((lead) => lead.id));
+  const newlyNumbered = rows.filter((lead) => !previouslyNumberedIds.has(lead.id));
+  const ordered = [...previouslyNumbered, ...newlyNumbered];
+
+  return new Map(ordered.map((lead, index) => [lead.id, index + 1]));
+}
+
+function leadDisplayId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0 ? String(value) : null;
+}
+
 /* =========================================================
    DASHBOARD
    Accessible to every authenticated client user. Data is scoped
@@ -260,6 +287,10 @@ router.get("/dashboard", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
     const userId = req.clientUser.userId;
+
+    // Repair legacy admissions that pre-date the admission -> Lead Store link
+    // rule so Dashboard/Action Center can show the same Lead ID consistently.
+    await backfillAdmissionsLeads(prisma, companyId);
     const selectedYear = parseYear(req.query.year);
     const currentYear = new Date().getFullYear();
 
@@ -499,17 +530,15 @@ router.get("/dashboard", async (req, res) => {
       directAdmissionLeadCount += 1;
     }
 
-    const totalLeads = leads.length + directAdmissionLeadCount;
+    // Lead KPIs represent actual Lead Store records. Direct-entry admissions
+    // stay in Admissions instead of inflating Lead Store counts.
+    const totalLeads = leads.length;
     const newLeads = leads.filter(
       (lead) => lead.stage === "NEW"
     ).length;
-    const qualifiedLeads =
-      leads.filter(
-        (lead) =>
-          lead.stage === "QUALIFIED" ||
-          lead.stage === "ADMITTED" ||
-          admittedLeadIds.has(lead.id)
-      ).length + directAdmissionLeadCount;
+    const qualifiedLeads = leads.filter(
+      (lead) => lead.stage === "QUALIFIED" || lead.stage === "ADMITTED"
+    ).length;
     const totalAdmissions = admissions.length;
 
     const potentialRevenue = activeAdmissions.reduce(
@@ -1021,6 +1050,295 @@ router.get("/dashboard", async (req, res) => {
   }
 });
 
+/* =========================================================
+   DASHBOARD KPI DETAILS
+   Lazy drill-down data for Business Pulse cards. The query mirrors the
+   dashboard's role/year scope so every opened record set reconciles with the
+   number shown on the card without making the main dashboard payload heavy.
+========================================================= */
+
+router.get("/dashboard/kpi/:key", async (req, res) => {
+  try {
+    if (!dashboardSectionAllowed(req.clientUser.pageAccess, req.clientUser.role, "business-pulse")) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have access to Dashboard Business Pulse",
+      });
+    }
+
+    const companyId = req.clientUser.companyId;
+    const userId = req.clientUser.userId;
+    const selectedYear = parseYear(req.query.year);
+    const key = String(req.params.key || "").trim();
+    const allowedKeys = new Set([
+      "total-leads",
+      "qualified-leads",
+      "new-leads",
+      "admissions",
+      "potential-revenue",
+      "received-revenue",
+      "pending-revenue",
+      "current-profit",
+    ]);
+
+    if (!allowedKeys.has(key)) {
+      return res.status(400).json({ success: false, message: "Unknown dashboard KPI" });
+    }
+
+    const access = await getDashboardAccessScope(companyId, userId);
+    if (!access) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const {
+      currentUser,
+      visibleUserIds,
+      visibleUserNames,
+    } = access;
+    const includeUnassigned = currentUser.role === "MANAGER";
+
+    const leadWhere = { companyId };
+    const admissionWhere = { companyId };
+    if (selectedYear) {
+      leadWhere.createdAt = yearRange(selectedYear);
+      admissionWhere.admissionDate = yearRange(selectedYear);
+    }
+
+    const [allLeads, allAdmissions, expenses, incentives, leadNumberMap] =
+      await Promise.all([
+        prisma.lead.findMany({
+          where: leadWhere,
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true,
+            source: true,
+            stage: true,
+            assignedToName: true,
+            createdAt: true,
+            leadDataset: { select: { assignedToUserId: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.admission.findMany({
+          where: admissionWhere,
+          select: {
+            id: true,
+            leadId: true,
+            studentName: true,
+            studentPhone: true,
+            studentEmail: true,
+            counsellorName: true,
+            college: true,
+            course: true,
+            totalFee: true,
+            paidAmount: true,
+            status: true,
+            admissionDate: true,
+            lead: {
+              select: {
+                id: true,
+                assignedToName: true,
+                leadDataset: { select: { assignedToUserId: true } },
+              },
+            },
+          },
+          orderBy: { admissionDate: "desc" },
+        }),
+        prisma.expense.findMany({
+          where: { companyId, status: "APPROVED" },
+          select: { amount: true, createdAt: true },
+        }),
+        prisma.incentive.findMany({
+          where: { companyId, status: { in: ["APPROVED", "PAID"] } },
+          select: { amount: true, createdAt: true },
+        }),
+        getLeadNumberMap(companyId),
+      ]);
+
+    const visibleLead = (lead) =>
+      visibleToDashboardUser({
+        record: lead,
+        fieldName: "assignedToName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      });
+
+    const visibleAdmission = (admission) =>
+      visibleToDashboardUser({
+        record: admission,
+        fieldName: "counsellorName",
+        currentUser,
+        visibleUserIds,
+        visibleUserNames,
+        includeUnassigned,
+      });
+
+    const leads = allLeads.filter(visibleLead);
+    const admissions = allAdmissions.filter(visibleAdmission);
+    const activeAdmissions = admissions.filter((admission) => admission.status !== "CANCELLED");
+
+    const filteredExpenses = selectedYear
+      ? expenses.filter((item) => new Date(item.createdAt).getFullYear() === selectedYear)
+      : expenses;
+    const filteredIncentives = selectedYear
+      ? incentives.filter((item) => new Date(item.createdAt).getFullYear() === selectedYear)
+      : incentives;
+
+    const leadByContactKey = new Map();
+    for (const lead of leads) {
+      for (const contactKey of contactKeys({ phone: lead.phone, email: lead.email })) {
+        if (!leadByContactKey.has(contactKey)) leadByContactKey.set(contactKey, lead);
+      }
+    }
+
+    const admittedLeadIds = new Set();
+    const directAdmissionKeys = new Set();
+    const directAdmissionRows = [];
+
+    for (const admission of activeAdmissions) {
+      if (admission.leadId) {
+        admittedLeadIds.add(admission.leadId);
+        continue;
+      }
+
+      const keys = contactKeys({ phone: admission.studentPhone, email: admission.studentEmail });
+      const matchedLead = keys.map((contactKey) => leadByContactKey.get(contactKey)).find(Boolean);
+      if (matchedLead) {
+        admittedLeadIds.add(matchedLead.id);
+        continue;
+      }
+
+      const alreadyCounted = keys.length > 0 && keys.some((contactKey) => directAdmissionKeys.has(contactKey));
+      if (alreadyCounted) continue;
+      keys.forEach((contactKey) => directAdmissionKeys.add(contactKey));
+      directAdmissionRows.push(admission);
+    }
+
+    const mapLead = (lead) => ({
+      id: lead.id,
+      leadId: lead.id,
+      leadDisplayId: leadDisplayId(leadNumberMap.get(lead.id)),
+      kind: "lead",
+      primary: lead.name || "Unnamed lead",
+      phone: lead.phone || null,
+      email: lead.email || null,
+      owner: lead.assignedToName || "Unassigned",
+      status: lead.stage || "NEW",
+      occurredAt: lead.createdAt,
+      note: SOURCE_LABELS[lead.source] || lead.source || "Lead",
+    });
+
+    const mapAdmission = (admission, amount = null, note = null) => {
+      const effectiveLeadId = admission.leadId || admission.lead?.id || null;
+      return {
+        id: admission.id,
+        leadId: effectiveLeadId,
+        leadDisplayId: effectiveLeadId
+          ? leadDisplayId(leadNumberMap.get(effectiveLeadId))
+          : null,
+        kind: "admission",
+        primary: admission.studentName || "Admission",
+        phone: admission.studentPhone || null,
+        email: admission.studentEmail || null,
+        owner: admission.counsellorName || admission.lead?.assignedToName || "Unassigned",
+        status: admission.status || "ONGOING",
+        occurredAt: admission.admissionDate,
+        ...(amount !== null ? { amount } : {}),
+        note: note || [admission.college, admission.course].filter(Boolean).join(" · ") || "Admission",
+      };
+    };
+
+    if (key === "total-leads" || key === "qualified-leads" || key === "new-leads") {
+      let selectedLeads = leads;
+      let label = "Total Leads";
+
+      if (key === "qualified-leads") {
+        label = "Qualified Leads";
+        selectedLeads = leads.filter(
+          (lead) => lead.stage === "QUALIFIED" || lead.stage === "ADMITTED"
+        );
+      } else if (key === "new-leads") {
+        label = "New Leads";
+        selectedLeads = leads.filter((lead) => lead.stage === "NEW");
+      }
+
+      const items = selectedLeads.map(mapLead);
+      return res.json({ success: true, key, label, count: items.length, items });
+    }
+
+    if (key === "admissions") {
+      const items = admissions.map((admission) => mapAdmission(admission));
+      return res.json({ success: true, key, label: "Admissions", count: items.length, items });
+    }
+
+    const revenueItems = activeAdmissions.map((admission) => {
+      const potential = Number(admission.totalFee || 0);
+      const received = Number(admission.paidAmount || 0);
+      const pending = Math.max(potential - received, 0);
+      const amount =
+        key === "potential-revenue" ? potential :
+        key === "received-revenue" ? received : pending;
+      return mapAdmission(admission, amount);
+    });
+
+    if (key === "potential-revenue" || key === "received-revenue" || key === "pending-revenue") {
+      const filteredItems = key === "pending-revenue"
+        ? revenueItems.filter((item) => Number(item.amount || 0) > 0)
+        : revenueItems;
+      const total = filteredItems.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const label =
+        key === "potential-revenue" ? "Potential Revenue" :
+        key === "received-revenue" ? "Received Revenue" : "Pending Revenue";
+
+      return res.json({
+        success: true,
+        key,
+        label,
+        count: filteredItems.length,
+        valueLabel: "Total",
+        displayValue: `₹${total.toLocaleString("en-IN")}`,
+        items: filteredItems,
+      });
+    }
+
+    const receivedAmount = activeAdmissions.reduce(
+      (sum, admission) => sum + Number(admission.paidAmount || 0),
+      0
+    );
+    const approvedExpenses = currentUser.role === "CLIENT_ADMIN"
+      ? filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0)
+      : 0;
+    const totalIncentives = currentUser.role === "CLIENT_ADMIN"
+      ? filteredIncentives.reduce((sum, incentive) => sum + Number(incentive.amount || 0), 0)
+      : 0;
+    const currentProfit = currentUser.role === "CLIENT_ADMIN"
+      ? receivedAmount - approvedExpenses - totalIncentives
+      : 0;
+
+    return res.json({
+      success: true,
+      key,
+      label: "Current Profit",
+      count: activeAdmissions.length,
+      valueLabel: "Profit",
+      displayValue: `₹${currentProfit.toLocaleString("en-IN")}`,
+      breakdown: [
+        { label: "Received Revenue", displayValue: `₹${receivedAmount.toLocaleString("en-IN")}` },
+        { label: "Approved Expenses", displayValue: `₹${approvedExpenses.toLocaleString("en-IN")}` },
+        { label: "Incentives", displayValue: `₹${totalIncentives.toLocaleString("en-IN")}` },
+      ],
+      items: activeAdmissions.map((admission) => mapAdmission(admission, Number(admission.paidAmount || 0))),
+    });
+  } catch (error) {
+    console.error("Failed to fetch dashboard KPI details:", error);
+    return res.status(500).json({ success: false, message: "Unable to load dashboard KPI details" });
+  }
+});
+
 
 /* =========================================================
    ACTION CENTER DETAILS
@@ -1072,6 +1390,7 @@ router.get("/action-center/:key", async (req, res) => {
 
     const includeUnassigned = currentUser.role === "MANAGER";
     const now = new Date();
+    const leadNumberMap = await getLeadNumberMap(companyId);
 
     const visibleLead = (lead) =>
       visibleToDashboardUser({
@@ -1138,6 +1457,8 @@ router.get("/action-center/:key", async (req, res) => {
         })
         .map((lead) => ({
           id: lead.id,
+          leadId: lead.id,
+          leadDisplayId: leadDisplayId(leadNumberMap.get(lead.id)),
           kind: "lead",
           primary: lead.name || "Unnamed lead",
           phone: lead.phone || null,
@@ -1186,6 +1507,9 @@ router.get("/action-center/:key", async (req, res) => {
         .map((session) => ({
           id: session.id,
           leadId: session.leadId || null,
+          leadDisplayId: session.leadId
+            ? leadDisplayId(leadNumberMap.get(session.leadId))
+            : null,
           kind: "followup",
           primary: session.studentName || "Lead follow-up",
           owner: session.counsellorName || "Unassigned",
@@ -1223,6 +1547,7 @@ router.get("/action-center/:key", async (req, res) => {
           admissionDate: true,
           lead: {
             select: {
+              id: true,
               assignedToName: true,
               leadDataset: { select: { assignedToUserId: true } },
             },
@@ -1265,7 +1590,10 @@ router.get("/action-center/:key", async (req, res) => {
 
       const items = selected.map((admission) => ({
         id: admission.id,
-        leadId: admission.leadId || null,
+        leadId: admission.leadId || admission.lead?.id || null,
+        leadDisplayId: leadDisplayId(
+          leadNumberMap.get(admission.leadId || admission.lead?.id)
+        ),
         kind: key === "revenue-risk" ? "revenue" : "payment",
         primary: admission.studentName || "Admission",
         phone: admission.studentPhone || null,
@@ -1343,6 +1671,9 @@ router.get("/action-center/:key", async (req, res) => {
       return {
         id: communication.id,
         leadId: communication.leadId || null,
+        leadDisplayId: communication.leadId
+          ? leadDisplayId(leadNumberMap.get(communication.leadId))
+          : null,
         kind: "whatsapp",
         primary: lead?.name || "WhatsApp lead",
         phone: lead?.phone || null,

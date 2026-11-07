@@ -593,6 +593,46 @@ export default function ClientPortal({
     () => getClientModuleFromPath()
   );
 
+  const [leadStoreTargetId, setLeadStoreTargetId] = useState(null);
+  const [leadStoreDashboardFilter, setLeadStoreDashboardFilter] = useState(null);
+  const [revenueDashboardMetric, setRevenueDashboardMetric] = useState(null);
+
+  function openLeadStoreRecord(leadId) {
+    const id = String(leadId || "").trim();
+    if (!id) return;
+    setLeadStoreTargetId(id);
+    setModule("lead-store");
+  }
+
+  function openDashboardKpi(key) {
+    const metric = String(key || "").trim();
+    if (!metric) return;
+
+    if (["total-leads", "new-leads", "qualified-leads"].includes(metric)) {
+      setLeadStoreDashboardFilter({
+        key: metric,
+        label:
+          metric === "new-leads"
+            ? "New Leads"
+            : metric === "qualified-leads"
+              ? "Qualified Leads"
+              : "Total Leads",
+      });
+      setModule("lead-store");
+      return;
+    }
+
+    if (metric === "admissions") {
+      setModule("admissions");
+      return;
+    }
+
+    if (["potential-revenue", "received-revenue", "pending-revenue", "current-profit"].includes(metric)) {
+      setRevenueDashboardMetric(metric);
+      setModule("revenue");
+    }
+  }
+
   // Keep-alive bookkeeping (see KEEPALIVE_ELIGIBLE above). `aliveModules` is an
   // LRU list of currently-mounted eligible modules (most-recent first).
   const [aliveModules, setAliveModules] = useState(() =>
@@ -1827,13 +1867,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   useEffect(() => {
     loadUnreadNotificationCount();
 
-    // P3: slower fallback poll (45s) that pauses while the app is
-    // backgrounded/hidden or signing out. Refresh-on-resume is handled by the
-    // lifecycle effect below.
+    // Notification polling is intentionally quicker than chat fallback so a
+    // server-created 10-minute calendar reminder is surfaced with its audible
+    // alert close to the scheduled reminder time. It still pauses while the
+    // app is backgrounded/hidden or signing out.
     const interval = window.setInterval(() => {
       if (!pollActiveRef.current || signingOutRef.current) return;
       loadUnreadNotificationCount();
-    }, 45000);
+    }, 15000);
 
     return () => window.clearInterval(interval);
   }, []);
@@ -3865,7 +3906,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             user={user}
             selectedYear={selectedYear}
             uiPreferences={uiPreferences}
-            onOpenLead={openLeadDetail}
+            onOpenLead={openLeadStoreRecord}
+            onOpenKpi={openDashboardKpi}
+            onOpenModule={setModule}
           />
         );
 
@@ -3951,7 +3994,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       case "revenue":
         return (
-          <Revenue selectedYear={selectedYear} />
+          <Revenue
+            selectedYear={selectedYear}
+            initialDashboardMetric={revenueDashboardMetric}
+            onInitialDashboardMetricApplied={() => setRevenueDashboardMetric(null)}
+            onOpenLead={openLeadStoreRecord}
+          />
         );
 
       case "lead-store":
@@ -3959,6 +4007,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           <LeadStore
             selectedYear={selectedYear}
             currentUser={user}
+            initialLeadId={leadStoreTargetId}
+            onInitialLeadOpened={() => setLeadStoreTargetId(null)}
+            initialDashboardFilter={leadStoreDashboardFilter}
+            onInitialDashboardFilterApplied={() => setLeadStoreDashboardFilter(null)}
             focusLeadId={leadFocusTarget}
             onFocusConsumed={() => setLeadFocusTarget(null)}
           />

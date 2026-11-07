@@ -8,6 +8,7 @@
 
 import { Capacitor } from "@capacitor/core";
 import { apiRequest } from "./api.js";
+import { playNotificationSound } from "./sound.js";
 
 let initialized = false;
 let currentToken = null;
@@ -155,6 +156,22 @@ export async function initMobilePush({ onNavigate } = {}) {
       return;
     }
 
+    // Android 8+ controls notification sound/importance through channels.
+    // Create the same channel id used by the backend FCM payload so calendar
+    // reminders and other CRM pushes are audible on mobile as well.
+    try {
+      await PushNotifications.createChannel?.({
+        id: "bispun_default",
+        name: "Bispun Notifications",
+        description: "CRM alerts and calendar reminders",
+        importance: 5,
+        sound: "default",
+        vibration: true,
+      });
+    } catch (error) {
+      console.warn("[push] notification channel setup failed", error?.message || error);
+    }
+
     await PushNotifications.addListener("registration", async (tokenData) => {
       const token = tokenData?.value;
       if (!token || token === currentToken) return;
@@ -170,10 +187,14 @@ export async function initMobilePush({ onNavigate } = {}) {
       console.error("[push] registration error", error?.error || error);
     });
 
-    // Foreground receipt: the existing in-app notification bell already polls
-    // and updates its unread count, so no separate in-app banner is created
-    // here (avoids duplicate alerts). Android shows nothing extra by default.
-    await PushNotifications.addListener("pushNotificationReceived", () => {});
+    // Android/iOS may suppress the system notification UI while the app is in
+    // the foreground. Play the CRM alert immediately for calendar reminders;
+    // the normal in-app bell polling still updates the unread counter.
+    await PushNotifications.addListener("pushNotificationReceived", (notification) => {
+      if (String(notification?.data?.type || "").toUpperCase() === "REMINDER") {
+        playNotificationSound();
+      }
+    });
 
     await PushNotifications.register();
   } catch (error) {

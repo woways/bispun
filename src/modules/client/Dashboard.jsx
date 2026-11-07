@@ -24,6 +24,8 @@ import {
   UserRound,
   CheckCircle2,
   MessageCircle,
+  Download,
+  ArrowUpRight,
 } from "lucide-react";
 
 import {
@@ -115,6 +117,7 @@ function MetricCard({
   icon: Icon,
   detail,
   accent = "indigo",
+  onClick,
 }) {
   const tones = {
     indigo: "bg-indigo-500",
@@ -125,8 +128,8 @@ function MetricCard({
   };
   const bar = tones[accent] || tones.indigo;
 
-  return (
-    <div className="cb-fade-in group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]">
+  const content = (
+    <>
       <div className="flex items-center gap-2.5 sm:gap-3">
         <div
           className={`flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl text-white ${bar}`}
@@ -149,8 +152,32 @@ function MetricCard({
           {detail}
         </div>
       ) : null}
-    </div>
+      {onClick ? (
+        <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
+          View details
+          <ArrowUpRight size={12} />
+        </div>
+      ) : null}
+    </>
   );
+
+  const className =
+    "cb-fade-in group relative min-w-0 overflow-hidden rounded-xl border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.05)] transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1 hover:border-slate-200 hover:shadow-[0_14px_32px_rgba(15,23,42,0.12)]";
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${className} w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2`}
+        aria-label={`Open ${label} details`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
 
 function dateKey(date) {
@@ -231,6 +258,8 @@ export default function Dashboard({
   selectedYear = "all",
   uiPreferences,
   onOpenLead,
+  onOpenKpi,
+  onOpenModule,
 }) {
   const accentColor = brandColor(600);
   const pieColors = [
@@ -266,6 +295,12 @@ export default function Dashboard({
   const [actionDetailData, setActionDetailData] = useState(null);
   const [actionDetailLoading, setActionDetailLoading] = useState(false);
   const [actionDetailError, setActionDetailError] = useState("");
+
+  const [kpiDetailOpen, setKpiDetailOpen] = useState(false);
+  const [kpiDetailMetric, setKpiDetailMetric] = useState(null);
+  const [kpiDetailData, setKpiDetailData] = useState(null);
+  const [kpiDetailLoading, setKpiDetailLoading] = useState(false);
+  const [kpiDetailError, setKpiDetailError] = useState("");
 
 
   const [
@@ -405,6 +440,86 @@ export default function Dashboard({
     } finally {
       setActionDetailLoading(false);
     }
+  }
+
+  async function openKpiDetail(metric) {
+    if (!metric?.key) return;
+
+    if (typeof onOpenKpi === "function") {
+      onOpenKpi(metric.key);
+    }
+  }
+
+  function closeKpiDetail() {
+    setKpiDetailOpen(false);
+    setKpiDetailMetric(null);
+    setKpiDetailData(null);
+    setKpiDetailError("");
+  }
+
+  function csvCell(value) {
+    const text = value === null || value === undefined ? "" : String(value);
+    return `"${text.replaceAll('"', '""')}"`;
+  }
+
+  function downloadCsv(filename, rows) {
+    if (!Array.isArray(rows) || !rows.length) return;
+
+    const headers = [
+      "Lead ID",
+      "Name",
+      "Phone",
+      "Email",
+      "Owner",
+      "Status",
+      "Amount",
+      "Date",
+      "Notes",
+    ];
+
+    const lines = [headers.map(csvCell).join(",")];
+    rows.forEach((record) => {
+      lines.push(
+        [
+          record.leadDisplayId || "",
+          record.primary || "",
+          record.phone || "",
+          record.email || "",
+          record.owner || "",
+          record.status || "",
+          record.amount ?? "",
+          record.occurredAt ? formatUiDateTime(record.occurredAt, uiPreferences) : "",
+          record.note || "",
+        ]
+          .map(csvCell)
+          .join(",")
+      );
+    });
+
+    const blob = new Blob([`\uFEFF${lines.join("\n")}`], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportActionDetail() {
+    const rows = Array.isArray(actionDetailData?.items) ? actionDetailData.items : [];
+    const key = actionDetailData?.key || actionDetailItem?.key || "action-center";
+    downloadCsv(`bispun-${key}.csv`, rows);
+  }
+
+  function openLead(record) {
+    if (!record?.leadId || typeof onOpenLead !== "function") return;
+    setActionDetailOpen(false);
+    closeKpiDetail();
+    onOpenLead(record.leadId);
   }
 
   async function loadCalendarUsers() {
@@ -956,6 +1071,7 @@ export default function Dashboard({
 
   const pulseMetrics = [
     {
+      key: "total-leads",
       label: "Total Leads",
       value: summary.totalLeads || 0,
       icon: Users,
@@ -966,6 +1082,7 @@ export default function Dashboard({
       accent: "indigo",
     },
     {
+      key: "qualified-leads",
       label: "Qualified Leads",
       value: summary.qualifiedLeads || 0,
       icon: Target,
@@ -973,6 +1090,7 @@ export default function Dashboard({
       accent: "emerald",
     },
     {
+      key: "new-leads",
       label: "New Leads",
       value: summary.newLeads || 0,
       icon: Clock,
@@ -983,6 +1101,7 @@ export default function Dashboard({
       accent: "slate",
     },
     {
+      key: "admissions",
       label: "Admissions",
       value: summary.totalAdmissions || 0,
       icon: UserCheck,
@@ -993,6 +1112,7 @@ export default function Dashboard({
       accent: "indigo",
     },
     {
+      key: "potential-revenue",
       label: "Potential Revenue",
       value: money(summary.potentialRevenue),
       icon: CircleDollarSign,
@@ -1000,6 +1120,7 @@ export default function Dashboard({
       accent: "amber",
     },
     {
+      key: "received-revenue",
       label: "Received Revenue",
       value: money(summary.receivedAmount),
       icon: CheckCircle2,
@@ -1007,6 +1128,7 @@ export default function Dashboard({
       accent: "emerald",
     },
     {
+      key: "pending-revenue",
       label: "Pending Revenue",
       value: money(summary.pendingAmount),
       icon: Clock,
@@ -1014,6 +1136,7 @@ export default function Dashboard({
       accent: "amber",
     },
     {
+      key: "current-profit",
       label: "Current Profit",
       value: money(summary.currentProfit),
       icon: Wallet,
@@ -1169,6 +1292,7 @@ export default function Dashboard({
                     <MetricCard
                       key={metric.label}
                       {...metric}
+                      onClick={() => openKpiDetail(metric)}
                     />
                   ))}
                 </div>
@@ -2197,6 +2321,16 @@ export default function Dashboard({
               </div>
 
               <div className="flex items-center gap-3">
+                {Array.isArray(actionDetailData?.items) && actionDetailData.items.length ? (
+                  <button
+                    type="button"
+                    onClick={exportActionDetail}
+                    className="hidden h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 sm:inline-flex"
+                  >
+                    <Download size={13} />
+                    Export CSV
+                  </button>
+                ) : null}
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right">
                   <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">Items</div>
                   <div className="text-[17px] font-extrabold text-slate-900">
@@ -2240,24 +2374,36 @@ export default function Dashboard({
                 </div>
               ) : Array.isArray(actionDetailData?.items) && actionDetailData.items.length ? (
                 <div className="space-y-2.5">
-                  {actionDetailData.items.map((record) => {
-                    // Lead-referencing rows open the exact lead detail (Task 9):
-                    // "lead" rows carry the lead id directly; "followup" rows
-                    // carry it as leadId.
-                    const leadIdForRecord =
-                      record.kind === "lead"
-                        ? record.id
-                        : record.kind === "followup"
-                          ? record.leadId
-                          : null;
-                    const rowKey = `${record.kind || "item"}-${record.id}`;
-                    const rowInner = (
+                  <div className="flex justify-end sm:hidden">
+                    <button
+                      type="button"
+                      onClick={exportActionDetail}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                    >
+                      <Download size={13} />
+                      Export CSV
+                    </button>
+                  </div>
+                  {actionDetailData.items.map((record) => (
+                    <div
+                      key={`${record.kind || "item"}-${record.id}`}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]"
+                    >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="truncate text-[13px] font-extrabold text-slate-900">
                               {record.primary || "CRM record"}
                             </div>
+                            {record.leadDisplayId ? (
+                              <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-extrabold text-indigo-700">
+                                Lead ID {record.leadDisplayId}
+                              </span>
+                            ) : record.kind === "payment" || record.kind === "revenue" || record.kind === "admission" ? (
+                              <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-extrabold text-slate-600">
+                                Admission record
+                              </span>
+                            ) : null}
                             {record.status ? (
                               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-600">
                                 {String(record.status).replaceAll("_", " ")}
@@ -2311,43 +2457,186 @@ export default function Dashboard({
                           </div>
                         ) : null}
                       </div>
-                    );
-
-                    if (leadIdForRecord && onOpenLead) {
-                      return (
-                        <button
-                          key={rowKey}
-                          type="button"
-                          aria-label={`Open lead ${record.primary || ""}`.trim()}
-                          onClick={() => {
-                            onOpenLead(leadIdForRecord);
-                            setActionDetailOpen(false);
-                            setActionDetailItem(null);
-                            setActionDetailData(null);
-                            setActionDetailError("");
-                          }}
-                          className="block w-full text-left rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)] hover:border-indigo-300 hover:bg-indigo-50/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-                        >
-                          {rowInner}
-                        </button>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={rowKey}
-                        className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.02)]"
-                      >
-                        {rowInner}
-                      </div>
-                    );
-                  })}
+                      {(record.leadId && typeof onOpenLead === "function") ||
+                      (!record.leadId && typeof onOpenModule === "function") ? (
+                        <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
+                          {record.leadId && typeof onOpenLead === "function" ? (
+                            <button
+                              type="button"
+                              onClick={() => openLead(record)}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
+                            >
+                              Open in Lead Store
+                              <ArrowUpRight size={12} />
+                            </button>
+                          ) : record.kind === "payment" || record.kind === "revenue" || record.kind === "admission" ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenModule("admissions")}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
+                            >
+                              Open in Admissions
+                              <ArrowUpRight size={12} />
+                            </button>
+                          ) : record.kind === "followup" ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenModule("counselling")}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
+                            >
+                              Open in Counselling
+                              <ArrowUpRight size={12} />
+                            </button>
+                          ) : record.kind === "walkin" ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenModule("walkins")}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
+                            >
+                              Open in Walk-ins
+                              <ArrowUpRight size={12} />
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">
                   <CheckCircle2 size={22} className="text-emerald-500" />
                   <div className="mt-2 text-sm font-bold text-slate-800">Nothing waiting here</div>
                   <div className="mt-1 text-xs text-slate-500">There are no records requiring attention in this category.</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {kpiDetailOpen && (
+        <div className="fixed inset-0 z-[131] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
+          <div className="flex max-h-[92vh] w-full max-w-[920px] flex-col overflow-hidden rounded-t-[18px] border border-slate-200 bg-white shadow-2xl sm:max-h-[86vh] sm:rounded-[18px]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-600">
+                  Dashboard KPI
+                </div>
+                <h3 className="mt-1 text-[18px] font-extrabold text-slate-950">
+                  {kpiDetailData?.label || kpiDetailMetric?.label || "KPI details"}
+                </h3>
+                <p className="mt-1 text-[12px] text-slate-500">
+                  Records used to calculate this dashboard value.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-right">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    {kpiDetailData?.valueLabel || "Items"}
+                  </div>
+                  <div className="text-[17px] font-extrabold text-slate-900">
+                    {kpiDetailData?.displayValue ?? Number(kpiDetailData?.count || 0).toLocaleString("en-IN")}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeKpiDetail}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                  aria-label="Close KPI details"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              {kpiDetailLoading ? (
+                <div className="flex min-h-[220px] items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 size={16} className="animate-spin" />
+                  Loading details...
+                </div>
+              ) : kpiDetailError ? (
+                <div className="flex min-h-[220px] flex-col items-center justify-center rounded-xl border border-rose-100 bg-rose-50/60 px-5 text-center">
+                  <AlertCircle size={20} className="text-rose-500" />
+                  <div className="mt-2 text-sm font-bold text-rose-700">{kpiDetailError}</div>
+                  <button
+                    type="button"
+                    onClick={() => openKpiDetail(kpiDetailMetric)}
+                    className="mt-4 inline-flex h-9 items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 hover:bg-rose-50"
+                  >
+                    <RefreshCw size={13} />
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {kpiDetailData?.breakdown ? (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {kpiDetailData.breakdown.map((item) => (
+                        <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                          <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">{item.label}</div>
+                          <div className="mt-1 text-[16px] font-extrabold text-slate-900">{item.displayValue}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {Array.isArray(kpiDetailData?.items) && kpiDetailData.items.length ? (
+                    <div className="space-y-2.5">
+                      {kpiDetailData.items.map((record) => (
+                        <div key={`${record.kind || "item"}-${record.id}`} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="truncate text-[13px] font-extrabold text-slate-900">{record.primary || "CRM record"}</div>
+                                {record.leadDisplayId ? (
+                                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-extrabold text-indigo-700">
+                                    Lead ID {record.leadDisplayId}
+                                  </span>
+                                ) : null}
+                                {record.status ? (
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.04em] text-slate-600">
+                                    {String(record.status).replaceAll("_", " ")}
+                                  </span>
+                                ) : null}
+                              </div>
+                              {(record.phone || record.email) ? (
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                                  {record.phone ? <span>{record.phone}</span> : null}
+                                  {record.email ? <span>{record.email}</span> : null}
+                                </div>
+                              ) : null}
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                                {record.owner ? <span className="inline-flex items-center gap-1"><UserRound size={11} />{record.owner}</span> : null}
+                                {record.occurredAt ? <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{formatUiDateTime(record.occurredAt, uiPreferences)}</span> : null}
+                              </div>
+                            </div>
+                            {record.amount !== undefined && record.amount !== null ? (
+                              <div className="shrink-0 sm:text-right">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">Amount</div>
+                                <div className="mt-0.5 text-[16px] font-extrabold text-slate-950">{money(record.amount)}</div>
+                              </div>
+                            ) : null}
+                          </div>
+                          {record.leadId && record.leadDisplayId && typeof onOpenLead === "function" ? (
+                            <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
+                              <button type="button" onClick={() => openLead(record)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700">
+                                Open in Lead Store
+                                <ArrowUpRight size={12} />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex min-h-[180px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-5 text-center">
+                      <CheckCircle2 size={22} className="text-emerald-500" />
+                      <div className="mt-2 text-sm font-bold text-slate-800">No records for this KPI</div>
+                      <div className="mt-1 text-xs text-slate-500">The selected period currently has no matching records.</div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

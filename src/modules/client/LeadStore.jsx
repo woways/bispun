@@ -2718,6 +2718,10 @@ function StoreMetric({
 export default function LeadStore({
   selectedYear = "all",
   currentUser = null,
+  initialLeadId = null,
+  onInitialLeadOpened = null,
+  initialDashboardFilter = null,
+  onInitialDashboardFilterApplied = null,
   focusLeadId = null,
   onFocusConsumed,
 }) {
@@ -2783,6 +2787,8 @@ export default function LeadStore({
       dateFrom: "",
       dateTo: "",
     });
+
+  const [dashboardLeadFilter, setDashboardLeadFilter] = useState(null);
 
   const [
     individualColumns,
@@ -3275,6 +3281,66 @@ export default function LeadStore({
     loadLeadStatusOptions();
   }, [selectedYear]);
 
+  useEffect(() => {
+    const leadId = String(initialLeadId || "").trim();
+    if (!leadId) return undefined;
+
+    let cancelled = false;
+
+    async function openRequestedLead() {
+      const existing = individualLeads.find((lead) => lead.id === leadId);
+      if (existing) {
+        setDetailsLead(existing);
+        onInitialLeadOpened?.();
+        return;
+      }
+
+      try {
+        const data = await apiRequest(
+          `/api/client/lead-store/manual?leadId=${encodeURIComponent(leadId)}`
+        );
+        if (cancelled) return;
+
+        const target = Array.isArray(data?.leads) ? data.leads[0] : null;
+        if (target) {
+          setIndividualLeads((current) =>
+            current.some((lead) => lead.id === target.id)
+              ? current
+              : [target, ...current]
+          );
+          setDetailsLead(target);
+        } else {
+          setError("That lead is not available in Lead Store.");
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setError(error?.data?.message || "Unable to open the selected lead");
+        }
+      } finally {
+        if (!cancelled) onInitialLeadOpened?.();
+      }
+    }
+
+    openRequestedLead();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialLeadId]);
+
+  useEffect(() => {
+    const key = String(initialDashboardFilter?.key || "").trim();
+    if (!key) return;
+
+    setSub("all");
+    setSearch("");
+    setPage(1);
+    setDashboardLeadFilter({
+      key,
+      label: initialDashboardFilter?.label || "Dashboard Leads",
+    });
+    onInitialDashboardFilterApplied?.();
+  }, [initialDashboardFilter]);
+
   const selectedType =
     useMemo(
       () =>
@@ -3446,6 +3512,13 @@ export default function LeadStore({
                         )
                     ));
 
+            const dashboardStageMatches =
+              !dashboardLeadFilter ||
+              dashboardLeadFilter.key === "total-leads" ||
+              (dashboardLeadFilter.key === "new-leads" && lead.stage === "NEW") ||
+              (dashboardLeadFilter.key === "qualified-leads" &&
+                (lead.stage === "QUALIFIED" || lead.stage === "ADMITTED"));
+
             const statusMatches =
               !filters.status ||
               (lead.leadStatus || "Fresh") ===
@@ -3496,6 +3569,7 @@ export default function LeadStore({
 
             return (
               searchMatches &&
+              dashboardStageMatches &&
               statusMatches &&
               temperatureMatches &&
               assignedMatches &&
@@ -3510,6 +3584,7 @@ export default function LeadStore({
         currentTypeLeads,
         search,
         filters,
+        dashboardLeadFilter,
         selectedAssigneeName,
       ]
     );
@@ -3917,6 +3992,7 @@ export default function LeadStore({
       dateFrom: "",
       dateTo: "",
     });
+    setDashboardLeadFilter(null);
   }
 
   function exportCurrentView() {
@@ -4634,6 +4710,22 @@ export default function LeadStore({
             </div>
           </div>
         </div>
+
+        {dashboardLeadFilter ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-600">Dashboard filter</div>
+              <div className="mt-0.5 text-[13px] font-semibold text-slate-800">Showing {dashboardLeadFilter.label}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDashboardLeadFilter(null)}
+              className="h-8 rounded-lg border border-indigo-200 bg-white px-3 text-[12px] font-semibold text-indigo-700 hover:bg-indigo-50"
+            >
+              Show all leads
+            </button>
+          </div>
+        ) : null}
 
         {filtersOpen && (
           <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">

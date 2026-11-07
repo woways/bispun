@@ -1864,7 +1864,7 @@ function AdmissionModal({
                 className="sm-input"
               >
                 <option value="">
-                  Direct admission / no linked lead
+                  Direct admission / create Lead Store record
                 </option>
 
                 {leads.map(
@@ -1877,13 +1877,10 @@ function AdmissionModal({
                         lead.id
                       }
                     >
-                      {
-                        lead.name
-                      }{" "}
-                      ·{" "}
-                      {
-                        lead.phone
-                      }
+                      {lead.leadDisplayId
+                        ? `Lead ID ${lead.leadDisplayId} · `
+                        : ""}
+                      {lead.name} · {lead.phone}
                     </option>
                   )
                 )}
@@ -1914,8 +1911,9 @@ function AdmissionModal({
               />
             </Field>
 
-            <Field label="Phone">
+            <Field label="Phone" required>
               <input
+                required
                 value={
                   form.studentPhone
                 }
@@ -3562,6 +3560,7 @@ function AdmissionsManager({
             <Table
               columns={[
                 "S.No",
+                "Lead ID",
                 "Student Name",
                 "Contact Number",
                 "University Name",
@@ -3583,6 +3582,14 @@ function AdmissionsManager({
                 >
                   <td className="px-4 py-3 text-[13px] font-semibold text-slate-500">
                     {index + 1}
+                  </td>
+
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
+                      {admission.leadDisplayId
+                        ? `Lead ID ${admission.leadDisplayId}`
+                        : "—"}
+                    </span>
                   </td>
 
                   <td className="px-4 py-3">
@@ -4424,6 +4431,7 @@ function AdmissionsManager({
           <Table
             columns={[
               "S.No",
+              "Lead ID",
               "Student Name",
               "Contact Number",
               "University Name",
@@ -4445,6 +4453,14 @@ function AdmissionsManager({
               >
                 <td className="px-4 py-3 text-[13px] font-semibold text-slate-500">
                   {index + 1}
+                </td>
+
+                <td className="whitespace-nowrap px-4 py-3">
+                  <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
+                    {admission.leadDisplayId
+                      ? `Lead ID ${admission.leadDisplayId}`
+                      : "—"}
+                  </span>
                 </td>
 
                 <td className="px-4 py-3">
@@ -4878,11 +4894,12 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50 text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-500">
-                <tr><th className="px-5 py-3">Student</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Stream</th><th className="px-5 py-3">College</th><th className="px-5 py-3">Branch</th><th className="px-5 py-3">Admission Date</th></tr>
+                <tr><th className="px-5 py-3">Lead ID</th><th className="px-5 py-3">Student</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Stream</th><th className="px-5 py-3">College</th><th className="px-5 py-3">Branch</th><th className="px-5 py-3">Admission Date</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.map((admission) => (
                   <tr key={admission.id} className="text-[13px] text-slate-700 hover:bg-slate-50/60">
+                    <td className="whitespace-nowrap px-5 py-3"><span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">{admission.leadDisplayId ? `Lead ID ${admission.leadDisplayId}` : '—'}</span></td>
                     <td className="px-5 py-3"><div className="font-semibold text-slate-900">{admission.name || '—'}</div><div className="mt-0.5 text-xs text-slate-500">{admission.phone || '—'}</div></td>
                     <td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[13px] font-semibold text-slate-700">{admission.market === 'INTERNATIONAL' ? 'International' : 'Domestic'}</span></td>
                     <td className="px-5 py-3">{admission.partner?.stream?.name || '—'}</td>

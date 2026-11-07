@@ -112,3 +112,95 @@ export async function ensureAdmissionsLead(db, {
     },
   });
 }
+
+export async function backfillAdmissionsLeads(db, companyId) {
+  const admissions = await db.admission.findMany({
+    where: {
+      companyId,
+      leadId: null,
+      OR: [
+        { studentPhone: { not: null } },
+        { studentEmail: { not: null } },
+      ],
+    },
+    select: {
+      id: true,
+      studentName: true,
+      studentPhone: true,
+      studentEmail: true,
+      course: true,
+      counsellorName: true,
+      status: true,
+      notes: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  let linked = 0;
+  let skipped = 0;
+
+  for (const admission of admissions) {
+    try {
+      const didLink = await db.$transaction(async (tx) => {
+        const lead = await ensureAdmissionsLead(tx, {
+          companyId,
+          origin: "Admission Backfill",
+          name: admission.studentName,
+          phone: admission.studentPhone,
+          email: admission.studentEmail,
+          course: admission.course,
+          assignedToName: admission.counsellorName,
+          stage: "NEW",
+          extraNotes: admission.notes,
+        });
+
+        if (!lead) return false;
+
+        const alreadyUsed = await tx.admission.findFirst({
+          where: {
+            companyId,
+            leadId: lead.id,
+            id: { not: admission.id },
+          },
+          select: { id: true },
+        });
+
+        if (alreadyUsed) return false;
+
+        await tx.admission.update({
+          where: { id: admission.id },
+          data: {
+            leadId: lead.id,
+            leadStageBeforeAdmission: lead.stage,
+          },
+        });
+
+        await tx.lead.update({
+          where: { id: lead.id },
+          data: {
+            stage: admission.status === "CANCELLED" ? lead.stage : "ADMITTED",
+            leadStatus:
+              admission.status === "CANCELLED"
+                ? lead.leadStatus || "Fresh"
+                : "Admission Done",
+          },
+        });
+
+        return true;
+      });
+
+      if (didLink) linked += 1;
+      else skipped += 1;
+    } catch (error) {
+      // Backfill is best-effort for legacy rows. A single malformed/duplicate
+      // admission must not block Dashboard or Admissions from loading.
+      skipped += 1;
+      console.warn(
+        `[admissions] Unable to backfill lead for admission ${admission.id}:`,
+        error?.message || error
+      );
+    }
+  }
+
+  return { linked, skipped };
+}
