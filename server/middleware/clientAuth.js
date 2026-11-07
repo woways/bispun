@@ -7,6 +7,11 @@ import {
   fullPageAccess,
 } from "../lib/pageAccess.js";
 import { getBearerToken } from "../lib/authToken.js";
+import {
+  dashboardSectionAllowed,
+  financeSectionAllowed,
+  insightsSectionAllowed,
+} from "../lib/pageAccess.js";
 
 const COOKIE_NAME =
   "cb_client_token";
@@ -90,6 +95,7 @@ export async function requireClientUser(
 
           select: {
             id: true,
+            name: true,
             companyId: true,
             role: true,
             active: true,
@@ -288,6 +294,11 @@ export async function requireClientUser(
           user.role ===
             "CLIENT_ADMIN" ||
           user.canManageSupport,
+
+        canViewTeamTargets:
+          user.role ===
+            "CLIENT_ADMIN" ||
+          user.canViewTeamTargets,
       },
     };
 
@@ -384,6 +395,55 @@ export function requireClientPermission(
           permission,
           message,
         });
+    }
+
+    return next();
+  };
+}
+
+const SECTION_CHECKERS = {
+  dashboard: dashboardSectionAllowed,
+  finance: financeSectionAllowed,
+  insights: insightsSectionAllowed,
+};
+
+/**
+ * Enforce a granular page section on the server.  This is intentionally a
+ * separate guard from the legacy page-level boolean permission: callers must
+ * pass both gates.  Never rely on a hidden tab/button as the security check.
+ */
+export function requireClientPageSection(
+  page,
+  section,
+  message = "You do not have permission to access this section"
+) {
+  return function clientPageSectionMiddleware(req, res, next) {
+    if (!req.clientUser) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const checker = SECTION_CHECKERS[page];
+    if (!checker) {
+      return res.status(500).json({
+        success: false,
+        message: "Invalid permission section configuration",
+      });
+    }
+
+    if (
+      !checker(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        section
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        page,
+        section,
+        message,
+      });
     }
 
     return next();

@@ -4,7 +4,9 @@ import prisma from "../lib/prisma.js";
 import {
   requireClientUser,
   requireClientPermission,
+  requireClientPageSection,
 } from "../middleware/clientAuth.js";
+import { financeSectionAllowed } from "../lib/pageAccess.js";
 
 const router = Router();
 
@@ -15,6 +17,17 @@ router.use(
     "canManageRevenue",
     "You do not have permission to access revenue"
   )
+);
+
+const requireFinanceOverview = requireClientPageSection(
+  "finance",
+  "overview",
+  "You do not have permission to manage revenue slabs"
+);
+const requireFinanceIncentives = requireClientPageSection(
+  "finance",
+  "incentives",
+  "You do not have permission to manage employee incentive slabs"
 );
 
 /* =========================================================
@@ -298,14 +311,33 @@ router.get("/", async (req, res) => {
       totalIncentives: employees.reduce((t, e) => t + e.incentiveAmount, 0),
     };
 
+    const canOverview = financeSectionAllowed(
+      req.clientUser.pageAccess,
+      req.clientUser.role,
+      "overview"
+    );
+    const canIncentives = financeSectionAllowed(
+      req.clientUser.pageAccess,
+      req.clientUser.role,
+      "incentives"
+    );
+
     return res.json({
-      colleges,
-      employees,
-      totals,
-      defaults: {
-        college: DEFAULT_COLLEGE_SLABS,
-        employee: DEFAULT_EMPLOYEE_SLABS,
+      colleges: canOverview ? colleges : [],
+      employees: canIncentives ? employees : [],
+      totals: {
+        inBucketRevenue: canOverview ? totals.inBucketRevenue : 0,
+        bufferZoneRevenue: canOverview ? totals.bufferZoneRevenue : 0,
+        totalPotential: canOverview ? totals.totalPotential : 0,
+        receivedRevenue: canOverview ? totals.receivedRevenue : 0,
+        pendingRevenue: canOverview ? totals.pendingRevenue : 0,
+        totalIncentives: canIncentives ? totals.totalIncentives : 0,
       },
+      defaults: {
+        college: canOverview ? DEFAULT_COLLEGE_SLABS : [],
+        employee: canIncentives ? DEFAULT_EMPLOYEE_SLABS : [],
+      },
+      allowedSections: { overview: canOverview, incentives: canIncentives },
     });
   } catch (error) {
     console.error("Failed to load revenue slabs:", error);
@@ -319,7 +351,7 @@ router.get("/", async (req, res) => {
    PUT /college/:partnerId  -> replace a college's slabs
 ========================================================= */
 
-router.put("/college/:partnerId", async (req, res) => {
+router.put("/college/:partnerId", requireFinanceOverview, async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
     const { partnerId } = req.params;
@@ -366,7 +398,7 @@ router.put("/college/:partnerId", async (req, res) => {
    body: { counsellorName, slabs: [...] }
 ========================================================= */
 
-router.put("/employee", async (req, res) => {
+router.put("/employee", requireFinanceIncentives, async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
     const counsellorName = String(req.body?.counsellorName || "").trim();
