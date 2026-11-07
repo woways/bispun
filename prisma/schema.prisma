@@ -269,6 +269,9 @@ model User {
   phone          String?
   jobTitle       String?
   department     String?
+  designationId  String?
+  levelId        String?
+  levelName      String?
   referralCode   String? @unique
   employeeId     String?
   customRoleId   String?
@@ -339,6 +342,8 @@ model User {
   @@index([companyId, role])
   @@index([companyId, active])
   @@index([companyId, managerId])
+  @@index([companyId, designationId])
+  @@index([companyId, levelId])
 }
 
 model ClientSession {

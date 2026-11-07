@@ -139,6 +139,8 @@ function normalizeOrganizationConfig(raw) {
       id: String(item.id),
       name: String(item.name || "Department"),
       code: cleanCode(item.code, "DEP"),
+      description: String(item.description || ""),
+      active: item.active !== false,
       system: false,
       permissions: normalizePermissions(item.permissions),
     });
@@ -150,9 +152,26 @@ function normalizeOrganizationConfig(raw) {
     baseRole: ALLOWED_ROLES.includes(String(item.baseRole || "EMPLOYEE").toUpperCase())
       ? String(item.baseRole).toUpperCase()
       : "EMPLOYEE",
+    description: String(item.description || ""),
+    active: item.active !== false,
     permissions: normalizePermissions(item.permissions),
   }));
-  return { departments, roles };
+  const designations = (Array.isArray(source.designations) ? source.designations : []).map((item) => ({
+    id: String(item.id),
+    name: String(item.name || "Designation"),
+    code: cleanCode(item.code, "DES"),
+    description: String(item.description || ""),
+    active: item.active !== false,
+  }));
+  const levels = (Array.isArray(source.levels) ? source.levels : []).map((item) => ({
+    id: String(item.id),
+    name: String(item.name || "Level"),
+    code: cleanCode(item.code, "LVL"),
+    description: String(item.description || ""),
+    rank: Math.max(1, Number(item.rank) || 1),
+    active: item.active !== false,
+  })).sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  return { departments, designations, levels, roles };
 }
 
 async function loadOrganizationConfig(companyId) {
@@ -180,6 +199,8 @@ async function saveOrganizationConfig(companyId, config) {
     .map(({ system, ...item }) => item);
   const organizationConfig = {
     departments: customDepartments,
+    designations: config.designations || [],
+    levels: config.levels || [],
     roles: config.roles,
   };
   await prisma.companySettings.upsert({
@@ -236,7 +257,7 @@ function defaultPermissions(role) {
       canManageBilling: false,
       canViewAnalytics: true,
       canManageAdmissions: true,
-      canManageRevenue: true,
+      canManageRevenue: false,
       canManageLeads: true,
       canManageSupport: true,
       canViewTeamTargets: true,
@@ -266,6 +287,9 @@ function formatUser(user) {
     phone: user.phone,
     jobTitle: user.jobTitle,
     department: user.department,
+    designationId: user.designationId ?? null,
+    levelId: user.levelId ?? null,
+    levelName: user.levelName ?? null,
     employeeId: user.employeeId,
     customRoleId: user.customRoleId,
     customRoleName: user.customRoleName,
@@ -476,6 +500,7 @@ router.post("/departments", async (req, res) => {
     }
     config.departments.push({
       id: slugId("dept", name), name, code, system: false,
+      description: String(req.body?.description || "").trim(), active: true,
       permissions: normalizePermissions(req.body?.permissions),
     });
     const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
@@ -505,6 +530,105 @@ router.delete("/departments/:departmentId", async (req, res) => {
   }
 });
 
+router.patch("/departments/:departmentId", async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can update departments" });
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    const target = config.departments.find((item) => item.id === req.params.departmentId);
+    if (!target) return res.status(404).json({ success: false, message: "Department not found" });
+    const oldName = target.name;
+    if (req.body?.name !== undefined && !target.system) target.name = String(req.body.name || "").trim() || target.name;
+    if (req.body?.code !== undefined && !target.system) target.code = cleanCode(req.body.code, target.code);
+    if (req.body?.description !== undefined) target.description = String(req.body.description || "").trim();
+    if (req.body?.active !== undefined && !target.system) target.active = req.body.active === true;
+    if (target.name !== oldName) {
+      await prisma.user.updateMany({ where: { companyId: req.clientUser.companyId, department: oldName }, data: { department: target.name } });
+    }
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: "DEPARTMENT_UPDATED", entityType: "ORGANIZATION", entityId: target.id, summary: `${actor.name} updated department ${target.name}.`, metadata: { previousName: oldName, active: target.active !== false } });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Update department failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to update department" });
+  }
+});
+
+function organizationCollection(type) {
+  return type === "designations" || type === "levels" ? type : null;
+}
+
+router.post(["/designations", "/levels"], async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can manage organization structure" });
+    const type = organizationCollection(req.path.split("/").filter(Boolean)[0]);
+    const name = String(req.body?.name || "").trim();
+    const code = cleanCode(req.body?.code, type === "levels" ? "LVL" : "DES");
+    if (!name) return res.status(400).json({ success: false, message: "Name is required" });
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    if (config[type].some((item) => item.name.toLowerCase() === name.toLowerCase() || item.code === code)) {
+      return res.status(409).json({ success: false, message: "Name or code already exists" });
+    }
+    config[type].push({ id: slugId(type === "levels" ? "level" : "designation", name), name, code, description: String(req.body?.description || "").trim(), active: true, ...(type === "levels" ? { rank: Math.max(1, Number(req.body?.rank) || config.levels.length + 1) } : {}) });
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: `${type.slice(0, -1).toUpperCase()}_CREATED`, entityType: "ORGANIZATION", summary: `${actor.name} created ${name}.`, metadata: { type, name, code } });
+    return res.status(201).json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Create organization item failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to create item" });
+  }
+});
+
+router.patch(["/designations/:id", "/levels/:id"], async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can manage organization structure" });
+    const type = organizationCollection(req.path.split("/").filter(Boolean)[0]);
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    const target = config[type].find((item) => item.id === req.params.id);
+    if (!target) return res.status(404).json({ success: false, message: "Item not found" });
+    const oldName = target.name;
+    if (req.body?.name !== undefined) target.name = String(req.body.name || "").trim() || target.name;
+    if (req.body?.code !== undefined) target.code = cleanCode(req.body.code, target.code);
+    if (req.body?.description !== undefined) target.description = String(req.body.description || "").trim();
+    if (req.body?.active !== undefined) target.active = req.body.active === true;
+    if (type === "levels" && req.body?.rank !== undefined) target.rank = Math.max(1, Number(req.body.rank) || 1);
+    if (type === "designations" && target.name !== oldName) await prisma.user.updateMany({ where: { companyId: req.clientUser.companyId, designationId: target.id }, data: { jobTitle: target.name } });
+    if (type === "levels" && target.name !== oldName) await prisma.user.updateMany({ where: { companyId: req.clientUser.companyId, levelId: target.id }, data: { levelName: target.name } });
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: `${type.slice(0, -1).toUpperCase()}_UPDATED`, entityType: "ORGANIZATION", entityId: target.id, summary: `${actor.name} updated ${target.name}.`, metadata: { type, previousName: oldName, active: target.active } });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Update organization item failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to update item" });
+  }
+});
+
+router.delete(["/designations/:id", "/levels/:id"], async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can manage organization structure" });
+    const type = organizationCollection(req.path.split("/").filter(Boolean)[0]);
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    const target = config[type].find((item) => item.id === req.params.id);
+    if (!target) return res.status(404).json({ success: false, message: "Item not found" });
+    const inUse = await prisma.user.count({ where: { companyId: req.clientUser.companyId, ...(type === "levels" ? { levelId: target.id } : { designationId: target.id }) } });
+    if (inUse) return res.status(409).json({ success: false, message: "Reassign employees before deleting this item" });
+    config[type] = config[type].filter((item) => item.id !== target.id);
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: `${type.slice(0, -1).toUpperCase()}_DELETED`, entityType: "ORGANIZATION", entityId: target.id, summary: `${actor.name} deleted ${target.name}.`, metadata: { type, name: target.name } });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Delete organization item failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to delete item" });
+  }
+});
+
 router.post("/roles", async (req, res) => {
   try {
     const actor = await requireUserManager(req, res);
@@ -519,12 +643,41 @@ router.post("/roles", async (req, res) => {
     if (config.roles.some((item) => item.name.toLowerCase() === name.toLowerCase() || item.code === code)) {
       return res.status(409).json({ success: false, message: "Role name or code already exists" });
     }
-    config.roles.push({ id: slugId("role", name), name, code, baseRole, permissions: normalizePermissions(req.body?.permissions) });
+    config.roles.push({ id: slugId("role", name), name, code, baseRole, description: String(req.body?.description || "").trim(), active: true, permissions: normalizePermissions(req.body?.permissions) });
     const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
     return res.status(201).json({ success: true, ...organization });
   } catch (error) {
     console.error("Create custom role failed:", error);
     return res.status(500).json({ success: false, message: "Unable to create role" });
+  }
+});
+
+router.patch("/roles/:roleId", async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can update roles" });
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    const target = config.roles.find((item) => item.id === req.params.roleId);
+    if (!target) return res.status(404).json({ success: false, message: "Role not found" });
+    const oldName = target.name;
+    if (req.body?.name !== undefined) target.name = String(req.body.name || "").trim() || target.name;
+    if (req.body?.code !== undefined) target.code = cleanCode(req.body.code, target.code);
+    if (req.body?.description !== undefined) target.description = String(req.body.description || "").trim();
+    if (req.body?.active !== undefined) target.active = req.body.active === true;
+    if (req.body?.baseRole !== undefined) {
+      const nextBase = String(req.body.baseRole || "").toUpperCase();
+      if (!ALLOWED_ROLES.includes(nextBase) || nextBase === "CLIENT_ADMIN") return res.status(400).json({ success: false, message: "Custom roles can use Employee or Manager as base access" });
+      target.baseRole = nextBase;
+    }
+    if (req.body?.permissions !== undefined) target.permissions = normalizePermissions(req.body.permissions);
+    if (target.name !== oldName) await prisma.user.updateMany({ where: { companyId: req.clientUser.companyId, customRoleId: target.id }, data: { customRoleName: target.name } });
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: "ROLE_UPDATED", entityType: "ORGANIZATION", entityId: target.id, summary: `${actor.name} updated role ${target.name}.`, metadata: { previousName: oldName, active: target.active, permissions: target.permissions } });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Update custom role failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to update role" });
   }
 });
 
@@ -675,6 +828,17 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ success: false, message: "Department is required and must be selected from the configured departments" });
     }
 
+    const requestedDesignationId = String(req.body?.designationId || "").trim();
+    const requestedLevelId = String(req.body?.levelId || "").trim();
+    const designation = requestedDesignationId
+      ? organization.designations.find((item) => item.id === requestedDesignationId && item.active !== false)
+      : null;
+    const level = requestedLevelId
+      ? organization.levels.find((item) => item.id === requestedLevelId && item.active !== false)
+      : null;
+    if (requestedDesignationId && !designation) return res.status(400).json({ success: false, message: "Select a valid active designation" });
+    if (requestedLevelId && !level) return res.status(400).json({ success: false, message: "Select a valid active level" });
+
     // A non-admin (manager) may only create EMPLOYEEs inside their own team.
     if (actor.role !== "CLIENT_ADMIN" && role !== "EMPLOYEE") {
       return res.status(403).json({
@@ -797,9 +961,13 @@ router.post("/", async (req, res) => {
               ? String(req.body.phone).trim()
               : null,
           jobTitle:
-            req.body?.jobTitle
-              ? String(req.body.jobTitle).trim()
-              : null,
+            designation?.name || (req.body?.jobTitle ? String(req.body.jobTitle).trim() : null),
+          designationId:
+            designation?.id || null,
+          levelId:
+            level?.id || null,
+          levelName:
+            level?.name || null,
           department: department.name,
           employeeId,
           customRoleId: customRole?.id || null,
@@ -1064,6 +1232,26 @@ router.patch("/:id", async (req, res) => {
       }
     }
 
+    if (req.body.designationId !== undefined) {
+      const designationId = String(req.body.designationId || "").trim();
+      const designation = designationId
+        ? organization.designations.find((item) => item.id === designationId && item.active !== false)
+        : null;
+      if (designationId && !designation) return res.status(400).json({ success: false, message: "Select a valid active designation" });
+      data.designationId = designation?.id || null;
+      data.jobTitle = designation?.name || (req.body.jobTitle ? String(req.body.jobTitle).trim() : null);
+    }
+
+    if (req.body.levelId !== undefined) {
+      const levelId = String(req.body.levelId || "").trim();
+      const level = levelId
+        ? organization.levels.find((item) => item.id === levelId && item.active !== false)
+        : null;
+      if (levelId && !level) return res.status(400).json({ success: false, message: "Select a valid active level" });
+      data.levelId = level?.id || null;
+      data.levelName = level?.name || null;
+    }
+
     if (req.body.department !== undefined) {
       const departmentName = String(req.body.department || "").trim();
       const department = organization.departments.find(
@@ -1163,6 +1351,35 @@ router.patch("/:id", async (req, res) => {
           updated.active,
       },
     });
+
+    const permissionFields = [...PERMISSION_KEYS, "pageAccess", "role", "customRoleId"];
+    if (changedFields.some((field) => permissionFields.includes(field))) {
+      await writeAuditLog({
+        req,
+        companyId: req.clientUser.companyId,
+        actor,
+        action: "USER_PERMISSIONS_UPDATED",
+        entityType: "PERMISSION",
+        entityId: updated.id,
+        summary: `${actor.name} updated permissions for ${updated.name}.`,
+        metadata: {
+          targetUserId: updated.id,
+          targetName: updated.name,
+          previous: {
+            role: target.role,
+            customRoleId: target.customRoleId,
+            permissions: Object.fromEntries(PERMISSION_KEYS.map((key) => [key, target[key] === true])),
+            pageAccess: normalizeUserPageAccess(target.pageAccess, { role: target.role, canViewAnalytics: target.canViewAnalytics }),
+          },
+          next: {
+            role: updated.role,
+            customRoleId: updated.customRoleId,
+            permissions: Object.fromEntries(PERMISSION_KEYS.map((key) => [key, updated[key] === true])),
+            pageAccess: normalizeUserPageAccess(updated.pageAccess, { role: updated.role, canViewAnalytics: updated.canViewAnalytics }),
+          },
+        },
+      });
+    }
 
     return res.json({
       success: true,
