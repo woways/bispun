@@ -3958,6 +3958,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         return (
           <LeadStore
             selectedYear={selectedYear}
+            currentUser={user}
             focusLeadId={leadFocusTarget}
             onFocusConsumed={() => setLeadFocusTarget(null)}
           />

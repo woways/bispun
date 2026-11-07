@@ -233,6 +233,113 @@ const TYPE_LABELS = {
 
 };
 
+const LEAD_STORE_COLUMN_KEYS = [
+  "leadId",
+  "name",
+  "phone",
+  "alternatePhone",
+  "email",
+  "course",
+  "assignedTo",
+  "temperature",
+  "status",
+  "intelligence",
+  "created",
+];
+
+function normalizeLeadStoreColumnOrder(value) {
+  const requested = Array.isArray(value) ? value : [];
+  const valid = requested
+    .map((key) => String(key || "").trim())
+    .filter(
+      (key, index, items) =>
+        LEAD_STORE_COLUMN_KEYS.includes(key) && items.indexOf(key) === index
+    );
+
+  return [
+    ...valid,
+    ...LEAD_STORE_COLUMN_KEYS.filter((key) => !valid.includes(key)),
+  ];
+}
+
+router.get("/column-preferences", async (req, res) => {
+  try {
+    const role = String(req.clientUser.role || "").toUpperCase();
+    const canReorder = role === "CLIENT_ADMIN" || role === "MANAGER";
+
+    if (!canReorder) {
+      return res.json({
+        success: true,
+        canReorder: false,
+        columnOrder: LEAD_STORE_COLUMN_KEYS,
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        id: req.clientUser.userId,
+        companyId: req.clientUser.companyId,
+        active: true,
+      },
+      select: { leadStoreColumnOrder: true },
+    });
+
+    return res.json({
+      success: true,
+      canReorder: true,
+      columnOrder: normalizeLeadStoreColumnOrder(user?.leadStoreColumnOrder),
+    });
+  } catch (error) {
+    console.error("Unable to load Lead Store column preferences:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to load column arrangement",
+    });
+  }
+});
+
+router.patch("/column-preferences", async (req, res) => {
+  try {
+    const role = String(req.clientUser.role || "").toUpperCase();
+    if (role !== "CLIENT_ADMIN" && role !== "MANAGER") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins and managers can rearrange Lead Store columns",
+      });
+    }
+
+    const requested = req.body?.columnOrder;
+    if (!Array.isArray(requested)) {
+      return res.status(400).json({
+        success: false,
+        message: "Column order must be a list",
+      });
+    }
+
+    const columnOrder = normalizeLeadStoreColumnOrder(requested);
+    await prisma.user.updateMany({
+      where: {
+        id: req.clientUser.userId,
+        companyId: req.clientUser.companyId,
+        active: true,
+      },
+      data: { leadStoreColumnOrder: columnOrder },
+    });
+
+    return res.json({
+      success: true,
+      message: "Column arrangement saved",
+      columnOrder,
+    });
+  } catch (error) {
+    console.error("Unable to save Lead Store column preferences:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to save column arrangement",
+    });
+  }
+});
+
 
 
 const VALID_TYPES =
