@@ -66,8 +66,17 @@ export function buildPushMessage({ notification, token }) {
       priority: "high",
       notification: {
         channelId: "bispun_default",
+        sound: "default",
+        defaultVibrateTimings: true,
         // Defence in depth: hide content on a locked screen for sensitive types.
         visibility: sensitive ? "private" : "public",
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+        },
       },
     },
   };

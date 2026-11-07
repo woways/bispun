@@ -3,7 +3,7 @@ import multer from "multer";
 import ExcelJS from "exceljs";
 
 import prisma from "../lib/prisma.js";
-import { ensureAdmissionsLead } from "../lib/admissionsLeadSync.js";
+import { ensureAdmissionsLead, backfillAdmissionsLeads } from "../lib/admissionsLeadSync.js";
 import {
   uploadAdmissionPartnerAttachment,
   deleteAdmissionPartnerAttachment,
@@ -189,7 +189,34 @@ function parseDate(value, fallback = new Date()) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatAdmission(admission) {
+async function getLeadNumberMap(companyId) {
+  const rows = await prisma.lead.findMany({
+    where: { companyId },
+    select: { id: true, source: true, notes: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  });
+
+  // Preserve the numbering already used by Lead Store, then append any
+  // previously unnumbered leads. Admissions uses this same map so the same
+  // lead always shows the same user-facing Lead ID in both modules.
+  const previouslyNumbered = rows.filter(
+    (lead) =>
+      lead.source === "LEAD_STORE" ||
+      String(lead.notes || "").includes("Admissions origin:")
+  );
+  const previousIds = new Set(previouslyNumbered.map((lead) => lead.id));
+  const appended = rows.filter((lead) => !previousIds.has(lead.id));
+  const ordered = [...previouslyNumbered, ...appended];
+
+  return new Map(ordered.map((lead, index) => [lead.id, index + 1]));
+}
+
+function leadDisplayId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0 ? String(value) : null;
+}
+
+function formatAdmission(admission, leadNumberMap = null) {
   const totalFee = Number(admission.totalFee) || 0;
   const paidAmount = Number(admission.paidAmount) || 0;
 
@@ -197,6 +224,9 @@ function formatAdmission(admission) {
     id: admission.id,
     market: admission.market,
     leadId: admission.leadId,
+    leadDisplayId: admission.leadId
+      ? leadDisplayId(leadNumberMap?.get(admission.leadId))
+      : null,
     partnerId: admission.partnerId,
     partner: admission.partner
       ? {
@@ -1986,6 +2016,101 @@ async function parseAdmissionFile(file) {
   return rows;
 }
 
+async function importAdmissionRowsWithLeads({
+  companyId,
+  partner,
+  branch = null,
+  rows,
+}) {
+  let imported = 0;
+  let duplicates = 0;
+  let invalid = 0;
+
+  for (const row of rows) {
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const admissionLead = await ensureAdmissionsLead(tx, {
+          companyId,
+          origin: "Admission Import",
+          name: row.studentName,
+          phone: row.studentPhone,
+          email: row.studentEmail,
+          course: branch?.name || row.course,
+          assignedToName: row.counsellorName,
+          // Create a new direct-import lead as NEW first. The original stage is
+          // stored on Admission before the lead is moved to ADMITTED.
+          stage: "NEW",
+          extraNotes: row.notes,
+        });
+
+        if (!admissionLead) return "invalid";
+
+        const existingAdmission = await tx.admission.findFirst({
+          where: {
+            companyId,
+            leadId: admissionLead.id,
+          },
+          select: { id: true },
+        });
+
+        if (existingAdmission) return "duplicate";
+
+        await tx.admission.create({
+          data: {
+            companyId,
+            market: partner.market || "DOMESTIC",
+            partnerId: partner.id,
+            branchId: branch?.id || null,
+            leadId: admissionLead.id,
+            leadStageBeforeAdmission: admissionLead.stage,
+            studentName: row.studentName,
+            studentPhone: row.studentPhone,
+            studentEmail: row.studentEmail,
+            universityName: row.universityName,
+            studentLocation: row.studentLocation,
+            studentInterCollege: row.studentInterCollege,
+            college: partner.name,
+            course: branch?.name || row.course,
+            counsellorName: row.counsellorName,
+            totalFee: row.totalFee,
+            paidAmount: row.paidAmount,
+            revenueStatus: row.revenueStatus,
+            amountStatus: row.amountStatus,
+            status: row.status,
+            admissionDate: row.admissionDate,
+            notes: row.notes,
+          },
+        });
+
+        await tx.lead.update({
+          where: { id: admissionLead.id },
+          data: {
+            stage: row.status === "CANCELLED" ? admissionLead.stage : "ADMITTED",
+            leadStatus:
+              row.status === "CANCELLED"
+                ? LEAD_STAGE_TO_STATUS[admissionLead.stage] || "Fresh"
+                : "Admission Done",
+          },
+        });
+
+        return "imported";
+      });
+
+      if (result === "imported") imported += 1;
+      else if (result === "duplicate") duplicates += 1;
+      else invalid += 1;
+    } catch (error) {
+      invalid += 1;
+      console.warn(
+        `[admissions] Import row ${row.rowNumber || "?"} skipped:`,
+        error?.message || error
+      );
+    }
+  }
+
+  return { imported, duplicates, invalid };
+}
+
 router.post(
   "/partners/:id/import",
   upload.single("file"),
@@ -2013,7 +2138,6 @@ router.post(
         ? await prisma.admission.findMany({
             where: {
               companyId,
-              partnerId: partner.id,
               studentPhone: { in: phones },
             },
             select: { studentPhone: true },
@@ -2026,6 +2150,7 @@ router.post(
       for (const row of rows) {
         if (
           !row.studentName ||
+          !row.studentPhone ||
           !row.course ||
           !Number.isFinite(row.totalFee) ||
           row.totalFee < 0 ||
@@ -2058,37 +2183,19 @@ router.post(
         });
       }
 
-      await prisma.admission.createMany({
-        data: valid.map((row) => ({
-          companyId,
-          market: partner.market || "DOMESTIC",
-          partnerId: partner.id,
-          studentName: row.studentName,
-          studentPhone: row.studentPhone,
-          studentEmail: row.studentEmail,
-          universityName: row.universityName,
-          studentLocation: row.studentLocation,
-          studentInterCollege: row.studentInterCollege,
-          college: partner.name,
-          course: row.course,
-          counsellorName: row.counsellorName,
-          totalFee: row.totalFee,
-          paidAmount: row.paidAmount,
-          revenueStatus: row.revenueStatus,
-          amountStatus: row.amountStatus,
-          status: row.status,
-          admissionDate: row.admissionDate,
-          notes: row.notes,
-        })),
+      const synced = await importAdmissionRowsWithLeads({
+        companyId,
+        partner,
+        rows: valid,
       });
 
       return res.status(201).json({
         success: true,
-        message: `${valid.length} admissions imported into ${partner.name}`,
+        message: `${synced.imported} admissions imported into ${partner.name}`,
         importSummary: {
-          imported: valid.length,
-          duplicates,
-          invalid,
+          imported: synced.imported,
+          duplicates: duplicates + synced.duplicates,
+          invalid: invalid + synced.invalid,
         },
       });
     } catch (error) {
@@ -2158,8 +2265,6 @@ router.post(
           ? await prisma.admission.findMany({
               where: {
                 companyId,
-                branchId:
-                  branch.id,
                 studentPhone: {
                   in: phones,
                 },
@@ -2184,6 +2289,7 @@ router.post(
       for (const row of rows) {
         if (
           !row.studentName ||
+          !row.studentPhone ||
           !Number.isFinite(
             row.totalFee
           ) ||
@@ -2239,61 +2345,27 @@ router.post(
         });
       }
 
-      await prisma.admission.createMany({
-        data:
-          valid.map(
-            (row) => ({
-              companyId,
-              market: partner.market || "DOMESTIC",
-              partnerId:
-                partner.id,
-              branchId:
-                branch.id,
-              studentName:
-                row.studentName,
-              studentPhone:
-                row.studentPhone,
-              studentEmail:
-                row.studentEmail,
-              universityName:
-                row.universityName,
-              studentLocation:
-                row.studentLocation,
-              studentInterCollege:
-                row.studentInterCollege,
-              college:
-                partner.name,
-              course:
-                branch.name,
-              counsellorName:
-                row.counsellorName,
-              totalFee:
-                row.totalFee,
-              paidAmount:
-                row.paidAmount,
-              revenueStatus:
-                row.revenueStatus,
-              amountStatus:
-                row.amountStatus,
-              status:
-                row.status,
-              admissionDate:
-                row.admissionDate,
-              notes:
-                row.notes,
-            })
-          ),
-      });
+      const synced =
+        await importAdmissionRowsWithLeads({
+          companyId,
+          partner,
+          branch,
+          rows: valid,
+        });
 
       return res.status(201).json({
         success: true,
         message:
-          `${valid.length} admissions imported into ${branch.name}`,
+          `${synced.imported} admissions imported into ${branch.name}`,
         importSummary: {
           imported:
-            valid.length,
-          duplicates,
-          invalid,
+            synced.imported,
+          duplicates:
+            duplicates +
+            synced.duplicates,
+          invalid:
+            invalid +
+            synced.invalid,
         },
       });
     } catch (error) {
@@ -2339,7 +2411,15 @@ router.get("/eligible-leads", async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    return res.json({ success: true, leads });
+    const leadNumberMap = await getLeadNumberMap(companyId);
+
+    return res.json({
+      success: true,
+      leads: leads.map((lead) => ({
+        ...lead,
+        leadDisplayId: leadDisplayId(leadNumberMap.get(lead.id)),
+      })),
+    });
   } catch (error) {
     console.error("Failed to fetch eligible leads:", error);
     return res.status(500).json({ success: false, message: "Unable to fetch eligible leads" });
@@ -2354,6 +2434,7 @@ router.get("/", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
     await syncLegacyPartners(companyId);
+    await backfillAdmissionsLeads(prisma, companyId);
 
     const partnerId = cleanOptional(req.query.partnerId);
     const streamId = cleanOptional(req.query.streamId);
@@ -2409,7 +2490,10 @@ router.get("/", async (req, res) => {
       orderBy: { admissionDate: "desc" },
     });
 
-    const formatted = admissions.map(formatAdmission);
+    const leadNumberMap = await getLeadNumberMap(companyId);
+    const formatted = admissions.map((admission) =>
+      formatAdmission(admission, leadNumberMap)
+    );
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const financial = formatted.filter((item) => item.statusKey !== "CANCELLED");
@@ -2595,6 +2679,12 @@ router.post("/", async (req, res) => {
     if (!cleanStudentName) {
       return res.status(400).json({ success: false, message: "Student name is required" });
     }
+    if (!cleanStudentPhone) {
+      return res.status(400).json({
+        success: false,
+        message: "Student phone is required so every admission can be linked to Lead Store",
+      });
+    }
     if (!cleanCourse) {
       return res.status(400).json({ success: false, message: "Course is required" });
     }
@@ -2639,9 +2729,33 @@ router.post("/", async (req, res) => {
         email: cleanStudentEmail,
         course: cleanCourse,
         assignedToName: cleanCounsellor,
-        stage: statusKey === "CANCELLED" ? "NEW" : "ADMITTED",
+        stage: "NEW",
         extraNotes: cleanOptional(notes),
       });
+
+      if (!admissionLead) {
+        const error = new Error(
+          "Unable to create or link the Lead Store record for this admission"
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const existingAdmissionForLead = await tx.admission.findFirst({
+        where: {
+          companyId,
+          leadId: admissionLead.id,
+        },
+        select: { id: true },
+      });
+
+      if (existingAdmissionForLead) {
+        const error = new Error(
+          "This student is already linked to an admission"
+        );
+        error.statusCode = 409;
+        throw error;
+      }
 
       if (selectedLead) {
         await ensureAdmissionsLead(tx, {
@@ -2723,14 +2837,21 @@ router.post("/", async (req, res) => {
       return created;
     });
 
+    const leadNumberMap = await getLeadNumberMap(companyId);
+
     return res.status(201).json({
       success: true,
       message: "Admission created successfully",
-      admission: formatAdmission(admission),
+      admission: formatAdmission(admission, leadNumberMap),
     });
   } catch (error) {
     console.error("Failed to create admission:", error);
-    return res.status(500).json({ success: false, message: "Unable to create admission" });
+    return res.status(error?.statusCode || 500).json({
+      success: false,
+      message: error?.statusCode
+        ? error.message
+        : "Unable to create admission",
+    });
   }
 });
 
@@ -2937,10 +3058,12 @@ router.patch("/:id", async (req, res) => {
       return saved;
     });
 
+    const leadNumberMap = await getLeadNumberMap(companyId);
+
     return res.json({
       success: true,
       message: "Admission updated successfully",
-      admission: formatAdmission(updated),
+      admission: formatAdmission(updated, leadNumberMap),
     });
   } catch (error) {
     console.error("Failed to update admission:", error);

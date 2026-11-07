@@ -7,6 +7,7 @@ import prisma from "./lib/prisma.js";
 import { loadServerConfig } from "./lib/env.js";
 import { syncDueSubscriptionLifecycles } from "./lib/subscriptions.js";
 import { startNurtureWorker } from "./lib/nurtureEngine.js";
+import { startCalendarReminderWorker } from "./lib/calendarReminders.js";
 import {
   requestId,
   securityHeaders,
@@ -277,18 +278,29 @@ async function reconcileSubscriptions() {
 }
 
 // Development safeguard: when DISABLE_BACKGROUND_WORKERS=true, the nurture
-// worker and the subscription-lifecycle timer do NOT auto-start. This lets a
+// worker, calendar reminder worker and subscription-lifecycle timer do NOT
+// auto-start. This lets a
 // backend pointed at a dev/clone database run without contacting real
 // customers (email/WhatsApp/SMS) or mutating records on a schedule. Production
 // leaves this unset, so the original behaviour is completely unchanged.
 if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
   console.warn(
-    "[startup] DISABLE_BACKGROUND_WORKERS=true — nurture worker and " +
-      "subscription lifecycle timer are DISABLED (development mode)."
+    "[startup] DISABLE_BACKGROUND_WORKERS=true — nurture worker, calendar " +
+      "reminder worker and subscription lifecycle timer are DISABLED (development mode)."
   );
+  // Safe mobile-reminder QA escape hatch: a cloned/dev database can opt into
+  // ONLY the calendar reminder worker without re-enabling Smart Nurture or the
+  // subscription lifecycle timer.
+  if (process.env.ENABLE_CALENDAR_REMINDER_WORKER === "true") {
+    startCalendarReminderWorker();
+    console.warn(
+      "[startup] ENABLE_CALENDAR_REMINDER_WORKER=true — calendar reminder worker enabled for QA."
+    );
+  }
 } else {
   reconcileSubscriptions();
   startNurtureWorker();
+  startCalendarReminderWorker();
   const subscriptionLifecycleTimer = setInterval(
     reconcileSubscriptions,
     60 * 60 * 1000

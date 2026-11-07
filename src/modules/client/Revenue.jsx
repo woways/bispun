@@ -1455,9 +1455,18 @@ function LeakageRadarView({ radar }) {
   );
 }
 
-export default function Revenue({ selectedYear = "all" }) {
+export default function Revenue({
+  selectedYear = "all",
+  initialDashboardMetric = null,
+  onInitialDashboardMetricApplied = null,
+  onOpenLead = null,
+}) {
   const [tab, setTab] =
     useState("overview");
+
+  const [dashboardMetricData, setDashboardMetricData] = useState(null);
+  const [dashboardMetricLoading, setDashboardMetricLoading] = useState(false);
+  const [dashboardMetricError, setDashboardMetricError] = useState("");
 
   const [data, setData] =
     useState({
@@ -1556,6 +1565,41 @@ export default function Revenue({ selectedYear = "all" }) {
   useEffect(() => {
     loadRevenue();
   }, [selectedYear]);
+
+  useEffect(() => {
+    const key = String(initialDashboardMetric || "").trim();
+    if (!key) return;
+
+    let cancelled = false;
+    setTab("overview");
+    setDashboardMetricLoading(true);
+    setDashboardMetricError("");
+    setDashboardMetricData(null);
+
+    apiRequest(
+      `/api/client/analytics/dashboard/kpi/${encodeURIComponent(key)}?year=${encodeURIComponent(selectedYear)}`
+    )
+      .then((result) => {
+        if (!cancelled) setDashboardMetricData(result);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setDashboardMetricError(
+            error?.data?.message || "Unable to load Dashboard revenue details"
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDashboardMetricLoading(false);
+          onInitialDashboardMetricApplied?.();
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialDashboardMetric, selectedYear]);
 
   async function expenseStatus(
     id,
@@ -1961,6 +2005,102 @@ export default function Revenue({ selectedYear = "all" }) {
         </div>
       ) : (
         <>
+          {(dashboardMetricLoading || dashboardMetricError || dashboardMetricData) ? (
+            <section className="rounded-2xl border border-indigo-100 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-600">Opened from Dashboard</div>
+                  <h2 className="mt-1 text-[16px] font-bold text-slate-950">
+                    {dashboardMetricData?.label || "Revenue details"}
+                  </h2>
+                  <p className="mt-1 text-[12px] text-slate-500">The records contributing to the Dashboard value are shown here in Finance.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDashboardMetricData(null);
+                    setDashboardMetricError("");
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  <X size={13} />
+                  Clear view
+                </button>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                {dashboardMetricLoading ? (
+                  <div className="flex min-h-[140px] items-center justify-center gap-2 text-sm text-slate-500">
+                    <Loader2 size={16} className="animate-spin" /> Loading records...
+                  </div>
+                ) : dashboardMetricError ? (
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{dashboardMetricError}</div>
+                ) : (
+                  <div className="space-y-3">
+                    {Array.isArray(dashboardMetricData?.breakdown) && dashboardMetricData.breakdown.length ? (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        {dashboardMetricData.breakdown.map((item) => (
+                          <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">{item.label}</div>
+                            <div className="mt-1 text-[16px] font-extrabold text-slate-900">{item.displayValue}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {dashboardMetricData?.displayValue ? (
+                      <div className="text-[13px] font-semibold text-slate-700">
+                        {dashboardMetricData?.valueLabel || "Total"}: <span className="text-indigo-700">{dashboardMetricData.displayValue}</span>
+                      </div>
+                    ) : null}
+
+                    {Array.isArray(dashboardMetricData?.items) && dashboardMetricData.items.length ? (
+                      <div className="max-h-[440px] space-y-2 overflow-y-auto pr-1">
+                        {dashboardMetricData.items.map((record) => (
+                          <div key={`${record.kind || "item"}-${record.id}`} className="flex flex-col gap-3 rounded-xl border border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="font-semibold text-slate-900">{record.primary || "Admission"}</div>
+                                {record.leadDisplayId ? (
+                                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">Lead ID {record.leadDisplayId}</span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-slate-500">
+                                {record.phone ? <span>{record.phone}</span> : null}
+                                {record.email ? <span>{record.email}</span> : null}
+                                {record.owner ? <span>{record.owner}</span> : null}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-3">
+                              {record.amount !== undefined && record.amount !== null ? (
+                                <div className="text-right">
+                                  <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-slate-400">Amount</div>
+                                  <div className="text-[15px] font-bold text-slate-950">{money(record.amount)}</div>
+                                </div>
+                              ) : null}
+                              {record.leadId && typeof onOpenLead === "function" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenLead(record.leadId)}
+                                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
+                                >
+                                  Open Lead
+                                  <ArrowUpRight size={12} />
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center text-sm text-slate-500">No matching records.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          ) : null}
+
           <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <RevenueMetric
               label="Total Admissions"

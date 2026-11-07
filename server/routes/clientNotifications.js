@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { getSubscriptionGraceEndsAt } from "../lib/subscriptions.js";
+import { ensureCalendarRemindersForUser } from "../lib/calendarReminders.js";
 import {
   requireClientUser,
 } from "../middleware/clientAuth.js";
@@ -10,83 +11,6 @@ const router = Router();
 
 router.use(requireClientUser);
 
-
-async function ensureCalendarReminders(
-  companyId,
-  userId
-) {
-  const now =
-    new Date();
-
-  const soon =
-    new Date(
-      now.getTime() +
-        60 * 60 * 1000
-    );
-
-  const events =
-    await prisma.calendarEvent.findMany({
-      where: {
-        companyId,
-        assignedToUserId:
-          userId,
-        status:
-          "SCHEDULED",
-        startAt: {
-          gte: now,
-          lte: soon,
-        },
-      },
-      select: {
-        id: true,
-        title: true,
-        startAt: true,
-        type: true,
-      },
-    });
-
-  for (const event of events) {
-    const marker =
-      `CALENDAR_REMINDER:${event.id}`;
-
-    const exists =
-      await prisma.notification.findFirst({
-        where: {
-          companyId,
-          userId,
-          message: {
-            contains:
-              marker,
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-    if (!exists) {
-      await prisma.notification.create({
-        data: {
-          companyId,
-          userId,
-          title:
-            "Upcoming calendar event",
-          message:
-            `${event.title} starts at ${event.startAt.toLocaleTimeString("en-IN", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}. ${marker}`,
-          type:
-            "REMINDER",
-          actionModule:
-            "dashboard",
-          actionLabel:
-            "Open calendar",
-        },
-      });
-    }
-  }
-}
 
 function indiaDateKey(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -420,7 +344,7 @@ async function ensureDynamicNotifications(
   req
 ) {
   await Promise.all([
-    ensureCalendarReminders(
+    ensureCalendarRemindersForUser(
       req.clientUser.companyId,
       req.clientUser.userId
     ),

@@ -2660,6 +2660,7 @@ router.get(
       const companyId = req.clientUser.companyId;
 
       const selectedYear = parseYear(req.query.year);
+      const requestedLeadId = String(req.query.leadId || "").trim();
 
       const search = String(req.query.search || "").trim();
 
@@ -2674,7 +2675,11 @@ router.get(
           { notes: { contains: "Admissions origin:" } },
         ],
 
-        ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
+        ...(requestedLeadId
+          ? { id: requestedLeadId }
+          : selectedYear
+            ? { createdAt: yearRange(selectedYear) }
+            : {}),
 
       };
 
@@ -2700,22 +2705,29 @@ router.get(
 
 
       const leadNumberRows = await prisma.lead.findMany({
-        where: {
-          companyId,
-          OR: [
-            { source: "LEAD_STORE" },
-            { notes: { contains: "Admissions origin:" } },
-          ],
-        },
-        select: { id: true },
+        where: { companyId },
+        select: { id: true, source: true, notes: true },
         orderBy: [
           { createdAt: "asc" },
           { id: "asc" },
         ],
       });
 
+      const previouslyNumbered = leadNumberRows.filter(
+        (lead) =>
+          lead.source === "LEAD_STORE" ||
+          String(lead.notes || "").includes("Admissions origin:")
+      );
+      const previouslyNumberedIds = new Set(
+        previouslyNumbered.map((lead) => lead.id)
+      );
+      const newlyNumbered = leadNumberRows.filter(
+        (lead) => !previouslyNumberedIds.has(lead.id)
+      );
+      const orderedLeadNumbers = [...previouslyNumbered, ...newlyNumbered];
+
       const leadNumberById = new Map(
-        leadNumberRows.map((lead, index) => [lead.id, index + 1])
+        orderedLeadNumbers.map((lead, index) => [lead.id, index + 1])
       );
 
       const leads = await prisma.lead.findMany({
