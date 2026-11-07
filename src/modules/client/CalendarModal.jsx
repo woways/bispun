@@ -2256,7 +2256,71 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
       )}
 
+      {/* CONNECT GOOGLE ACCOUNT DIALOG — in-place connect (works for employees,
+          no Settings access needed). Uses the existing secure OAuth flow. */}
+      {connectDialogOpen && (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4"
+          onClick={closeConnectDialog}
+        >
+          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- Escape + buttons provide the keyboard path */}
+          <div
+            ref={connectDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gconnect-title"
+            aria-describedby="gconnect-desc"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="gconnect-title" className="text-lg font-bold text-slate-900">
+              Connect your Google account
+            </h2>
+            <p id="gconnect-desc" className="mt-2 text-sm text-slate-600">
+              Connect your Google account to create Google Calendar events and
+              Google Meet links.
+            </p>
 
+            {googleStatus.configured === false ? (
+              <p role="alert" className="mt-4 text-sm text-amber-800">
+                Google isn't set up on this server yet. Ask your administrator to
+                configure Google integration.
+              </p>
+            ) : connecting ? (
+              <p role="status" className="mt-4 text-sm text-slate-700">
+                Waiting for Google… finish sign-in in the opened window, then
+                return here.
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeConnectDialog}
+                className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Not now
+              </button>
+              {googleStatus.configured !== false && (
+                <button
+                  ref={connectBtnRef}
+                  type="button"
+                  onClick={() => {
+                    if (!connecting) startGoogleConnect();
+                  }}
+                  aria-disabled={connecting}
+                  aria-busy={connecting}
+                  className={`h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-bold ${
+                    connecting ? "opacity-50" : "hover:bg-indigo-700"
+                  }`}
+                >
+                  {connecting ? "Connecting…" : "Connect your Google account"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
 
@@ -2433,72 +2497,6 @@ function FragmentRow({
         );
 
       })}
-
-      {/* CONNECT GOOGLE ACCOUNT DIALOG — in-place connect (works for employees,
-          no Settings access needed). Uses the existing secure OAuth flow. */}
-      {connectDialogOpen && (
-        <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 p-4"
-          onClick={closeConnectDialog}
-        >
-          {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- Escape + buttons provide the keyboard path */}
-          <div
-            ref={connectDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="gconnect-title"
-            aria-describedby="gconnect-desc"
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="gconnect-title" className="text-lg font-bold text-slate-900">
-              Connect your Google account
-            </h2>
-            <p id="gconnect-desc" className="mt-2 text-sm text-slate-600">
-              Connect your Google account to create Google Calendar events and
-              Google Meet links.
-            </p>
-
-            {googleStatus.configured === false ? (
-              <p role="alert" className="mt-4 text-sm text-amber-800">
-                Google isn't set up on this server yet. Ask your administrator to
-                configure Google integration.
-              </p>
-            ) : connecting ? (
-              <p role="status" className="mt-4 text-sm text-slate-700">
-                Waiting for Google… finish sign-in in the opened window, then
-                return here.
-              </p>
-            ) : null}
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeConnectDialog}
-                className="h-10 px-4 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Not now
-              </button>
-              {googleStatus.configured !== false && (
-                <button
-                  ref={connectBtnRef}
-                  type="button"
-                  onClick={() => {
-                    if (!connecting) startGoogleConnect();
-                  }}
-                  aria-disabled={connecting}
-                  aria-busy={connecting}
-                  className={`h-10 px-4 rounded-xl bg-indigo-600 text-white text-sm font-bold ${
-                    connecting ? "opacity-50" : "hover:bg-indigo-700"
-                  }`}
-                >
-                  {connecting ? "Connecting…" : "Connect your Google account"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
     </>
 
