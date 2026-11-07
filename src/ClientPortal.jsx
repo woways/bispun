@@ -1468,6 +1468,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       return hasDashboardSidebarAccess();
     }
 
+    // Users & Roles lives inside Settings, but it has its own permission.
+    // A user manager must be able to open that screen without receiving
+    // unrelated company-settings access.
+    if (moduleKey === "settings") {
+      return (
+        permissions.canManageSettings === true ||
+        permissions.canManageUsers === true
+      );
+    }
+
     const permission =
       MODULE_PERMISSION_MAP[
         moduleKey

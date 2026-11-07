@@ -9,6 +9,7 @@ import {
 import {
   requireClientUser,
   requireClientPermission,
+  requireClientPageSection,
 } from "../middleware/clientAuth.js";
 import { financeSectionAllowed } from "../lib/pageAccess.js";
 
@@ -35,6 +36,26 @@ router.use(
   requireClientPermission(
     "canManageRevenue",
     "You do not have permission to access revenue"
+  )
+);
+
+// Section permissions are enforced for reads and writes.  The overview GET
+// still returns a safely filtered aggregate payload, while every expense and
+// incentive endpoint is protected here against direct API access.
+router.use(
+  "/expenses",
+  requireClientPageSection(
+    "finance",
+    "expenses",
+    "You do not have permission to access expenses"
+  )
+);
+router.use(
+  "/incentives",
+  requireClientPageSection(
+    "finance",
+    "incentives",
+    "You do not have permission to access employee incentives"
   )
 );
 
@@ -551,7 +572,11 @@ router.get("/", async (req, res) => {
     return res.json({
       success: true,
 
-      summary: {
+      summary: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "overview"
+      ) ? {
         potentialRevenue,
         inBucketRevenue,
         bufferRevenue,
@@ -562,11 +587,19 @@ router.get("/", async (req, res) => {
         currentProfit,
         totalAdmissions:
           admissions.length,
-      },
+      } : {},
 
-      monthlyRevenue,
+      monthlyRevenue: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "overview"
+      ) ? monthlyRevenue : [],
 
-      leakageRadar,
+      leakageRadar: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "overview"
+      ) ? leakageRadar : null,
 
       // Section-level access: withhold the Expenses / Incentives payloads when
       // the viewer's finance access does not include those sections.

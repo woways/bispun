@@ -12,6 +12,13 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import {
+  applyAdmissionScope,
+  resolveVisibleScope,
+  scopeAllowsStream,
+  scopeAllowsCollege,
+  scopeAllowsBranch,
+} from "../lib/pageAccess.js";
 
 const router = Router();
 
@@ -43,6 +50,95 @@ router.use(
     "You do not have permission to access admissions"
   )
 );
+
+// Streams/colleges/branches and bulk imports are shared company structure.
+// A scoped user may work with records inside their grant, but cannot mutate
+// shared structure or bulk-create records outside the explicit tree.  Client
+// Admin and users with "Allow all admissions" keep the existing workflow.
+router.use(async (req, res, next) => {
+  if (req.method === "GET" || req.clientUser.role === "CLIENT_ADMIN") {
+    return next();
+  }
+
+  const sharedStructureMutation =
+    req.path.startsWith("/streams") ||
+    req.path.startsWith("/partners") ||
+    req.path.includes("/import");
+
+  if (!sharedStructureMutation) return next();
+
+  try {
+    const scope = await currentAdmissionScope(req);
+    if (scope.all) return next();
+    return admissionScopeDenied(res);
+  } catch (error) {
+    console.error("Admission scope guard failed:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify admission permissions",
+    });
+  }
+});
+
+async function currentAdmissionScope(req) {
+  return resolveVisibleScope(
+    prisma,
+    req.clientUser.companyId,
+    req.clientUser.pageAccess,
+    req.clientUser.role
+  );
+}
+
+function admissionScopeDenied(res) {
+  return res.status(403).json({
+    success: false,
+    forbidden: true,
+    page: "admissions",
+    message: "You do not have permission to access this admission scope",
+  });
+}
+
+async function ensureAdmissionRecordInScope(req, res, admission) {
+  if (req.clientUser.role === "CLIENT_ADMIN") return true;
+  const scopedWhere = applyAdmissionScope(
+    { id: admission.id, companyId: req.clientUser.companyId },
+    req.clientUser.pageAccess,
+    req.clientUser.role
+  );
+  const visible = await prisma.admission.findFirst({
+    where: scopedWhere,
+    select: { id: true },
+  });
+  if (!visible) {
+    admissionScopeDenied(res);
+    return false;
+  }
+  return true;
+}
+
+async function ensureAdmissionDestinationInScope(req, res, { market, partner, branch }) {
+  const scope = await currentAdmissionScope(req);
+  if (scope.all) return true;
+
+  if (branch) {
+    const allowed = scopeAllowsBranch(scope, branch, partner || null);
+    if (!allowed) admissionScopeDenied(res);
+    return allowed;
+  }
+  if (partner) {
+    const allowed = scopeAllowsCollege(scope, partner);
+    if (!allowed) admissionScopeDenied(res);
+    return allowed;
+  }
+  if (market) {
+    const allowed = scope.markets?.has(market);
+    if (!allowed) admissionScopeDenied(res);
+    return allowed;
+  }
+
+  admissionScopeDenied(res);
+  return false;
+}
 
 const VALID_STATUSES = [
   "PENDING",
@@ -590,9 +686,21 @@ router.get("/streams", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
+    const scope = await currentAdmissionScope(req);
+    const visibleStreams = scope.all
+      ? streams
+      : streams
+          .filter((stream) => scopeAllowsStream(scope, stream))
+          .map((stream) => ({
+            ...stream,
+            partners: stream.partners.filter((partner) =>
+              scopeAllowsCollege(scope, partner)
+            ),
+          }));
+
     return res.json({
       success: true,
-      streams: streams.map(streamMetrics),
+      streams: visibleStreams.map(streamMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission streams:", error);
@@ -865,9 +973,14 @@ router.get("/partners", async (req, res) => {
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     });
 
+    const scope = await currentAdmissionScope(req);
+    const visiblePartners = scope.all
+      ? partners
+      : partners.filter((partner) => scopeAllowsCollege(scope, partner));
+
     return res.json({
       success: true,
-      partners: partners.map(partnerMetrics),
+      partners: visiblePartners.map(partnerMetrics),
     });
   } catch (error) {
     console.error("Failed to fetch admission partners:", error);
@@ -2460,8 +2573,14 @@ router.get("/", async (req, res) => {
       };
     }
 
-    const admissions = await prisma.admission.findMany({
+    const scopedWhere = applyAdmissionScope(
       where,
+      req.clientUser.pageAccess,
+      req.clientUser.role
+    );
+
+    const admissions = await prisma.admission.findMany({
+      where: scopedWhere,
       include: {
         partner: {
           select: {
@@ -2585,6 +2704,16 @@ router.post("/", async (req, res) => {
         success: false,
         message: `Selected branch is not part of ${requestedMarket === "INTERNATIONAL" ? "International" : "Domestic"} admissions`,
       });
+    }
+
+    if (
+      !(await ensureAdmissionDestinationInScope(req, res, {
+        market: requestedMarket,
+        partner,
+        branch,
+      }))
+    ) {
+      return;
     }
 
     let cleanStudentName = String(studentName || "").trim();
@@ -2870,6 +2999,9 @@ router.patch("/:id", async (req, res) => {
       return res.status(404).json({ success: false, message: "Admission not found" });
     }
 
+
+    if (!(await ensureAdmissionRecordInScope(req, res, existing))) return;
+
     const data = {};
 
     if (req.body?.partnerId !== undefined) {
@@ -2910,6 +3042,24 @@ router.patch("/:id", async (req, res) => {
         branch.id;
       data.course =
         branch.name;
+    }
+
+    if (req.body?.partnerId !== undefined || req.body?.branchId !== undefined) {
+      const destinationPartnerId = data.partnerId || existing.partnerId;
+      const destinationBranchId = data.branchId || existing.branchId;
+      const [destinationPartner, destinationBranch] = await Promise.all([
+        destinationPartnerId ? getPartner(companyId, destinationPartnerId) : null,
+        destinationBranchId ? getBranch(companyId, destinationBranchId) : null,
+      ]);
+      if (
+        !(await ensureAdmissionDestinationInScope(req, res, {
+          market: destinationPartner?.market || existing.market,
+          partner: destinationPartner,
+          branch: destinationBranch,
+        }))
+      ) {
+        return;
+      }
     }
 
     const stringFields = [
@@ -3085,6 +3235,9 @@ router.delete("/:id", async (req, res) => {
     if (!existing) {
       return res.status(404).json({ success: false, message: "Admission not found" });
     }
+
+
+    if (!(await ensureAdmissionRecordInScope(req, res, existing))) return;
 
     await prisma.$transaction(async (tx) => {
       await tx.admission.delete({ where: { id: existing.id } });

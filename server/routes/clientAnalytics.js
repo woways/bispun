@@ -1035,10 +1035,10 @@ router.get("/dashboard", async (req, res) => {
       revenueTrend: canDashboard("revenue-trend") ? revenueTrend : [],
       leadsBySource: canDashboard("leads-by-source") ? leadsBySource : [],
       teamPerformance: canDashboard("team-performance") ? teamPerformance : [],
-      myPerformance,
+      myPerformance: canDashboard("team-performance") ? myPerformance : null,
       recentAdmissions: canDashboard("recent-admissions") ? recentAdmissions : [],
       admissionsByMonth: canDashboard("admissions-by-month") ? admissionsByMonth : [],
-      recentActivity,
+      recentActivity: canDashboard("action-center") ? recentActivity : [],
     });
   } catch (error) {
     console.error("Failed to fetch dashboard:", error);
@@ -2032,12 +2032,14 @@ router.get(
         selectedYear: requestedYear || "all",
         primaryYear,
         compareYear,
-        summary: primary.summary,
-        sourceConversion: primary.sourceConversion,
-        leadsByStage: primary.leadsByStage,
-        monthlyActivity: primary.monthlyActivity,
-        employeePerformance: primary.employeePerformance,
-        topCampaigns: primary.topCampaigns,
+        // The comparison grant must not implicitly reveal Overview datasets.
+        // Each payload is withheld independently, even for direct API calls.
+        summary: canOverview ? primary.summary : {},
+        sourceConversion: canOverview ? primary.sourceConversion : [],
+        leadsByStage: canOverview ? primary.leadsByStage : [],
+        monthlyActivity: canOverview ? primary.monthlyActivity : [],
+        employeePerformance: canOverview ? primary.employeePerformance : [],
+        topCampaigns: canOverview ? primary.topCampaigns : [],
         // Withhold the Comparison payload unless that section is granted.
         comparison: canComparison
           ? {

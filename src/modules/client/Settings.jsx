@@ -244,12 +244,31 @@ export default function SettingsView({
   currentUser,
   onWorkspaceUpdated,
 }) {
+  const canManageUsers =
+    currentUser?.role === "CLIENT_ADMIN" ||
+    currentUser?.permissions?.canManageUsers === true;
+  const canManageSettings =
+    currentUser?.role === "CLIENT_ADMIN" ||
+    currentUser?.permissions?.canManageSettings === true;
+
+  const visibleTabs = TABS.filter((item) => {
+    if (item.k === "users") return canManageUsers;
+    if (item.k === "activity") return canManageUsers || canManageSettings;
+    return canManageSettings;
+  });
+
   const [
     tab,
     setTab,
   ] = useState(
-    "company"
+    canManageSettings ? "company" : "users"
   );
+
+  useEffect(() => {
+    if (!visibleTabs.some((item) => item.k === tab)) {
+      setTab(visibleTabs[0]?.k || "users");
+    }
+  }, [tab, canManageSettings, canManageUsers]);
 
   // ---- Google Workspace (Meet + Gmail) integration state ----
   const [googleStatus, setGoogleStatus] = useState({
@@ -976,8 +995,8 @@ export default function SettingsView({
   }
 
   useEffect(() => {
-    loadWorkspaceSettings();
-  }, []);
+    if (canManageSettings) loadWorkspaceSettings();
+  }, [canManageSettings]);
 
   async function saveWorkspaceSettings() {
     setWorkspaceSettingsError("");
@@ -2385,7 +2404,7 @@ export default function SettingsView({
 
         <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <div className="flex flex-wrap gap-1">
-            {TABS.map(
+            {visibleTabs.map(
               (
                 item
               ) => {
