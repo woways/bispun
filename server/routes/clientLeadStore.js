@@ -23,6 +23,13 @@ import {
 
 } from "../middleware/clientAuth.js";
 
+import {
+  getLeadVisibilityScope,
+  leadVisibilityWhere,
+  datasetVisibilityWhere,
+  canViewLead,
+} from "../lib/leadVisibility.js";
+
 
 
 const router =
@@ -131,6 +138,50 @@ function yearRange(year) {
 
 
 
+
+/**
+ * Security guard for single-lead actions: confirms the acting user is
+ * allowed to see this lead under the visibility scope. Responds with 404
+ * (not 403) so out-of-scope leads are indistinguishable from missing ones.
+ * Returns true when access is allowed.
+ */
+async function ensureLeadInScope(req, res, lead) {
+  const scope = await getLeadVisibilityScope(
+    prisma,
+    req.clientUser.companyId,
+    req.clientUser
+  );
+  if (!canViewLead(scope, lead)) {
+    res
+      .status(404)
+      .json({ success: false, message: "Lead not found" });
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Same idea for lead datasets (import batches). Datasets carry a single
+ * assignedToUserId; non-admins may only manage datasets within their scope.
+ */
+async function ensureDatasetInScope(req, res, dataset) {
+  const scope = await getLeadVisibilityScope(
+    prisma,
+    req.clientUser.companyId,
+    req.clientUser
+  );
+  if (scope.isAdmin) return true;
+  const allowed =
+    dataset?.assignedToUserId &&
+    scope.visibleUserIds?.has(dataset.assignedToUserId);
+  if (!allowed) {
+    res
+      .status(404)
+      .json({ success: false, message: "Dataset not found" });
+    return false;
+  }
+  return true;
+}
 
 router.use(
 
@@ -2094,11 +2145,20 @@ router.get(
 
       const selectedYear = parseYear(req.query.year);
 
+      // Security: non-admins only see datasets assigned within their scope.
+      const scope = await getLeadVisibilityScope(
+        prisma,
+        companyId,
+        req.clientUser
+      );
+
       const where = {
 
         companyId,
 
         ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
+
+        ...(datasetVisibilityWhere(scope) || {}),
 
       };
 
@@ -2556,7 +2616,14 @@ router.get(
 
       const search = String(req.query.search || "").trim();
 
-
+      // Security: scope leads so Employees only see their assigned leads
+      // (Managers see their team, Client Admin sees all). Enforced here in
+      // the backend query, not just the UI.
+      const scope = await getLeadVisibilityScope(
+        prisma,
+        companyId,
+        req.clientUser
+      );
 
       const where = {
 
@@ -2569,24 +2636,27 @@ router.get(
 
         ...(selectedYear ? { createdAt: yearRange(selectedYear) } : {}),
 
+        AND: [],
+
       };
 
-
+      const visibilityWhere = leadVisibilityWhere(scope);
+      if (visibilityWhere) {
+        where.AND.push(visibilityWhere);
+      }
 
       if (search) {
 
-        where.AND = [
-          {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { phone: { contains: search, mode: "insensitive" } },
-              { alternatePhone: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-              { course: { contains: search, mode: "insensitive" } },
-              { assignedToName: { contains: search, mode: "insensitive" } },
-            ],
-          },
-        ];
+        where.AND.push({
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+            { alternatePhone: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { course: { contains: search, mode: "insensitive" } },
+            { assignedToName: { contains: search, mode: "insensitive" } },
+          ],
+        });
 
       }
 
@@ -3003,6 +3073,16 @@ router.patch(
 
 
 
+      // Security: a user can only (re)assign leads that are within their
+      // own visibility scope. Employees therefore cannot pull unassigned or
+      // other people's leads to themselves via bulk-assign.
+      const bulkScope = await getLeadVisibilityScope(
+        prisma,
+        companyId,
+        req.clientUser
+      );
+      const bulkVisibilityWhere = leadVisibilityWhere(bulkScope);
+
       const eligible =
 
         await prisma.lead.findMany({
@@ -3020,6 +3100,10 @@ router.patch(
               in: leadIds,
 
             },
+
+            ...(bulkVisibilityWhere
+              ? { AND: [bulkVisibilityWhere] }
+              : {}),
 
           },
 
@@ -3194,6 +3278,8 @@ router.patch(
         return res.status(404).json({ success: false, message: "Lead not found" });
 
       }
+
+      if (!(await ensureLeadInScope(req, res, existing))) return;
 
 
 
@@ -3631,7 +3717,13 @@ router.patch(
             { notes: { contains: "Admissions origin:" } },
           ],
         },
-        select: { id: true, name: true, stage: true },
+        select: {
+          id: true,
+          name: true,
+          stage: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
 
       if (!lead) {
@@ -3640,6 +3732,8 @@ router.patch(
           message: "Lead not found",
         });
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
       const fixedStatus = FIXED_LEAD_STATUSES.find(
         (item) => normalizeLeadStatus(item) === normalizeLeadStatus(status)
@@ -3729,12 +3823,19 @@ router.patch(
             { notes: { contains: "Admissions origin:" } },
           ],
         },
-        select: { id: true, name: true },
+        select: {
+          id: true,
+          name: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
 
       if (!lead) {
         return res.status(404).json({ success: false, message: "Lead not found" });
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
       const updated = await prisma.lead.update({
         where: { id: lead.id },
@@ -3801,6 +3902,10 @@ router.delete(
 
           leadDatasetId: true,
 
+          assignedToUserId: true,
+
+          assignedToName: true,
+
         },
 
       });
@@ -3812,6 +3917,8 @@ router.delete(
         return res.status(404).json({ success: false, message: "Lead not found" });
 
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
 
 
@@ -3936,7 +4043,12 @@ router.post(
           companyId,
           source: "LEAD_STORE",
         },
-        select: { id: true, notes: true },
+        select: {
+          id: true,
+          notes: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
 
       if (!lead) {
@@ -3945,6 +4057,8 @@ router.post(
           message: "Lead not found",
         });
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
       await prisma.$transaction(async (tx) => {
         const count = await tx.leadRemark.count({
@@ -4012,7 +4126,11 @@ router.patch(
           companyId,
           source: "LEAD_STORE",
         },
-        select: { id: true },
+        select: {
+          id: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
 
       if (!lead) {
@@ -4021,6 +4139,8 @@ router.patch(
           message: "Lead not found",
         });
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
       const remark = await prisma.leadRemark.findFirst({
         where: { id: remarkId, companyId, leadId },
@@ -4070,7 +4190,11 @@ router.delete(
           companyId,
           source: "LEAD_STORE",
         },
-        select: { id: true },
+        select: {
+          id: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
       });
 
       if (!lead) {
@@ -4079,6 +4203,8 @@ router.delete(
           message: "Lead not found",
         });
       }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
 
       const remark = await prisma.leadRemark.findFirst({
         where: { id: remarkId, companyId, leadId },
@@ -4514,7 +4640,30 @@ router.post(
 
       }
 
-
+      // Security + UX: non-admins may only create leads assigned within their
+      // scope. When no assignee is chosen, default to the creator so the new
+      // lead stays visible to them (employees never create "lost" leads).
+      const createScope = await getLeadVisibilityScope(
+        prisma,
+        companyId,
+        req.clientUser
+      );
+      let effectiveAssignee = assignee;
+      if (!createScope.isAdmin) {
+        if (assignedToUserId) {
+          if (!createScope.visibleUserIds?.has(assignedToUserId)) {
+            return res.status(403).json({
+              success: false,
+              message: "You can only assign leads to yourself or your team.",
+            });
+          }
+        } else {
+          effectiveAssignee = await getAssignee(
+            companyId,
+            req.clientUser.userId
+          );
+        }
+      }
 
       let preparedCustomFields;
 
@@ -4781,7 +4930,7 @@ router.post(
 
                 assignedToName:
 
-                  assignee?.name ||
+                  effectiveAssignee?.name ||
 
                   null,
 
@@ -5983,6 +6132,8 @@ router.patch(
 
       }
 
+      if (!(await ensureDatasetInScope(req, res, existing))) return;
+
 
 
       const data = {};
@@ -6482,6 +6633,8 @@ router.delete(
           });
 
       }
+
+      if (!(await ensureDatasetInScope(req, res, existing))) return;
 
 
 

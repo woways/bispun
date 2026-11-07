@@ -10,6 +10,10 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import {
+  getLeadVisibilityScope,
+  leadVisibilityWhere,
+} from "../lib/leadVisibility.js";
 
 const router = Router();
 
@@ -232,9 +236,21 @@ router.post("/sequences/:id/enroll", async (req, res) => {
     const steps = Array.isArray(sequence.steps) ? sequence.steps : [];
     if (!steps.length) return res.status(400).json({ success: false, message: "Sequence has no steps." });
 
+    // Security: a user can only enroll leads within their visibility scope.
+    const scope = await getLeadVisibilityScope(
+      prisma,
+      req.clientUser.companyId,
+      req.clientUser
+    );
+    const visibilityWhere = leadVisibilityWhere(scope);
+
     const [leads, companySettings] = await Promise.all([
       prisma.lead.findMany({
-        where: { companyId: req.clientUser.companyId, id: { in: leadIds } },
+        where: {
+          companyId: req.clientUser.companyId,
+          id: { in: leadIds },
+          ...(visibilityWhere ? { AND: [visibilityWhere] } : {}),
+        },
         select: { id: true, name: true, stage: true, leadStatus: true },
       }),
       prisma.companySettings.findUnique({

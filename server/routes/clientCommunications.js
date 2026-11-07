@@ -7,6 +7,10 @@ import {
   requireClientUser,
   requireClientPermission,
 } from "../middleware/clientAuth.js";
+import {
+  getLeadVisibilityScope,
+  leadVisibilityWhere,
+} from "../lib/leadVisibility.js";
 
 const router = Router();
 const MAX_EMAILS_PER_REQUEST = 100;
@@ -290,10 +294,19 @@ router.post("/email", runAttachmentUpload, async (req, res) => {
       buffer: file.buffer,
     }));
 
+    // Security: a user can only email leads within their visibility scope.
+    const scope = await getLeadVisibilityScope(
+      prisma,
+      req.clientUser.companyId,
+      req.clientUser
+    );
+    const visibilityWhere = leadVisibilityWhere(scope);
+
     const leads = await prisma.lead.findMany({
       where: {
         companyId: req.clientUser.companyId,
         id: { in: leadIds },
+        ...(visibilityWhere ? { AND: [visibilityWhere] } : {}),
       },
       select: {
         id: true,

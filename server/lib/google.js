@@ -89,7 +89,26 @@ export async function getCalendarForUser(userId) {
   return google.calendar({ version: "v3", auth: oauth2 });
 }
 
+function extractMeetLink(eventData) {
+  return (
+    eventData?.hangoutLink ||
+    eventData?.conferenceData?.entryPoints?.find(
+      (e) => e.entryPointType === "video"
+    )?.uri ||
+    null
+  );
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // Create a calendar event with a Google Meet link; returns the meet URL.
+//
+// Google Meet conference creation is ASYNCHRONOUS: the events.insert response
+// frequently comes back with conferenceData.createRequest.status = "pending"
+// and NO hangoutLink yet. The previous implementation read hangoutLink from
+// that first response, so it was usually null ("no immediate Meet link").
+// We now poll the event until Google finishes provisioning the conference, and
+// surface a `pending` flag if it is still not ready — we never fabricate a link.
 export async function createMeetEvent(
   userId,
   { summary, description, startISO, endISO, attendees = [] }
@@ -99,6 +118,8 @@ export async function createMeetEvent(
   const res = await calendar.events.insert({
     calendarId: "primary",
     conferenceDataVersion: 1,
+    // No sendUpdates => Google sends no invitation emails (API default), which
+    // also keeps automated/test runs from notifying real attendees.
     requestBody: {
       summary: summary || "Meeting",
       description: description || "",
@@ -113,13 +134,41 @@ export async function createMeetEvent(
       },
     },
   });
-  const meetLink =
-    res.data.hangoutLink ||
-    res.data.conferenceData?.entryPoints?.find(
-      (e) => e.entryPointType === "video"
-    )?.uri ||
-    null;
-  return { meetLink, eventId: res.data.id, htmlLink: res.data.htmlLink };
+
+  let data = res.data;
+  const eventId = data.id;
+  let meetLink = extractMeetLink(data);
+
+  // Poll for the asynchronously-created conference (short, bounded backoff).
+  let attempts = 0;
+  while (!meetLink && eventId && attempts < 5) {
+    const statusCode = data.conferenceData?.createRequest?.status?.statusCode;
+    // "success" without a link, or "failure", means polling won't help.
+    if (statusCode && statusCode !== "pending") break;
+    await sleep(800);
+    try {
+      const got = await calendar.events.get({
+        calendarId: "primary",
+        eventId,
+        conferenceDataVersion: 1,
+      });
+      data = got.data;
+      meetLink = extractMeetLink(data);
+    } catch {
+      break;
+    }
+    attempts += 1;
+  }
+
+  const statusCode = data.conferenceData?.createRequest?.status?.statusCode;
+  const pending = !meetLink && (!statusCode || statusCode === "pending");
+
+  return {
+    meetLink,
+    pending,
+    eventId,
+    htmlLink: data.htmlLink,
+  };
 }
 export function hasGmailSendScope(scopes = []) {
   return Array.isArray(scopes) &&
