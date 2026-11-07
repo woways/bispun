@@ -529,12 +529,14 @@ function ImportInternalLeadsModal({
   defaultSource = "INTERNAL",
   onClose,
   onImported,
+  links = [],
 }) {
   const safeDefaultSource = INTERNAL_SOURCE_KEYS.includes(defaultSource)
     ? defaultSource
     : "INTERNAL";
 
   const [source, setSource] = useState(safeDefaultSource);
+  const [utmLink, setUtmLink] = useState("");
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -554,6 +556,9 @@ function ImportInternalLeadsModal({
       const body = new FormData();
       body.append("file", file);
       body.append("source", source);
+      if (utmLink) {
+        body.append("utmLinkId", utmLink);
+      }
 
       const data = await apiRequest(
         "/api/client/leads/internal/import",
@@ -607,10 +612,11 @@ function ImportInternalLeadsModal({
             ) : null}
 
             <div>
-              <label className="mb-1 block text-[13px] font-medium text-slate-600">
+              <label htmlFor="import-source" className="mb-1 block text-[13px] font-medium text-slate-600">
                 Lead Source
               </label>
               <select
+                id="import-source"
                 value={source}
                 onChange={(event) => setSource(event.target.value)}
                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
@@ -623,6 +629,29 @@ function ImportInternalLeadsModal({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label htmlFor="import-utm-link" className="mb-1 block text-[13px] font-medium text-slate-600">
+                Attribute to UTM link (optional)
+              </label>
+              <select
+                id="import-utm-link"
+                value={utmLink}
+                onChange={(event) => setUtmLink(event.target.value)}
+                aria-describedby="import-utm-link-help"
+                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              >
+                <option value="">— No UTM link —</option>
+                {links.map((link) => (
+                  <option key={link.id} value={link.id}>
+                    {`${link.campaign} · ${link.source} / ${link.medium}`}
+                  </option>
+                ))}
+              </select>
+              <p id="import-utm-link-help" className="mt-1 text-[12px] text-slate-500">
+                Optional. Attributes every imported lead to this campaign link so they appear in UTM Analytics.
+              </p>
             </div>
 
             <div>
@@ -3320,6 +3349,7 @@ export default function UTMLeads({
       {showInternalImportModal ? (
         <ImportInternalLeadsModal
           defaultSource={leadSourceView}
+          links={links}
           onClose={() => setShowInternalImportModal(false)}
           onImported={async (data, source) => {
             setShowInternalImportModal(false);
