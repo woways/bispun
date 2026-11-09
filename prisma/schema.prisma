@@ -111,6 +111,11 @@ enum LeadDatasetType {
   PURCHASED
   UPLOADED
   ASSIGNED
+  GOOGLE_FORM
+  WEBSITE_FORM
+  IM
+  DM
+  INTERNAL
 }
 
 enum CustomFieldEntityType {
@@ -681,6 +686,9 @@ model Lead {
   email          String?
 
   course String?
+
+  // Preferred Colleges the lead is interested in (comma-separated; free text).
+  preferredColleges String?
 
   source      String
   stage       LeadStage       @default(NEW)
