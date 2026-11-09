@@ -70,6 +70,37 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 — Gradle build ROOT CAUSE + host build procedure (evidence)
+
+**Root cause (confirmed with the full stack trace):** Gradle fails at startup, before any compilation:
+```
+org.gradle.launcher.daemon.client.SingleUseDaemonClient.execute
+  → DefaultDaemonConnector.startSingleUseDaemon → doStartDaemon → connectToDaemon
+  → org.gradle.internal.remote.internal.inet.SocketConnection.<init>
+  → java.io.IOException: Unable to establish loopback connection
+```
+Even with `--no-daemon`, Gradle 8.14.3 starts a **single-use daemon** (a forked child JVM) and the launcher must connect to it over a **loopback socket**. 
+
+**Differential diagnosis (what it is NOT):**
+- *Not* JDK/Gradle incompatibility — JDK 21 (Temurin) + Gradle 8.14.3 are compatible.
+- *Not* the OS/JVM loopback — a standalone JVM test opened a `ServerSocket` on `127.0.0.1` and connected to it successfully (default *and* `-Djava.net.preferIPv4Stack=true`); `localhost` resolves to `127.0.0.1`; `curl http://localhost:4000` worked earlier for the dev backend.
+- *Not* the project — the host previously produced `app-debug.apk` (8.7 MB, 2026-11-01).
+- *Not* the shell sandbox — reproduced with the sandbox disabled, in foreground and background, with and without the IPv4 flag (4 distinct attempts).
+
+**Conclusion:** this agent's execution shell cannot let Gradle's launcher connect to its forked child-JVM daemon over loopback. **Gradle must be run on the Windows host** (normal terminal or Android Studio), not through this tool. No fresh APK was produced here; the Nov-1 APK is NOT a current build.
+
+**Exact host build procedure (debug APK):**
+1. Open a normal Windows terminal (PowerShell/CMD) — not this agent.
+2. `cd S:\Bispun` → `npm run build` → `npx cap sync android`
+3. `cd android` → `.\gradlew.bat assembleDebug`
+4. Output: `S:\Bispun\android\app\build\outputs\apk\debug\app-debug.apk`
+   — or Android Studio ▸ Open `S:\Bispun\android` ▸ Build ▸ Build APK(s).
+
+### 2026-11-09 — signing status (Phase 4)
+- **A release keystore ALREADY EXISTS:** `S:\Bispun-release\android\app\bispun-release.jks` (alias `bispun-release`, gitignored). So this is **not** a first-time-key situation and **no new signing identity is needed** (do NOT regenerate — it would break update signing). Per `MOBILE-ANDROID-KEYSTORE-SETUP.md`.
+- **Remaining for a signed AAB (host only):** create `S:\Bispun-release\android\keystore.properties` from `keystore.properties.example` with the real passwords for the existing `.jks` (operator holds them; keep gitignored), set a real **HTTPS** `VITE_API_URL`, then on the host: `npm run build && npx cap sync android && cd android && .\gradlew.bat bundleRelease` → `android/app/build/outputs/bundle/release/app-release.aab`.
+- Whether this is a **first Play submission or an update** depends on whether `com.bispun.crm` is already live on Play Console — operator to confirm; the upload key (`bispun-release.jks`) is the same either way.
+
 ### 2026-11-09 — Android build attempt (Phase E) + submission package (Phase F)
 
 **Toolchain present:** JDK 21 (Temurin), Android SDK at `S:\Android\Sdk` (ANDROID_HOME set, platform-tools present), Gradle wrapper. 
