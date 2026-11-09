@@ -8,18 +8,12 @@ import {
 import {
   Plus,
   Link2,
-  FileSpreadsheet,
   Globe,
-  MessageSquare,
-  Instagram,
   Copy,
-  MoreVertical,
   Search,
-  RefreshCw,
   X,
   Loader2,
   AlertCircle,
-  SlidersHorizontal,
   Users,
   Download,
   Pencil,
@@ -32,7 +26,6 @@ import {
   IndianRupee,
   Check,
   ChevronDown,
-  Upload,
   PhoneCall,
 } from "lucide-react";
 
@@ -45,68 +38,55 @@ import {
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 
-const SOURCES = [
-  {
-    value: "GOOGLE_FORM",
-    label: "Google Form",
-  },
-  {
-    value: "WEBSITE_FORM",
-    label: "Website Form",
-  },
-  {
-    value: "IM_LEADS",
-    label: "IM Leads",
-  },
-  {
-    value: "DM_LEADS",
-    label: "DM Leads",
-  },
-  {
-    value: "INTERNAL",
-    label: "Internal Leads",
-  },
-  {
-    value: "OTHER",
-    label: "Other",
-  },
+const UTM_MEDIUM_OPTIONS = [
+  "Social",
+  "Paid Social",
+  "CPC/PPC",
+  "Organic",
+  "Referral",
+  "Influencer",
+  "WhatsApp",
+  "SMS",
+  "Offline/QR",
+  "Other",
 ];
 
-const INTERNAL_SOURCE_KEYS = [
-  "INTERNAL",
-  "GOOGLE_FORM",
-  "WEBSITE_FORM",
-  "IM_LEADS",
-  "DM_LEADS",
-];
+function resolveUtmMedium(form) {
+  if (form.medium === "Other") {
+    return String(form.mediumOther || "").trim();
+  }
 
-const INTERNAL_SOURCE_TABS = [
-  {
-    key: "INTERNAL",
-    label: "Internal Leads",
-    icon: Users,
-  },
-  {
-    key: "GOOGLE_FORM",
-    label: "Google Form",
-    icon: FileSpreadsheet,
-  },
-  {
-    key: "WEBSITE_FORM",
-    label: "Website Form",
-    icon: Globe,
-  },
-  {
-    key: "IM_LEADS",
-    label: "IM Leads",
-    icon: MessageSquare,
-  },
-  {
-    key: "DM_LEADS",
-    label: "DM Leads",
-    icon: Instagram,
-  },
-];
+  return String(form.medium || "").trim();
+}
+
+function getMediumFormValues(value) {
+  const raw = String(value || "").trim();
+
+  if (!raw) {
+    return {
+      medium: "",
+      mediumOther: "",
+    };
+  }
+
+  const preset = UTM_MEDIUM_OPTIONS.find(
+    (item) =>
+      item !== "Other" &&
+      item.toLowerCase() === raw.toLowerCase()
+  );
+
+  if (preset) {
+    return {
+      medium: preset,
+      mediumOther: "",
+    };
+  }
+
+  return {
+    medium: "Other",
+    mediumOther: raw,
+  };
+}
 
 const STAGES = [
   {
@@ -163,555 +143,6 @@ function formatDate(date) {
   return formatUiDateTime(parsed);
 }
 
-function LeadModal({
-  onClose,
-  onCreated,
-  defaultSource = "GOOGLE_FORM",
-}) {
-  const [saving, setSaving] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [form, setForm] =
-    useState({
-      name: "",
-      phone: "",
-      email: "",
-      course: "",
-      source: defaultSource,
-      stage: "NEW",
-      temperature: "WARM",
-      campaign: "",
-      medium: "",
-      assignedToName: "",
-      notes: "",
-    });
-
-  function update(
-    key,
-    value
-  ) {
-    setForm((current) => ({
-      ...current,
-      [key]: value,
-    }));
-  }
-
-  async function submit(event) {
-    event.preventDefault();
-
-    if (saving) {
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      const data =
-        await apiRequest(
-          "/api/client/leads",
-          {
-            method: "POST",
-
-            body: JSON.stringify(
-              form
-            ),
-          }
-        );
-
-      onCreated(data.lead);
-    } catch (error) {
-      setError(
-        error?.data?.message ||
-          "Unable to create lead"
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-[17px] font-semibold text-slate-900">
-              New Lead
-            </h2>
-
-            <p className="text-[13px] text-slate-500 mt-0.5">
-              Add a lead to your
-              company CRM.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-slate-100 text-slate-500"
-          >
-            <X size={17} />
-          </button>
-        </div>
-
-        <form
-          onSubmit={submit}
-          className="overflow-y-auto max-h-[calc(92vh-72px)]"
-        >
-          <div className="p-5">
-            {error && (
-              <div className="mb-4 flex items-center gap-2 px-3 py-2 border border-rose-200 bg-rose-50 rounded-lg text-[15px] text-rose-700">
-                <AlertCircle
-                  size={14}
-                />
-
-                {error}
-              </div>
-            )}
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <div>
-                <Field
-                  label="Lead Name"
-                  required
-                  value={form.name}
-                  onChange={(value) =>
-                    update(
-                      "name",
-                      value
-                    )
-                  }
-                  placeholder="Student / customer name"
-                />
-                {form.name.trim().length > 0 &&
-                  form.name.trim().length < 2 && (
-                    <p className="mt-1 text-[13px] font-semibold text-rose-600">
-                      Name must be at least 2 characters.
-                    </p>
-                  )}
-              </div>
-
-              <div>
-                <Field
-                  label="Phone"
-                  required
-                  value={form.phone}
-                  onChange={(value) =>
-                    update(
-                      "phone",
-                      value
-                    )
-                  }
-                  placeholder="9876543210"
-                />
-                {form.phone.trim().length > 0 &&
-                  !isValidPhone(form.phone) && (
-                    <p className="mt-1 text-[13px] font-semibold text-rose-600">
-                      Enter a valid 10-digit phone number.
-                    </p>
-                  )}
-              </div>
-
-              <Field
-                label="Email"
-                type="email"
-                value={form.email}
-                onChange={(value) =>
-                  update(
-                    "email",
-                    value
-                  )
-                }
-                placeholder="student@email.com"
-              />
-
-              <Field
-                label="Course / Interest"
-                value={form.course}
-                onChange={(value) =>
-                  update(
-                    "course",
-                    value
-                  )
-                }
-                placeholder="MBBS Abroad"
-              />
-
-              <div>
-                <label className="block text-[13px] font-medium text-slate-600 mb-1">
-                  Source
-                  <span className="text-rose-500 ml-0.5">
-                    *
-                  </span>
-                </label>
-
-                <select
-                  value={form.source}
-                  onChange={(event) =>
-                    update(
-                      "source",
-                      event.target.value
-                    )
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-[15px]"
-                >
-                  {SOURCES.map(
-                    (source) => (
-                      <option
-                        key={
-                          source.value
-                        }
-                        value={
-                          source.value
-                        }
-                      >
-                        {source.label}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-medium text-slate-600 mb-1">
-                  Stage
-                </label>
-
-                <select
-                  value={form.stage}
-                  onChange={(event) =>
-                    update(
-                      "stage",
-                      event.target.value
-                    )
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-[15px]"
-                >
-                  {STAGES.map(
-                    (stage) => (
-                      <option
-                        key={
-                          stage.value
-                        }
-                        value={
-                          stage.value
-                        }
-                      >
-                        {stage.label}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-medium text-slate-600 mb-1">
-                  Lead Temperature
-                </label>
-
-                <select
-                  value={form.temperature}
-                  onChange={(event) => update("temperature", event.target.value)}
-                  className={`w-full px-3 py-2 border rounded-md text-[15px] font-semibold ${temperatureClass(form.temperature)}`}
-                >
-                  {LEAD_TEMPERATURES.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <Field
-                label="Campaign"
-                value={
-                  form.campaign
-                }
-                onChange={(value) =>
-                  update(
-                    "campaign",
-                    value
-                  )
-                }
-                placeholder="MBBS-Ukraine-Q4"
-              />
-
-              <Field
-                label="Medium"
-                value={form.medium}
-                onChange={(value) =>
-                  update(
-                    "medium",
-                    value
-                  )
-                }
-                placeholder="Meta Ads"
-              />
-
-              <Field
-                label="Assigned To"
-                value={
-                  form.assignedToName
-                }
-                onChange={(value) =>
-                  update(
-                    "assignedToName",
-                    value
-                  )
-                }
-                placeholder="Counsellor name"
-              />
-
-              <div className="md:col-span-2">
-                <label className="block text-[13px] font-medium text-slate-600 mb-1">
-                  Notes
-                </label>
-
-                <textarea
-                  value={form.notes}
-                  onChange={(event) =>
-                    update(
-                      "notes",
-                      event.target.value
-                    )
-                  }
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-[15px] resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                  placeholder="Optional notes"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="sticky bottom-0 bg-white border-t border-slate-200 px-5 py-3 flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="px-4 py-2 border border-slate-200 rounded-md text-[15px] text-slate-700"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              disabled={
-                saving ||
-                form.name.trim().length < 2 ||
-                !isValidPhone(form.phone)
-              }
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-md text-[15px] inline-flex items-center gap-2"
-            >
-              {saving && (
-                <Loader2
-                  size={14}
-                  className="animate-spin"
-                />
-              )}
-
-              {saving
-                ? "Creating..."
-                : "Create Lead"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-
-function ImportInternalLeadsModal({
-  defaultSource = "INTERNAL",
-  onClose,
-  onImported,
-  links = [],
-}) {
-  const safeDefaultSource = INTERNAL_SOURCE_KEYS.includes(defaultSource)
-    ? defaultSource
-    : "INTERNAL";
-
-  const [source, setSource] = useState(safeDefaultSource);
-  const [utmLink, setUtmLink] = useState("");
-  const [file, setFile] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(event) {
-    event.preventDefault();
-
-    if (!file) {
-      setError("Choose a CSV or XLSX file.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      body.append("source", source);
-      if (utmLink) {
-        body.append("utmLinkId", utmLink);
-      }
-
-      const data = await apiRequest(
-        "/api/client/leads/internal/import",
-        {
-          method: "POST",
-          body,
-        }
-      );
-
-      onImported(data, source);
-    } catch (error) {
-      setError(
-        error?.data?.message ||
-          "Unable to import internal leads"
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
-      <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/70 bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div>
-            <h2 className="text-[17px] font-semibold text-slate-900">
-              Import Internal Leads
-            </h2>
-            <p className="mt-1 text-[13px] text-slate-500">
-              Upload CSV/XLSX and choose where these manually managed leads should appear.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
-          >
-            <X size={17} />
-          </button>
-        </div>
-
-        <form onSubmit={submit}>
-          <div className="space-y-4 p-5">
-            {error ? (
-              <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] font-semibold text-rose-700">
-                <AlertCircle size={14} className="mt-0.5 shrink-0" />
-                {error}
-              </div>
-            ) : null}
-
-            <div>
-              <label htmlFor="import-source" className="mb-1 block text-[13px] font-medium text-slate-600">
-                Lead Source
-              </label>
-              <select
-                id="import-source"
-                value={source}
-                onChange={(event) => setSource(event.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              >
-                {SOURCES.filter((item) =>
-                  INTERNAL_SOURCE_KEYS.includes(item.value)
-                ).map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="import-utm-link" className="mb-1 block text-[13px] font-medium text-slate-600">
-                Attribute to UTM link (optional)
-              </label>
-              <select
-                id="import-utm-link"
-                value={utmLink}
-                onChange={(event) => setUtmLink(event.target.value)}
-                aria-describedby="import-utm-link-help"
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-              >
-                <option value="">— No UTM link —</option>
-                {links.map((link) => (
-                  <option key={link.id} value={link.id}>
-                    {`${link.campaign} · ${link.source} / ${link.medium}`}
-                  </option>
-                ))}
-              </select>
-              <p id="import-utm-link-help" className="mt-1 text-[12px] text-slate-500">
-                Optional. Attributes every imported lead to this campaign link so they appear in UTM Analytics.
-              </p>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-[13px] font-medium text-slate-600">
-                Lead File
-              </label>
-              <label className="flex min-h-[110px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-200 px-5 text-center transition hover:border-indigo-300 hover:bg-indigo-50/30">
-                <input
-                  type="file"
-                  accept=".csv,.xlsx"
-                  className="hidden"
-                  disabled={saving}
-                  onChange={(event) =>
-                    setFile(event.target.files?.[0] || null)
-                  }
-                />
-                <div>
-                  <Upload size={22} className="mx-auto text-indigo-500" />
-                  <div className="mt-2 text-[14px] font-semibold text-slate-800">
-                    {file ? file.name : "Choose CSV or XLSX"}
-                  </div>
-                  <div className="mt-1 text-[12px] text-slate-500">
-                    Imported records are added as real CRM leads.
-                  </div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving || !file}
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {saving ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Upload size={14} />
-              )}
-              {saving ? "Importing..." : "Import Leads"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-
-// A valid link must start with http(s):// AND have a real host (so
-// "https:mccccccc.com" — missing the // — is rejected). Used for CA-013/014/015/017.
 function isValidHttpUrl(value) {
   const v = String(value || "").trim();
   if (!/^https?:\/\/.+/i.test(v)) return false;
@@ -729,14 +160,6 @@ function isValidHttpUrl(value) {
 }
 
 // Accept a 10-digit Indian mobile, optionally with a 91/+91 prefix. CA-018.
-function isValidPhone(value) {
-  const d = String(value || "").replace(/\D/g, "");
-  return (
-    d.length === 10 ||
-    (d.length === 12 && d.startsWith("91"))
-  );
-}
-
 function buildTrackedUrl({
   url,
   campaign,
@@ -799,22 +222,31 @@ function LinkModal({
     );
 
   const [form, setForm] =
-    useState({
+    useState(() => ({
       campaign:
         editing?.campaign || "",
+      influencerName:
+        editing?.influencerName || "",
       source:
         editing?.source || "",
-      medium:
-        editing?.medium || "",
+      ...getMediumFormValues(
+        editing?.medium
+      ),
       url:
         editing?.url || "",
       cost:
         editing?.cost ?? "",
-    });
+    }));
+
+  const effectiveMedium =
+    resolveUtmMedium(form);
 
   const generatedUrl =
     mode === "generate"
-      ? buildTrackedUrl(form)
+      ? buildTrackedUrl({
+          ...form,
+          medium: effectiveMedium,
+        })
       : form.url;
 
   function update(key, value) {
@@ -837,10 +269,12 @@ function LinkModal({
         mode,
         campaign:
           form.campaign,
+        influencerName:
+          form.influencerName,
         source:
           form.source,
         medium:
-          form.medium,
+          effectiveMedium,
         url:
           mode === "generate"
             ? generatedUrl
@@ -964,6 +398,18 @@ function LinkModal({
               placeholder="Admissions-2026"
             />
 
+            <Field
+              label="Influencer Name"
+              value={form.influencerName}
+              onChange={(value) =>
+                update(
+                  "influencerName",
+                  value
+                )
+              }
+              placeholder="Influencer / partner name"
+            />
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Field
                 label="Source"
@@ -978,17 +424,21 @@ function LinkModal({
                 placeholder="google / instagram / partner"
               />
 
-              <Field
-                label="Medium"
-                required
+              <MediumSelect
                 value={form.medium}
+                otherValue={form.mediumOther}
                 onChange={(value) =>
                   update(
                     "medium",
                     value
                   )
                 }
-                placeholder="cpc / social / referral"
+                onOtherChange={(value) =>
+                  update(
+                    "mediumOther",
+                    value
+                  )
+                }
               />
             </div>
 
@@ -1053,7 +503,7 @@ function LinkModal({
                 saving ||
                 !form.campaign.trim() ||
                 !form.source.trim() ||
-                !form.medium.trim() ||
+                !effectiveMedium ||
                 !form.url.trim() ||
                 (mode ===
                   "generate" &&
@@ -1180,14 +630,83 @@ function PlatformSelect({
   );
 }
 
+function MediumSelect({
+  value,
+  otherValue,
+  onChange,
+  onOtherChange,
+  required = true,
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-[13px] font-medium text-slate-600">
+        Medium
+        {required ? (
+          <span className="ml-0.5 text-rose-500">*</span>
+        ) : null}
+      </label>
+
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(event) =>
+            onChange(event.target.value)
+          }
+          required={required}
+          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+        >
+          <option value="">
+            Select medium
+          </option>
+          {UTM_MEDIUM_OPTIONS.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+
+        <ChevronDown
+          size={16}
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+        />
+      </div>
+
+      {value === "Other" ? (
+        <input
+          type="text"
+          required={required}
+          value={otherValue}
+          onChange={(event) =>
+            onOtherChange(event.target.value)
+          }
+          placeholder="Enter custom medium"
+          className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function MetricCard({
   label,
   value,
   icon: Icon,
   detail,
+  onClick,
+  active = false,
 }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+  const className = `w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${
+    onClick
+      ? "cursor-pointer hover:border-indigo-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
+      : ""
+  } ${
+    active
+      ? "border-indigo-300 ring-2 ring-indigo-50"
+      : "border-slate-200"
+  }`;
+
+  const content = (
+    <>
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div>
           <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">
@@ -1206,7 +725,225 @@ function MetricCard({
 
       <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
         {detail}
+        {onClick ? (
+          <span className="ml-1 font-semibold text-indigo-600">
+            View details
+          </span>
+        ) : null}
       </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={className}
+        aria-pressed={active}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
+}
+
+function AnalysisDetailPanel({
+  type,
+  links,
+  leads,
+  onClose,
+}) {
+  if (!type) {
+    return null;
+  }
+
+  const titleMap = {
+    links: "UTM Links",
+    registrations: "Registrations",
+    leads: "UTM Leads",
+    admissions: "Admissions",
+    revenue: "Revenue",
+  };
+
+  const linkById = new Map(
+    links.map((link) => [link.id, link])
+  );
+
+  const contributingLinks =
+    type === "registrations"
+      ? links.filter((link) => Number(link.regs || 0) > 0)
+      : type === "admissions"
+      ? links.filter((link) => Number(link.adm || 0) > 0)
+      : type === "revenue"
+      ? links.filter((link) => Number(link.rev || 0) > 0)
+      : links;
+
+  return (
+    <div
+      id="utm-analysis-details"
+      className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.04)]"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-indigo-50/40 px-5 py-4">
+        <div>
+          <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-indigo-600">
+            KPI Details
+          </div>
+          <h3 className="mt-1 text-lg font-bold text-slate-950">
+            {titleMap[type]}
+          </h3>
+          <p className="mt-1 text-[13px] text-slate-500">
+            {type === "registrations"
+              ? "Campaign links contributing to the registration total."
+              : type === "leads"
+              ? "Actual leads attributed to saved UTM links."
+              : type === "admissions"
+              ? "Campaign links contributing admissions."
+              : type === "revenue"
+              ? "Campaign links contributing received admission revenue."
+              : "Saved UTM campaign links for the selected year."}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white hover:text-slate-800"
+          aria-label="Close KPI details"
+        >
+          <X size={16} />
+        </button>
+      </div>
+
+      {type === "leads" ? (
+        <div className="overflow-x-auto">
+          <Table
+            columns={[
+              "Lead",
+              "Campaign",
+              "Influencer",
+              "Source / Medium",
+              "Stage",
+              "Created",
+            ]}
+            empty="No UTM leads found"
+            rows={leads.map((lead) => {
+              const link = linkById.get(lead.utmLinkId);
+
+              return (
+                <tr key={lead.id} className="hover:bg-slate-50/80">
+                  <td className="px-4 py-3">
+                    <div className="text-[14px] font-semibold text-slate-900">
+                      {lead.name}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-slate-500">
+                      {lead.phone || lead.email || "—"}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-[13px] text-slate-700">
+                    {link?.campaign || lead.campaign || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] text-slate-700">
+                    {link?.influencerName || "—"}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] text-slate-600">
+                    {link
+                      ? `${link.source} / ${link.medium}`
+                      : `${lead.source || "—"} / ${lead.medium || "—"}`}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Badge tone={stageTone(lead.stageKey || lead.stage)}>
+                      {lead.stage}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-[12px] text-slate-500">
+                    {formatDate(lead.createdAt)}
+                  </td>
+                </tr>
+              );
+            })}
+          />
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <Table
+            columns={
+              type === "links"
+                ? [
+                    "Campaign",
+                    "Influencer",
+                    "Source / Medium",
+                    "Registrations",
+                    "Leads",
+                    "Created",
+                  ]
+                : type === "registrations"
+                ? [
+                    "Campaign",
+                    "Influencer",
+                    "Source / Medium",
+                    "Registrations",
+                    "Leads",
+                  ]
+                : [
+                    "Campaign",
+                    "Influencer",
+                    "Source / Medium",
+                    "Admissions",
+                    "Revenue",
+                  ]
+            }
+            empty={`No ${titleMap[type].toLowerCase()} found`}
+            rows={contributingLinks.map((link) => (
+              <tr key={link.id} className="hover:bg-slate-50/80">
+                <td className="px-4 py-3 text-[14px] font-semibold text-slate-900">
+                  {link.campaign}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-700">
+                  {link.influencerName || "—"}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600">
+                  {link.source} / {link.medium}
+                </td>
+
+                {type === "links" ? (
+                  <>
+                    <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
+                      {Number(link.regs || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
+                      {Number(link.leads || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-[12px] text-slate-500">
+                      {formatDate(link.createdAt)}
+                    </td>
+                  </>
+                ) : type === "registrations" ? (
+                  <>
+                    <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
+                      {Number(link.regs || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-[13px] text-slate-700">
+                      {Number(link.leads || 0)}
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td className="px-4 py-3 text-[13px] font-bold text-emerald-700">
+                      {Number(link.adm || 0)}
+                    </td>
+                    <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
+                      ₹{Number(link.rev || 0).toLocaleString("en-IN")}
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1214,6 +951,7 @@ function MetricCard({
 function downloadCsv(rows) {
   const headers = [
     "Campaign",
+    "Influencer Name",
     "Source",
     "Medium",
     "URL",
@@ -1234,6 +972,7 @@ function downloadCsv(rows) {
     ...rows.map((link) =>
       [
         link.campaign,
+        link.influencerName,
         link.source,
         link.medium,
         link.url,
@@ -1286,59 +1025,6 @@ function downloadCsv(rows) {
 
 
 
-
-function downloadSourceLeads(rows, filename = "leads.csv") {
-  const headers = [
-    "Lead Name",
-    "Phone",
-    "Email",
-    "Course / Interest",
-    "Source",
-    "Campaign",
-    "Medium",
-    "Stage",
-    "Temperature",
-    "Assigned",
-    "Created",
-  ];
-
-  const escape = (value) =>
-    `"${String(value ?? "").replace(/"/g, '""')}"`;
-
-  const csv = [
-    headers.map(escape).join(","),
-    ...rows.map((lead) =>
-      [
-        lead.name,
-        lead.phone,
-        lead.email,
-        lead.course,
-        lead.source,
-        lead.campaign,
-        lead.medium,
-        lead.stage,
-        lead.temperature || "WARM",
-        lead.assigned,
-        lead.createdAt,
-      ]
-        .map(escape)
-        .join(",")
-    ),
-  ].join("\n");
-
-  const blob = new Blob([csv], {
-    type: "text/csv;charset=utf-8;",
-  });
-
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
 
 function downloadUtmLeadDetails(rows) {
   const headers = [
@@ -1550,30 +1236,6 @@ export default function UTMLeads({
   const [editingLink, setEditingLink] = useState(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
 
-  const [leadSourceView, setLeadSourceView] =
-    useState("INTERNAL");
-
-  const [showInternalLeadModal, setShowInternalLeadModal] =
-    useState(false);
-
-  const [showInternalImportModal, setShowInternalImportModal] =
-    useState(false);
-
-  const [internalImportMessage, setInternalImportMessage] =
-    useState("");
-
-  const [internalLeadSearch, setInternalLeadSearch] = useState("");
-  const [internalFiltersOpen, setInternalFiltersOpen] = useState(false);
-  const [internalFilters, setInternalFilters] = useState({
-    temperature: "",
-    stage: "",
-    assigned: "",
-    source: "",
-    course: "",
-    dateFrom: "",
-    dateTo: "",
-  });
-
   const [temperatureUpdatingId, setTemperatureUpdatingId] =
     useState("");
 
@@ -1581,7 +1243,9 @@ export default function UTMLeads({
     url: "",
     source: "",
     medium: "",
+    mediumOther: "",
     campaign: "",
+    influencerName: "",
     cost: "",
   });
 
@@ -1589,7 +1253,9 @@ export default function UTMLeads({
     url: "",
     source: "",
     medium: "",
+    mediumOther: "",
     campaign: "",
+    influencerName: "",
     cost: "",
   });
 
@@ -1598,6 +1264,7 @@ export default function UTMLeads({
   const [generateError, setGenerateError] = useState("");
   const [manualError, setManualError] = useState("");
   const [copiedGenerated, setCopiedGenerated] = useState(false);
+  const [analysisDetail, setAnalysisDetail] = useState(null);
 
   async function loadData() {
     setLoading(true);
@@ -1676,13 +1343,18 @@ export default function UTMLeads({
     }
   }
 
+  const generateMedium =
+    resolveUtmMedium(generateForm);
+  const manualMedium =
+    resolveUtmMedium(manualForm);
+
   const generatedUrl = useMemo(
     () =>
       buildTrackedUrl({
         url: generateForm.url,
         campaign: generateForm.campaign,
         source: generateForm.source,
-        medium: generateForm.medium,
+        medium: resolveUtmMedium(generateForm),
       }),
     [generateForm]
   );
@@ -1705,7 +1377,7 @@ export default function UTMLeads({
     if (
       !generateForm.url.trim() ||
       !generateForm.source.trim() ||
-      !generateForm.medium.trim() ||
+      !generateMedium ||
       !generateForm.campaign.trim() ||
       !generatedUrl
     ) {
@@ -1727,8 +1399,9 @@ export default function UTMLeads({
             mode: "generate",
             url: generateForm.url,
             source: generateForm.source,
-            medium: generateForm.medium,
+            medium: generateMedium,
             campaign: generateForm.campaign,
+            influencerName: generateForm.influencerName,
             cost: Number(generateForm.cost || 0),
           }),
         }
@@ -1738,7 +1411,9 @@ export default function UTMLeads({
         url: "",
         source: "",
         medium: "",
+        mediumOther: "",
         campaign: "",
+        influencerName: "",
         cost: "",
       });
 
@@ -1757,7 +1432,7 @@ export default function UTMLeads({
     if (
       !manualForm.url.trim() ||
       !manualForm.source.trim() ||
-      !manualForm.medium.trim() ||
+      !manualMedium ||
       !manualForm.campaign.trim()
     ) {
       setManualError(
@@ -1785,8 +1460,9 @@ export default function UTMLeads({
             mode: "manual",
             url: manualForm.url,
             source: manualForm.source,
-            medium: manualForm.medium,
+            medium: manualMedium,
             campaign: manualForm.campaign,
+            influencerName: manualForm.influencerName,
             cost: Number(manualForm.cost || 0),
           }),
         }
@@ -1796,7 +1472,9 @@ export default function UTMLeads({
         url: "",
         source: "",
         medium: "",
+        mediumOther: "",
         campaign: "",
+        influencerName: "",
         cost: "",
       });
 
@@ -1873,6 +1551,7 @@ export default function UTMLeads({
         query &&
         ![
           link.campaign,
+          link.influencerName,
           link.source,
           link.medium,
           link.url,
@@ -1990,146 +1669,6 @@ export default function UTMLeads({
     [links]
   );
 
-
-  const internalGroupLeads = useMemo(
-    () =>
-      leads.filter((lead) =>
-        INTERNAL_SOURCE_KEYS.includes(lead.sourceKey)
-      ),
-    [leads]
-  );
-
-  const internalAssignedOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          internalGroupLeads
-            .map((lead) => lead.assigned)
-            .filter(
-              (value) => value && value !== "Unassigned"
-            )
-        )
-      ).sort(),
-    [internalGroupLeads]
-  );
-
-  const internalCourseOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          internalGroupLeads
-            .map((lead) => lead.course)
-            .filter(Boolean)
-        )
-      ).sort(),
-    [internalGroupLeads]
-  );
-
-  const sourceViewLeads = useMemo(() => {
-    const query = internalLeadSearch.trim().toLowerCase();
-
-    return internalGroupLeads.filter((lead) => {
-      if (lead.sourceKey !== leadSourceView) {
-        return false;
-      }
-
-      if (
-        internalFilters.source &&
-        lead.sourceKey !== internalFilters.source
-      ) {
-        return false;
-      }
-
-      if (
-        internalFilters.temperature &&
-        (lead.temperature || "WARM") !==
-          internalFilters.temperature
-      ) {
-        return false;
-      }
-
-      if (
-        internalFilters.stage &&
-        lead.stageKey !== internalFilters.stage
-      ) {
-        return false;
-      }
-
-      if (
-        internalFilters.assigned &&
-        lead.assigned !== internalFilters.assigned
-      ) {
-        return false;
-      }
-
-      if (
-        internalFilters.course &&
-        lead.course !== internalFilters.course
-      ) {
-        return false;
-      }
-
-      const createdAt = new Date(lead.createdAt);
-
-      if (
-        internalFilters.dateFrom &&
-        createdAt < new Date(`${internalFilters.dateFrom}T00:00:00`)
-      ) {
-        return false;
-      }
-
-      if (internalFilters.dateTo) {
-        const dateTo = new Date(
-          `${internalFilters.dateTo}T23:59:59.999`
-        );
-        if (createdAt > dateTo) {
-          return false;
-        }
-      }
-
-      if (!query) return true;
-
-      return [
-        lead.name,
-        lead.phone,
-        lead.email,
-        lead.course,
-        lead.source,
-        lead.campaign,
-        lead.medium,
-        lead.stage,
-        lead.temperature,
-        lead.assigned,
-      ]
-        .filter(Boolean)
-        .some((value) =>
-          String(value).toLowerCase().includes(query)
-        );
-    });
-  }, [
-    internalGroupLeads,
-    leadSourceView,
-    internalLeadSearch,
-    internalFilters,
-  ]);
-
-  const hasInternalFilters = Boolean(
-    internalLeadSearch.trim() ||
-      Object.values(internalFilters).some(Boolean)
-  );
-
-  function clearInternalFilters() {
-    setInternalLeadSearch("");
-    setInternalFilters({
-      temperature: "",
-      stage: "",
-      assigned: "",
-      source: "",
-      course: "",
-      dateFrom: "",
-      dateTo: "",
-    });
-  }
 
   const summary = analytics.summary || {};
 
@@ -2265,6 +1804,15 @@ export default function UTMLeads({
               placeholder="August Admissions 2026"
             />
 
+            <Field
+              label="Influencer Name"
+              value={generateForm.influencerName}
+              onChange={(value) =>
+                updateGenerate("influencerName", value)
+              }
+              placeholder="Influencer / partner name"
+            />
+
             <PlatformSelect
               label="Platform"
               value={generateForm.source}
@@ -2276,14 +1824,18 @@ export default function UTMLeads({
               }
             />
 
-            <Field
-              label="Medium"
-              required
+            <MediumSelect
               value={generateForm.medium}
-              onChange={(value) =>
-                updateGenerate("medium", value)
+              otherValue={generateForm.mediumOther}
+              onChange={(value) => {
+                updateGenerate("medium", value);
+                if (value !== "Other") {
+                  updateGenerate("mediumOther", "");
+                }
+              }}
+              onOtherChange={(value) =>
+                updateGenerate("mediumOther", value)
               }
-              placeholder="social"
             />
 
             <div>
@@ -2322,6 +1874,7 @@ export default function UTMLeads({
               disabled={
                 generateSaving ||
                 !generatedUrl ||
+                !generateMedium ||
                 Number(generateForm.cost) < 0
               }
               className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
@@ -2406,6 +1959,15 @@ export default function UTMLeads({
               placeholder="Influencer August"
             />
 
+            <Field
+              label="Influencer Name"
+              value={manualForm.influencerName}
+              onChange={(value) =>
+                updateManual("influencerName", value)
+              }
+              placeholder="Influencer / partner name"
+            />
+
             <PlatformSelect
               label="Platform / Source"
               value={manualForm.source}
@@ -2417,14 +1979,18 @@ export default function UTMLeads({
               }
             />
 
-            <Field
-              label="Medium"
-              required
+            <MediumSelect
               value={manualForm.medium}
-              onChange={(value) =>
-                updateManual("medium", value)
+              otherValue={manualForm.mediumOther}
+              onChange={(value) => {
+                updateManual("medium", value);
+                if (value !== "Other") {
+                  updateManual("mediumOther", "");
+                }
+              }}
+              onOtherChange={(value) =>
+                updateManual("mediumOther", value)
               }
-              placeholder="instagram"
             />
 
             <Field
@@ -2445,7 +2011,7 @@ export default function UTMLeads({
               manualSaving ||
               !isValidHttpUrl(manualForm.url) ||
               !manualForm.source.trim() ||
-              !manualForm.medium.trim() ||
+              !manualMedium ||
               !manualForm.campaign.trim() ||
               Number(manualForm.cost) < 0
             }
@@ -2508,7 +2074,7 @@ export default function UTMLeads({
                 onChange={(event) =>
                   setLinkSearch(event.target.value)
                 }
-                placeholder="Search campaign, source, medium, URL or latest lead..."
+                placeholder="Search campaign, influencer, source, medium, URL or latest lead..."
                 className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px]"
               />
             </div>
@@ -2575,6 +2141,7 @@ export default function UTMLeads({
           <Table
             columns={[
               "Campaign",
+              "Influencer",
               "Source / Medium",
               "Saved Link",
               "Leads",
@@ -2598,6 +2165,10 @@ export default function UTMLeads({
                   <div className="mt-0.5 text-[13px] text-slate-400">
                     {formatDate(link.createdAt)}
                   </div>
+                </td>
+
+                <td className="px-4 py-3 text-[15px] text-slate-700">
+                  {link.influencerName || "—"}
                 </td>
 
                 <td className="px-4 py-3 text-[15px] capitalize text-slate-600">
@@ -2696,402 +2267,11 @@ export default function UTMLeads({
       </section>
 
 
-      {/* Internal lead sources */}
-      <section className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
-              Lead Sources
-            </div>
-
-            <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] text-slate-950">
-              Internal Leads
-            </h2>
-
-            <p className="mt-1 text-[13px] text-slate-500">
-              Manage manually added or imported Internal, Google Form, Website Form, IM and DM leads in one place.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowInternalLeadModal(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700"
-            >
-              <Plus size={14} />
-              Add Lead
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowInternalImportModal(true)}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white hover:bg-slate-800"
-            >
-              <Upload size={14} />
-              Import Leads
-            </button>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
-          {INTERNAL_SOURCE_TABS.map((item) => {
-            const Icon = item.icon;
-            const count = internalGroupLeads.filter(
-              (lead) => lead.sourceKey === item.key
-            ).length;
-
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setLeadSourceView(item.key)}
-                className={`inline-flex h-10 items-center gap-2 rounded-xl px-3.5 text-[13px] font-bold ${
-                  leadSourceView === item.key
-                    ? "bg-indigo-600 text-white"
-                    : "text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                <Icon size={14} />
-                {item.label}
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[12px] ${
-                    leadSourceView === item.key
-                      ? "bg-white/15"
-                      : "bg-slate-100"
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 p-3">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-              <div className="relative min-w-0 flex-1">
-                <Search
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <input
-                  value={internalLeadSearch}
-                  onChange={(event) =>
-                    setInternalLeadSearch(event.target.value)
-                  }
-                  placeholder="Search name, phone, email, course, source, stage or assigned user..."
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setInternalFiltersOpen((current) => !current)
-                }
-                className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl border px-4 text-[13px] font-bold ${
-                  internalFiltersOpen ||
-                  Object.values(internalFilters).some(Boolean)
-                    ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <SlidersHorizontal size={14} />
-                Filter
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  downloadSourceLeads(
-                    sourceViewLeads,
-                    `${leadSourceView.toLowerCase()}-leads.csv`
-                  )
-                }
-                disabled={!sourceViewLeads.length}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                <Download size={14} />
-                Export
-              </button>
-            </div>
-
-            {internalFiltersOpen ? (
-              <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    Temperature
-                  </label>
-                  <select
-                    value={internalFilters.temperature}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        temperature: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  >
-                    <option value="">All temperatures</option>
-                    {LEAD_TEMPERATURES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    Stage / Status
-                  </label>
-                  <select
-                    value={internalFilters.stage}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        stage: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  >
-                    <option value="">All stages</option>
-                    {STAGES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    Assigned To
-                  </label>
-                  <select
-                    value={internalFilters.assigned}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        assigned: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  >
-                    <option value="">All assignees</option>
-                    <option value="Unassigned">Unassigned</option>
-                    {internalAssignedOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    Source
-                  </label>
-                  <select
-                    value={internalFilters.source}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        source: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  >
-                    <option value="">All sources</option>
-                    {SOURCES.filter((item) =>
-                      INTERNAL_SOURCE_KEYS.includes(item.value)
-                    ).map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    Course
-                  </label>
-                  <select
-                    value={internalFilters.course}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        course: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  >
-                    <option value="">All courses</option>
-                    {internalCourseOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    From Date
-                  </label>
-                  <input
-                    type="date"
-                    value={internalFilters.dateFrom}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        dateFrom: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-[12px] font-semibold text-slate-500">
-                    To Date
-                  </label>
-                  <input
-                    type="date"
-                    value={internalFilters.dateTo}
-                    onChange={(event) =>
-                      setInternalFilters((current) => ({
-                        ...current,
-                        dateTo: event.target.value,
-                      }))
-                    }
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px]"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    type="button"
-                    onClick={clearInternalFilters}
-                    disabled={!hasInternalFilters}
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {internalImportMessage ? (
-            <div className="border-b border-emerald-100 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">
-              {internalImportMessage}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 text-[12px] text-slate-500">
-            <span>
-              Showing <strong className="text-slate-700">{sourceViewLeads.length}</strong> of {internalGroupLeads.length} internal leads
-            </span>
-            <span>
-              {INTERNAL_SOURCE_TABS.find(
-                (item) => item.key === leadSourceView
-              )?.label || "Internal Leads"}
-            </span>
-          </div>
-
-          <Table
-            columns={[
-              "Lead",
-              "Course / Interest",
-              "Source",
-              "Campaign",
-              "Medium",
-              "Stage",
-              "Temperature",
-              "Assigned",
-              "Created",
-            ]}
-            empty="No internal leads match the selected filters"
-            rows={sourceViewLeads.map((lead) => (
-              <tr key={lead.id} className="hover:bg-slate-50/80">
-                <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
-                    {lead.name}
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-slate-500">
-                    <PhoneAction
-                      phone={lead.phone}
-                      name={lead.name}
-                    />
-                  </div>
-                  {lead.email ? (
-                    <div className="mt-0.5 text-[12px] text-slate-400">
-                      {lead.email}
-                    </div>
-                  ) : null}
-                </td>
-
-                <td className="px-4 py-3 text-[15px] text-slate-700">
-                  {lead.course || "—"}
-                </td>
-
-                <td className="px-4 py-3 text-[15px] text-slate-600">
-                  {lead.source || "—"}
-                </td>
-
-                <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
-                  {lead.campaign || "—"}
-                </td>
-
-                <td className="px-4 py-3 text-[15px] text-slate-600">
-                  {lead.medium || "—"}
-                </td>
-
-                <td className="px-4 py-3">
-                  <Badge tone={stageTone(lead.stageKey || lead.stage)}>
-                    {lead.stage}
-                  </Badge>
-                </td>
-
-                <td className="px-4 py-3">
-                  <select
-                    value={lead.temperature || "WARM"}
-                    disabled={temperatureUpdatingId === lead.id}
-                    onChange={(event) =>
-                      updateLeadTemperature(lead.id, event.target.value)
-                    }
-                    className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none disabled:opacity-60 ${temperatureClass(
-                      lead.temperature || "WARM"
-                    )}`}
-                  >
-                    {LEAD_TEMPERATURES.map((item) => (
-                      <option key={item.value} value={item.value}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="px-4 py-3 text-[15px] text-slate-700">
-                  {lead.assigned || "Unassigned"}
-                </td>
-
-                <td className="px-4 py-3 text-[13px] text-slate-500">
-                  {formatDate(lead.createdAt)}
-                </td>
-              </tr>
-            ))}
-          />
-        </div>
-      </section>
-
-
       {/* UTM Lead Details */}
-      <section className="space-y-3">
+      <section
+        id="utm-lead-details"
+        className="space-y-3 scroll-mt-28"
+      >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
@@ -3227,7 +2407,10 @@ export default function UTMLeads({
       </section>
 
       {/* UTM Analysis */}
-      <section className="space-y-4">
+      <section
+        id="utm-analysis"
+        className="space-y-4 scroll-mt-28"
+      >
         <div>
           <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
             Performance
@@ -3247,28 +2430,36 @@ export default function UTMLeads({
             label="UTM Links"
             value={summary.totalUtmLinks ?? links.length}
             icon={Link2}
-            detail="Saved campaign links"
+            detail="Saved campaign links."
+            onClick={() => setAnalysisDetail("links")}
+            active={analysisDetail === "links"}
           />
 
           <MetricCard
             label="Registrations"
             value={summary.totalRegistrations ?? 0}
             icon={UserPlus}
-            detail="Tracked registrations"
+            detail="Tracked registrations."
+            onClick={() => setAnalysisDetail("registrations")}
+            active={analysisDetail === "registrations"}
           />
 
           <MetricCard
             label="UTM Leads"
             value={summary.totalLeads ?? utmLeads.length}
             icon={Users}
-            detail="Tracked UTM leads"
+            detail="Tracked UTM leads."
+            onClick={() => setAnalysisDetail("leads")}
+            active={analysisDetail === "leads"}
           />
 
           <MetricCard
             label="Admissions"
             value={summary.totalAdmissions ?? 0}
             icon={UserCheck}
-            detail="Admissions from UTM leads"
+            detail="Admissions from UTM leads."
+            onClick={() => setAnalysisDetail("admissions")}
+            active={analysisDetail === "admissions"}
           />
 
           <MetricCard
@@ -3277,9 +2468,18 @@ export default function UTMLeads({
               summary.totalRevenue || 0
             ).toLocaleString("en-IN")}`}
             icon={IndianRupee}
-            detail="Received admission revenue"
+            detail="Received admission revenue."
+            onClick={() => setAnalysisDetail("revenue")}
+            active={analysisDetail === "revenue"}
           />
         </div>
+
+        <AnalysisDetailPanel
+          type={analysisDetail}
+          links={links}
+          leads={utmLeads}
+          onClose={() => setAnalysisDetail(null)}
+        />
 
         <div className="grid gap-4 xl:grid-cols-3">
           <PerformanceCard
@@ -3331,40 +2531,6 @@ export default function UTMLeads({
         </div>
       </section>
 
-
-      {showInternalLeadModal ? (
-        <LeadModal
-          defaultSource={leadSourceView}
-          onClose={() => setShowInternalLeadModal(false)}
-          onCreated={async (lead) => {
-            setShowInternalLeadModal(false);
-            await loadData();
-            if (lead?.sourceKey && INTERNAL_SOURCE_KEYS.includes(lead.sourceKey)) {
-              setLeadSourceView(lead.sourceKey);
-            }
-          }}
-        />
-      ) : null}
-
-      {showInternalImportModal ? (
-        <ImportInternalLeadsModal
-          defaultSource={leadSourceView}
-          links={links}
-          onClose={() => setShowInternalImportModal(false)}
-          onImported={async (data, source) => {
-            setShowInternalImportModal(false);
-            setInternalImportMessage(
-              `${data.importSummary?.imported || 0} imported · ${
-                data.importSummary?.duplicates || 0
-              } duplicates · ${
-                data.importSummary?.invalid || 0
-              } invalid skipped`
-            );
-            await loadData();
-            setLeadSourceView(source);
-          }}
-        />
-      ) : null}
 
       {showLinkModal ? (
         <LinkModal

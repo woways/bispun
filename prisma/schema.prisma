@@ -577,10 +577,11 @@ model UtmLink {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  campaign String
-  source   String
-  medium   String
-  url      String
+  campaign       String
+  influencerName String?
+  source         String
+  medium         String
+  url            String
 
   clicks        Int @default(0)
   registrations Int @default(0)

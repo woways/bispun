@@ -474,6 +474,7 @@ function formatLink(link) {
   return {
     id: link.id,
     campaign: link.campaign,
+    influencerName: link.influencerName,
     source: link.source,
     medium: link.medium,
     url: link.url,
@@ -1807,6 +1808,14 @@ router.get("/utm/links", async (req, res) => {
           },
         },
         {
+          influencerName: {
+            contains:
+              search,
+            mode:
+              "insensitive",
+          },
+        },
+        {
           source: {
             contains:
               search,
@@ -1900,6 +1909,8 @@ router.get("/utm/links", async (req, res) => {
             id: link.id,
             campaign:
               link.campaign,
+            influencerName:
+              link.influencerName,
             source:
               link.source,
             medium:
@@ -2067,6 +2078,12 @@ router.post("/utm/links", async (req, res) => {
           ""
       ).trim();
 
+    const influencerName =
+      String(
+        req.body?.influencerName ||
+          ""
+      ).trim();
+
     const source =
       String(
         req.body?.source ||
@@ -2190,6 +2207,8 @@ router.post("/utm/links", async (req, res) => {
         data: {
           companyId,
           campaign,
+          influencerName:
+            influencerName || null,
           source,
           medium,
           url,
@@ -2205,6 +2224,8 @@ router.post("/utm/links", async (req, res) => {
         id: link.id,
         campaign:
           link.campaign,
+        influencerName:
+          link.influencerName,
         source:
           link.source,
         medium:
@@ -2336,6 +2357,20 @@ router.patch("/utm/links/:id", async (req, res) => {
     }
 
     if (
+      req.body?.influencerName !==
+      undefined
+    ) {
+      const influencerName =
+        String(
+          req.body.influencerName ||
+            ""
+        ).trim();
+
+      data.influencerName =
+        influencerName || null;
+    }
+
+    if (
       req.body?.url !==
       undefined
     ) {
@@ -2383,6 +2418,8 @@ router.patch("/utm/links/:id", async (req, res) => {
           updated.id,
         campaign:
           updated.campaign,
+        influencerName:
+          updated.influencerName,
         source:
           updated.source,
         medium:
