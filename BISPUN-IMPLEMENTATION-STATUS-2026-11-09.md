@@ -285,6 +285,49 @@ Safe, un-gated fixes implemented and committed on the integration branch (base `
 
 ---
 
+## 11. Release-prep audit — 2026-11-09 (HOLD; read-only; docs local/uncommitted)
+
+**Decisions in force:** Production release **ON HOLD** and branch cleanup **ON HOLD** (incl. the candidate `feat/admissions-notifications-calendar` — untouched). No merge, no `main` push, no deploy, no Prod access, no deletions. These doc edits are **local/uncommitted** (not pushed to PR #13).
+
+**GitHub:** `origin/main` = `c618261` (unchanged). PR **#13** OPEN, head `7edee75`, **0 behind / 14 ahead** (clean FF), `MERGEABLE` / `CLEAN`, Vercel preview SUCCESS, no failing checks, no required-review block, no new PRs since #12. **Technically ready for review; held by decision.**
+
+**Deployment behavior (Phase 2):**
+- *Verified (repo):* `vercel.json` present (SPA rewrites) → **frontend** is a Vite static SPA on **Vercel**. **No** `render.yaml`/`Procfile`/`render.json` and **no `.github/workflows`** in the repo → backend host + CI are configured **outside** the repo.
+- *Assumption (needs dashboard confirmation):* Vercel auto-deploys the **frontend** from `main`; **Render** auto-deploys the **Express backend** from `main`. Exact triggers are in the Vercel/Render dashboards — **not** verifiable from the repo.
+- PR #13 **contains backend changes** (server routes/libs) **and** frontend changes → both would redeploy on a `main` push.
+- **Backward compatibility (by inspection, not runtime):** additive and safe either order — new backend returns `leadsBySourceTotal` (old FE ignores it); new FE falls back to the slice-sum when it's absent; notification `actionModule` `lead-store#lead:<id>` is parsed by both old and new FE (the `#` split pre-existed). Telephony/calendar/bulk-assign are backend-only. **Recommended order: backend first, then frontend.**
+- **Rollback:** Vercel (redeploy previous) and Render (redeploy previous) independently; git rollback via `main`'s prior commit + backup tag `backup/pre-main-merge-20261109`. Deployed commit is identified via the Vercel/Render dashboards (`/api/health` returns `requestId`, **not** a build SHA — consider adding a version field later).
+
+**Production schema (Phase 3): PASS for verified columns.** Operator-confirmed on `consulbuzz-production`/`production`/`neondb`: `User.designationId`, `levelId`, `levelName` (text) and `leadStoreColumnOrder` (array, default `ARRAY[]::text[]`). PR #13 changes **no** schema/migration files; its queries depend only on pre-existing tables/columns + those confirmed. **Do NOT run `0002` in Prod.**
+- **One open item (not a PR #13 dependency):** the pre-existing **`DeviceToken`** table (migration `0001`, mobile push). Operator SELECT-only checks:
+  ```sql
+  SELECT to_regclass('public."DeviceToken"') AS devicetoken_table;         -- null => missing
+  SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'DeviceToken';
+  -- re-confirm User cols:
+  SELECT column_name, data_type, column_default FROM information_schema.columns
+   WHERE table_name = 'User' AND column_name IN ('designationId','levelId','levelName','leadStoreColumnOrder');
+  ```
+  Without `DeviceToken`, device-token register/unregister 500s (push dispatch is guarded); it does **not** affect the Web/Backend fixes in PR #13.
+
+**Web/Backend release-safety (Phase 4):**
+| Item | Impl | Verification |
+|---|---|---|
+| Automated suite / build | — | ✅ PASS (75/75; build OK) |
+| Dev DB schema / Prisma client | — | ✅ PASS |
+| Prod designation/level/columnOrder columns | — | ✅ PASS (operator) |
+| Telephony call-history scope | FULLY | ✅ unit PASS; ⬜ route integration NOT TESTED |
+| Calendar edit/delete authz | FULLY | ✅ unit PASS; ⬜ route integration NOT TESTED |
+| Notification exact-lead nav (web) | FULLY | ✅ parser unit PASS; 🟡 UI click NOT TESTED |
+| Dashboard Leads-by-Source total | FULLY | ✅ unit PASS |
+| Lead bulk-assign id hardening | FULLY | ✅ id-clause unit PASS; ⬜ bulk-assign integration NOT TESTED |
+| Login/session; Users&Roles; permissions; tenant isolation | FULLY (code) | 🟡 unit (pageAccess/leadVisibility) + data-layer/boot; ⬜ full interactive NOT TESTED |
+| Calendar private/shared **view** model | NOT IMPL | ⬜ pending (migration-gated) |
+| Google OAuth / Firebase | NEEDS CONFIG | ⛔ BLOCKED (creds not provisioned; not required by PR #13) |
+
+**Remaining Production risks:** (1) confirm Vercel/Render **deploy triggers** in the dashboards; (2) confirm **`DeviceToken`** in Prod; (3) FE/BE **deploy order** (backend first) to avoid a transient mismatch; (4) interactive runtime of Users&Roles/permissions not yet exercised (unit + data-layer only).
+
+---
+
 ## 9. Release gate status — 2026-11-09 (pre-merge)
 
 Feature branch is **0 behind / 10 ahead** of `origin/main` (`2aceef9`, no other-dev commits) → clean fast-forward, no conflicts.

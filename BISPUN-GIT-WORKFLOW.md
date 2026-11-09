@@ -17,7 +17,7 @@
 | Branch | Latest | What it is | Status |
 |---|---|---|---|
 | `main` | `c618261` | Integrated baseline (live) | ✅ Protected — never delete |
-| `feat/bispun-audit-fixes-mobile-completion` | `809f6a7` | Audit fixes (security, notifications, dashboard, Users&Roles migration) | 🔵 **ACTIVE — PR #13 open (under review)**; ready to merge after deploy approval |
+| `feat/bispun-audit-fixes-mobile-completion` | `7edee75` | Audit fixes (security, notifications, dashboard, Users&Roles migration) | 🔵 **PR #13 open — technically ready; release ON HOLD** (awaiting owner deploy approval) |
 | `release/android-signing-prep` | `47396dd` | Android release signing config | 🟣 On hold (worktree) — needed for Android release |
 | `feat/referrals-integration` | `844c352` | Referrals work (merged PR #6) | 🟣 In use (worktree) |
 | `integration/mui-yc` | `70b8209` | Older integration work | 🟣 In use (worktree) |

@@ -159,6 +159,8 @@ Quick "opens + loads data + core action works" pass for each:
 
 ---
 
+> **HOLD 2026-11-09:** Production release and branch cleanup are ON HOLD by owner decision. The deploy gate below is prepared for a future approved release — do not execute it now.
+
 ## 11. Deploy gate (prod parity) — updated 2026-11-09
 
 **Production schema verification (PR #13 dependency): ✅ PASS.** Confirmed by the operator via the Neon SQL Editor on `consulbuzz-production` / branch `production` / `neondb`: `User.designationId`, `User.levelId`, `User.levelName` all exist (text). → **Do NOT apply migration `0002` to Production** (already present). PR #13 itself changes **no** schema/migration files, so it introduces **no new Production schema requirement**.

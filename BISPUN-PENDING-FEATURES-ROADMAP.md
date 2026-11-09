@@ -9,6 +9,9 @@ Complexity key: **S** = <½ day, **M** = ~1–3 days, **L** = >3 days / cross-cu
 
 ---
 
+## Status 2026-11-09 (later): RELEASE & CLEANUP ON HOLD
+Per owner decision: **Production release ON HOLD** and **branch cleanup ON HOLD**. PR #13 stays open (MERGEABLE/CLEAN, Vercel preview green). No merge, no `main` push, no deploy, no branch/worktree deletion. Prod schema verified (designation/level + leadStoreColumnOrder present) — do **not** run `0002` in Prod. Only remaining Web/Backend gate is the owner's deploy approval; open item: confirm `DeviceToken` table in Prod. Mobile runtime remains BLOCKED (no emulator).
+
 ## Progress — 2026-11-09 (branch `feat/bispun-audit-fixes-mobile-completion`)
 
 | # | Item | State |
