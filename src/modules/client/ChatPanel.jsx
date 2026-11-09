@@ -287,6 +287,9 @@ export default function ChatPanel({
   onTargetConversationHandled,
 }) {
   const myId = currentUser?.id;
+  const canDeleteChats =
+    currentUser?.role === "CLIENT_ADMIN" ||
+    currentUser?.pageAccess?.chat?.deleteChats === true;
 
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -325,6 +328,19 @@ export default function ChatPanel({
   const groupAvatarInputRef = useRef(null);
   const messageMenuAnchorRef = useRef(null);
   const messageMenuPopoverRef = useRef(null);
+
+  const activeMeetingLink = useMemo(() => {
+    const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.deletedForEveryone) continue;
+      const room = meetingRoomFromBody(message?.body);
+      if (!room) continue;
+      const createdAt = message?.createdAt ? new Date(message.createdAt).getTime() : Date.now();
+      if (!Number.isNaN(createdAt) && createdAt >= cutoff) return room;
+    }
+    return "";
+  }, [messages]);
 
   function closeMessageMenu() {
     setMessageMenuId(null);
@@ -1169,6 +1185,10 @@ export default function ChatPanel({
   }
 
   async function clearActiveChat() {
+    if (!canDeleteChats) {
+      setError("Client Admin has not enabled chat deletion for your account");
+      return;
+    }
     if (!activeId || deleting) return;
     if (!window.confirm("Clear this chat for you? The other participants will keep their messages.")) return;
     setDeleting(true);
@@ -1199,6 +1219,11 @@ export default function ChatPanel({
   }
 
   async function deleteSelectedChats() {
+    if (!canDeleteChats) {
+      setError("Client Admin has not enabled chat deletion for your account");
+      leaveSelectionMode();
+      return;
+    }
     if (!selectedConversationIds.length || deleting) return;
     if (!window.confirm(`Delete ${selectedConversationIds.length} selected chat${selectedConversationIds.length > 1 ? "s" : ""} for you?`)) return;
     setDeleting(true);
@@ -1225,21 +1250,19 @@ export default function ChatPanel({
 
   async function startMeeting() {
     if (!activeId) return;
+    if (activeMeetingLink) {
+      joinMeeting(activeMeetingLink);
+      return;
+    }
     try {
-      const now = Date.now();
-      const data = await apiRequest("/api/client/google/meet", {
+      const data = await apiRequest(`/api/client/chat/${activeId}/meet`, {
         method: "POST",
-        body: JSON.stringify({
-          summary: "Bispun call",
-          startISO: new Date(now).toISOString(),
-          endISO: new Date(now + 60 * 60 * 1000).toISOString(),
-        }),
       });
       const link = data?.meetLink;
       if (!link) return;
 
       const socket = socketRef.current;
-      if (socket) {
+      if (data?.announce !== false && socket) {
         socket.emit(
           "message:send",
           { conversationId: activeId, body: `${MEETING_PREFIX}${link}` },
@@ -1530,7 +1553,9 @@ export default function ChatPanel({
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => setSelectionMode(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Select chats" title="Select chats"><ListChecks size={16} /></button>
+                  {canDeleteChats && (
+                    <button type="button" onClick={() => setSelectionMode(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Select chats" title="Select chats"><ListChecks size={16} /></button>
+                  )}
                   <button type="button" onClick={openNewChat} className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-neutral-300 bg-white px-3.5 text-[13px] font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50"><Plus size={14} />New</button>
                 </>
               )}
@@ -1620,10 +1645,10 @@ export default function ChatPanel({
                   type="button"
                   onClick={startMeeting}
                   className="inline-flex h-9 items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 text-[13px] font-bold text-indigo-700 transition hover:bg-indigo-100"
-                  title="Start meeting"
+                  title={activeMeetingLink ? "Join current meeting" : "Start meeting"}
                 >
                   <Video size={14} />
-                  <span className="hidden sm:inline">Meet now</span>
+                  <span className="hidden sm:inline">{activeMeetingLink ? "Join Meet" : "Meet now"}</span>
                 </button>
                 <button
                   type="button"
@@ -1659,7 +1684,9 @@ export default function ChatPanel({
                       {activeConversation.isGroup && (
                         <button type="button" onClick={() => { setHeaderMenuOpen(false); groupAvatarInputRef.current?.click(); }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Camera size={14} />Change group photo</button>
                       )}
-                      <button type="button" onClick={clearActiveChat} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Eraser size={14} />Clear chat for me</button>
+                      {canDeleteChats && (
+                        <button type="button" onClick={clearActiveChat} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Eraser size={14} />Clear chat for me</button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2140,8 +2167,8 @@ export default function ChatPanel({
                     type="button"
                     onClick={startMeeting}
                     className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 lg:h-9 lg:w-9"
-                    aria-label="Start meeting"
-                    title="Start meeting"
+                    aria-label={activeMeetingLink ? "Join current meeting" : "Start meeting"}
+                    title={activeMeetingLink ? "Join current meeting" : "Start meeting"}
                   >
                     <Video size={16} />
                   </button>

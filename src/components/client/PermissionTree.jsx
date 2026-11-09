@@ -14,10 +14,11 @@ import { useState } from "react";
  * access — nodes outside `actorPageAccess` are disabled.
  */
 
-const EMPTY_ADMISSIONS = { all: false, markets: [], streamIds: [], collegeIds: [], branchIds: [] };
+const EMPTY_ADMISSIONS = { all: false, markets: [], streamIds: [], collegeIds: [], branchIds: [], attachments: false };
 
 export function emptyPageAccess() {
   return {
+    chat: { deleteChats: false },
     dashboard: { all: false, sections: [] },
     admissions: { ...EMPTY_ADMISSIONS },
     finance: { all: false, sections: [] },
@@ -27,12 +28,14 @@ export function emptyPageAccess() {
 
 export function normalizeClientPageAccess(raw) {
   const s = raw && typeof raw === "object" ? raw : {};
+  const c = s.chat && typeof s.chat === "object" ? s.chat : {};
   const d = s.dashboard && typeof s.dashboard === "object" ? s.dashboard : {};
   const a = s.admissions && typeof s.admissions === "object" ? s.admissions : {};
   const f = s.finance && typeof s.finance === "object" ? s.finance : {};
   const i = s.insights && typeof s.insights === "object" ? s.insights : {};
   const arr = (v) => (Array.isArray(v) ? v.map(String) : []);
   return {
+    chat: { deleteChats: c.deleteChats === true },
     dashboard: { all: d.all === true, sections: arr(d.sections) },
     admissions: {
       all: a.all === true,
@@ -40,6 +43,7 @@ export function normalizeClientPageAccess(raw) {
       streamIds: arr(a.streamIds),
       collegeIds: arr(a.collegeIds),
       branchIds: arr(a.branchIds),
+      attachments: a.attachments === true,
     },
     finance: { all: f.all === true, sections: arr(f.sections) },
     insights: { all: i.all === true, sections: arr(i.sections) },
@@ -158,6 +162,7 @@ export default function PermissionTree({
 
   const PAGES = [
     { key: "dashboard", label: "Dashboard", perm: null },
+    { key: "chats", label: "Chats", perm: null },
     { key: "admissions", label: "Admissions", perm: "canManageAdmissions" },
     { key: "finance", label: "Finance", perm: "canManageRevenue" },
     { key: "insights", label: "Insights", perm: "canViewAnalytics" },
@@ -173,6 +178,10 @@ export default function PermissionTree({
     onPageAccess({ ...access, admissions: { ...access.admissions, ...next } });
   }
 
+  function patchChat(next) {
+    onPageAccess({ ...access, chat: { ...access.chat, ...next } });
+  }
+
   const toggle = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
 
   function renderAdmissions() {
@@ -181,6 +190,14 @@ export default function PermissionTree({
 
     return (
       <div className="mt-1">
+        <Row indent={0}>
+          <Check
+            label="View college attachments"
+            checked={access.admissions.attachments}
+            disabled={actor ? !actor.admissions.attachments : false}
+            onChange={(on) => patchAdmissions({ attachments: on })}
+          />
+        </Row>
         <Row indent={0}>
           <Check
             label="Allow all admissions"
@@ -316,6 +333,26 @@ export default function PermissionTree({
     );
   }
 
+  function renderChat() {
+    const grantable = actor ? actor.chat.deleteChats : true;
+    return (
+      <div className="mt-1">
+        <Row indent={0}>
+          <Check
+            label="Allow chat deletion"
+            checked={access.chat.deleteChats}
+            disabled={!grantable}
+            muted={!grantable}
+            onChange={(on) => patchChat({ deleteChats: on })}
+          />
+        </Row>
+        <div className="pl-4 pt-1 text-[11px] leading-4 text-slate-400">
+          Controls Clear Chat and single/multi-chat deletion. Message-level delete remains available to the message owner.
+        </div>
+      </div>
+    );
+  }
+
   function renderSections(pageKey, sections, actorHas, pageLabel) {
     const node = access[pageKey];
     const setSections = (next) => onPageAccess({ ...access, [pageKey]: { ...node, ...next } });
@@ -390,6 +427,8 @@ export default function PermissionTree({
                   </div>
                 ) : page.key === "dashboard" ? (
                   renderSections("dashboard", DASHBOARD_SECTIONS, actorHasDashboard, "Dashboard")
+                ) : page.key === "chats" ? (
+                  renderChat()
                 ) : page.key === "admissions" ? (
                   renderAdmissions()
                 ) : page.key === "finance" ? (

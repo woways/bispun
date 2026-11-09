@@ -48,11 +48,18 @@ export function normalizePageAccess(raw) {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
 
   const adm = source.admissions && typeof source.admissions === "object" ? source.admissions : {};
+  const chat = source.chat && typeof source.chat === "object" ? source.chat : {};
   const dash = source.dashboard && typeof source.dashboard === "object" ? source.dashboard : {};
   const fin = source.finance && typeof source.finance === "object" ? source.finance : {};
   const ins = source.insights && typeof source.insights === "object" ? source.insights : {};
+  const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 
   return {
+    chat: {
+      // Existing users previously had chat deletion available. Preserve that
+      // behaviour until Client Admin explicitly disables it for the user.
+      deleteChats: hasOwn(chat, "deleteChats") ? chat.deleteChats === true : true,
+    },
     dashboard: {
       all: dash.all === true,
       sections: strArray(dash.sections, DASHBOARD_SECTIONS),
@@ -63,6 +70,10 @@ export function normalizePageAccess(raw) {
       streamIds: strArray(adm.streamIds),
       collegeIds: strArray(adm.collegeIds),
       branchIds: strArray(adm.branchIds),
+      // Attachments were historically visible to anyone with admissions access.
+      // Keep that backwards-compatible default for existing users; new users
+      // created from the permission editor send an explicit false by default.
+      attachments: hasOwn(adm, "attachments") ? adm.attachments === true : true,
     },
     finance: {
       all: fin.all === true,
@@ -78,8 +89,9 @@ export function normalizePageAccess(raw) {
 /** A full-access spec (used for CLIENT_ADMIN and role "grant everything"). */
 export function fullPageAccess() {
   return {
+    chat: { deleteChats: true },
     dashboard: { all: true, sections: [...DASHBOARD_SECTIONS] },
-    admissions: { all: true, markets: [], streamIds: [], collegeIds: [], branchIds: [] },
+    admissions: { all: true, markets: [], streamIds: [], collegeIds: [], branchIds: [], attachments: true },
     finance: { all: true, sections: [...FINANCE_SECTIONS] },
     insights: { all: true, sections: [...INSIGHTS_SECTIONS] },
   };
@@ -308,15 +320,21 @@ export function clampPageAccessToActor(requested, actorAccess, actorRole) {
 
   const admAll = own.admissions.all && req.admissions.all;
   const admissions = own.admissions.all
-    ? req.admissions
+    ? { ...req.admissions }
     : {
         all: false,
         markets: intersectArrays(req.admissions.markets, false, own.admissions.markets),
         streamIds: intersectArrays(req.admissions.streamIds, false, own.admissions.streamIds),
         collegeIds: intersectArrays(req.admissions.collegeIds, false, own.admissions.collegeIds),
         branchIds: intersectArrays(req.admissions.branchIds, false, own.admissions.branchIds),
+        attachments: own.admissions.attachments && req.admissions.attachments,
       };
   admissions.all = admAll;
+  admissions.attachments = own.admissions.attachments && req.admissions.attachments;
+
+  const chat = {
+    deleteChats: own.chat.deleteChats && req.chat.deleteChats,
+  };
 
   const dashboard = {
     all: own.dashboard.all && req.dashboard.all,
@@ -335,5 +353,5 @@ export function clampPageAccessToActor(requested, actorAccess, actorRole) {
     sections: intersectArrays(req.insights.sections, own.insights.all, own.insights.sections),
   };
 
-  return normalizePageAccess({ dashboard, admissions, finance, insights });
+  return normalizePageAccess({ chat, dashboard, admissions, finance, insights });
 }

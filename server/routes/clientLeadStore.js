@@ -1184,6 +1184,11 @@ function formatDataset(
 
       dataset.duplicateCount,
 
+
+    duplicateDetails:
+      Array.isArray(dataset.duplicateDetails)
+        ? dataset.duplicateDetails
+        : [],
     failedCount:
 
       dataset.failedCount,
@@ -1705,6 +1710,8 @@ function validateRows(
 
     0;
 
+  const duplicateRows = [];
+
 
 
   for (const row of rows) {
@@ -1798,38 +1805,26 @@ function validateRows(
       row.email ||
 
       null;
+    const duplicatePhone =
+      seenPhones.has(row.phone) ||
+      (row.alternatePhone && seenPhones.has(row.alternatePhone));
+    const duplicateEmail = Boolean(emailKey && seenEmails.has(emailKey));
 
-
-
-    if (
-
-      seenPhones.has(
-
-        row.phone
-
-      ) ||
-      (row.alternatePhone && seenPhones.has(row.alternatePhone)) ||
-
-      (
-
-        emailKey &&
-
-        seenEmails.has(
-
-          emailKey
-
-        )
-
-      )
-
-    ) {
-
-      duplicateInFile +=
-
-        1;
-
+    if (duplicatePhone || duplicateEmail) {
+      duplicateInFile += 1;
+      duplicateRows.push({
+        rowNumber: row.rowNumber,
+        name: row.name || null,
+        phone: row.phone || null,
+        alternatePhone: row.alternatePhone || null,
+        email: row.email || null,
+        course: row.course || null,
+        matchedBy: duplicatePhone ? "Phone" : "Email",
+        reason: duplicatePhone
+          ? "Duplicate contact inside the import file"
+          : "Duplicate email inside the import file",
+      });
       continue;
-
     }
 
 
@@ -1877,6 +1872,8 @@ function validateRows(
     invalid,
 
     duplicateInFile,
+
+  duplicateRows,
 
   };
 
@@ -2778,9 +2775,18 @@ router.get(
       }
 
       if (search) {
+        const leadNumberMatch = search.match(/^LD0*(\d+)$/i);
+        const numericLeadNumber = leadNumberMatch
+          ? Number(leadNumberMatch[1])
+          : /^\d+$/.test(search)
+            ? Number(search)
+            : null;
 
         where.AND.push({
           OR: [
+            ...(Number.isInteger(numericLeadNumber) && numericLeadNumber > 0
+              ? [{ leadNumber: numericLeadNumber }]
+              : []),
             { name: { contains: search, mode: "insensitive" } },
             { phone: { contains: search, mode: "insensitive" } },
             { alternatePhone: { contains: search, mode: "insensitive" } },
@@ -2791,34 +2797,6 @@ router.get(
         });
 
       }
-
-
-
-      const leadNumberRows = await prisma.lead.findMany({
-        where: { companyId },
-        select: { id: true, source: true, notes: true },
-        orderBy: [
-          { createdAt: "asc" },
-          { id: "asc" },
-        ],
-      });
-
-      const previouslyNumbered = leadNumberRows.filter(
-        (lead) =>
-          lead.source === "LEAD_STORE" ||
-          String(lead.notes || "").includes("Admissions origin:")
-      );
-      const previouslyNumberedIds = new Set(
-        previouslyNumbered.map((lead) => lead.id)
-      );
-      const newlyNumbered = leadNumberRows.filter(
-        (lead) => !previouslyNumberedIds.has(lead.id)
-      );
-      const orderedLeadNumbers = [...previouslyNumbered, ...newlyNumbered];
-
-      const leadNumberById = new Map(
-        orderedLeadNumbers.map((lead, index) => [lead.id, index + 1])
-      );
 
       const leads = await prisma.lead.findMany({
 
@@ -2929,7 +2907,7 @@ router.get(
         leads: leads.map((lead) => ({
 
           id: lead.id,
-          leadNumber: leadNumberById.get(lead.id) || null,
+          leadNumber: lead.leadNumber || null,
 
           name: lead.name,
 
@@ -5537,6 +5515,9 @@ router.post(
 
           ),
 
+        duplicateSample:
+          validated.duplicateRows.slice(0, 5),
+
       });
 
     } catch (error) {
@@ -5644,6 +5625,9 @@ router.post(
             ?.sourceName
 
         );
+
+      const defaultCourse =
+        cleanString(req.body?.defaultCourse);
 
 
 
@@ -5794,6 +5778,7 @@ router.post(
 
 
       const importable = [];
+      const existingDuplicateRows = [];
 
       let existingDuplicateCount =
 
@@ -5834,13 +5819,23 @@ router.post(
 
 
         if (duplicate) {
-
-          existingDuplicateCount +=
-
-            1;
-
+          existingDuplicateCount += 1;
+          const phoneMatch =
+            duplicates.phones.has(row.phone) ||
+            (row.alternatePhone && duplicates.phones.has(row.alternatePhone));
+          existingDuplicateRows.push({
+            rowNumber: row.rowNumber,
+            name: row.name || null,
+            phone: row.phone || null,
+            alternatePhone: row.alternatePhone || null,
+            email: row.email || null,
+            course: row.course || defaultCourse || null,
+            matchedBy: phoneMatch ? "Phone" : "Email",
+            reason: phoneMatch
+              ? "Phone already exists in Lead Store"
+              : "Email already exists in Lead Store",
+          });
           continue;
-
         }
 
 
@@ -5896,6 +5891,11 @@ router.post(
         validated.invalid.length;
 
 
+
+      const duplicateDetails = [
+        ...(validated.duplicateRows || []),
+        ...existingDuplicateRows,
+      ];
 
       const dataset =
 
@@ -6001,6 +6001,8 @@ router.post(
 
                   duplicateCount,
 
+                  duplicateDetails,
+
                   failedCount,
 
                   assignedToUserId:
@@ -6055,7 +6057,7 @@ router.post(
 
                     course:
 
-                      row.course,
+                      row.course || defaultCourse || null,
 
                     source:
 

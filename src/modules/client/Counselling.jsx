@@ -76,7 +76,7 @@ const STATUS_OPTIONS = [
 
 const MODE_OPTIONS = [
   ["IN_PERSON", "In Person"],
-  ["VIDEO_CALL", "Video Call"],
+  ["VIDEO_CALL", "Online Meet"],
   ["PHONE_CALL", "Phone Call"],
 ];
 
@@ -96,6 +96,7 @@ function formatDateTime(value) {
 }
 
 function prettyMode(value) {
+  if (String(value || "").toUpperCase() === "VIDEO_CALL") return "Online Meet";
   return String(value || "")
     .toLowerCase()
     .split("_")
@@ -109,6 +110,8 @@ function CounsellingMetric({
   icon: Icon,
   detail,
   tone = "indigo",
+  onClick,
+  active = false,
 }) {
   const tones = {
     indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
@@ -117,8 +120,13 @@ function CounsellingMetric({
     slate: "bg-slate-50 text-slate-600 border-slate-200",
   };
 
+  const Component = onClick ? "button" : "div";
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <Component
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
+    >
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div>
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
@@ -135,7 +143,7 @@ function CounsellingMetric({
       <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
         {detail}
       </div>
-    </div>
+    </Component>
   );
 }
 
@@ -181,6 +189,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [metricFilter, setMetricFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -423,8 +432,34 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
     }
   }
 
+  function chooseMetricFilter(next) {
+    setSearch("");
+    setStatusFilter("");
+    setMetricFilter((current) => (current === next ? "" : next));
+  }
+
+  const visibleSessions = sessions.filter((session) => {
+    if (!metricFilter) return true;
+    const scheduled = new Date(session.scheduledAt);
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate() + 1);
+    const weekStart = new Date(dayStart);
+    const day = weekStart.getDay();
+    weekStart.setDate(weekStart.getDate() + (day === 0 ? -6 : 1 - day));
+    const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+    if (metricFilter === "today") return scheduled >= dayStart && scheduled < nextDay;
+    if (metricFilter === "week") return scheduled >= weekStart && scheduled < weekEnd;
+    if (metricFilter === "converted") return session.converted === true;
+    if (metricFilter === "followups") return session.statusKey === "FOLLOW_UP" || Boolean(session.followUpAt && !["COMPLETED", "CANCELLED"].includes(session.statusKey));
+    return true;
+  });
+
   return (
     <div className="space-y-4">
+      <style>{`
+        .counselling-select { appearance:none; padding-right:2.5rem !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .75rem center; background-size:16px 16px; }
+      `}</style>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
@@ -455,6 +490,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Calendar}
           detail="Counselling sessions scheduled today"
           tone="indigo"
+          onClick={() => chooseMetricFilter("today")}
+          active={metricFilter === "today"}
         />
         <CounsellingMetric
           label="This Week"
@@ -462,6 +499,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Video}
           detail="Total sessions in the current week"
           tone="slate"
+          onClick={() => chooseMetricFilter("week")}
+          active={metricFilter === "week"}
         />
         <CounsellingMetric
           label="Conversion Rate"
@@ -469,6 +508,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={TrendingUp}
           detail="Sessions marked as converted"
           tone="emerald"
+          onClick={() => chooseMetricFilter("converted")}
+          active={metricFilter === "converted"}
         />
         <CounsellingMetric
           label="Pending Follow-ups"
@@ -476,6 +517,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Clock}
           detail="Sessions requiring another interaction"
           tone="amber"
+          onClick={() => chooseMetricFilter("followups")}
+          active={metricFilter === "followups"}
         />
       </div>
 
@@ -498,7 +541,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
-            className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700"
+            className="counselling-select h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700"
           >
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map(([value, label]) => (
@@ -507,6 +550,13 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           </select>
         </div>
       </div>
+
+      {metricFilter ? (
+        <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-[13px] text-indigo-700">
+          <span>Showing records behind the selected KPI · {visibleSessions.length} session{visibleSessions.length === 1 ? "" : "s"}</span>
+          <button type="button" onClick={() => setMetricFilter("")} className="font-bold hover:text-indigo-900">Show all</button>
+        </div>
+      ) : null}
 
       {loadError ? (
         <div className="flex items-start gap-2 text-[13px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
@@ -521,7 +571,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
             <Loader2 size={16} className="animate-spin" />
             Loading counselling sessions...
           </div>
-        ) : sessions.length === 0 ? (
+        ) : visibleSessions.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-xl py-16 text-center px-5">
             <Calendar size={24} className="mx-auto text-slate-300" />
             <div className="mt-3 text-[15px] font-semibold text-slate-800">
@@ -532,7 +582,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
             </div>
           </div>
         ) : (
-          sessions.map((session) => (
+          visibleSessions.map((session) => (
             <div
               key={session.id}
               className="bg-white border border-slate-200 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden"
@@ -544,6 +594,11 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       <div className="text-base font-bold text-slate-950">
                         {session.student}
                       </div>
+                      {session.leadDisplayId ? (
+                        <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
+                          {session.leadDisplayId}
+                        </span>
+                      ) : null}
                       <Badge tone="slate">{session.course}</Badge>
                       <Badge tone={statusTone(session.status)}>{session.status}</Badge>
                       {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
@@ -742,7 +797,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                             value === OTHER_OPTION ? current.courseOther : "",
                         }));
                       }}
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                      className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
                     >
                       <option value="">
                         {optionsLoading ? "Loading streams..." : "Select stream"}
@@ -785,7 +840,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                     onChange={(event) =>
                       updateForm("counsellorName", event.target.value)
                     }
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                    className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
                   >
                     <option value="">
                       {optionsLoading ? "Loading employees..." : "Unassigned"}
@@ -814,7 +869,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   <select
                     value={form.mode}
                     onChange={(event) => updateForm("mode", event.target.value)}
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                    className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
                   >
                     {MODE_OPTIONS.map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
@@ -835,7 +890,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   <select
                     value={form.status}
                     onChange={(event) => updateForm("status", event.target.value)}
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                    className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
                   >
                     {STATUS_OPTIONS.map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
@@ -865,7 +920,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                               : "",
                         }));
                       }}
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                      className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
                     >
                       <option value="">Select</option>
                       {CAME_WITH_OPTIONS.map((option) => (

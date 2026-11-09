@@ -677,6 +677,10 @@ model LeadStatusOption {
 model Lead {
   id String @id @default(cuid())
 
+  // Stable, user-facing sequence number within a company. Displayed as LD001, LD002, ...
+  // The value is assigned by a database trigger so every lead creation path shares one sequence.
+  leadNumber Int?
+
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -721,6 +725,7 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([companyId, leadNumber])
   @@index([companyId])
   @@index([companyId, source])
   @@index([companyId, stage])
@@ -1123,6 +1128,7 @@ model LeadDataset {
   leadCount      Int @default(0)
   importedCount  Int @default(0)
   duplicateCount Int @default(0)
+  duplicateDetails Json?
   failedCount    Int @default(0)
   convertedCount Int @default(0)
 

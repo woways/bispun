@@ -146,6 +146,20 @@ const SOURCE_OPTIONS = [
   "Other",
 ];
 
+// Common Course / Interest choices. Existing/custom values remain supported via Other.
+const COURSE_OPTIONS = [
+  "B.Tech",
+  "MBA",
+  "BBA",
+  "B.Com",
+  "MBBS",
+  "NEET",
+  "Law",
+  "Pharmacy",
+  "Nursing",
+  "Other",
+];
+
 function leadCategoryApi(lead) {
   return String(
     lead?.type || (lead?.isManual ? "INDIVIDUAL" : "")
@@ -378,7 +392,9 @@ function isValidManualLeadName(value) {
 
 function displayLeadId(leadNumber) {
   const value = Number(leadNumber);
-  return Number.isInteger(value) && value > 0 ? String(value) : "—";
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : "—";
 }
 
 
@@ -760,6 +776,16 @@ function IndividualLeadModal({
       notes: lead?.notes || "",
     });
 
+  const mergedCourseOptions = Array.from(
+    new Set([
+      ...COURSE_OPTIONS.filter((option) => option !== "Other"),
+      ...courseOptions.filter(Boolean),
+      "Other",
+    ])
+  );
+  const [courseOther, setCourseOther] = useState(
+    !!(lead?.course && !mergedCourseOptions.includes(lead.course))
+  );
   const [sourceOther, setSourceOther] = useState(
     !!(lead?.sourceName && !SOURCE_OPTIONS.includes(lead.sourceName))
   );
@@ -1051,7 +1077,7 @@ function IndividualLeadModal({
               </h2>
               {lead && (
                 <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
-                  #{displayLeadId(lead.leadNumber)}
+                  {displayLeadId(lead.leadNumber)}
                 </span>
               )}
             </div>
@@ -1229,34 +1255,45 @@ function IndividualLeadModal({
             </Field>
 
             <Field label="Course / Interest">
-              <input
+              <select
                 value={
-                  form.course
+                  courseOther
+                    ? "Other"
+                    : mergedCourseOptions.includes(form.course)
+                    ? form.course
+                    : ""
                 }
-                onChange={(
-                  event
-                ) =>
-                  update(
-                    "course",
-                    event.target.value
-                  )
-                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "Other") {
+                    setCourseOther(true);
+                    update("course", "");
+                  } else {
+                    setCourseOther(false);
+                    update("course", value);
+                  }
+                }}
                 className="form-input"
-                list="course-interest-options"
-                autoComplete="off"
-                placeholder="B.Tech / MBA / NEET"
-              />
-              {/* Searchable suggestions from the company's existing courses; a
-                  custom value can still be typed (native combobox, no schema
-                  change). */}
-              <datalist id="course-interest-options">
-                {courseOptions.map((option) => (
-                  <option key={option} value={option} />
+              >
+                <option value="">Select course / interest</option>
+                {mergedCourseOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
                 ))}
-              </datalist>
+              </select>
+              {courseOther && (
+                <input
+                  value={form.course}
+                  onChange={(event) => update("course", event.target.value)}
+                  className="form-input mt-2"
+                  placeholder="Enter course / interest"
+                  autoFocus
+                />
+              )}
             </Field>
 
-            <Field label="Preferred Colleges">
+            <Field label="Interested College">
               <input
                 value={form.preferredColleges}
                 onChange={(event) =>
@@ -1783,6 +1820,7 @@ function UploadDatasetModal({
   onClose,
   onImported,
   defaultType = "EXTERNAL_DATA",
+  courseOptions = [],
 }) {
   const [
     file,
@@ -1824,11 +1862,23 @@ function UploadDatasetModal({
         defaultType || "EXTERNAL_DATA",
       sourceName:
         "",
+      defaultCourse:
+        "",
       assignedToUserId:
         "",
       notes:
         "",
     });
+
+  const uploadCourseOptions = Array.from(
+    new Set([
+      ...COURSE_OPTIONS.filter((option) => option !== "Other"),
+      ...courseOptions.filter(Boolean),
+      "Other",
+    ])
+  );
+  const [courseOther, setCourseOther] = useState(false);
+  const [sourceOther, setSourceOther] = useState(false);
 
   function update(
     field,
@@ -1956,6 +2006,11 @@ function UploadDatasetModal({
       body.append(
         "sourceName",
         form.sourceName
+      );
+
+      body.append(
+        "defaultCourse",
+        form.defaultCourse
       );
 
       body.append(
@@ -2286,22 +2341,64 @@ function UploadDatasetModal({
                 </select>
               </Field>
 
-              <Field label="Source">
-                <input
-                  value={
-                    form.sourceName
-                  }
-                  onChange={(
-                    event
-                  ) =>
-                    update(
-                      "sourceName",
-                      event.target.value
-                    )
-                  }
+              <Field label="Default Course / Interest">
+                <select
+                  value={courseOther ? "Other" : form.defaultCourse}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "Other") {
+                      setCourseOther(true);
+                      update("defaultCourse", "");
+                    } else {
+                      setCourseOther(false);
+                      update("defaultCourse", value);
+                    }
+                  }}
                   className="form-input"
-                  placeholder="Justdial / College Expo"
-                />
+                >
+                  <option value="">Use course from file / leave blank</option>
+                  {uploadCourseOptions.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {courseOther && (
+                  <input
+                    value={form.defaultCourse}
+                    onChange={(event) => update("defaultCourse", event.target.value)}
+                    className="form-input mt-2"
+                    placeholder="Enter course / interest"
+                  />
+                )}
+              </Field>
+
+              <Field label="Source">
+                <select
+                  value={sourceOther ? "Other" : form.sourceName}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "Other") {
+                      setSourceOther(true);
+                      update("sourceName", "");
+                    } else {
+                      setSourceOther(false);
+                      update("sourceName", value);
+                    }
+                  }}
+                  className="form-input"
+                >
+                  <option value="">Select source</option>
+                  {SOURCE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+                {sourceOther && (
+                  <input
+                    value={form.sourceName}
+                    onChange={(event) => update("sourceName", event.target.value)}
+                    className="form-input mt-2"
+                    placeholder="Enter custom source"
+                  />
+                )}
               </Field>
 
               <Field label="Assign Imported Leads To">
@@ -2749,6 +2846,8 @@ function StoreMetric({
   icon: Icon,
   detail,
   tone = "indigo",
+  onClick = null,
+  active = false,
 }) {
   const tones = {
     indigo:
@@ -2761,8 +2860,18 @@ function StoreMetric({
       "bg-slate-50 text-slate-600 border-slate-200",
   };
 
+  const Component = onClick ? "button" : "div";
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
+    <Component
+      type={onClick ? "button" : undefined}
+      onClick={onClick || undefined}
+      className={`w-full text-left bg-white border rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
+        active
+          ? "border-indigo-300 ring-2 ring-indigo-100"
+          : "border-slate-200 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+      } ${onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200" : ""}`}
+    >
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
@@ -2791,7 +2900,7 @@ function StoreMetric({
       <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
         {detail}
       </div>
-    </div>
+    </Component>
   );
 }
 
@@ -2853,6 +2962,10 @@ export default function LeadStore({
     setFiltersOpen,
   ] =
     useState(false);
+
+  const [viewOpen, setViewOpen] = useState(false);
+  const [leadStoreMetricFilter, setLeadStoreMetricFilter] = useState(null);
+  const [metricPanel, setMetricPanel] = useState(null);
 
   const [
     filters,
@@ -3552,13 +3665,22 @@ export default function LeadStore({
             search
           );
 
+        const normalizedLeadIdQuery =
+          /^(?:ld)?0*\d+$/i.test(query)
+            ? normalizeFilterText(
+                query.toUpperCase().startsWith("LD")
+                  ? `LD${String(Number(query.slice(2))).padStart(3, "0")}`
+                  : `LD${String(Number(query)).padStart(3, "0")}`
+              )
+            : "";
+
         const exactLeadIdMatchExists =
-          /^\d+$/.test(query) &&
+          Boolean(normalizedLeadIdQuery) &&
           currentTypeLeads.some(
             (lead) =>
               normalizeFilterText(
                 displayLeadId(lead.leadNumber)
-              ) === query
+              ) === normalizedLeadIdQuery
           );
 
         return currentTypeLeads.filter(
@@ -3568,7 +3690,7 @@ export default function LeadStore({
               (exactLeadIdMatchExists
                 ? normalizeFilterText(
                     displayLeadId(lead.leadNumber)
-                  ) === query
+                  ) === normalizedLeadIdQuery
                 : [
                     displayLeadId(lead.leadNumber),
                     lead.name,
@@ -3598,6 +3720,13 @@ export default function LeadStore({
               (dashboardLeadFilter.key === "new-leads" && lead.stage === "NEW") ||
               (dashboardLeadFilter.key === "qualified-leads" &&
                 (lead.stage === "QUALIFIED" || lead.stage === "ADMITTED"));
+
+            const metricMatches =
+              !leadStoreMetricFilter ||
+              leadStoreMetricFilter.key === "all" ||
+              (leadStoreMetricFilter.key === "imported" && Boolean(lead.datasetId)) ||
+              (leadStoreMetricFilter.key === "converted" &&
+                (lead.stage === "ADMITTED" || lead.leadStatus === "Admission Done"));
 
             const statusMatches =
               !filters.status ||
@@ -3650,6 +3779,7 @@ export default function LeadStore({
             return (
               searchMatches &&
               dashboardStageMatches &&
+              metricMatches &&
               statusMatches &&
               temperatureMatches &&
               assignedMatches &&
@@ -3665,6 +3795,7 @@ export default function LeadStore({
         search,
         filters,
         dashboardLeadFilter,
+        leadStoreMetricFilter,
         selectedAssigneeName,
       ]
     );
@@ -4073,6 +4204,7 @@ export default function LeadStore({
       dateTo: "",
     });
     setDashboardLeadFilter(null);
+    setLeadStoreMetricFilter(null);
   }
 
   function exportCurrentView() {
@@ -4173,6 +4305,9 @@ export default function LeadStore({
 
   const totalLeads =
     individualLeads.length;
+
+  const importedLeads =
+    individualLeads.filter((lead) => Boolean(lead.datasetId)).length;
 
   const totalConverted =
     individualLeads.filter(
@@ -4613,59 +4748,166 @@ export default function LeadStore({
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <StoreMetric
-          label="Datasets"
-          value={
-            datasets.length
-          }
-          icon={
-            Database
-          }
-          detail="Lead datasets currently stored"
+          label="Import Batches"
+          value={datasets.length}
+          icon={Database}
+          detail="Files / batches imported into Lead Store"
           tone="indigo"
+          active={metricPanel === "datasets"}
+          onClick={() => {
+            setMetricPanel((current) => current === "datasets" ? null : "datasets");
+            setLeadStoreMetricFilter(null);
+          }}
         />
 
         <StoreMetric
           label="Imported Leads"
-          value={
-            totalLeads.toLocaleString(
-              "en-IN"
-            )
-          }
-          icon={
-            Users
-          }
-          detail="Real CRM leads imported from datasets"
+          value={importedLeads.toLocaleString("en-IN")}
+          icon={Users}
+          detail="Leads created from imported datasets"
           tone="slate"
+          active={leadStoreMetricFilter?.key === "imported"}
+          onClick={() => {
+            setMetricPanel(null);
+            setSub("all");
+            setSearch("");
+            setFilters({
+              status: "",
+              temperature: "",
+              assignedToUserId: "",
+              course: "",
+              source: "",
+              dateFrom: "",
+              dateTo: "",
+            });
+            setDashboardLeadFilter(null);
+            setLeadStoreMetricFilter({ key: "imported", label: "Imported Leads" });
+            setPage(1);
+          }}
         />
 
         <StoreMetric
           label="Converted"
-          value={
-            totalConverted.toLocaleString(
-              "en-IN"
-            )
-          }
-          icon={
-            UserCheck
-          }
-          detail="Lead Store leads that reached Admitted"
+          value={totalConverted.toLocaleString("en-IN")}
+          icon={UserCheck}
+          detail="Lead Store leads that reached Admission Done"
           tone="emerald"
+          active={leadStoreMetricFilter?.key === "converted"}
+          onClick={() => {
+            setMetricPanel(null);
+            setSub("all");
+            setSearch("");
+            setFilters({
+              status: "",
+              temperature: "",
+              assignedToUserId: "",
+              course: "",
+              source: "",
+              dateFrom: "",
+              dateTo: "",
+            });
+            setDashboardLeadFilter(null);
+            setLeadStoreMetricFilter({ key: "converted", label: "Converted Leads" });
+            setPage(1);
+          }}
         />
 
         <StoreMetric
           label="Duplicates Skipped"
-          value={
-            duplicatesSkipped.toLocaleString(
-              "en-IN"
-            )
-          }
-          icon={
-            Layers3
-          }
-          detail={`${assignedLeads} leads currently assigned`}
+          value={duplicatesSkipped.toLocaleString("en-IN")}
+          icon={Layers3}
+          detail="Duplicate rows skipped during imports"
           tone="amber"
+          active={metricPanel === "duplicates"}
+          onClick={() => {
+            setMetricPanel((current) => current === "duplicates" ? null : "duplicates");
+            setLeadStoreMetricFilter(null);
+          }}
         />
       </div>
+
+      {metricPanel === "datasets" && (
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">Import Batches</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">Each file/import batch that contributes to the Data Sets KPI.</div>
+            </div>
+            <button type="button" onClick={() => setMetricPanel(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600">Close</button>
+          </div>
+          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+            <table className="min-w-full text-[12px]">
+              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Batch</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Imported</th><th className="px-3 py-2 text-left">Duplicates</th><th className="px-3 py-2 text-left">Uploaded</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">
+                {datasets.length === 0 ? (
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">No import batches yet.</td></tr>
+                ) : datasets.map((dataset) => (
+                  <tr key={dataset.id}>
+                    <td className="px-3 py-2.5 font-semibold text-slate-800">{dataset.name}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{dataset.typeLabel || dataset.type}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{dataset.importedCount ?? dataset.count ?? 0}</td>
+                    <td className="px-3 py-2.5 text-slate-600">{dataset.duplicateCount || 0}</td>
+                    <td className="px-3 py-2.5 text-slate-500">{formatDate(dataset.uploadedAt || dataset.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {metricPanel === "duplicates" && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">Duplicates Skipped</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">Skipped import rows and the duplicate match used.</div>
+            </div>
+            <button type="button" onClick={() => setMetricPanel(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600">Close</button>
+          </div>
+          <div className="mt-3 space-y-3">
+            {datasets.filter((dataset) => Number(dataset.duplicateCount || 0) > 0).length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-[12px] text-slate-400">No duplicate rows recorded.</div>
+            ) : datasets.filter((dataset) => Number(dataset.duplicateCount || 0) > 0).map((dataset) => (
+              <div key={dataset.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-semibold text-slate-800">{dataset.name}</div>
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">{dataset.duplicateCount} skipped</span>
+                </div>
+                {Array.isArray(dataset.duplicateDetails) && dataset.duplicateDetails.length > 0 ? (
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="min-w-full text-[11px]">
+                      <thead className="text-slate-400"><tr><th className="px-2 py-1.5 text-left">Row</th><th className="px-2 py-1.5 text-left">Lead</th><th className="px-2 py-1.5 text-left">Contact</th><th className="px-2 py-1.5 text-left">Reason</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {dataset.duplicateDetails.map((item, index) => (
+                          <tr key={`${dataset.id}-${item.rowNumber || index}`}>
+                            <td className="px-2 py-2 text-slate-500">{item.rowNumber || "—"}</td>
+                            <td className="px-2 py-2 font-medium text-slate-700">{item.name || "—"}</td>
+                            <td className="px-2 py-2 text-slate-500">{item.phone || item.email || "—"}</td>
+                            <td className="px-2 py-2 text-slate-600">{item.reason || item.matchedBy || "Duplicate"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[11px] text-slate-500">This older import stores the duplicate count only. Row-level duplicate details will be available for new imports.</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {leadStoreMetricFilter && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-600">Lead Store KPI</div>
+            <div className="mt-0.5 text-[13px] font-semibold text-slate-800">Showing {leadStoreMetricFilter.label}</div>
+          </div>
+          <button type="button" onClick={() => setLeadStoreMetricFilter(null)} className="h-8 rounded-lg border border-indigo-200 bg-white px-3 text-[12px] font-semibold text-indigo-700 hover:bg-indigo-50">Show all leads</button>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -4718,11 +4960,10 @@ export default function LeadStore({
             <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
               <button
                 type="button"
-                onClick={() =>
-                  setFiltersOpen(
-                    (current) => !current
-                  )
-                }
+                onClick={() => {
+                  setViewOpen(false);
+                  setFiltersOpen((current) => !current);
+                }}
                 className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
                   filtersOpen ||
                   activeFilterCount > 0
@@ -4740,12 +4981,20 @@ export default function LeadStore({
                 )}
               </button>
 
-              <details className="relative">
-                  <summary className="h-9 cursor-pointer list-none px-3.5 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 inline-flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
-                    <Layers3 size={14} />
-                    View
-                  </summary>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFiltersOpen(false);
+                    setViewOpen((current) => !current);
+                  }}
+                  className={`h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 shadow-sm ${viewOpen ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  <Layers3 size={14} />
+                  View
+                </button>
 
+                {viewOpen && (
                   <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
                     <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
                     <div className="mt-2 space-y-1">
@@ -4784,7 +5033,8 @@ export default function LeadStore({
                         : "Column order follows the company default. Custom fields open from the lead name."}
                     </p>
                   </div>
-                </details>
+                )}
+              </div>
 
               <button
                 type="button"
@@ -5918,6 +6168,7 @@ export default function LeadStore({
           assignees={
             assignees
           }
+          courseOptions={individualCourseOptions}
           defaultType={
             sub === "individual" || sub === "all"
               ? "EXTERNAL_DATA"

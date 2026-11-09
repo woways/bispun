@@ -3928,7 +3928,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         );
 
       case "admissions":
-        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly />;
+        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly currentUser={user} />;
 
       case "domestic-walkins":
         return renderAdmissionsMarketWorkspace({
@@ -3962,6 +3962,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             <Admissions
               selectedYear={selectedYear}
               market="DOMESTIC"
+              currentUser={user}
             />
           ),
         });
@@ -3998,6 +3999,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             <Admissions
               selectedYear={selectedYear}
               market="INTERNATIONAL"
+              currentUser={user}
             />
           ),
         });

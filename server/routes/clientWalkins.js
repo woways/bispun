@@ -58,7 +58,14 @@ function parseDate(value, fallback = new Date()) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function formatWalkIn(walkIn) {
+function formatLeadDisplayId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : null;
+}
+
+function formatWalkIn(walkIn, leadDisplayId = null) {
   return {
     id: walkIn.id,
     name: walkIn.visitorName,
@@ -78,6 +85,7 @@ function formatWalkIn(walkIn) {
     statusKey: walkIn.status,
     arrivedAt: walkIn.arrivedAt,
     convertedLeadId: walkIn.convertedLeadId,
+    leadDisplayId,
     market: walkIn.market,
     createdAt: walkIn.createdAt,
     updatedAt: walkIn.updatedAt,
@@ -186,14 +194,38 @@ router.get("/", async (req, res) => {
     const [rows, allRows] = await Promise.all([
       prisma.walkIn.findMany({ where, orderBy: { arrivedAt: "desc" } }),
       prisma.walkIn.findMany({
-        where: { companyId, ...(market ? { market } : {}) },
+        where: {
+          companyId,
+          ...(market ? { market } : {}),
+          ...(selectedYear ? { arrivedAt: yearRange(selectedYear) } : {}),
+        },
         select: { status: true, arrivedAt: true },
       }),
     ]);
 
+    const convertedLeadIds = Array.from(
+      new Set(rows.map((row) => row.convertedLeadId).filter(Boolean))
+    );
+    const linkedLeads = convertedLeadIds.length
+      ? await prisma.lead.findMany({
+          where: { companyId, id: { in: convertedLeadIds } },
+          select: { id: true, leadNumber: true },
+        })
+      : [];
+    const leadNumberById = new Map(
+      linkedLeads.map((lead) => [lead.id, lead.leadNumber])
+    );
+
     return res.json({
       success: true,
-      walkIns: rows.map(formatWalkIn),
+      walkIns: rows.map((row) =>
+        formatWalkIn(
+          row,
+          row.convertedLeadId
+            ? formatLeadDisplayId(leadNumberById.get(row.convertedLeadId))
+            : null
+        )
+      ),
       summary: buildSummary(allRows),
     });
   } catch (error) {
@@ -261,7 +293,18 @@ router.post("/", async (req, res) => {
       });
     });
 
-    return res.status(201).json({ success: true, message: "Walk-in logged successfully", walkIn: formatWalkIn(walkIn) });
+    const linkedLead = walkIn.convertedLeadId
+      ? await prisma.lead.findFirst({
+          where: { id: walkIn.convertedLeadId, companyId },
+          select: { leadNumber: true },
+        })
+      : null;
+
+    return res.status(201).json({
+      success: true,
+      message: "Walk-in logged successfully",
+      walkIn: formatWalkIn(walkIn, formatLeadDisplayId(linkedLead?.leadNumber)),
+    });
   } catch (error) {
     console.error("Failed to create walk-in:", error);
     return res.status(500).json({ success: false, message: "Unable to create walk-in" });
@@ -335,7 +378,17 @@ router.patch("/:id", async (req, res) => {
     }
 
     const updated = await prisma.walkIn.update({ where: { id: existing.id }, data });
-    return res.json({ success: true, message: "Walk-in updated successfully", walkIn: formatWalkIn(updated) });
+    const linkedLead = updated.convertedLeadId
+      ? await prisma.lead.findFirst({
+          where: { id: updated.convertedLeadId, companyId },
+          select: { leadNumber: true },
+        })
+      : null;
+    return res.json({
+      success: true,
+      message: "Walk-in updated successfully",
+      walkIn: formatWalkIn(updated, formatLeadDisplayId(linkedLead?.leadNumber)),
+    });
   } catch (error) {
     console.error("Failed to update walk-in:", error);
     return res.status(500).json({ success: false, message: "Unable to update walk-in" });
@@ -372,7 +425,13 @@ router.post("/:id/convert-to-lead", async (req, res) => {
         return res.json({
           success: true,
           message: "Walk-in converted to lead successfully",
-          lead: { id: lead.id, name: lead.name, phone: lead.phone, stage: lead.stage },
+          lead: {
+            id: lead.id,
+            leadDisplayId: formatLeadDisplayId(lead.leadNumber),
+            name: lead.name,
+            phone: lead.phone,
+            stage: lead.stage,
+          },
         });
       }
     }

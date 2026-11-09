@@ -254,27 +254,17 @@ async function getDashboardAccessScope(companyId, userId) {
 async function getLeadNumberMap(companyId) {
   const rows = await prisma.lead.findMany({
     where: { companyId },
-    select: { id: true, source: true, notes: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, leadNumber: true },
   });
 
-  // Preserve the numbering users already saw for Lead Store / Admissions-origin
-  // records, then append any other company leads that previously had no display ID.
-  const previouslyNumbered = rows.filter(
-    (lead) =>
-      lead.source === "LEAD_STORE" ||
-      String(lead.notes || "").includes("Admissions origin:")
-  );
-  const previouslyNumberedIds = new Set(previouslyNumbered.map((lead) => lead.id));
-  const newlyNumbered = rows.filter((lead) => !previouslyNumberedIds.has(lead.id));
-  const ordered = [...previouslyNumbered, ...newlyNumbered];
-
-  return new Map(ordered.map((lead, index) => [lead.id, index + 1]));
+  return new Map(rows.map((lead) => [lead.id, lead.leadNumber]));
 }
 
 function leadDisplayId(leadNumber) {
   const value = Number(leadNumber);
-  return Number.isInteger(value) && value > 0 ? String(value) : null;
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : null;
 }
 
 /* =========================================================

@@ -821,6 +821,7 @@ function AnalysisDetailPanel({
         <div className="overflow-x-auto">
           <Table
             columns={[
+              "Lead ID",
               "Lead",
               "Campaign",
               "Influencer",
@@ -834,6 +835,11 @@ function AnalysisDetailPanel({
 
               return (
                 <tr key={lead.id} className="hover:bg-slate-50/80">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                      {lead.leadDisplayId || "—"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="text-[14px] font-semibold text-slate-900">
                       {lead.name}
@@ -2325,6 +2331,7 @@ export default function UTMLeads({
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <Table
             columns={[
+              "Lead ID",
               "Lead",
               "Course / Interest",
               "Source",
@@ -2341,6 +2348,11 @@ export default function UTMLeads({
                 key={lead.id}
                 className="hover:bg-slate-50/80"
               >
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                    {lead.leadDisplayId || "—"}
+                  </span>
+                </td>
                 <td className="px-4 py-3">
                   <div className="text-[15px] font-semibold text-slate-900">
                     {lead.name}

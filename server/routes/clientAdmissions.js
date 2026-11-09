@@ -18,6 +18,7 @@ import {
   scopeAllowsStream,
   scopeAllowsCollege,
   scopeAllowsBranch,
+  normalizePageAccess,
 } from "../lib/pageAccess.js";
 
 const router = Router();
@@ -87,6 +88,40 @@ async function currentAdmissionScope(req) {
     req.clientUser.pageAccess,
     req.clientUser.role
   );
+}
+
+function attachmentAccessEnabled(req) {
+  if (req.clientUser.role === "CLIENT_ADMIN") return true;
+  return normalizePageAccess(req.clientUser.pageAccess).admissions.attachments === true;
+}
+
+async function ensureAttachmentPartnerAccess(req, res, partnerId) {
+  if (!attachmentAccessEnabled(req)) {
+    res.status(403).json({
+      success: false,
+      forbidden: true,
+      permission: "admissions.attachments",
+      message: "Client Admin has not enabled admission attachments for your account",
+    });
+    return null;
+  }
+
+  const partner = await prisma.admissionPartner.findFirst({
+    where: { id: partnerId, companyId: req.clientUser.companyId, active: true },
+    select: { id: true, name: true, market: true, streamId: true },
+  });
+  if (!partner) {
+    res.status(404).json({ success: false, message: "College not found" });
+    return null;
+  }
+  if (req.clientUser.role !== "CLIENT_ADMIN") {
+    const scope = await currentAdmissionScope(req);
+    if (!scopeAllowsCollege(scope, partner)) {
+      admissionScopeDenied(res);
+      return null;
+    }
+  }
+  return partner;
 }
 
 function admissionScopeDenied(res) {
@@ -288,28 +323,17 @@ function parseDate(value, fallback = new Date()) {
 async function getLeadNumberMap(companyId) {
   const rows = await prisma.lead.findMany({
     where: { companyId },
-    select: { id: true, source: true, notes: true },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { id: true, leadNumber: true },
   });
 
-  // Preserve the numbering already used by Lead Store, then append any
-  // previously unnumbered leads. Admissions uses this same map so the same
-  // lead always shows the same user-facing Lead ID in both modules.
-  const previouslyNumbered = rows.filter(
-    (lead) =>
-      lead.source === "LEAD_STORE" ||
-      String(lead.notes || "").includes("Admissions origin:")
-  );
-  const previousIds = new Set(previouslyNumbered.map((lead) => lead.id));
-  const appended = rows.filter((lead) => !previousIds.has(lead.id));
-  const ordered = [...previouslyNumbered, ...appended];
-
-  return new Map(ordered.map((lead, index) => [lead.id, index + 1]));
+  return new Map(rows.map((lead) => [lead.id, lead.leadNumber]));
 }
 
 function leadDisplayId(leadNumber) {
   const value = Number(leadNumber);
-  return Number.isInteger(value) && value > 0 ? String(value) : null;
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : null;
 }
 
 function formatAdmission(admission, leadNumberMap = null) {
@@ -1176,14 +1200,8 @@ router.delete("/partners/:id", async (req, res) => {
 router.get("/partners/:id/attachments", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
-    const partner = await prisma.admissionPartner.findFirst({
-      where: { id: req.params.id, companyId, active: true },
-      select: { id: true, name: true },
-    });
-
-    if (!partner) {
-      return res.status(404).json({ success: false, message: "College not found" });
-    }
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.id);
+    if (!partner) return;
 
     const [attachments, folders] = await Promise.all([
       prisma.admissionPartnerAttachment.findMany({
@@ -1228,14 +1246,8 @@ router.post(
   async (req, res) => {
     try {
       const companyId = req.clientUser.companyId;
-      const partner = await prisma.admissionPartner.findFirst({
-        where: { id: req.params.id, companyId, active: true },
-        select: { id: true, name: true },
-      });
-
-      if (!partner) {
-        return res.status(404).json({ success: false, message: "College not found" });
-      }
+      const partner = await ensureAttachmentPartnerAccess(req, res, req.params.id);
+      if (!partner) return;
 
       if (!req.file) {
         return res.status(400).json({ success: false, message: "Choose a file to upload" });
@@ -1312,6 +1324,8 @@ router.post(
 router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.partnerId);
+    if (!partner) return;
     const attachment = await prisma.admissionPartnerAttachment.findFirst({
       where: {
         id: req.params.attachmentId,
@@ -1340,21 +1354,16 @@ router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res)
 
 // ---- College attachment folders --------------------------------------------
 
-async function findPartnerForFolders(companyId, partnerId) {
-  return prisma.admissionPartner.findFirst({
-    where: { id: partnerId, companyId, active: true },
-    select: { id: true },
-  });
+async function findPartnerForFolders(req, res, partnerId) {
+  return ensureAttachmentPartnerAccess(req, res, partnerId);
 }
 
 // Create a folder on a college.
 router.post("/partners/:id/folders", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
-    const partner = await findPartnerForFolders(companyId, req.params.id);
-    if (!partner) {
-      return res.status(404).json({ success: false, message: "College not found" });
-    }
+    const partner = await findPartnerForFolders(req, res, req.params.id);
+    if (!partner) return;
 
     const name = String(req.body?.name || "").trim();
     if (!name) {
@@ -1391,6 +1400,8 @@ router.post("/partners/:id/folders", async (req, res) => {
 router.patch("/partners/:partnerId/folders/:folderId", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.partnerId);
+    if (!partner) return;
     const folder = await prisma.admissionAttachmentFolder.findFirst({
       where: { id: req.params.folderId, partnerId: req.params.partnerId, companyId },
     });
@@ -1435,6 +1446,8 @@ router.patch("/partners/:partnerId/folders/:folderId", async (req, res) => {
 router.delete("/partners/:partnerId/folders/:folderId", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.partnerId);
+    if (!partner) return;
     const folder = await prisma.admissionAttachmentFolder.findFirst({
       where: { id: req.params.folderId, partnerId: req.params.partnerId, companyId },
       select: { id: true },
@@ -1456,6 +1469,8 @@ router.delete("/partners/:partnerId/folders/:folderId", async (req, res) => {
 router.patch("/partners/:partnerId/attachments/:attachmentId", async (req, res) => {
   try {
     const companyId = req.clientUser.companyId;
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.partnerId);
+    if (!partner) return;
     const attachment = await prisma.admissionPartnerAttachment.findFirst({
       where: { id: req.params.attachmentId, partnerId: req.params.partnerId, companyId },
       select: { id: true },

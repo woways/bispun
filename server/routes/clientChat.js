@@ -4,10 +4,32 @@ import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { deleteChatFile, uploadChatFile } from "../lib/chatStorage.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
+import { normalizePageAccess } from "../lib/pageAccess.js";
+import { createMeetEvent } from "../lib/google.js";
 
 const router = Router();
 
 router.use(requireClientUser);
+
+const MEETING_PREFIX = "📹 Meeting started — join: ";
+const ACTIVE_MEET_WINDOW_MS = 2 * 60 * 60 * 1000;
+const activeMeetCache = new Map();
+
+
+function canDeleteChats(req) {
+  if (req.clientUser?.role === "CLIENT_ADMIN") return true;
+  return normalizePageAccess(req.clientUser?.pageAccess).chat.deleteChats === true;
+}
+
+function requireChatDelete(req, res, next) {
+  if (canDeleteChats(req)) return next();
+  return res.status(403).json({
+    success: false,
+    forbidden: true,
+    permission: "chat.delete",
+    message: "Client Admin has not enabled chat deletion for your account",
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -212,6 +234,108 @@ router.get("/unread-count", async (req, res) => {
     return res
       .status(500)
       .json({ success: false, message: "Unable to fetch chat unread count" });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /:id/meet — one shared active Meet per conversation             */
+/* ------------------------------------------------------------------ */
+
+router.post("/:id/meet", async (req, res) => {
+  const conversationId = req.params.id;
+  try {
+    const member = await prisma.conversationMember.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId,
+          userId: req.clientUser.userId,
+        },
+      },
+      include: { conversation: true },
+    });
+
+    if (!member || member.conversation.companyId !== req.clientUser.companyId) {
+      return res.status(404).json({ success: false, message: "Conversation not found" });
+    }
+
+    const now = Date.now();
+    const cutoff = new Date(now - ACTIVE_MEET_WINDOW_MS);
+
+    const recentMessage = await prisma.chatMessage.findFirst({
+      where: {
+        conversationId,
+        deletedForEveryoneAt: null,
+        createdAt: { gte: cutoff },
+        body: { startsWith: MEETING_PREFIX },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { body: true },
+    });
+
+    if (recentMessage?.body) {
+      const meetLink = recentMessage.body.slice(MEETING_PREFIX.length).trim();
+      if (meetLink) {
+        activeMeetCache.set(conversationId, {
+          link: meetLink,
+          expiresAt: now + ACTIVE_MEET_WINDOW_MS,
+        });
+        return res.json({ success: true, meetLink, reused: true, announce: false });
+      }
+    }
+
+    const cached = activeMeetCache.get(conversationId);
+    if (cached?.link && cached.expiresAt > now) {
+      return res.json({ success: true, meetLink: cached.link, reused: true, announce: false });
+    }
+    if (cached?.promise) {
+      const meetLink = await cached.promise;
+      return res.json({ success: true, meetLink, reused: true, announce: false });
+    }
+
+    const creationPromise = (async () => {
+      const result = await createMeetEvent(req.clientUser.userId, {
+        summary: "Bispun call",
+        startISO: new Date(now).toISOString(),
+        endISO: new Date(now + 60 * 60 * 1000).toISOString(),
+      });
+      if (!result.meetLink) {
+        const error = new Error(
+          result.pending
+            ? "Your meeting was created. The Google Meet link is still being generated — please try again in a moment."
+            : "Google did not return a Meet link. Try again."
+        );
+        error.statusCode = result.pending ? 202 : 502;
+        throw error;
+      }
+      return result.meetLink;
+    })();
+
+    activeMeetCache.set(conversationId, {
+      promise: creationPromise,
+      expiresAt: now + ACTIVE_MEET_WINDOW_MS,
+    });
+
+    try {
+      const meetLink = await creationPromise;
+      activeMeetCache.set(conversationId, {
+        link: meetLink,
+        expiresAt: Date.now() + ACTIVE_MEET_WINDOW_MS,
+      });
+      return res.json({ success: true, meetLink, reused: false, announce: true });
+    } catch (error) {
+      activeMeetCache.delete(conversationId);
+      throw error;
+    }
+  } catch (error) {
+    console.error("Failed to create/reuse chat Meet:", error);
+    const status = Number(error?.statusCode) || 500;
+    return res.status(status).json({
+      success: false,
+      pending: status === 202,
+      message:
+        error?.message ||
+        "Unable to start a Google Meet. Connect Google in Settings → Integrations.",
+    });
   }
 });
 
@@ -1064,7 +1188,7 @@ router.delete("/messages/:messageId", async (req, res) => {
 /* POST /:id/clear — clear only the current user's message history     */
 /* ------------------------------------------------------------------ */
 
-router.post("/:id/clear", async (req, res) => {
+router.post("/:id/clear", requireChatDelete, async (req, res) => {
   try {
     const conversationId = req.params.id;
     const me = req.clientUser.userId;
@@ -1090,7 +1214,7 @@ router.post("/:id/clear", async (req, res) => {
 /* POST /delete-many — hide selected chats for the current user        */
 /* ------------------------------------------------------------------ */
 
-router.post("/delete-many", async (req, res) => {
+router.post("/delete-many", requireChatDelete, async (req, res) => {
   try {
     const ids = Array.from(new Set(
       (Array.isArray(req.body?.conversationIds) ? req.body.conversationIds : [])
@@ -1119,7 +1243,7 @@ router.post("/delete-many", async (req, res) => {
 /* DELETE /:id — hide one chat only for the current user               */
 /* ------------------------------------------------------------------ */
 
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", requireChatDelete, async (req, res) => {
   try {
     const conversationId = req.params.id;
     const me = req.clientUser.userId;

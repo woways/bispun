@@ -103,6 +103,8 @@ function WalkinMetric({
   icon: Icon,
   detail,
   tone = "indigo",
+  onClick,
+  active = false,
 }) {
   const tones = {
     indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
@@ -111,8 +113,13 @@ function WalkinMetric({
     rose: "bg-rose-50 text-rose-600 border-rose-100",
   };
 
+  const Component = onClick ? "button" : "div";
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <Component
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
+    >
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div>
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
@@ -129,7 +136,7 @@ function WalkinMetric({
       <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
         {detail}
       </div>
-    </div>
+    </Component>
   );
 }
 
@@ -157,6 +164,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [metricFilter, setMetricFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -383,6 +391,25 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
     }
   }
 
+  function chooseMetricFilter(next) {
+    setSearch("");
+    setStatusFilter("");
+    setMetricFilter((current) => (current === next ? "" : next));
+  }
+
+  const visibleWalkIns = walkIns.filter((walkIn) => {
+    if (!metricFilter) return true;
+    const arrived = new Date(walkIn.arrivedAt);
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (arrived < monthStart) return false;
+    if (metricFilter === "month") return true;
+    if (metricFilter === "converted") return walkIn.statusKey === "CONVERTED";
+    if (metricFilter === "progress") return ["NEW", "IN_PROGRESS"].includes(walkIn.statusKey);
+    if (metricFilter === "lost") return walkIn.statusKey === "LOST";
+    return true;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -415,6 +442,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={UserPlus}
           detail="Visitors recorded this month"
           tone="indigo"
+          onClick={() => chooseMetricFilter("month")}
+          active={metricFilter === "month"}
         />
         <WalkinMetric
           label="Walk-ins Converted"
@@ -422,6 +451,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={ArrowUpRight}
           detail="Visitors converted into CRM leads"
           tone="emerald"
+          onClick={() => chooseMetricFilter("converted")}
+          active={metricFilter === "converted"}
         />
         <WalkinMetric
           label="In Progress"
@@ -429,6 +460,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={Clock}
           detail="Walk-ins requiring follow-up"
           tone="amber"
+          onClick={() => chooseMetricFilter("progress")}
+          active={metricFilter === "progress"}
         />
         <WalkinMetric
           label="Lost"
@@ -436,6 +469,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={ArrowDownRight}
           detail="Visitors closed without conversion"
           tone="rose"
+          onClick={() => chooseMetricFilter("lost")}
+          active={metricFilter === "lost"}
         />
       </div>
 
@@ -470,6 +505,13 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
         </div>
       </div>
 
+      {metricFilter ? (
+        <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-[13px] text-indigo-700">
+          <span>Showing records behind the selected KPI · {visibleWalkIns.length} walk-in{visibleWalkIns.length === 1 ? "" : "s"}</span>
+          <button type="button" onClick={() => setMetricFilter("")} className="font-bold hover:text-indigo-900">Show all</button>
+        </div>
+      ) : null}
+
       {loadError ? (
         <div className="flex items-start gap-2 text-[13px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
           <AlertCircle size={14} className="mt-0.5" />
@@ -483,7 +525,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
             <Loader2 size={16} className="animate-spin" />
             Loading walk-ins...
           </div>
-        ) : walkIns.length === 0 ? (
+        ) : visibleWalkIns.length === 0 ? (
           <div className="py-16 text-center px-5">
             <UserPlus size={24} className="mx-auto text-slate-300" />
             <div className="mt-3 text-[15px] font-semibold text-slate-800">
@@ -498,6 +540,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           <Table
             columns={[
               "Arrived",
+              "Lead ID",
               "Visitor / Student",
               "Phone",
               "Purpose",
@@ -507,10 +550,15 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
               "Status",
               "Actions",
             ]}
-            rows={walkIns.map((walkIn) => (
+            rows={visibleWalkIns.map((walkIn) => (
               <tr key={walkIn.id} className="hover:bg-slate-50/80 transition-colors">
                 <td className="px-4 py-3 text-[13px] text-slate-500 whitespace-nowrap">
                   {formatDateTime(walkIn.arrivedAt)}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                    {walkIn.leadDisplayId || "—"}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="text-[15px] font-semibold text-slate-900">

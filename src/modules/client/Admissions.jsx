@@ -49,6 +49,21 @@ import {
 } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
 
+const BASIC_STREAM_OPTIONS = [
+  "Engineering",
+  "Medical",
+  "Dental",
+  "Management",
+  "Commerce",
+  "Arts & Humanities",
+  "Science",
+  "Law",
+  "Pharmacy",
+  "Nursing",
+  "Agriculture",
+];
+const OTHER_STREAM_OPTION = "__OTHER_STREAM__";
+
 const STATUS_OPTIONS = [
   {
     value: "PENDING",
@@ -311,6 +326,16 @@ function streamIcon(name) {
   return GraduationCap;
 }
 
+function formatLeadDisplayId(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^LD\d+$/i.test(text)) return text.toUpperCase();
+  const numeric = Number(text.replace(/^Lead ID\s*/i, ""));
+  return Number.isInteger(numeric) && numeric > 0
+    ? `LD${String(numeric).padStart(3, "0")}`
+    : text;
+}
+
 function money(value) {
   return `₹${Number(
     value || 0
@@ -392,9 +417,15 @@ function Stat({
   label,
   value,
   detail,
+  onClick,
 }) {
+  const Component = onClick ? "button" : "div";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <Component
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${onClick ? "cursor-pointer transition hover:border-indigo-200 hover:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-100" : ""}`}
+    >
       <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">
         {label}
       </div>
@@ -406,7 +437,7 @@ function Stat({
       <div className="mt-1 text-[13px] leading-5 text-slate-500">
         {detail}
       </div>
-    </div>
+    </Component>
   );
 }
 
@@ -508,6 +539,14 @@ function StreamModal({
     setName,
   ] = useState(
     editing?.name || ""
+  );
+
+  const [streamPreset, setStreamPreset] = useState(() =>
+    BASIC_STREAM_OPTIONS.includes(editing?.name || "")
+      ? editing.name
+      : editing?.name
+        ? OTHER_STREAM_OPTION
+        : ""
   );
 
   const [
@@ -618,20 +657,37 @@ function StreamModal({
           label="Stream Name"
           required
         >
-          <input
-            required
-            value={name}
-            onChange={(
-              event
-            ) =>
-              setName(
-                event.target
-                  .value
-              )
-            }
-            placeholder="Medical"
-            className="sm-input"
-          />
+          <div className="space-y-2">
+            <select
+              required
+              value={streamPreset}
+              onChange={(event) => {
+                const value = event.target.value;
+                setStreamPreset(value);
+                if (value === OTHER_STREAM_OPTION) {
+                  if (BASIC_STREAM_OPTIONS.includes(name)) setName("");
+                } else {
+                  setName(value);
+                }
+              }}
+              className="sm-input"
+            >
+              <option value="">Select stream</option>
+              {BASIC_STREAM_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+              <option value={OTHER_STREAM_OPTION}>Other</option>
+            </select>
+            {streamPreset === OTHER_STREAM_OPTION ? (
+              <input
+                required
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="Enter stream name"
+                className="sm-input"
+              />
+            ) : null}
+          </div>
         </Field>
 
         <Field label="Stream Colour">
@@ -1878,7 +1934,7 @@ function AdmissionModal({
                       }
                     >
                       {lead.leadDisplayId
-                        ? `Lead ID ${lead.leadDisplayId} · `
+                        ? `${formatLeadDisplayId(lead.leadDisplayId)} · `
                         : ""}
                       {lead.name} · {lead.phone}
                     </option>
@@ -1950,7 +2006,7 @@ function AdmissionModal({
             </Field>
 
             <Field
-              label="University Name"
+              label="University Name / Affiliation Name"
               required
             >
               <input
@@ -2424,11 +2480,15 @@ function ImportModal({
 function AdmissionsManager({
   selectedYear = "all",
   market = "ALL",
+  currentUser = null,
 }) {
   // Admissions Done is always opened in a concrete market from the sidebar.
   // Keeping the market tied directly to the route avoids Domestic/International
   // data carrying over when the user switches between the two sections.
   const activeMarket = market === "INTERNATIONAL" ? "INTERNATIONAL" : "DOMESTIC";
+  const canViewAttachments =
+    currentUser?.role === "CLIENT_ADMIN" ||
+    currentUser?.pageAccess?.admissions?.attachments === true;
   const [streams, setStreams] = useState([]);
   const [partners, setPartners] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -3247,7 +3307,11 @@ function AdmissionsManager({
     return (
       <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap gap-3">
-          <div className="w-full rounded-xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 px-4 py-4 text-white sm:w-[210px] lg:w-[220px]">
+          <button
+            type="button"
+            onClick={() => setShowAllAdmissions(true)}
+            className="w-full rounded-xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px]"
+          >
             <div className="text-[13px] font-semibold text-white/70">
               Total Admissions
             </div>
@@ -3259,7 +3323,7 @@ function AdmissionsManager({
             <div className="mt-2 text-[13px] text-white/60">
               Across all streams
             </div>
-          </div>
+          </button>
 
           {visibleStreams.map((stream, index) => {
             const gradient =
@@ -3270,9 +3334,11 @@ function AdmissionsManager({
               );
 
             return (
-              <div
+              <button
+                type="button"
                 key={stream.id}
-                className={`w-full rounded-xl px-4 py-4 text-white sm:w-[210px] lg:w-[220px] ${gradient.bg}`}
+                onClick={() => setSelectedStream(stream)}
+                className={`w-full rounded-xl px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px] ${gradient.bg}`}
               >
                 <div className="text-[13px] font-semibold text-white/75">
                   {stream.name}
@@ -3285,7 +3351,7 @@ function AdmissionsManager({
                 <div className="mt-2 text-[13px] text-white/70">
                   {stream.totalColleges || 0} colleges
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -3587,7 +3653,7 @@ function AdmissionsManager({
                   <td className="whitespace-nowrap px-4 py-3">
                     <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
                       {admission.leadDisplayId
-                        ? `Lead ID ${admission.leadDisplayId}`
+                        ? formatLeadDisplayId(admission.leadDisplayId)
                         : "—"}
                     </span>
                   </td>
@@ -4004,8 +4070,8 @@ function AdmissionsManager({
                 setSelectedPartner(partner);
                 setSelectedBranch(null);
               }}
-              onAttachments={() => setAttachmentsPartner(partner)}
-              attachmentCount={partner.attachmentCount || 0}
+              onAttachments={canViewAttachments ? () => setAttachmentsPartner(partner) : null}
+              attachmentCount={canViewAttachments ? partner.attachmentCount || 0 : 0}
               onEdit={() =>
                 setCollegeModal({
                   mode: "edit",
@@ -4458,7 +4524,7 @@ function AdmissionsManager({
                 <td className="whitespace-nowrap px-4 py-3">
                   <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
                     {admission.leadDisplayId
-                      ? `Lead ID ${admission.leadDisplayId}`
+                      ? formatLeadDisplayId(admission.leadDisplayId)
                       : "—"}
                   </span>
                 </td>
@@ -4794,21 +4860,29 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             label: "Overall Admissions",
             value: data.all.length,
             detail: "Across Domestic & International",
+            filter: "ALL",
           },
           {
             label: "Domestic Admissions",
             value: data.domestic.length,
             detail: "All Domestic admissions",
+            filter: "DOMESTIC",
           },
           {
             label: "International Admissions",
             value: data.international.length,
             detail: "All International admissions",
+            filter: "INTERNATIONAL",
           },
         ].map((item) => (
-          <div
+          <button
+            type="button"
             key={item.label}
-            className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+            onClick={() => {
+              setFilter(item.filter);
+              window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+            }}
+            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30"
           >
             <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400">
               {item.label}
@@ -4821,13 +4895,13 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500">
               {item.detail}
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div> : null}
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+      <div id="admissions-records" className="scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
           <div>
             <h2 className="text-[16px] font-bold text-slate-950">All Admissions</h2>
@@ -4899,7 +4973,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.map((admission) => (
                   <tr key={admission.id} className="text-[13px] text-slate-700 hover:bg-slate-50/60">
-                    <td className="whitespace-nowrap px-5 py-3"><span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">{admission.leadDisplayId ? `Lead ID ${admission.leadDisplayId}` : '—'}</span></td>
+                    <td className="whitespace-nowrap px-5 py-3"><span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">{admission.leadDisplayId ? formatLeadDisplayId(admission.leadDisplayId) : '—'}</span></td>
                     <td className="px-5 py-3"><div className="font-semibold text-slate-900">{admission.name || '—'}</div><div className="mt-0.5 text-xs text-slate-500">{admission.phone || '—'}</div></td>
                     <td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[13px] font-semibold text-slate-700">{admission.market === 'INTERNATIONAL' ? 'International' : 'Domestic'}</span></td>
                     <td className="px-5 py-3">{admission.partner?.stream?.name || '—'}</td>

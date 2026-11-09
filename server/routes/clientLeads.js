@@ -426,9 +426,18 @@ async function saveCustomFieldValues(
   }
 }
 
+function formatLeadDisplayId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : null;
+}
+
 function formatLead(lead, sourceMap = new Map()) {
   return {
     id: lead.id,
+    leadNumber: lead.leadNumber || null,
+    leadDisplayId: formatLeadDisplayId(lead.leadNumber),
     name: lead.name,
     phone: lead.phone,
     email: lead.email,
@@ -567,7 +576,17 @@ router.get("/", async (req, res) => {
     }
 
     if (search) {
+      const leadNumberMatch = search.match(/^LD0*(\d+)$/i);
+      const numericLeadNumber = leadNumberMatch
+        ? Number(leadNumberMatch[1])
+        : /^\d+$/.test(search)
+          ? Number(search)
+          : null;
+
       where.OR = [
+        ...(Number.isInteger(numericLeadNumber) && numericLeadNumber > 0
+          ? [{ leadNumber: numericLeadNumber }]
+          : []),
         {
           name: {
             contains: search,

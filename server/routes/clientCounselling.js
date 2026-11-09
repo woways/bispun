@@ -78,10 +78,18 @@ function startOfWeek(date) {
   return start;
 }
 
-function formatSession(session, intelligence = null) {
+function formatLeadDisplayId(leadNumber) {
+  const value = Number(leadNumber);
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : null;
+}
+
+function formatSession(session, intelligence = null, lead = null) {
   return {
     id: session.id,
     leadId: session.leadId,
+    leadDisplayId: formatLeadDisplayId(lead?.leadNumber),
     student: session.studentName,
     studentName: session.studentName,
     phone: session.studentPhone,
@@ -176,7 +184,11 @@ router.get("/", async (req, res) => {
         orderBy: { scheduledAt: "desc" },
       }),
       prisma.counsellingSession.findMany({
-        where: { companyId, ...(market ? { market } : {}) },
+        where: {
+          companyId,
+          ...(market ? { market } : {}),
+          ...(selectedYear ? { scheduledAt: yearRange(selectedYear) } : {}),
+        },
         select: {
           leadId: true,
           status: true,
@@ -197,6 +209,7 @@ router.get("/", async (req, res) => {
             where: { companyId, id: { in: leadIds } },
             select: {
               id: true,
+              leadNumber: true,
               name: true,
               phone: true,
               email: true,
@@ -260,7 +273,8 @@ router.get("/", async (req, res) => {
       sessions: sessions.map((session) =>
         formatSession(
           session,
-          session.leadId ? intelligenceByLead.get(session.leadId) || null : null
+          session.leadId ? intelligenceByLead.get(session.leadId) || null : null,
+          session.leadId ? leadById.get(session.leadId) || null : null
         )
       ),
       summary: buildSummary(allSessions),
@@ -409,10 +423,17 @@ router.post("/", async (req, res) => {
       });
     });
 
+    const linkedLead = session.leadId
+      ? await prisma.lead.findFirst({
+          where: { id: session.leadId, companyId },
+          select: { leadNumber: true },
+        })
+      : null;
+
     return res.status(201).json({
       success: true,
       message: "Counselling session scheduled successfully",
-      session: formatSession(session),
+      session: formatSession(session, null, linkedLead),
     });
   } catch (error) {
     console.error("Failed to schedule counselling session:", error);
@@ -518,10 +539,17 @@ router.patch("/:id", async (req, res) => {
       data,
     });
 
+    const linkedLead = updated.leadId
+      ? await prisma.lead.findFirst({
+          where: { id: updated.leadId, companyId },
+          select: { leadNumber: true },
+        })
+      : null;
+
     return res.json({
       success: true,
       message: "Counselling session updated successfully",
-      session: formatSession(updated),
+      session: formatSession(updated, null, linkedLead),
     });
   } catch (error) {
     console.error("Failed to update counselling session:", error);

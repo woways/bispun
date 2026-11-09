@@ -21,7 +21,9 @@ import { apiRequest } from "../../lib/api";
 
 function formatLeadId(leadNumber) {
   const value = Number(leadNumber);
-  return Number.isInteger(value) && value > 0 ? `#${value}` : "—";
+  return Number.isInteger(value) && value > 0
+    ? `LD${String(value).padStart(3, "0")}`
+    : "—";
 }
 
 function formatDateTime(value) {
@@ -283,7 +285,7 @@ export default function LeadDetailsView({
     ["Alternative Phone", lead?.alternatePhone],
     ["Email", lead?.email],
     ["Course / Interest", lead?.course],
-    ["Preferred Colleges", lead?.preferredColleges],
+    ["Interested College", lead?.preferredColleges],
     ["Lead Type", lead?.type],
     ["Temperature", lead?.temperature],
     ["Source", lead?.sourceName || lead?.source],
@@ -334,7 +336,7 @@ export default function LeadDetailsView({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[18px] font-bold text-slate-950">{lead?.name || "Lead"}</div>
-                  <div className="mt-0.5 text-[12px] font-medium text-slate-500">Lead {formatLeadId(lead?.leadNumber)}</div>
+                  <div className="mt-0.5 text-[12px] font-medium text-slate-500">Lead ID {formatLeadId(lead?.leadNumber)}</div>
                   <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${summaryTone(status)}`}>
                     {displayValue(status)}
                   </span>
