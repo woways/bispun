@@ -272,9 +272,13 @@ Safe, un-gated fixes implemented and committed on the integration branch (base `
 
 **Accessibility:** the two UI files (`ClientPortal.jsx`, `Dashboard.jsx`) were reviewed by the accessibility-lead before editing. Honored must-preserve items: focus handoff to main content after notification navigation; donut visible total and sr-only total kept in lockstep. Pre-existing a11y gaps on the desktop notification dropdown (Escape-to-close, dynamic aria-label with unread count, focus-visible rings) were flagged and are logged as follow-ups in the roadmap.
 
+### Update — 2026-11-09 (later, after approval + connectivity restored)
+- **E4 / designation-level (Users & Roles):** 🔴→✅ **FIXED.** Migration `0002` applied to Dev, Prisma Client regenerated, data layer + backend boot verified (§8 execution log). Implementation **FULLY**; verification **PASS (data layer + boot)** — interactive Add/Edit-User UI workflow still NOT TESTED (manual).
+- **Lead-visibility hardening (name→id):** 🟡 **PARTIAL DONE** — bulk-assign now writes the authoritative `assignedToUserId` (fixes stale-id visibility leak); id-clause behavior unit-tested. Full case-consistency + an integration test harness remain.
+- **CI test gap:** ✅ **FIXED** — `npm test` now runs all 12 test files (was 4).
+- **Config (A11/D8):** ✅ documented + non-fatal boot warnings (creds still need provisioning for live features).
+
 ### Still outstanding (not yet implemented)
-- **E4 / designation-level (Users & Roles):** 🔴 still BROKEN in Dev — **blocked on the migration approval gate (§8).** No code change yet; applying the migration + `prisma generate` is the fix.
-- **Lead-visibility hardening** (name→id based assignment, case consistency): not started — partly intersects designation data; recommend after the migration.
 - **Calendar private/shared view model** (A5 remainder): needs a schema `visibility` column → include in migration package if approved.
 - **Config gaps** (A11 Google OAuth, D8 Firebase, G12 Android signing): documentation/provisioning — see roadmap P1/P3.
 - **Mobile stages 0–4:** see `BISPUN-MOBILE-STAGE-STATUS.md`.
@@ -310,5 +314,10 @@ CREATE INDEX IF NOT EXISTS "User_companyId_levelId_idx" ON "User"("companyId", "
 ### Execution log — 2026-11-09 (approved)
 - ✅ Target re-verified: `ep-blue-mouse-...neondb` (blue-mouse Dev, **not** pond).
 - ✅ SQL re-scanned: only additive `ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`; no destructive statements.
-- ⛔ **BLOCKED — Dev DB unreachable.** Connection attempts to Neon blue-mouse (pooler **and** direct endpoint, 45s timeout, IPv4-first per the Part B note) all returned `ETIMEDOUT`; a raw TCP probe to `:5432` also timed out. The compute almost certainly auto-suspended since the earlier successful read, or there is a network/allowlist block from this environment. **The migration was NOT applied** (correct per the STOP rule — cannot verify against an unreachable DB).
-- **To complete:** ensure the Neon blue-mouse compute is awake and reachable from the run environment (open it in the Neon console once, or confirm network/IP access), then re-run the approved apply (target + SQL already verified). Then `prisma generate` + the verification steps above.
+- ⛔ First attempt BLOCKED — Dev DB unreachable (`ETIMEDOUT`, pooler + direct + raw TCP:5432); compute had auto-suspended. Migration NOT applied at that time (correct per STOP rule).
+- ✅ **Second attempt (connectivity restored): APPLIED SUCCESSFULLY.** DNS resolved (IPv4 + IPv6), TCP connected both families. Re-verified target (blue-mouse, not pond) + SQL (3 additive statements) + read-only diff (columns "(none)" before). Applied the exact reviewed SQL **inside a transaction**. After: `designationId`/`levelId`/`levelName` (text) + both indexes (`User_companyId_designationId_idx`, `User_companyId_levelId_idx`) confirmed present.
+- ✅ `prisma generate` → client now references the 3 fields (143 each) — stale-client issue resolved.
+- ✅ **Data-layer verification (read-only, real PASS):** via the project's own Prisma client — (1) explicit `select` of the new fields succeeds; (2) the **default `findMany` projection that previously 500'd** succeeds; (3) `count({ where:{ designationId:{ not:null } } })` succeeds. Schema + client + DB now aligned.
+- ✅ **Backend boot verification:** started Dev backend with `DISABLE_BACKGROUND_WORKERS=true`; `GET /api/health` → `{success:true, database:"connected"}`. No boot-time errors from the new client or the `env.js` change. Server then stopped.
+- ⬜ **Not exercised this session:** the full authenticated Add/Edit-User **UI workflow** through the browser (needs a login session + would create test data). Data layer + boot are proven; the interactive UI path is **NOT TESTED** — recommend a manual pass (see regression checklist).
+- **Production:** unchanged — still requires separate explicit Production authorization; nothing applied to pond.

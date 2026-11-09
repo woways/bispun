@@ -63,9 +63,12 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 
 ---
 
-## Release readiness snapshot
-- **WEB:** NOT READY — pending migration (Users & Roles) + remaining P1 security/config.
-- **BACKEND:** NOT READY — pending migration + Google/Firebase config.
-- **DATABASE (Dev):** BLOCKED — designation/level migration awaiting approval.
-- **ANDROID:** NOT READY — no release signing; runtime unverified.
-- **PRODUCTION:** NOT READY — requires separate prod migration + config authorization; nothing merged to `main`.
+## Release readiness snapshot (updated 2026-11-09, after migration applied)
+- **WEB:** NOT READY — Users & Roles unblocked (migration applied); remaining: config provisioning (Google/Firebase creds) + lead-visibility hardening completion.
+- **BACKEND:** NOT READY — boots & DB-connected in Dev; needs Google/Firebase creds for those features in Prod.
+- **DATABASE (Dev):** ✅ **READY** — `0002` applied to blue-mouse, Prisma Client regenerated, data layer verified. (Prod migration still requires separate authorization.)
+- **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
+- **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
+
+### 2026-11-09 update
+No mobile **source** changed this session beyond the notification deep-link fix (Stage 4, done) and mobile unit tests now running in `npm test`. Stage percentages are unchanged; the binding mobile blockers remain **(1) release signing/keystore** and **(2) no device/emulator for runtime verification**. Mobile development can proceed on code-level Stage 4 cleanup (dialer centralization) and Stage 1/3 items, but their **verification** stays BLOCKED until a device/emulator is available.

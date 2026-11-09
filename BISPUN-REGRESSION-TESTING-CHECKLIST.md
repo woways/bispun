@@ -53,6 +53,8 @@ grep -c "designationId" node_modules/.prisma/client/index.d.ts
 
 ## 1. 🔴 Critical DB gate (run before trusting Users/Roles)
 
+> **Status 2026-11-09:** ✅ Migration `0002` **APPLIED** to Dev blue-mouse; Prisma Client regenerated; columns + indexes + data-layer queries + `/api/health` verified. The boxes below are confirmed in Dev **except** the interactive Add/Edit-User UI workflow (still to do manually with a login session). `npm test` now runs all 12 suites.
+
 - [ ] Dev DB `User` table has `designationId`, `levelId`, `levelName` (at audit time: **MISSING**). Verify via Neon SQL editor or an `information_schema` read.
 - [ ] Prisma client regenerated after schema change (see §0).
 - [ ] `User.leadStoreColumnOrder` exists (confirmed EXISTS at audit — ARRAY default `ARRAY[]::text[]`).
