@@ -20,7 +20,9 @@ Per owner decision: **Production release ON HOLD** and **branch cleanup ON HOLD*
 | 2 | Lead-notification deep link (web + mobile) | ✅ **DONE** — `parseNotificationTarget`, encoded `actionModule`, focus handoff; 6 tests |
 | 3 | Calendar private-event protection | 🟡 **PARTIAL DONE** — edit/delete authz shipped (`canModifyCalendarEvent`, 6 tests); private-vs-shared **view** model still needs a schema column (migration-gated) |
 | 4 | Telephony call-history scoping | ✅ **DONE** — `callHistoryWhere`, 3 tests |
-| 5 | Lead-visibility hardening (name→id) | 🟡 **PARTIAL** — bulk-assign now writes authoritative `assignedToUserId` (fixes stale-id leak). Remaining: case-consistent name matching + integration tests. |
+| 5 | Lead-visibility hardening (name→id) | ✅ **DONE (code)** — bulk-assign writes authoritative `assignedToUserId` (fixes stale-id leak) **and** `leadVisibilityWhere` now matches names case-insensitively (consistent with `canViewLead`). +2 unit tests. Remaining: route-level integration tests (needs a DB test harness). |
+| 5c | Notification a11y (desktop dropdown) | ✅ **DONE** — dynamic aria-label+count, haspopup/expanded, Escape-to-close + focus return, role=alert, aria-live list, focus rings, contrast (per a11y-lead review). Mobile untouched. |
+| 3b | Calendar private/shared **view** model | 🟡 **MIGRATION DRAFTED (gate)** — `prisma/pending-migrations/0003_DRAFT_add_calendar_event_visibility.sql` (additive `visibility` TEXT default COMPANY + index) with schema + GET-filter plan. NOT applied; awaits approval. |
 | 5b | CI test coverage | ✅ **DONE** — `npm test` now runs all 12 suites (was 4). |
 | 6 | Google/Firebase config docs | ✅ **DONE** — `.env.example` documents Google OAuth + Firebase (+core/telephony) vars; `env.js` warns when unconfigured (non-fatal). Provisioning real creds still required for the live features. |
 | 7 | Dashboard Leads-by-Source counting | ✅ **DONE** — `buildLeadsBySource` + `leadsBySourceTotal`, 5 tests |
