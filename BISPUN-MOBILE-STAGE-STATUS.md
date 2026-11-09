@@ -70,6 +70,26 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 (16:12) — ✅ FRESH DEBUG APK BUILT (host terminal)
+
+The Gradle loopback blocker is specific to the agent's sandboxed shell. Running the
+build in the **user's real Terminal panel (host PowerShell, unsandboxed)** via
+`run_in_terminal` **succeeded**:
+- `npm run build` ✓ → `npx cap sync android` ✓ → `.\gradlew.bat assembleDebug` → **BUILD SUCCESSFUL in 59s** (156 tasks).
+- **Fresh APK:** `S:\Bispun\android\app\build\outputs\apk\debug\app-debug.apk` — **8.8 MB, 2026-11-09 16:12**, source SHA **5b2ce0c**, `applicationId com.bispun.crm`, versionCode 1 / versionName 1.0.
+- **ANDROID DEBUG BUILD — READY** (genuinely fresh; the old Nov-1 APK is superseded).
+- **Device QA (Pixel_6 emulator, Android cold-booted, API 36):** ran genuine smoke checks with screenshot evidence:
+  | Check | Result |
+  |---|---|
+  | `adb install` fresh APK | ✅ PASS (Streamed Install: Success) |
+  | App launch (launcher intent) | ✅ PASS (process pid alive; no FATAL in logcat) |
+  | Capacitor/WebView load | ✅ PASS (chromium 145; React bundle executed from `http://localhost/crm-assets/...`) |
+  | Splash screen (Bispun bird branding) | ✅ PASS (screenshot: branded splash rendered) |
+  | React UI renders (no white/blank screen) | ✅ PASS (screenshot) |
+  | Graceful API-error handling | ✅ PASS (showed "Can't reach the server … Try again" — the auth-bootstrap retry state, not a crash/blank) |
+  | Login / session / navigation / native actions / push | ⛔ BLOCKED — needs a backend reachable from the emulator **and** interactive input (agent cannot type credentials / drive multi-step UI blind) |
+  Note: this debug build's API endpoint was not reachable from the emulator, which is why the app correctly showed the graceful retry screen. Full interactive QA requires a human on the device/emulator with a reachable backend. No fake PASS claimed.
+
 ### 2026-11-09 — Gradle build ROOT CAUSE + host build procedure (evidence)
 
 **Root cause (confirmed with the full stack trace):** Gradle fails at startup, before any compilation:
