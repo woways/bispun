@@ -8,6 +8,7 @@ import {
   leadVisibilityWhere,
   canViewLead,
   datasetVisibilityWhere,
+  callHistoryWhere,
 } from "./leadVisibility.js";
 
 const COMPANY_USERS = [
@@ -104,4 +105,47 @@ test("datasetVisibilityWhere scopes by assignedToUserId for employee", () => {
   assert.deepEqual(datasetVisibilityWhere(scope), {
     assignedToUserId: { in: ["emp1"] },
   });
+});
+
+test("callHistoryWhere: admin is companyId-only, no OR restriction", () => {
+  const scope = buildScope(COMPANY_USERS[0], COMPANY_USERS);
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "admin1",
+    leadId: "lead-9",
+  });
+  assert.deepEqual(where, { companyId: "c1", leadId: "lead-9" });
+});
+
+test("callHistoryWhere: employee restricted to own calls OR calls on visible leads", () => {
+  const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "emp1",
+    leadId: "lead-9",
+    visibleLeadIds: ["lead-9", "lead-10"],
+  });
+  assert.equal(where.companyId, "c1");
+  assert.equal(where.leadId, "lead-9");
+  assert.ok(Array.isArray(where.OR), "expected OR restriction for non-admin");
+  const ownClause = where.OR.find((c) => c.userId === "emp1");
+  assert.ok(ownClause, "own-calls clause missing");
+  const leadClause = where.OR.find((c) => c.leadId?.in);
+  assert.deepEqual(leadClause.leadId.in, ["lead-9", "lead-10"]);
+});
+
+test("callHistoryWhere: employee with no visible leads still sees only own calls", () => {
+  const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "emp1",
+    phone: "9998887777",
+    visibleLeadIds: [],
+  });
+  assert.equal(where.companyId, "c1");
+  assert.equal(where.phone, "9998887777");
+  assert.deepEqual(where.OR, [{ userId: "emp1" }]);
 });
