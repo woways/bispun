@@ -51,14 +51,27 @@ test("admin scope has no restriction (null ids, where null)", () => {
   assert.equal(datasetVisibilityWhere(scope), null);
 });
 
-test("employee lead where matches only own assigned id (+ own name fallback)", () => {
+test("employee lead where matches own assigned id + case-insensitive name", () => {
   const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
   const where = leadVisibilityWhere(scope);
   assert.ok(where.OR, "expected an OR clause");
   const idClause = where.OR.find((c) => c.assignedToUserId?.in);
   assert.deepEqual(idClause.assignedToUserId.in, ["emp1"]);
-  const nameClause = where.OR.find((c) => c.assignedToName?.in);
-  assert.deepEqual(nameClause.assignedToName.in, ["Employee One"]);
+  // Name matching must be case-insensitive to stay consistent with canViewLead
+  // (which normalizes case). Each visible name is an insensitive equals clause.
+  const nameClause = where.OR.find((c) => c.assignedToName?.equals);
+  assert.equal(nameClause.assignedToName.equals, "Employee One");
+  assert.equal(nameClause.assignedToName.mode, "insensitive");
+  // No case-sensitive `in` clause should remain.
+  assert.equal(where.OR.find((c) => c.assignedToName?.in), undefined);
+});
+
+test("manager name matching is case-insensitive for each team member", () => {
+  const scope = buildScope(COMPANY_USERS[1], COMPANY_USERS); // Sales manager: mgr1, emp1, emp2
+  const where = leadVisibilityWhere(scope);
+  const nameClauses = where.OR.filter((c) => c.assignedToName?.equals);
+  assert.equal(nameClauses.length, 3);
+  assert.ok(nameClauses.every((c) => c.assignedToName.mode === "insensitive"));
 });
 
 test("canViewLead: employee can see own lead by id, not others", () => {

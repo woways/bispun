@@ -165,8 +165,10 @@ export function leadVisibilityWhere(scope) {
     or.push({ assignedToUserId: { in: ids } });
   }
 
-  if (names.length) {
-    or.push({ assignedToName: { in: names } });
+  // Case-insensitive per-name match (Prisma `in` has no case-insensitive mode),
+  // so the list query stays consistent with canViewLead(), which normalizes case.
+  for (const name of names) {
+    or.push({ assignedToName: { equals: name, mode: "insensitive" } });
   }
 
   if (!or.length) {
