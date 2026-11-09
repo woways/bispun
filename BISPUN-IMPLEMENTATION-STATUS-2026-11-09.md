@@ -285,6 +285,54 @@ Safe, un-gated fixes implemented and committed on the integration branch (base `
 
 ---
 
+## 9. Release gate status — 2026-11-09 (pre-merge)
+
+Feature branch is **0 behind / 10 ahead** of `origin/main` (`2aceef9`, no other-dev commits) → clean fast-forward, no conflicts.
+
+| # | Mandatory gate | Status |
+|---|---|---|
+| 1 | Automated tests | ✅ PASS (75/75, all 12 suites in `npm test`) |
+| 2 | Production build | ✅ PASS |
+| 3 | Dev DB schema compatible | ✅ PASS (migration `0002` applied) |
+| 4 | Prisma Client synced | ✅ PASS (regenerated) |
+| 5 | Login/logout/session | 🟡 data-layer + boot verified; interactive flow NOT runtime-tested |
+| 6 | Desktop CRM unchanged | ✅ PASS (no layout/markup redesign) |
+| 7 | Modules available | ✅ PASS (regression audit: 17/17) |
+| 8 | Role permissions correct | 🟡 unit-tested (pageAccess/leadVisibility); no full integration test |
+| 9 | Tenant isolation | 🟡 code + unit tests; no cross-tenant integration test |
+| 10 | Notification navigation | ✅ helper unit-tested; web path verified by code |
+| 11 | Calendar security | ✅ edit/delete authz (unit-tested); private/shared view model still open |
+| 12 | **Android build succeeds** | ⛔ **NOT VERIFIED** (not built here; signing lives on `release/android-signing-prep`) |
+| 13 | **Android device/emulator tests** | ⛔ **BLOCKED** (no device/emulator) |
+| 14 | No secrets | ✅ PASS (diff scanned) |
+| 15 | No feature lost | ✅ PASS |
+| 16 | No unresolved critical bug/security | 🟡 calendar private/shared **view** model open (migration-gated); not release-critical |
+
+**Verdict:** mandatory gates **#12 and #13 are BLOCKED** → per the stated rule, full release readiness is **NOT** claimed. Combined with the Production-deploy consequence (below), the merge-to-`main`-and-push is **held**.
+
+### Production-deploy consequence (STOP condition)
+`vercel.json` is present and the repo is Vercel-connected. By Vercel's default, a push to the production branch (`main`) **triggers a Production deployment**. This is **not separately authorized** for an unreviewed release, and Production DB/compat was not verified. **→ STOP before any `main` push.** Recommended safe path: open a **PR** (no deploy) for review.
+
+## 10. Branch & worktree inventory — 2026-11-09 (Phase 8, read-only)
+
+**Worktrees (4):** `S:/Bispun` (feat/bispun-audit-fixes-mobile-completion), `S:/Bispun-integ` (integration/mui-yc), `S:/Bispun-stab` (feat/referrals-integration), `S:/Bispun-release` (release/android-signing-prep).
+
+| Branch | Latest | Classification |
+|---|---|---|
+| `main` | 2aceef9 | KEEP (never delete) |
+| `feat/bispun-audit-fixes-mobile-completion` | b6b56ba | KEEP — ACTIVE (this work; PR pending) |
+| `backup/main-pre-merge-20261107` | 78ef822 | KEEP — BACKUP/ROLLBACK |
+| `feat/client-admin-password-reset` | 0084f2d | KEEP — UNIQUE COMMITS (local-only; merge status unverified) |
+| `feat/mobile-ui-optimization` | 32f58bc | KEEP — UNIQUE COMMITS (ahead 1 of its remote) |
+| `feat/referrals-integration` | 844c352 | KEEP — WORKTREE (S:/Bispun-stab) |
+| `hotfix/prod-login-coldstart` | c55388f | KEEP — likely rollback/hotfix (UNKNOWN) |
+| `integration/mui-yc` | 70b8209 | KEEP — WORKTREE (S:/Bispun-integ; remote gone) |
+| `release/android-signing-prep` | 47396dd | KEEP — WORKTREE + UNIQUE (carries Android signing config) |
+
+**Result: 0 branches SAFE TO DELETE.** All are worktree-attached, backups, or carry unique/unmerged commits. Cleanup is post-merge only and requires explicit per-branch confirmation — **no deletions performed or proposed** this session. (Note: `release/android-signing-prep` is the home of the Android release-signing work that gate #12 needs.)
+
+---
+
 ## 8. 🔴 APPROVAL GATE — Dev database migration package
 
 **Status: PREPARED, NOT APPLIED.** Awaiting explicit approval (per your rules: no migrations without separate approval). This unblocks E4 (Users & Roles).
