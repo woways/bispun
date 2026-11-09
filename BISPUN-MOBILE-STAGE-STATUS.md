@@ -70,6 +70,32 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 — Android build attempt (Phase E) + submission package (Phase F)
+
+**Toolchain present:** JDK 21 (Temurin), Android SDK at `S:\Android\Sdk` (ANDROID_HOME set, platform-tools present), Gradle wrapper. 
+**Web build + Capacitor sync: ✅ PASS** (`npm run build` → `npx cap sync android`; 2 plugins: @capacitor/app, @capacitor/push-notifications; `dist/index.html` synced into `android/app/src/main/assets/public/`).
+**Gradle `assembleDebug`: ⛔ BLOCKED in this environment** — fails with `java.io.IOException: Unable to establish loopback connection`, reproduced 3× (default, `--no-daemon`, and with the shell sandbox disabled). This is an environment-level restriction on Gradle's required local 127.0.0.1 JVM IPC — **not** the project and **not** my code. The project is known-buildable (a prior `app-debug.apk`, 8.7 MB, dated 2026-11-01 exists from a normal build). **I did not produce a fresh APK and do not present the old one as current.** A fresh build must run in a normal Android environment (the developer's Android Studio / the `S:\Bispun-release` worktree, or CI).
+**Device/emulator testing: ⛔ BLOCKED** (none available). No runtime PASS claimed.
+
+#### Android submission package status (target 2026-11-13)
+| Item | Status | Note / operator action |
+|---|---|---|
+| applicationId | ✅ `com.bispun.crm` | capacitor.config + build.gradle |
+| versionCode / versionName | ✅ `1` / `1.0` | on `release/android-signing-prep`; bump per release |
+| Web assets + cap sync | ✅ PASS | reproducible here |
+| App icon / splash assets | ✅ present | `android/app/src/main/res/**` |
+| `google-services.json` (FCM) | ✅ present | project `bispun-crm` |
+| Manifest permissions | 🟡 INTERNET present | confirm **POST_NOTIFICATIONS** is in the *merged* manifest for Android 13+ (push) |
+| Release signing config | ✅ ready (fail-closed) | on release branch; **needs operator keystore** |
+| Signed AAB/APK | ⛔ BLOCKED | needs keystore `bispun-release.jks` + `android/keystore.properties` (secrets) — operator creates via Android Studio/keytool; I will not create signing secrets |
+| Debug APK (fresh) | ⛔ BLOCKED here | Gradle loopback restriction; build in a normal Android env |
+| Device test results | ⛔ BLOCKED | no emulator/device |
+| Production API config | 🟡 operator | release build must set a real **HTTPS** `VITE_API_URL` (not localhost/10.0.2.2); cleartext to real domains is blocked by `network_security_config.xml` |
+| Privacy policy / Data safety / screenshots / description / release notes | ⬜ operator | store-listing content — not code; prepare per Play Console |
+| Distribution channel | ❓ unconfirmed | confirm Play production vs internal/closed testing vs direct APK |
+
+**Signed-release operator steps (when authorized):** on `S:\Bispun-release` (or after merging the signing branch) → create `bispun-release.jks` (Android Studio *Generate Signed Bundle* or `keytool`) → copy `android/keystore.properties.example` → `android/keystore.properties` and fill `storeFile/storePassword/keyAlias/keyPassword` (gitignored; never commit) → set a real HTTPS `VITE_API_URL` → `npm run build && npx cap sync android` → `./gradlew bundleRelease` → the AAB lands at `android/app/build/outputs/bundle/release/`. See `MOBILE-ANDROID-SIGNING-REPORT.md`.
+
 ### 2026-11-09 — next-stage prep (Phase 7; no code changes made)
 - **Emulator/device availability here: ⛔ BLOCKED** — no Android emulator/physical device in this environment; only the default Capacitor instrumentation stub exists. All Stage 1–4 **runtime** verification stays BLOCKED until a device is available. No APK/AAB built.
 - **Capacitor config (verified):** `appId: com.bispun.crm`, `appName: Bispun`, `webDir: dist`, `androidScheme: http` (cleartext limited to emulator/localhost via `network_security_config.xml`; prod traffic HTTPS-only). `google-services.json` present (`bispun-crm`).
