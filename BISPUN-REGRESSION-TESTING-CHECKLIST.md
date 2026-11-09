@@ -1,0 +1,171 @@
+# Bispun CRM — Regression Testing Checklist
+
+**Date:** 2026-11-09 · **Branch:** main @ `2aceef9`
+**Companion to:** `BISPUN-IMPLEMENTATION-STATUS-2026-11-09.md`, `BISPUN-PENDING-FEATURES-ROADMAP.md`
+
+Use this before any merge/deploy. It mixes **automated gates** (run now) with **manual checks** (need Dev login / Google / Firebase / Android device). Boxes are unchecked — this audit did **not** perform the manual runtime checks (they require authorized test sessions and credentials). Mark `PASS` / `FAIL` / `BLOCKED` as you go.
+
+---
+
+## Session-2 fix verification (branch `feat/bispun-audit-fixes-mobile-completion`)
+
+Automated (run now): `node --test $(find server src -name "*.test.js")` → expect **75/75**.
+- [ ] `callHistoryWhere` (3) — telephony scope
+- [ ] `canModifyCalendarEvent` (6) — calendar edit/delete authz
+- [ ] `parseNotificationTarget` (6) — notification deep-link id
+- [ ] `buildLeadsBySource` (5) — donut counting (direct admissions / unspecified / zero data)
+
+Manual (need Dev login):
+- [ ] Employee cannot load a colleague's lead call history via `GET /telephony/history?leadId=` / `?phone=` (only own + visible-lead calls).
+- [ ] Non-creator/non-assignee employee gets 403 on PATCH/DELETE of another user's calendar event; admin still can.
+- [ ] Clicking a lead follow-up notification opens the **exact lead** (web); focus lands in main content.
+- [ ] Dashboard "Leads by Source": donut center number **equals** the sum of the legend slices, including a Direct Admission bucket when present.
+
+## 0. Pre-flight (automated — safe to run anytime)
+
+```bash
+git fetch origin && git status
+```
+- [ ] Local `main` not behind `origin/main` (was 4 behind at audit start; fast-forwarded to `2aceef9`).
+
+```bash
+node --test $(find server src -name "*.test.js")
+```
+- [ ] All 9 test files pass (expect **55/55**). ⚠️ `npm test` alone only runs 4 of them.
+
+```bash
+npm run build
+```
+- [ ] `vite build` exits 0, `dist/` generated.
+
+```bash
+npx prisma validate
+```
+- [ ] Schema valid.
+
+**Prisma client freshness (catches the designation/level trap):**
+```bash
+grep -c "designationId" node_modules/.prisma/client/index.d.ts
+```
+- [ ] Returns **> 0** after you run `prisma generate`. (At audit time it was **0** = stale.)
+
+---
+
+## 1. 🔴 Critical DB gate (run before trusting Users/Roles)
+
+- [ ] Dev DB `User` table has `designationId`, `levelId`, `levelName` (at audit time: **MISSING**). Verify via Neon SQL editor or an `information_schema` read.
+- [ ] Prisma client regenerated after schema change (see §0).
+- [ ] `User.leadStoreColumnOrder` exists (confirmed EXISTS at audit — ARRAY default `ARRAY[]::text[]`).
+- [ ] `DeviceToken` table exists (migration `0001`) — else device-token register/unregister 500.
+- [ ] After migration: open **Settings → Users & Roles** → list loads, create user, edit user, assign designation + level → all succeed (no 500).
+
+---
+
+## 2. Authentication, roles & tenant isolation (highest priority)
+
+- [ ] Login as **Employee**, **Manager**, **Client Admin**, and confirm **Super Admin is rejected** from the client portal (`clientAuth.js:72,182`).
+- [ ] **Lead Store visibility:** Employee sees only own/assigned leads; Manager sees team (and their no-department case); Admin sees all.
+- [ ] **Cross-company isolation:** with two companies seeded, user A (company 1) cannot see/fetch company 2's leads, UTM links, admissions, calendar events, chats, users (try direct id in URL/API).
+- [ ] **Dashboard widget permissions:** restricted role does not receive gated sections (payload omits them; KPI/action-center detail routes 403).
+- [ ] **Users management scope:** Manager can only edit EMPLOYEEs in their subtree, cannot change roles or grant perms beyond their own.
+- [ ] 🟠 **Telephony `GET /history`:** confirm whether an employee can read another user's lead call history (current code: **not visibility-scoped** — expected FAIL until fixed).
+- [ ] 🟠 **Calendar private events:** confirm whether a non-organizer can read/edit/delete another user's event + open its Meet link (current code: **no protection** — expected FAIL until fixed).
+
+---
+
+## 3. Dashboard
+
+- [ ] KPI tiles render with correct values for the selected year; drill-down modals reconcile with tiles.
+- [ ] 🟡 **Leads by Source:** donut center total **equals** the sum of the legend slices (expected mismatch when direct admissions exist — see roadmap #7).
+- [ ] "Unspecified" and "Direct Admission" buckets appear correctly.
+- [ ] Action Center rows: "Open lead" opens the **exact** lead detail (not just the module).
+- [ ] Responsive layout on mobile widths (manual/visual).
+
+---
+
+## 4. Lead Store
+
+- [ ] Create / edit lead (name + phone validation; primary-phone change blocked by design).
+- [ ] Search + filters (type/year/temperature/status); Course/Interest autocomplete.
+- [ ] Lead Details open; Lead ID displayed (note: derived sequential, may shift).
+- [ ] **Saved column ordering:** reorder columns as Admin/Manager → reload → order persists (GET/PATCH `/column-preferences`). Employees get fixed default (by design).
+- [ ] Notes/Remarks CRUD; Activity history shows calls/emails/whatsapp.
+- [ ] Import CSV **and** XLSX (dedup, caps 5000 rows/5MB); Export (CSV only currently).
+- [ ] Smart Nurture: enroll a lead (respects visibility), steps schedule; reply/terminal-status stop. (Needs Gmail/WhatsApp connection.)
+- [ ] Dial & Track: log a call; verify it syncs to activity.
+
+---
+
+## 5. Notifications
+
+- [ ] Notification list loads; unread badge correct; decrements on read.
+- [ ] 🔴 **Lead notification → click opens the exact lead** (current code: **BROKEN** — opens module only; expected FAIL until roadmap #2).
+- [ ] Other module notifications route to the right module.
+- [ ] Notification preferences toggle and are respected by producers.
+- [ ] (No volume control exists yet — N/A.)
+
+---
+
+## 6. Users & Departments
+
+- [ ] Department dropdown loads company-specific departments (defaults + custom).
+- [ ] Designation/Level dropdowns populate and save (blocked until §1 migration).
+- [ ] Loading / empty / **Retry** states on the department dropdown; note users-list failure currently has no Retry.
+- [ ] Add/Edit/Reset-password workflows; self-demote / self-deactivate blocked.
+
+---
+
+## 7. UTM Leads
+
+- [ ] Create UTM link (generate + manual modes); URL validation rejects bad input.
+- [ ] Import modal attribution dropdown stamps `utmLinkId` on imported leads.
+- [ ] Lead attribution persists on create/import (note: PATCH can't change it later).
+- [ ] UTM Analytics figures reconcile with leads/admissions (note: **not role-scoped**; "Clicks" always 0 — tracking not implemented).
+- [ ] Cross-company: cannot attribute to or view another company's UTM link.
+
+---
+
+## 8. Google Calendar & Meet  (⛔ needs Google OAuth creds — BLOCKED without them)
+
+- [ ] `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` + `CLIENT_URL` configured.
+- [ ] Connect popup launches from inside Calendar; status polls to "connected".
+- [ ] Employee (no Settings access) can connect their own Google.
+- [ ] Create event with Meet → link appears (or clean "pending" state); reopen behavior.
+- [ ] Calendar opens without crashing (the FragmentRow crash fix, commit `32f58bc`).
+- [ ] Verify no unexpected invite emails are sent (no `sendUpdates`).
+
+---
+
+## 9. Mobile CRM (Android)  (⛔ needs device/emulator + Firebase — BLOCKED without them)
+
+- [ ] Debug build installs and launches (native splash shows).
+- [ ] Login persists across cold start (session restoration).
+- [ ] Bottom nav + More menu; all authorized modules reachable; Logout works from mobile.
+- [ ] Android hardware back: overlays close first → module back → exit at root (no accidental exit).
+- [ ] Native actions: WhatsApp / SMS / phone dial from a lead.
+- [ ] Firebase push: receive a notification; tap routes to the right module (note: record-level deep link currently missing).
+- [ ] KPI/grids readable; tap targets ≥44px.
+- [ ] **Release build:** currently **blocked** — no signing config/keystore (roadmap #12).
+
+---
+
+## 10. Existing-module regression sweep (no functionality lost)
+
+Quick "opens + loads data + core action works" pass for each:
+- [ ] Dashboard  [ ] Lead Store  [ ] UTM Leads  [ ] Admissions  [ ] Revenue  [ ] Finance (expenses/incentives in Revenue)  [ ] Walk-ins  [ ] Counselling  [ ] Analytics  [ ] Chats (real-time send/receive)  [ ] Goals & Targets  [ ] My Store (templates; AI gen "coming soon")  [ ] My Referrals  [ ] Settings (SMS "coming soon")  [ ] Help & Support  [ ] Subscription/Billing (Razorpay)  [ ] Super Admin
+- [ ] Confirm no console errors / 500s on module open.
+
+---
+
+## 11. Deploy gate (prod parity)
+
+- [ ] Migration `0002` (and `0001`) applied to the target environment.
+- [ ] `prisma generate` run in the build.
+- [ ] Google OAuth + Firebase env vars present in prod.
+- [ ] `GOOGLE_REDIRECT_URI` points to the prod callback (not the localhost default).
+- [ ] `google-services.json` API key confirmed SHA/package-restricted.
+- [ ] Background workers behavior intended (nurture + calendar reminders start unless `DISABLE_BACKGROUND_WORKERS=true`).
+
+---
+
+*Items flagged 🔴/🟠/🟡 correspond to known defects/gaps in the roadmap; they are expected to FAIL until fixed. Everything else is "verify no regression." This checklist was authored from static review + automated checks; the manual sections were not executed during the audit.*
