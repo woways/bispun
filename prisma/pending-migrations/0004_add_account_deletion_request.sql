@@ -1,5 +1,7 @@
 -- =====================================================================
--- DRAFT — NOT APPROVED, NOT APPLIED (awaiting explicit migration approval)
+-- APPROVED & APPLIED to Neon blue-mouse DEVELOPMENT on 2026-11-09
+-- (transactional, additive-only, verified). PRODUCTION: NOT applied — requires
+-- separate explicit authorization.
 -- Durable store for account/data deletion REQUESTS (Google Play compliance).
 --
 -- Scope: records a request only. It does NOT delete or anonymize any account
