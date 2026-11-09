@@ -331,6 +331,13 @@ Feature branch is **0 behind / 10 ahead** of `origin/main` (`2aceef9`, no other-
 
 **Result: 0 branches SAFE TO DELETE.** All are worktree-attached, backups, or carry unique/unmerged commits. Cleanup is post-merge only and requires explicit per-branch confirmation — **no deletions performed or proposed** this session. (Note: `release/android-signing-prep` is the home of the Android release-signing work that gate #12 needs.)
 
+### Update — 2026-11-09 (later): main advanced + PR #13 opened
+- `origin/main` advanced `2aceef9 → c618261` (**PR #12** "level-keyed Access editor", merged by another author). No file overlap with my work and **no new migration**; it uses the `levelId`/`levelName` columns my migration `0002` already added.
+- Integrated `origin/main` into the feature branch (clean merge, commit `809f6a7`); re-ran tests (75/75) + build (compiles the merged Access-editor UI). Feature branch is now **0 behind / 12 ahead**. Backup tag `backup/pre-main-merge-20261109` created + pushed.
+- **PR #13 opened:** https://github.com/woways/bispun/pull/13 — state open, `MERGEABLE` but `mergeStateStatus: BLOCKED` (branch protection / required review). No CI pipeline configured. **Not merged, `main` not pushed, no deploy.**
+- **Branch cleanup (re-evaluated after main moved):** exactly **one SAFE TO DELETE** candidate — remote `feat/admissions-notifications-calendar` (PR #9 merged, ancestor of main, no worktree, no unique commits, no local copy). All others KEEP (worktree / unique commits / backup / active). **Held for explicit confirmation of exact names before any deletion.** `hotfix/prod-login-coldstart` is merged but retained as a hotfix/rollback ref unless you say otherwise.
+- Management-facing branch guide added: `BISPUN-GIT-WORKFLOW.md`.
+
 ---
 
 ## 8. 🔴 APPROVAL GATE — Dev database migration package
