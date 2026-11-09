@@ -14,6 +14,28 @@ function parseOrigins(value) {
     .map((origin) => origin.replace(/\/+$/, ""));
 }
 
+function warnUnconfiguredIntegrations() {
+  const googleReady = Boolean(
+    String(process.env.GOOGLE_CLIENT_ID || "").trim() &&
+      String(process.env.GOOGLE_CLIENT_SECRET || "").trim()
+  );
+  if (!googleReady) {
+    console.warn(
+      "[config] Google Calendar/Meet disabled: set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI (+ CLIENT_URL)."
+    );
+  }
+
+  const firebaseReady = Boolean(
+    String(process.env.FIREBASE_SERVICE_ACCOUNT || "").trim() ||
+      String(process.env.GOOGLE_APPLICATION_CREDENTIALS || "").trim()
+  );
+  if (!firebaseReady) {
+    console.warn(
+      "[config] Mobile push disabled: set FIREBASE_SERVICE_ACCOUNT or GOOGLE_APPLICATION_CREDENTIALS."
+    );
+  }
+}
+
 export function loadServerConfig() {
   const jwtSecret = required("JWT_SECRET");
   if (isProduction && jwtSecret.length < 32) {
@@ -41,6 +63,11 @@ export function loadServerConfig() {
 
   const port = Number(process.env.PORT) || 4000;
   if (!Number.isInteger(port) || port <= 0) throw new Error("PORT must be a positive integer");
+
+  // Non-fatal config health: surface optional integrations that are unconfigured
+  // so an operator can see WHY a feature is dormant instead of it silently no-oping.
+  // These never throw — missing Google/Firebase config disables the feature, not the app.
+  warnUnconfiguredIntegrations();
 
   return {
     isProduction,
