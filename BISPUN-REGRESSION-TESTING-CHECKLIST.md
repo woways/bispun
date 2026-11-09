@@ -159,14 +159,20 @@ Quick "opens + loads data + core action works" pass for each:
 
 ---
 
-## 11. Deploy gate (prod parity)
+## 11. Deploy gate (prod parity) — updated 2026-11-09
 
-- [ ] Migration `0002` (and `0001`) applied to the target environment.
-- [ ] `prisma generate` run in the build.
-- [ ] Google OAuth + Firebase env vars present in prod.
-- [ ] `GOOGLE_REDIRECT_URI` points to the prod callback (not the localhost default).
-- [ ] `google-services.json` API key confirmed SHA/package-restricted.
-- [ ] Background workers behavior intended (nurture + calendar reminders start unless `DISABLE_BACKGROUND_WORKERS=true`).
+**Production schema verification (PR #13 dependency): ✅ PASS.** Confirmed by the operator via the Neon SQL Editor on `consulbuzz-production` / branch `production` / `neondb`: `User.designationId`, `User.levelId`, `User.levelName` all exist (text). → **Do NOT apply migration `0002` to Production** (already present). PR #13 itself changes **no** schema/migration files, so it introduces **no new Production schema requirement**.
+
+Controlled main-merge + Production deployment checklist (for PR #13):
+- [x] Prod has designation/level columns (operator-verified) — PASS
+- [x] PR #13 adds no new migration/schema dependency (verified: `git diff` shows no schema files)
+- [x] PR #13 mergeable & CLEAN; Vercel **preview** build SUCCESS; `npm test` 75/75; local build OK
+- [ ] **(pending) Operator confirms `DeviceToken` table exists in Production** (migration `0001`, a pre-existing push dependency — NOT added by PR #13; without it, device-token register/unregister 500s but push dispatch is guarded).
+- [ ] **(pending human approval) Authorize the `main` push → Vercel Production deploy.** A merge to `main` deploys the web app to Production.
+- [ ] After deploy: verify Production `/api/health`, login/session, Users & Roles page loads, Leads-by-Source donut total, a lead notification opens the exact lead.
+- [ ] Prod env vars for the dormant features when wanted: `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI` (+ `CLIENT_URL`), `FIREBASE_SERVICE_ACCOUNT`/`GOOGLE_APPLICATION_CREDENTIALS` (these are NOT required for PR #13's fixes to work).
+
+**Web/Backend vs Android (release separation):** merging PR #13 → `main` deploys the **web app** via Vercel only. The **Android (Capacitor)** app is a **separate build/signing/Play-Store release** and is NOT shipped by the `main` push. Therefore the Android device-test / signing gates (§9 #12–#13) **do not block this Web/Backend release** — they gate a future Android release only.
 
 ---
 

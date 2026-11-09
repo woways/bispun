@@ -313,6 +313,13 @@ Feature branch is **0 behind / 10 ahead** of `origin/main` (`2aceef9`, no other-
 ### Production-deploy consequence (STOP condition)
 `vercel.json` is present and the repo is Vercel-connected. By Vercel's default, a push to the production branch (`main`) **triggers a Production deployment**. This is **not separately authorized** for an unreviewed release, and Production DB/compat was not verified. **→ STOP before any `main` push.** Recommended safe path: open a **PR** (no deploy) for review.
 
+### Update — 2026-11-09 (later): Prod schema verified, PR #13 clean, gates reframed
+- ✅ **Production schema compatibility: PASS** (operator-verified via Neon SQL Editor on `consulbuzz-production`/`production`/`neondb`: `designationId`/`levelId`/`levelName` all exist, text). Migration `0002` must **NOT** be applied to Prod (already present). PR #13 adds **no** schema/migration files → no new Prod schema requirement.
+- ✅ **PR #13: MERGEABLE, `mergeStateStatus: CLEAN`**, 2 checks passing (Vercel **preview** build + comments, SUCCESS), 0 failing, no required-review block. `npm test` 75/75, local build OK.
+- 🔎 **Gate reframing — Android does NOT block the Web/Backend release.** Merging PR #13 → `main` deploys the **web app** via Vercel only; the **Android/Capacitor** app is a separate build/signing/Play-Store release not shipped by a `main` push. So §9 gates **#12 (Android build)** and **#13 (Android device tests)** gate a *future Android release*, not this Web/Backend one.
+- **Net:** the Web/Backend release has **no remaining technical blocker**. The only remaining gate is the **human Production-deploy approval** (merge → Vercel prod deploy), plus an optional operator check that Prod has the pre-existing `DeviceToken` table (migration `0001`; not a PR #13 dependency).
+- **Still held per instruction:** no merge, no `main` push, no deploy, no branch deletion — awaiting your release approval.
+
 ## 10. Branch & worktree inventory — 2026-11-09 (Phase 8, read-only)
 
 **Worktrees (4):** `S:/Bispun` (feat/bispun-audit-fixes-mobile-completion), `S:/Bispun-integ` (integration/mui-yc), `S:/Bispun-stab` (feat/referrals-integration), `S:/Bispun-release` (release/android-signing-prep).
