@@ -10,6 +10,7 @@ import {
   fullPageAccess,
   clampPageAccessToActor,
 } from "../lib/pageAccess.js";
+import { normalizeLevelPermissions, flagsFromComponents } from "../lib/levelAccess.js";
 
 const router = Router();
 
@@ -170,6 +171,8 @@ function normalizeOrganizationConfig(raw) {
     description: String(item.description || ""),
     rank: Math.max(1, Number(item.rank) || 1),
     active: item.active !== false,
+    // Level-keyed Access: scope + component-action matrix + admissions college scope.
+    permissions: normalizeLevelPermissions(item.permissions),
   })).sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   return { departments, designations, levels, roles };
 }
@@ -605,6 +608,49 @@ router.patch(["/designations/:id", "/levels/:id"], async (req, res) => {
   } catch (error) {
     console.error("Update organization item failed:", error);
     return res.status(500).json({ success: false, message: "Unable to update item" });
+  }
+});
+
+// Save a level's Access (scope + component-action matrix + admissions college scope).
+// Admin saves verbatim; derived legacy flags propagate to inheriting users.
+router.patch("/levels/:id/access", async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") {
+      return res.status(403).json({ success: false, message: "Only Client Admin can edit level access" });
+    }
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    const target = config.levels.find((item) => item.id === req.params.id);
+    if (!target) return res.status(404).json({ success: false, message: "Level not found" });
+
+    target.permissions = normalizeLevelPermissions(req.body?.permissions);
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+
+    // Propagate derived legacy flags to users on this level who have NO per-user
+    // override (override marked by pageAccess.__override === true).
+    const levelFlags = flagsFromComponents(target.permissions.components);
+    const levelUsers = await prisma.user.findMany({
+      where: { companyId: req.clientUser.companyId, levelId: target.id, role: { not: "CLIENT_ADMIN" } },
+      select: { id: true, pageAccess: true },
+    });
+    const inheritIds = levelUsers
+      .filter((u) => !(u.pageAccess && typeof u.pageAccess === "object" && u.pageAccess.__override === true))
+      .map((u) => u.id);
+    if (inheritIds.length) {
+      await prisma.user.updateMany({ where: { id: { in: inheritIds } }, data: levelFlags });
+    }
+
+    await writeAuditLog({
+      req, companyId: req.clientUser.companyId, actor,
+      action: "LEVEL_ACCESS_UPDATED", entityType: "ORGANIZATION", entityId: target.id,
+      summary: `${actor.name} updated access for ${target.name}.`,
+      metadata: { scope: target.permissions.scope },
+    });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Update level access failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to update level access" });
   }
 });
 

@@ -44,6 +44,7 @@ import PermissionTree, {
   emptyPageAccess,
   normalizeClientPageAccess,
 } from "../../components/client/PermissionTree";
+import AccessTab from "../../components/client/AccessTab";
 
 const QUICK_BRAND_COLOR_KEYS = [
   "indigo",
@@ -773,6 +774,27 @@ export default function SettingsView({
 
   const [permissionTree, setPermissionTree] = useState(null);
   const [actorPageAccess, setActorPageAccess] = useState(null);
+  const [levelAccessSaving, setLevelAccessSaving] = useState(false);
+
+  async function saveLevelAccess(levelId, permissions) {
+    setLevelAccessSaving(true);
+    try {
+      const data = await apiRequest(`/api/client/users/levels/${levelId}/access`, {
+        method: "PATCH",
+        body: JSON.stringify({ permissions }),
+      });
+      if (data?.success) setOrganization((prev) => ({ ...prev, levels: data.levels }));
+    } catch (err) {
+      setUsersError(err?.data?.message || "Unable to save level access");
+    } finally {
+      setLevelAccessSaving(false);
+    }
+  }
+
+  useEffect(() => {
+    if (usersManagementTab === "access") loadPermissionTree();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usersManagementTab]);
   const [permissionTreeLoading, setPermissionTreeLoading] = useState(false);
 
   const [
@@ -3033,6 +3055,7 @@ export default function SettingsView({
                   ["departments", "Departments", organization.departments.length],
                   ["designations", "Designations", organization.designations.length],
                   ["levels", "Levels", organization.levels.length],
+                  ["access", "Access", organization.levels.length],
                   ["roles", "Roles", organization.roles.length],
                   ["permissions", "Permissions", users.length],
                   ["history", "History", ""],
@@ -3435,6 +3458,17 @@ export default function SettingsView({
                   </div>
                 );
               })()}
+
+              {usersManagementTab === "access" && (
+                <AccessTab
+                  key={organization.levels.map((l) => l.id).join(",")}
+                  levels={organization.levels}
+                  admissionsTree={permissionTree}
+                  canEdit={currentUser?.role === "CLIENT_ADMIN"}
+                  saving={levelAccessSaving}
+                  onSave={saveLevelAccess}
+                />
+              )}
 
               {usersManagementTab === "permissions" && (
                 <div className="space-y-4">
