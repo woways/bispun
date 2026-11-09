@@ -5,6 +5,9 @@ import {
   validateDeletionRequest,
   buildDeletionRequestEmail,
   DELETION_POLICY_TEXT,
+  DELETION_STATUSES,
+  normalizeDeletionStatus,
+  buildDeletionRecordData,
 } from "./accountDeletion.js";
 
 test("valid request normalizes email (trim+lowercase) and trims reason", () => {
@@ -61,4 +64,40 @@ test("buildDeletionRequestEmail notes verified identity for in-app requests", ()
 test("DELETION_POLICY_TEXT describes deletion, retention and processing", () => {
   assert.match(DELETION_POLICY_TEXT, /delet/i);
   assert.match(DELETION_POLICY_TEXT, /retain|retention|legal|billing/i);
+});
+
+test("normalizeDeletionStatus accepts known statuses and falls back otherwise", () => {
+  assert.deepEqual(DELETION_STATUSES, ["PENDING", "VERIFIED", "PROCESSED", "REJECTED"]);
+  assert.equal(normalizeDeletionStatus("processed"), "PROCESSED");
+  assert.equal(normalizeDeletionStatus("REJECTED"), "REJECTED");
+  assert.equal(normalizeDeletionStatus("bogus"), "PENDING");
+  assert.equal(normalizeDeletionStatus("", "VERIFIED"), "VERIFIED");
+});
+
+test("buildDeletionRecordData shapes a public request (no company/user)", () => {
+  const data = buildDeletionRecordData({
+    email: "user@example.com",
+    reason: "leaving",
+    source: "public",
+  });
+  assert.equal(data.email, "user@example.com");
+  assert.equal(data.reason, "leaving");
+  assert.equal(data.source, "public");
+  assert.equal(data.status, "PENDING");
+  assert.equal(data.companyId, null);
+  assert.equal(data.userId, null);
+});
+
+test("buildDeletionRecordData carries verified identity for in-app requests", () => {
+  const data = buildDeletionRecordData({
+    email: "emp@example.com",
+    reason: "",
+    source: "in-app",
+    actor: { userId: "u1", companyId: "c1", role: "CLIENT_ADMIN" },
+  });
+  assert.equal(data.source, "in-app");
+  assert.equal(data.companyId, "c1");
+  assert.equal(data.userId, "u1");
+  assert.equal(data.status, "PENDING");
+  assert.equal(data.reason, null); // empty reason stored as null
 });

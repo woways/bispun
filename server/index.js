@@ -38,6 +38,7 @@ import publicPayRoutes from "./routes/publicPay.js";
 import publicOnboardRoutes from "./routes/publicOnboard.js";
 import publicDataDeletionRoutes from "./routes/publicDataDeletion.js";
 import clientAccountRoutes from "./routes/clientAccount.js";
+import adminDataDeletionRoutes from "./routes/adminDataDeletion.js";
 
 import clientAuthRoutes from "./routes/clientAuth.js";
 import clientLeadsRoutes from "./routes/clientLeads.js";
@@ -190,6 +191,7 @@ app.use("/api/admin/payments", adminPaymentsRoutes);
 app.use("/api/admin/payment-links", adminPaymentLinksRoutes);
 app.use("/api/admin/audit-logs", adminAuditLogsRoutes);
 app.use("/api/admin/website-leads", adminWebsiteLeadsRoutes);
+app.use("/api/admin/data-deletion", adminDataDeletionRoutes);
 app.use("/api/admin/referrals", adminReferralsRoutes);
 
 // Public marketing-site lead capture. This route is intentionally unauthenticated

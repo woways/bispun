@@ -9,6 +9,7 @@ import { requireClientUser } from "../middleware/clientAuth.js";
 import {
   validateDeletionRequest,
   buildDeletionRequestEmail,
+  buildDeletionRecordData,
 } from "../lib/accountDeletion.js";
 import { sendMail, isEmailConfigured } from "../lib/mailer.js";
 import { writeAuditLog } from "../lib/auditLog.js";
@@ -52,6 +53,27 @@ router.post("/deletion-request", async (req, res) => {
       metadata: { reason: normalized.reason || null, source: "in-app" },
     });
 
+    // Durable dedicated record when the store is provisioned (guarded so it is
+    // safe before the migration). The AuditLog above is the guaranteed record,
+    // so an authenticated request is durably tracked either way.
+    let requestId = null;
+    let status = "PENDING";
+    try {
+      if (prisma.accountDeletionRequest?.create) {
+        const record = await prisma.accountDeletionRequest.create({
+          data: {
+            ...buildDeletionRecordData({ ...normalized, source: "in-app", actor }),
+            ipAddress: req.ip || null,
+            userAgent: String(req.headers["user-agent"] || "").slice(0, 300) || null,
+          },
+        });
+        requestId = record.id;
+        status = record.status;
+      }
+    } catch (error) {
+      console.error("[account-deletion] persist failed:", error?.message || error);
+    }
+
     const inbox = String(
       process.env.DATA_DELETION_INBOX || process.env.SMTP_USER || ""
     ).trim();
@@ -72,6 +94,8 @@ router.post("/deletion-request", async (req, res) => {
 
     return res.json({
       success: true,
+      requestId,
+      status,
       message:
         "Your account deletion request has been recorded. Our team will process it within 30 days and may contact you to verify.",
     });

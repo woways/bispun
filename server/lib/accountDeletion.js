@@ -38,6 +38,27 @@ export function validateDeletionRequest({ email, reason } = {}) {
   };
 }
 
+// Durable request lifecycle statuses (stored as String on AccountDeletionRequest).
+export const DELETION_STATUSES = ["PENDING", "VERIFIED", "PROCESSED", "REJECTED"];
+
+export function normalizeDeletionStatus(value, fallback = "PENDING") {
+  const v = String(value || "").trim().toUpperCase();
+  return DELETION_STATUSES.includes(v) ? v : fallback;
+}
+
+// Shape the row written to AccountDeletionRequest. Public requests carry no
+// company/user; in-app requests carry the verified identity for processing.
+export function buildDeletionRecordData({ email, reason, source, actor } = {}) {
+  return {
+    email: String(email || "").trim().toLowerCase(),
+    reason: reason && String(reason).trim() ? String(reason).trim() : null,
+    source: source || "public",
+    status: "PENDING",
+    companyId: actor?.companyId || null,
+    userId: actor?.userId || null,
+  };
+}
+
 export function buildDeletionRequestEmail({ email, reason, source, actor } = {}) {
   const lines = [
     "A Bispun account deletion request was submitted.",
