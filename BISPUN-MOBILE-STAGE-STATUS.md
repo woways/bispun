@@ -70,6 +70,25 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 — ✅ ACCOUNT DELETION REQUEST WORKFLOW IMPLEMENTED (Play compliance)
+
+Implemented the request-intake workflow (records/forwards a request; it does **not** delete or anonymize data — that stays a separate, policy-gated operation).
+
+**Backend (runtime-verified):**
+- Pure helper `server/lib/accountDeletion.js` (validate/normalize + email/policy builders) — **7 unit tests**, in CI (`npm test` now 83/83).
+- Public endpoint `POST /api/public/data-deletion` (+ `GET …/policy`) — `server/routes/publicDataDeletion.js`: validates, rate-limited (5/hr/IP), emails the deletion inbox **fire-and-forget** (slow SMTP never blocks/fails the request), returns a **privacy-safe generic confirmation** (never reveals whether an account exists). Verified: GET policy → 200; POST invalid → 400.
+- Authenticated endpoint `POST /api/client/account/deletion-request` — `server/routes/clientAccount.js`: identity from the session, fetches the user scoped by `{id, companyId}` (tenant-safe), writes a persistent **AuditLog** record `ACCOUNT_DELETION_REQUESTED` (admin-trackable, no schema change), detached email notify. Verified: returns **401 without auth**. A user can only request deletion of **their own** account (no id param) → no cross-tenant vector.
+- Config: `DATA_DELETION_INBOX` documented in `.env.example` (falls back to `SMTP_USER`).
+
+**Frontend (accessibility-lead reviewed before edit):**
+- Public page `src/DataDeletion.jsx` routed at **`/data-deletion`** (the URL for Play) — labeled fields, `required`/`type=email`, `aria-invalid`/`aria-describedby`, pre-mounted live regions, focus-to-error, focus-to-confirmation, one `<h1>`/`<main>`, deletion/retention/processing info.
+- In-app `src/components/client/AccountDeletionSection.jsx` rendered in Settings → Company tab — native `<dialog>` (focus-trap + Escape), labelled/described, initial focus on Cancel, focus return to trigger, `aria-busy`, status/alert live regions.
+- Suite 83/83; production build passes.
+
+**Play URL readiness:** the page EXISTS and works locally at `/<host>/data-deletion`. It is **not yet publicly deployed** (Production deploy is on HOLD). Once the site deploys, the public URL is `https://<prod-domain>/data-deletion` — use that in the Play listing.
+
+**Gated enhancement (not required for v1; prepare on request):** a dedicated `AccountDeletionRequest` table would give public (unauthenticated) requests in-app status tracking too (v1 emails them; authenticated requests are tracked via AuditLog). That needs a migration → bring it when you want richer public-request tracking.
+
 ### 2026-11-09 — OPERATOR PLAYBOOK (exact actions you must perform)
 
 #### A. Set the dev QA password safely (no exposure)
