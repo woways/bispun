@@ -87,7 +87,13 @@ Implemented the request-intake workflow (records/forwards a request; it does **n
 
 **Play URL readiness:** the page EXISTS and works locally at `/<host>/data-deletion`. It is **not yet publicly deployed** (Production deploy is on HOLD). Once the site deploys, the public URL is `https://<prod-domain>/data-deletion` — use that in the Play listing.
 
-**Gated enhancement (not required for v1; prepare on request):** a dedicated `AccountDeletionRequest` table would give public (unauthenticated) requests in-app status tracking too (v1 emails them; authenticated requests are tracked via AuditLog). That needs a migration → bring it when you want richer public-request tracking.
+**Durable workflow (implemented 2026-11-09; migration gated):**
+- Added Prisma model `AccountDeletionRequest` (id/email/reason/source/status + companyId/userId/verification/handling fields; indexes on status+createdAt, email, companyId). `prisma validate` passes.
+- **Migration prepared, NOT applied:** `prisma/pending-migrations/0004_DRAFT_add_account_deletion_request.sql` — a single additive `CREATE TABLE IF NOT EXISTS` + 3 indexes, no FK, no existing-table changes, fully reversible. **Impact: zero risk to existing rows/relations.** Apply to Dev after approval, then `npx prisma generate`.
+- **Endpoints now persist durably, guarded:** both endpoints check `prisma.accountDeletionRequest` and wrap the write in try/catch. A **success is returned only when a durable record exists** (requirement: never imply acceptance of an unpersisted request). Authenticated requests are also written to AuditLog, so they're durably tracked even pre-migration. **Verified pre-migration:** valid public POST returns an honest **503** ("couldn't record… please email…"), not a false success, and sends no email; GET /policy 200; admin route 401.
+- **Super-Admin review:** `GET/PATCH /api/admin/data-deletion` (`requireSuperAdmin`) to list requests and transition status (PENDING→VERIFIED/PROCESSED/REJECTED) with handler + remarks. No destructive deletion. Guarded for pre-migration.
+- Tests: `npm test` now **86/86** (+3 for status/record-shaping helpers).
+- **Post-migration behavior:** the same endpoints switch automatically to durable persistence (requestId + status in the response); public requests become admin-trackable too.
 
 ### 2026-11-09 — OPERATOR PLAYBOOK (exact actions you must perform)
 
