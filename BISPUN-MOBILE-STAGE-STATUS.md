@@ -96,6 +96,11 @@ Implemented the request-intake workflow (records/forwards a request; it does **n
 - Tests: `npm test` now **86/86** (+3 for status/record-shaping helpers).
 - **Post-migration behavior:** the same endpoints switch automatically to durable persistence (requestId + status in the response); public requests become admin-trackable too.
 
+**Play account-deletion compliance (verified vs Google policy, 2025):**
+- Google requires apps that allow account creation to provide **BOTH**: (1) an **in-app** path to delete the account + data, and (2) a **web link** to request deletion. Freezing/deactivating does NOT qualify; legally-required data may be retained **if disclosed**.
+- ✅ Both entry points exist: in-app "Request account deletion" (Settings) + public `/data-deletion` (works without login); durable tracking; retention disclosed in the policy text.
+- 🔴 **Remaining compliance gap — FULFILLMENT:** the request is recorded but **actual deletion/anonymization is NOT implemented** (policy-gated, destructive). Google expects a request to result in deletion. Full compliance needs (a) an approved deletion policy and (b) a backend fulfillment job that deletes/anonymizes the user's personal data on a verified request (retaining only legally-required billing/audit, as disclosed). **This is the key remaining Play account-deletion blocker** — approval-gated. Ref: support.google.com/googleplay/android-developer/answer/13327111.
+
 ### 2026-11-09 — OPERATOR PLAYBOOK (exact actions you must perform)
 
 #### A. Set the dev QA password safely (no exposure)
@@ -138,6 +143,10 @@ The existing signing config lives on `release/android-signing-prep` (worktree `S
 - **Data Safety (declare):** Collected & sent to the app's own backend over HTTPS (encrypted in transit): email + password (app functionality: account auth), name/phone (account), user-entered CRM business data (app functionality), and an FCM **device token** (push). No third-party analytics/ads SDK found (FCM messaging only). Data is **not** sold. Deletion: link the §C deletion URL.
 - **Account deletion URL:** from §C (required).
 - **Operator still supplies:** feature graphic (1024×500), phone screenshots (take from the emulator once logged in), app icon (present in `res/`), privacy policy URL, content rating questionnaire, target audience, ads declaration (none), reviewer login (a dev/test account), release notes, testing track (internal/closed vs production).
+
+### 2026-11-09 — ✅ USER-REPORTED MANUAL QA PASS (Development, Pixel_6)
+
+The project owner personally ran the full device QA on the **Pixel_6 emulator** with the authorized Development **CLIENT_ADMIN** account: **19 PASS / 0 FAIL / 0 BLOCKED**, no observations (Dashboard, Lead Store incl. Remarks/Activity/Follow-up/Smart Nurture, Admissions, Finance, bottom nav + More, Chats + badges, Calendar, Notifications + exact-lead nav, Android back, session restore, offline/retry, role-based module visibility, native phone/SMS/WhatsApp, Request-Account-Deletion visibility, logout). **User-reported on Development (debug build); not independently reproduced by the agent; not a release-build sign-off.** This converts the previously BLOCKED Stage 1/3/4 *runtime* items to PASS **for the Dev debug build** — release-build QA (prod HTTPS API, signed AAB on a device) is still pending.
 
 ### 2026-11-09 (16:32) — ✅ BACKEND CONNECTIVITY FIXED + LOGIN SCREEN VERIFIED ON DEVICE
 

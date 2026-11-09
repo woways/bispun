@@ -21,6 +21,11 @@ Manual (need Dev login):
 - [ ] Clicking a lead follow-up notification opens the **exact lead** (web); focus lands in main content.
 - [ ] Dashboard "Leads by Source": donut center number **equals** the sum of the legend slices, including a Direct Admission bucket when present.
 
+## Mobile emulator — manual QA result (USER-REPORTED, 2026-11-09)
+
+> **USER-REPORTED PASS — 19 / 19 (0 FAIL, 0 BLOCKED).** The project owner personally tested the Android app on the **Pixel_6 emulator** using the authorized Development **CLIENT_ADMIN** account and reported all items passing: Dashboard KPIs+refresh; Lead Store (list/search/details/filters/Remarks/Activity History/Follow-up/Smart Nurture); Admissions; Finance; Bottom nav + More sheet; Chats + unread badges; Calendar; Notifications + exact-lead navigation; Android hardware Back; Session restoration; Backend-unavailable/retry; CLIENT_ADMIN module visibility; native phone/SMS/WhatsApp; Request Account Deletion option visibility; Logout. Observations: none.
+> **This is a user-reported result on Development** (debug build against the local dev backend); it was **not** independently reproduced by the agent, and it is **not** a Production/release-build QA sign-off (see §release-build QA below).
+
 ## Mobile emulator — manual QA checklist (human-run, 2026-11-09)
 
 Environment ready now: Pixel_6 emulator (`emulator-5554`) with the fresh debug APK installed; dev backend on host `:4000` (workers disabled, DB connected); app points at `http://10.0.2.2:4000`. Log in as `bispun.qa.admin@example.com` (set the password first — see the safe procedure in `BISPUN-MOBILE-STAGE-STATUS.md`). Mark each PASS / FAIL / BLOCKED and note any bug.
