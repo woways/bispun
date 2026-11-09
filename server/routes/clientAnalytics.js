@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { backfillAdmissionsLeads } from "../lib/admissionsLeadSync.js";
+import { buildLeadsBySource } from "../lib/leadsBySource.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -620,33 +621,14 @@ router.get("/dashboard", async (req, res) => {
       };
     });
 
-    const sourceCounts = {};
-
-    for (const lead of leads) {
-      const rawSource =
-        SOURCE_LABELS[lead.source] || lead.source;
-      // Leads with no recorded source go to a named bucket instead of an empty
-      // legend row, so every lead is represented.
-      const source =
-        rawSource && String(rawSource).trim()
-          ? String(rawSource).trim()
-          : "Unspecified";
-      sourceCounts[source] =
-        (sourceCounts[source] || 0) + 1;
-    }
-
-    // Direct admissions are included in `totalLeads` but have no lead row, so
-    // they were missing from the source breakdown — which made the donut's
-    // center total (e.g. 13) exceed the legend sum (e.g. 11). Surface them as
-    // their own bucket so the breakdown reconciles with the total.
-    if (directAdmissionLeadCount > 0) {
-      sourceCounts["Direct Admission"] =
-        (sourceCounts["Direct Admission"] || 0) + directAdmissionLeadCount;
-    }
-
-    const leadsBySource = Object.entries(sourceCounts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
+    // Single source of truth for the donut: leadsBySourceTotal is the sum of
+    // all buckets (incl. the "Direct Admission" bucket), so the donut center
+    // always equals the sum of its slices. See server/lib/leadsBySource.js.
+    const { leadsBySource, leadsBySourceTotal } = buildLeadsBySource(
+      leads,
+      directAdmissionLeadCount,
+      SOURCE_LABELS
+    );
 
     const teamMap = new Map();
 
@@ -1034,6 +1016,7 @@ router.get("/dashboard", async (req, res) => {
         : {},
       revenueTrend: canDashboard("revenue-trend") ? revenueTrend : [],
       leadsBySource: canDashboard("leads-by-source") ? leadsBySource : [],
+      leadsBySourceTotal: canDashboard("leads-by-source") ? leadsBySourceTotal : 0,
       teamPerformance: canDashboard("team-performance") ? teamPerformance : [],
       myPerformance: canDashboard("team-performance") ? myPerformance : null,
       recentAdmissions: canDashboard("recent-admissions") ? recentAdmissions : [],
