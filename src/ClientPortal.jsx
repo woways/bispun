@@ -892,6 +892,7 @@ export default function ClientPortal({
 
   const notificationRef =
     useRef(null);
+  const desktopBellRef = useRef(null);
   const previousUnreadNotificationCountRef = useRef(null);
   const previousAudibleChatCountRef = useRef(null);
   const lastChatSoundAtRef = useRef(0);
@@ -1755,6 +1756,24 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       );
     };
   }, []);
+
+  // A11y: Escape closes the notifications dropdown and returns focus to the bell.
+  // Own effect keyed on open state. notificationsOpen is shared with the mobile
+  // BottomSheet, so only act when the DESKTOP bell is actually visible — avoids
+  // focusing a hidden element on mobile. Separate keydown channel; does not
+  // touch the mousedown outside-click handler above.
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    function handleEscape(event) {
+      if (event.key !== "Escape") return;
+      const bell = desktopBellRef.current;
+      if (!bell || bell.offsetParent === null) return; // desktop bell not visible
+      setNotificationsOpen(false);
+      bell.focus();
+    }
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [notificationsOpen]);
 
   async function loadNotifications() {
     setNotificationsLoading(true);
@@ -5402,6 +5421,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 {/* NOTIFICATIONS */}
                 <div ref={notificationRef} className="relative">
                   <button
+                    ref={desktopBellRef}
                     type="button"
                     onClick={() => {
                       const next = !notificationsOpen;
@@ -5412,10 +5432,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         loadNotifications();
                       }
                     }}
-                    className="relative w-9 h-9 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950"
-                    aria-label="Notifications"
+                    className="relative w-9 h-9 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                    aria-haspopup="true"
+                    aria-expanded={notificationsOpen}
+                    aria-label={
+                      unreadNotificationCount > 0
+                        ? `Notifications, ${unreadNotificationCount} unread`
+                        : "Notifications"
+                    }
                   >
-                    <Bell size={18} />
+                    <Bell size={18} aria-hidden="true" />
 
                     {unreadNotificationCount > 0 && (
                       <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-brand-600 text-white text-[13px] font-bold leading-[17px] text-center">
@@ -5435,21 +5461,25 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           <button
                             type="button"
                             onClick={markAllNotificationsRead}
-                            className="text-[13px] font-semibold text-indigo-600"
+                            className="text-[13px] font-semibold text-indigo-600 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                           >
                             Mark all read
                           </button>
                         )}
                       </div>
 
-                      <div className="max-h-[420px] overflow-y-auto">
+                      <div
+                        className="max-h-[420px] overflow-y-auto"
+                        aria-live="polite"
+                        aria-busy={notificationsLoading}
+                      >
                         {notificationsLoading ? (
                           <div className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500">
-                            <Loader2 size={14} className="animate-spin" />
+                            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
                             Loading...
                           </div>
                         ) : notificationError ? (
-                          <div className="p-4 text-xs text-rose-600">
+                          <div className="p-4 text-xs text-rose-700" role="alert">
                             {notificationError}
                           </div>
                         ) : notifications.length === 0 ? (
@@ -5462,7 +5492,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                               key={notification.id}
                               type="button"
                               onClick={() => markNotificationRead(notification)}
-                              className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 hover:bg-slate-50 ${
+                              className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-inset ${
                                 notification.read
                                   ? "bg-white"
                                   : "bg-indigo-50/30"
