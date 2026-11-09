@@ -21,6 +21,8 @@ import {
   unregisterMobilePush,
 } from "./lib/mobilePush";
 
+import { parseNotificationTarget } from "./lib/notificationTarget";
+
 import {
   Bell,
   MessageSquare,
@@ -658,6 +660,23 @@ export default function ClientPortal({
   // notification clicks and dashboard lead rows). Lead Store opens the detail
   // and calls back to clear this so it doesn't re-fire on list refreshes.
   const [leadFocusTarget, setLeadFocusTarget] = useState(null);
+  // A11y: after a notification navigates (the panel closes and the activated
+  // control unmounts), move focus to the main content region so keyboard/screen
+  // reader users aren't dropped to <body>. Best-effort; never throws.
+  function focusMainContentSoon() {
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(() => {
+      try {
+        const main = document.querySelector("main");
+        if (!main) return;
+        if (!main.hasAttribute("tabindex")) main.setAttribute("tabindex", "-1");
+        main.focus({ preventScroll: false });
+      } catch {
+        /* non-fatal: focus handoff is best-effort */
+      }
+    });
+  }
+
   function openLeadDetail(leadId) {
     if (!leadId) return;
     setLeadFocusTarget(String(leadId));
@@ -1823,20 +1842,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     // Resolve a deep-link target so the click opens the exact record, not just
-    // the module. Lead id may be embedded in the message (LEAD_FOLLOWUP:<id>:)
-    // or encoded on actionModule as "lead-store#lead:<id>".
-    const rawModule = String(notification.actionModule || "");
-    const [moduleKey, encodedTarget] = rawModule.split("#");
-    let leadId = null;
-    const followUpMatch = String(notification.message || "").match(
-      /LEAD_FOLLOWUP:([^:]+):/
+    // the module. The lead id is carried on actionModule ("lead-store#lead:<id>")
+    // with a legacy fallback to the message marker. Shared with mobile push.
+    const { moduleKey, leadId } = parseNotificationTarget(
+      notification.actionModule,
+      notification.message
     );
-    if (followUpMatch) {
-      leadId = followUpMatch[1];
-    } else if (encodedTarget) {
-      const targetMatch = encodedTarget.match(/^lead:(.+)$/);
-      if (targetMatch) leadId = targetMatch[1];
-    }
 
     if (leadId) {
       openLeadDetail(leadId);
@@ -1845,6 +1856,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     setNotificationsOpen(false);
+    focusMainContentSoon();
   }
 
   async function markAllNotificationsRead() {
@@ -2044,7 +2056,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   // reuse the existing module navigation (setModule).
   useEffect(() => {
     if (!user?.id) return undefined;
-    initMobilePush({ onNavigate: (actionModule) => setModule(actionModule) });
+    initMobilePush({
+      onNavigate: (target) => {
+        const { moduleKey, leadId } = parseNotificationTarget(target);
+        if (leadId) openLeadDetail(leadId);
+        else if (moduleKey) setModule(moduleKey);
+        focusMainContentSoon();
+      },
+    });
     return undefined;
   }, [user?.id]);
 
