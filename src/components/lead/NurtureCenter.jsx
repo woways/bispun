@@ -4,7 +4,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Mail,
+  Info,
   MessageCircle,
   Pause,
   Play,
@@ -18,18 +18,17 @@ import {
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 
+// Smart Nurture is WhatsApp-only: WhatsApp template -> follow-up task -> manager
+// alert if there is still no reply. Email steps were removed from this feature;
+// email functionality elsewhere in the CRM is unaffected.
 const EMPTY_FORM = {
   name: "Lead Re-Engagement",
-  description: "Re-engage inactive leads with WhatsApp/email, create a follow-up task, then alert a manager when there is still no response.",
+  description:
+    "Re-engage inactive leads over WhatsApp, create a follow-up task, then alert a manager when there is still no response.",
   whatsappTemplateName: "",
   whatsappLanguageCode: "en_US",
   whatsappSendTime: "10:00",
   waitAfterWhatsappHours: 24,
-  emailSubject: "Following up on your enquiry",
-  emailMessage:
-    "Hi {{name}},\n\nWe are following up on your enquiry about {{course}}. Please reply if you would like us to help with the next step.\n\nThank you.",
-  emailSendTime: "16:00",
-  waitAfterEmailHours: 24,
   followUpTaskTime: "11:00",
   waitBeforeManagerHours: 24,
   managerAlertTime: "17:00",
@@ -74,29 +73,19 @@ function formatDelay(minutes) {
 
 function buildSteps(form) {
   const steps = [];
-  const templateName = String(form.whatsappTemplateName || "").trim();
 
-  if (templateName) {
-    steps.push({
-      type: "WHATSAPP_TEMPLATE",
-      delayMinutes: 0,
-      templateName,
-      languageCode: form.whatsappLanguageCode || "en_US",
-      preferredTime: form.whatsappSendTime || "10:00",
-    });
-  }
-
+  // WhatsApp template is the first and required channel.
   steps.push({
-    type: "EMAIL",
-    delayMinutes: templateName ? hoursToMinutes(form.waitAfterWhatsappHours) : 0,
-    subject: form.emailSubject,
-    message: form.emailMessage,
-    preferredTime: form.emailSendTime || "16:00",
+    type: "WHATSAPP_TEMPLATE",
+    delayMinutes: 0,
+    templateName: String(form.whatsappTemplateName || "").trim(),
+    languageCode: form.whatsappLanguageCode || "en_US",
+    preferredTime: form.whatsappSendTime || "10:00",
   });
   steps.push({
     type: "FOLLOW_UP_TASK",
-    delayMinutes: hoursToMinutes(form.waitAfterEmailHours),
-    message: "Smart Nurture follow-up: contact {{name}}, review the communication history and record the outcome.",
+    delayMinutes: hoursToMinutes(form.waitAfterWhatsappHours),
+    message: "Smart Nurture follow-up: contact {{name}}, review the WhatsApp history and record the outcome.",
     durationMinutes: 30,
     preferredTime: form.followUpTaskTime || "11:00",
   });
@@ -118,6 +107,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [info, setInfo] = useState(""); // neutral, non-success messages (empty states, nothing-due)
   const [form, setForm] = useState(EMPTY_FORM);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -126,6 +116,12 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
     () => sequences.filter((item) => item.status !== "ARCHIVED"),
     [sequences]
   );
+
+  function clearBanners() {
+    setError("");
+    setSuccess("");
+    setInfo("");
+  }
 
   async function loadData() {
     setLoading(true);
@@ -146,13 +142,10 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
 
   useEffect(() => {
     if (!open) return;
-    setError("");
-    setSuccess("");
+    clearBanners();
     loadData();
   }, [open]);
 
-  // Overlay dismissal + focus (Escape / Android back / focus in-and-return),
-  // consistent with CalendarModal/ChatPanel.
   const dialogRef = useRef(null);
   useOverlayDismiss(open, onClose, { containerRef: dialogRef });
 
@@ -160,13 +153,12 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
 
   async function createSequence(event) {
     event.preventDefault();
-    if (!form.name.trim() || !form.emailSubject.trim() || !form.emailMessage.trim()) {
-      setError("Sequence name, email subject and email message are required.");
+    if (!form.name.trim() || !form.whatsappTemplateName.trim()) {
+      setError("Sequence name and an approved WhatsApp template name are required.");
       return;
     }
     setSaving(true);
-    setError("");
-    setSuccess("");
+    clearBanners();
     try {
       const data = await apiRequest("/api/client/nurture/sequences", {
         method: "POST",
@@ -189,18 +181,25 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
 
   async function enroll(sequence) {
     if (!selectedCount) {
-      setError("Select one or more leads in Lead Store first.");
+      // Neutral empty-state, not a red error and not a green success.
+      setError("");
+      setSuccess("");
+      setInfo("No eligible leads selected for nurture. Select one or more leads in Lead Store first.");
       return;
     }
     setBusyId(sequence.id);
-    setError("");
-    setSuccess("");
+    clearBanners();
     try {
       const data = await apiRequest(`/api/client/nurture/sequences/${sequence.id}/enroll`, {
         method: "POST",
         body: JSON.stringify({ leadIds: selectedLeadIds }),
       });
-      setSuccess(data.message || "Leads enrolled successfully.");
+      const enrolled = Number(data.enrolled ?? data.count ?? selectedCount);
+      if (enrolled > 0) {
+        setSuccess(data.message || `${enrolled} lead${enrolled === 1 ? "" : "s"} enrolled successfully.`);
+      } else {
+        setInfo(data.message || "No leads were eligible to enroll.");
+      }
       await loadData();
     } catch (err) {
       setError(err?.data?.message || "Unable to start nurture sequence.");
@@ -211,8 +210,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
 
   async function stopEnrollment(enrollment) {
     setBusyId(`enrollment-${enrollment.id}`);
-    setError("");
-    setSuccess("");
+    clearBanners();
     try {
       await apiRequest(`/api/client/nurture/enrollments/${enrollment.id}/status`, {
         method: "PATCH",
@@ -246,11 +244,16 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
 
   async function runNow() {
     setBusyId("run-now");
-    setError("");
-    setSuccess("");
+    clearBanners();
     try {
       const data = await apiRequest("/api/client/nurture/run-now", { method: "POST" });
-      setSuccess(`${data.processed || 0} due nurture item${Number(data.processed || 0) === 1 ? "" : "s"} processed.`);
+      const processed = Number(data.processed || 0);
+      // 3.17/3.19: only a green success when at least one action actually ran.
+      if (processed > 0) {
+        setSuccess(`${processed} due nurture item${processed === 1 ? "" : "s"} processed.`);
+      } else {
+        setInfo("No nurture actions are due right now.");
+      }
       await loadData();
     } catch (err) {
       setError(err?.data?.message || "Unable to process nurture queue.");
@@ -267,9 +270,9 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
               <Workflow size={14} /> Smart Nurture & Re-Engagement
             </div>
-            <div id="nurture-title" className="mt-1 text-[18px] font-bold text-slate-950">Automated follow-up sequences</div>
+            <div id="nurture-title" className="mt-1 text-[18px] font-bold text-slate-950">Automated WhatsApp follow-up sequences</div>
             <div className="mt-1 text-[12px] text-slate-500">
-              WhatsApp template → Email → Follow-up task → Manager alert if there is still no reply.
+              WhatsApp template → Follow-up task → Manager alert if there is still no reply.
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close Smart Nurture" className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8">
@@ -300,6 +303,11 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
               <AlertCircle size={14} className="mt-0.5" /> {error}
             </div>
           ) : null}
+          {info ? (
+            <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12px] font-semibold text-slate-600">
+              <Info size={14} className="mt-0.5" /> {info}
+            </div>
+          ) : null}
           {success ? (
             <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[12px] font-semibold text-emerald-700">
               <CheckCircle2 size={14} className="mt-0.5" /> {success}
@@ -310,7 +318,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
             <form onSubmit={createSequence} className="mb-5 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
               <div className="mb-4">
                 <div className="text-[14px] font-bold text-slate-900">Create nurture sequence</div>
-                <div className="mt-1 text-[11px] text-slate-500">WhatsApp is optional. Preferred send times use the company timezone.</div>
+                <div className="mt-1 text-[11px] text-slate-500">WhatsApp-only. Preferred send times use the company timezone.</div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -319,35 +327,20 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                   <input value={form.name} onChange={(e) => setForm((c) => ({ ...c, name: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
-                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Approved WhatsApp template name</span>
-                  <input value={form.whatsappTemplateName} onChange={(e) => setForm((c) => ({ ...c, whatsappTemplateName: e.target.value }))} placeholder="Optional · e.g. lead_follow_up" className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Approved WhatsApp template name *</span>
+                  <input value={form.whatsappTemplateName} onChange={(e) => setForm((c) => ({ ...c, whatsappTemplateName: e.target.value }))} placeholder="e.g. lead_follow_up" className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label>
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">WhatsApp language code</span>
+                  <input value={form.whatsappLanguageCode} onChange={(e) => setForm((c) => ({ ...c, whatsappLanguageCode: e.target.value }))} placeholder="en_US" className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">WhatsApp send time</span>
                   <input type="time" value={form.whatsappSendTime} onChange={(e) => setForm((c) => ({ ...c, whatsappSendTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
-                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Wait after WhatsApp (hours)</span>
-                  <input type="number" min="0" value={form.waitAfterWhatsappHours} onChange={(e) => setForm((c) => ({ ...c, waitAfterWhatsappHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
-                </label>
-                <label>
-                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Email send time</span>
-                  <input type="time" value={form.emailSendTime} onChange={(e) => setForm((c) => ({ ...c, emailSendTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
-                </label>
-                <label>
-                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Email subject *</span>
-                  <input value={form.emailSubject} onChange={(e) => setForm((c) => ({ ...c, emailSubject: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
-                </label>
-                <label className="lg:col-span-2">
-                  <span className="mb-1.5 flex items-center justify-between gap-3 text-[11px] font-semibold text-slate-600">
-                    <span>Email message *</span>
-                    <span className="font-normal text-slate-400">Use {"{{name}}"}, {"{{phone}}"}, {"{{email}}"}, {"{{course}}"}</span>
-                  </span>
-                  <textarea rows={5} value={form.emailMessage} onChange={(e) => setForm((c) => ({ ...c, emailMessage: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] leading-5" />
-                </label>
-                <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Wait before follow-up task (hours)</span>
-                  <input type="number" min="0" value={form.waitAfterEmailHours} onChange={(e) => setForm((c) => ({ ...c, waitAfterEmailHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                  <input type="number" min="0" value={form.waitAfterWhatsappHours} onChange={(e) => setForm((c) => ({ ...c, waitAfterWhatsappHours: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
                 </label>
                 <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Follow-up task time</span>
@@ -360,6 +353,10 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                 <label>
                   <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Manager alert time</span>
                   <input type="time" value={form.managerAlertTime} onChange={(e) => setForm((c) => ({ ...c, managerAlertTime: e.target.value }))} className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px]" />
+                </label>
+                <label className="lg:col-span-2">
+                  <span className="mb-1.5 block text-[11px] font-semibold text-slate-600">Description</span>
+                  <textarea rows={3} value={form.description} onChange={(e) => setForm((c) => ({ ...c, description: e.target.value }))} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-[13px] leading-5" />
                 </label>
               </div>
 
@@ -402,7 +399,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
                             <div className="mt-2 flex flex-wrap gap-1.5">
                               {(sequence.steps || []).map((step, index) => (
                                 <span key={`${sequence.id}-${index}`} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold text-slate-600">
-                                  {step.type === "EMAIL" ? <Mail size={10} /> : step.type === "WHATSAPP_TEMPLATE" ? <MessageCircle size={10} /> : <Clock size={10} />}
+                                  {step.type === "WHATSAPP_TEMPLATE" ? <MessageCircle size={10} /> : <Clock size={10} />}
                                   <span>{String(step.type || "").replaceAll("_", " ")}</span>
                                   <span className="font-normal text-slate-400">· {formatDelay(step.delayMinutes)}{step.preferredTime ? ` · ${formatPreferredTime(step.preferredTime)}` : ""}</span>
                                 </span>
@@ -428,7 +425,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-3">
                 <div className="text-[13px] font-bold text-slate-900">Recent nurture activity</div>
-                <div className="mt-0.5 text-[11px] text-slate-500">Latest lead enrollments and outcomes.</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">Processed attempts — lead, time, WhatsApp status and result.</div>
               </div>
               {enrollments.length === 0 ? (
                 <div className="py-12 text-center text-[12px] text-slate-500">No nurture activity yet.</div>

@@ -231,6 +231,26 @@ const TYPE_LABELS = {
 
     "Assigned",
 
+  GOOGLE_FORM:
+
+    "Google Form",
+
+  WEBSITE_FORM:
+
+    "Website Form",
+
+  IM:
+
+    "IM Leads",
+
+  DM:
+
+    "DM Leads",
+
+  INTERNAL:
+
+    "Internal Leads",
+
 };
 
 const LEAD_STORE_COLUMN_KEYS = [
@@ -2921,6 +2941,8 @@ router.get(
 
           course: lead.course,
 
+          preferredColleges: lead.preferredColleges,
+
           source: lead.source,
 
           stage: lead.stage,
@@ -3421,6 +3443,8 @@ router.patch(
 
       const course = cleanString(req.body?.course);
 
+      const preferredColleges = cleanString(req.body?.preferredColleges);
+
       const temperature = String(
         req.body?.temperature || existing.temperature || "WARM"
       ).trim().toUpperCase();
@@ -3636,6 +3660,8 @@ router.patch(
 
             course,
 
+            preferredColleges: preferredColleges || null,
+
             temperature,
 
             medium: type,
@@ -3720,6 +3746,8 @@ router.patch(
           email: updated.email,
 
           course: updated.course,
+
+          preferredColleges: updated.preferredColleges,
 
           source: updated.source,
 
@@ -4141,6 +4169,31 @@ router.delete(
 
 ========================================================= */
 
+// Fetch a lead's remarks on their own, so Lead Details > Activity History can
+// refresh without reloading the whole portal.
+router.get(
+  "/manual/:id/remarks",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, companyId, source: "LEAD_STORE" },
+        select: { id: true, assignedToUserId: true, assignedToName: true },
+      });
+      if (!lead) {
+        return res.status(404).json({ success: false, message: "Lead not found" });
+      }
+      if (!(await ensureLeadInScope(req, res, lead))) return;
+      const remarks = await getLatestLeadRemarks(prisma, companyId, leadId);
+      return res.json({ success: true, remarks });
+    } catch (error) {
+      console.error("Failed to load lead remarks:", error);
+      return res.status(500).json({ success: false, message: "Unable to load remarks" });
+    }
+  }
+);
+
 router.post(
   "/manual/:id/remarks",
   async (req, res) => {
@@ -4455,6 +4508,14 @@ router.post(
         cleanString(
 
           req.body?.course
+
+        );
+
+      const preferredColleges =
+
+        cleanString(
+
+          req.body?.preferredColleges
 
         );
 
@@ -5027,6 +5088,10 @@ router.post(
 
                 course,
 
+                preferredColleges:
+                  preferredColleges ||
+                  null,
+
                 source:
 
                   "LEAD_STORE",
@@ -5190,6 +5255,9 @@ router.post(
             course:
 
               lead.course,
+
+            preferredColleges:
+              lead.preferredColleges,
 
             source:
 

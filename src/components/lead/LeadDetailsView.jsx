@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RefreshCw,
   Trash2,
   UserRound,
   X,
@@ -125,29 +126,39 @@ export default function LeadDetailsView({
     setRemarks(lead?.remarks || []);
   }, [lead]);
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadHistory() {
-      if (!lead?.id) return;
-      setActivityLoading(true);
+  // Refresh ONLY the activity history (and the lead's remarks) without reloading
+  // the whole portal — used by the dedicated Refresh button in the Activity tab.
+  const refreshActivity = useCallback(async () => {
+    if (!lead?.id) return;
+    setActivityLoading(true);
+    try {
+      const history = await apiRequest(
+        `/api/client/communications/history?leadId=${encodeURIComponent(lead.id)}&limit=20`
+      );
+      setCommunicationHistory(history.logs || []);
+      // Pull the latest remarks too, so a just-added remark appears on refresh.
       try {
-        const history = await apiRequest(
-          `/api/client/communications/history?leadId=${encodeURIComponent(lead.id)}&limit=20`
+        const latest = await apiRequest(
+          `/api/client/lead-store/manual/${lead.id}/remarks`
         );
-        if (active) setCommunicationHistory(history.logs || []);
+        if (Array.isArray(latest?.remarks)) {
+          setRemarks(latest.remarks);
+          onLeadChange?.({ ...lead, remarks: latest.remarks });
+        }
       } catch {
-        if (active) setCommunicationHistory([]);
-      } finally {
-        if (active) setActivityLoading(false);
+        // Remarks GET is optional; keep whatever is in state on failure.
       }
+    } catch {
+      setCommunicationHistory([]);
+    } finally {
+      setActivityLoading(false);
     }
-
-    loadHistory();
-    return () => {
-      active = false;
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lead?.id]);
+
+  useEffect(() => {
+    refreshActivity();
+  }, [refreshActivity]);
 
   const activities = useMemo(() => {
     const items = [];
@@ -272,6 +283,7 @@ export default function LeadDetailsView({
     ["Alternative Phone", lead?.alternatePhone],
     ["Email", lead?.email],
     ["Course / Interest", lead?.course],
+    ["Preferred Colleges", lead?.preferredColleges],
     ["Lead Type", lead?.type],
     ["Temperature", lead?.temperature],
     ["Source", lead?.sourceName || lead?.source],
@@ -390,9 +402,20 @@ export default function LeadDetailsView({
           <div className="p-4 sm:p-5">
             {tab === "activity" ? (
               <div>
-                <div className="mb-4">
-                  <h2 className="text-[15px] font-bold text-slate-900">Activity History</h2>
-                  <p className="mt-1 text-[12px] text-slate-500">Only activity already recorded by the CRM is shown here.</p>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900">Activity History</h2>
+                    <p className="mt-1 text-[12px] text-slate-500">Only activity already recorded by the CRM is shown here.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={refreshActivity}
+                    disabled={activityLoading}
+                    title="Refresh activity history"
+                    className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <RefreshCw size={13} className={activityLoading ? "animate-spin" : ""} /> Refresh
+                  </button>
                 </div>
 
                 {activityLoading ? (

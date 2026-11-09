@@ -83,6 +83,31 @@ const TYPES = [
     api: "ASSIGNED",
     label: "Assigned",
   },
+  {
+    key: "google_form",
+    api: "GOOGLE_FORM",
+    label: "Google Form",
+  },
+  {
+    key: "website_form",
+    api: "WEBSITE_FORM",
+    label: "Website Form",
+  },
+  {
+    key: "im",
+    api: "IM",
+    label: "IM Leads",
+  },
+  {
+    key: "dm",
+    api: "DM",
+    label: "DM Leads",
+  },
+  {
+    key: "internal",
+    api: "INTERNAL",
+    label: "Internal Leads",
+  },
 ];
 
 const ALL_LEADS_TYPE = {
@@ -101,6 +126,24 @@ const ALL_LEAD_TYPES = [
   ALL_LEADS_TYPE,
   INDIVIDUAL_LEAD_TYPE,
   ...TYPES,
+];
+
+// 3.9: recommended Source values for the Add Lead dropdown. "Other" reveals a
+// free-text input and the typed value is saved as the source.
+const SOURCE_OPTIONS = [
+  "Website",
+  "Google Form",
+  "Google Ads",
+  "Meta/Facebook/Instagram",
+  "Referral",
+  "Walk-in",
+  "College Expo/Event",
+  "WhatsApp",
+  "Call/Telecalling",
+  "Partner/Agent",
+  "Organic",
+  "Purchased Data",
+  "Other",
 ];
 
 function leadCategoryApi(lead) {
@@ -706,6 +749,7 @@ function IndividualLeadModal({
       alternatePhone: lead?.alternatePhone || "",
       email: lead?.email || "",
       course: lead?.course || "",
+      preferredColleges: lead?.preferredColleges || "",
       temperature: lead?.temperature || "WARM",
       type: lead?.type || defaultType || "INDIVIDUAL",
       sourceName: lead?.sourceName || "",
@@ -716,6 +760,9 @@ function IndividualLeadModal({
       notes: lead?.notes || "",
     });
 
+  const [sourceOther, setSourceOther] = useState(
+    !!(lead?.sourceName && !SOURCE_OPTIONS.includes(lead.sourceName))
+  );
   const [remarks, setRemarks] = useState(lead?.remarks || []);
   const [remarkDraft, setRemarkDraft] = useState("");
   const [remarkSaving, setRemarkSaving] = useState(false);
@@ -1209,6 +1256,17 @@ function IndividualLeadModal({
               </datalist>
             </Field>
 
+            <Field label="Preferred Colleges">
+              <input
+                value={form.preferredColleges}
+                onChange={(event) =>
+                  update("preferredColleges", event.target.value)
+                }
+                className="form-input"
+                placeholder="e.g. VNR VJIET, CBIT (comma-separated)"
+              />
+            </Field>
+
             <Field
               label="Lead Type"
               required
@@ -1265,21 +1323,43 @@ function IndividualLeadModal({
             </Field>
 
             <Field label="Source">
-              <input
+              <select
                 value={
-                  form.sourceName
+                  sourceOther
+                    ? "Other"
+                    : SOURCE_OPTIONS.includes(form.sourceName)
+                    ? form.sourceName
+                    : ""
                 }
-                onChange={(
-                  event
-                ) =>
-                  update(
-                    "sourceName",
-                    event.target.value
-                  )
-                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === "Other") {
+                    setSourceOther(true);
+                    update("sourceName", "");
+                  } else {
+                    setSourceOther(false);
+                    update("sourceName", value);
+                  }
+                }}
                 className="form-input"
-                placeholder="Justdial / Reference / College Expo"
-              />
+              >
+                <option value="">Select source</option>
+                {SOURCE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              {sourceOther && (
+                <input
+                  value={form.sourceName}
+                  onChange={(event) =>
+                    update("sourceName", event.target.value)
+                  }
+                  className="form-input mt-2"
+                  placeholder="Enter custom source"
+                />
+              )}
             </Field>
 
             <Field label="Follow-up">
@@ -4383,6 +4463,17 @@ export default function LeadStore({
             border-color: rgb(129 140 248);
             box-shadow: 0 0 0 3px rgb(224 231 255);
           }
+          /* 3.10: inset the dropdown arrow from the far-right edge and align it. */
+          select.form-input {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            padding-right: 36px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+          }
         `}</style>
 
         <LeadDetailsView
@@ -4427,6 +4518,17 @@ export default function LeadStore({
         .form-input:focus {
           border-color: rgb(129 140 248);
           box-shadow: 0 0 0 3px rgb(224 231 255);
+        }
+        /* 3.10: inset the dropdown arrow from the far-right edge and align it. */
+        select.form-input {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          padding-right: 36px;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          background-size: 16px;
         }
       `}</style>
 
