@@ -21,6 +21,33 @@ Manual (need Dev login):
 - [ ] Clicking a lead follow-up notification opens the **exact lead** (web); focus lands in main content.
 - [ ] Dashboard "Leads by Source": donut center number **equals** the sum of the legend slices, including a Direct Admission bucket when present.
 
+## Mobile emulator — manual QA checklist (human-run, 2026-11-09)
+
+Environment ready now: Pixel_6 emulator (`emulator-5554`) with the fresh debug APK installed; dev backend on host `:4000` (workers disabled, DB connected); app points at `http://10.0.2.2:4000`. Log in as `bispun.qa.admin@example.com` (set the password first — see the safe procedure in `BISPUN-MOBILE-STAGE-STATUS.md`). Mark each PASS / FAIL / BLOCKED and note any bug.
+
+| # | Test | Expected | Result |
+|---|------|----------|--------|
+| 1 | Login (valid creds) | Lands on Dashboard | ☐ |
+| 2 | Login (wrong password) | Clear inline error, no crash | ☐ |
+| 3 | Session restoration (kill + reopen app) | Returns to Dashboard, no re-login | ☐ |
+| 4 | Background → foreground (Home, reopen) | State preserved, no blank screen | ☐ |
+| 5 | Dashboard | KPIs + Leads-by-Source render; donut center = legend sum | ☐ |
+| 6 | Lead Store | List loads; open a lead; search/filter work | ☐ |
+| 7 | Admissions | List loads; open a record | ☐ |
+| 8 | Finance / Revenue | Loads; figures render | ☐ |
+| 9 | Calendar | Renders; open an event; create/edit only if authorized | ☐ |
+| 10 | Notifications | List + unread badge; tapping a lead notification opens the exact lead | ☐ |
+| 11 | More menu | Opens; only permitted modules shown | ☐ |
+| 12 | Bottom navigation | Switches modules fast; active state correct | ☐ |
+| 13 | Native actions | Phone dial / SMS / WhatsApp open from a lead | ☐ |
+| 14 | Android hardware back | Closes overlays first, then module back, exits only at root | ☐ |
+| 15 | Role/permission visibility | Employee sees only permitted modules/leads | ☐ |
+| 16 | Tenant isolation | No data from another company visible | ☐ |
+| 17 | Network failure/retry | Graceful "Can't reach the server" + Try again (stop backend to test) | ☐ |
+| 18 | Logout | Returns to Login; token cleared; re-login works | ☐ |
+
+Already verified by the agent (no need to re-test): install, launch, splash branding, splash→login routing, login-screen render, backend reachability, graceful offline state, no crash on launch.
+
 ## 0. Pre-flight (automated — safe to run anytime)
 
 ```bash

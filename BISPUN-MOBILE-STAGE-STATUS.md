@@ -70,6 +70,49 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 — OPERATOR PLAYBOOK (exact actions you must perform)
+
+#### A. Set the dev QA password safely (no exposure)
+Run the provided tool **in your own terminal** (it uses a HIDDEN prompt — the password never appears in argv, history, logs, or Git; the file is gitignored):
+```
+cd S:\Bispun
+node reset-dev-admin-password.mjs
+# Enter a password (≥10 chars) twice at the hidden prompt.
+```
+It targets only `bispun.qa.admin@example.com` (CLIENT_ADMIN) on the dev `blue-mouse` DB, updates one row in a transaction, prints no password. Then log in on the emulator with that password and run the manual QA checklist (regression doc). Do **not** type the password via `adb shell input` (that would expose it). Delete the script after use if you prefer (it's dev-only).
+
+#### B. Signed AAB on the Windows host (never reads/prints/generates passwords)
+The existing signing config lives on `release/android-signing-prep` (worktree `S:\Bispun-release`) with the existing keystore `android/app/bispun-release.jks` (alias `bispun-release`) — **do not regenerate/replace it**. That branch's code is behind current `main`, so build the signed AAB from **current code + the signing config**:
+1. Create a release-candidate that has both (operator choice; keeps PR #13 unchanged):
+   - simplest: `git checkout -b rc/android-signed ab9401f` then `git cherry-pick 47396dd` (the signing-config commit), resolving trivially; **or** wait until PR #13 + the signing branch are merged to `main` (HOLD) and build from `main`.
+2. In that worktree: copy `android/keystore.properties.example` → `android/keystore.properties` and fill the **existing** keystore's `storePassword`/`keyPassword` (you hold them; file is gitignored — never commit).
+3. Set a real **HTTPS** `VITE_API_URL` (production endpoint) in the build env — **not** `10.0.2.2`/localhost.
+4. Build + validate:
+   ```
+   npm run build
+   npx cap sync android
+   cd android
+   .\gradlew.bat bundleRelease
+   ```
+   Output: `android\app\build\outputs\bundle\release\app-release.aab`. Validate with `bundletool`/Play that package=`com.bispun.crm`, versionCode/Name are correct, and it's signed by the existing certificate. (The build is **fail-closed**: it refuses to produce an unsigned/debug-signed release.)
+
+#### C. Google Play account-deletion requirement — VERIFIED GAP + plan
+- **Verified:** the app has **self-serve signup** (`src/SignupPage.jsx`, `server/routes/publicOnboard.js`, `server/lib/selfServeOnboard.js`) and **no account/data-deletion flow exists** (code search found none). Google Play **requires** a data/account deletion path for apps that let users create accounts.
+- **Implementation plan (needs approval — new endpoint/UI, possibly schema):**
+  1. Public **Data Deletion Request** page/URL (hosted; e.g. `/data-deletion`) describing what is deleted and how to request it — this URL goes in the Play listing. (Smallest compliant step.)
+  2. Backend deletion/anonymization flow for a verified request (user + their personal data; for a Client Admin, the company account) — hard-delete or anonymize, with an audit entry. New authenticated endpoint + admin action, and/or a verified public request intake.
+  3. Document the admin-driven deactivation path already in `clientUsers.js` as the interim internal process.
+  - Complexity: **Medium**. This is the **critical Play-compliance blocker** besides the signed AAB.
+
+#### D. Play Console listing + Data Safety — DRAFT (from verified behavior; confirm in Console)
+- **App name:** Bispun CRM. **Package:** `com.bispun.crm`. **Category:** Business.
+- **Short description (≤80 chars):** "Bispun CRM — leads, admissions, calendar, chats and dashboards on the go."
+- **Full description:** summarize actual modules (Dashboard, Lead Store, Admissions, Revenue/Finance, UTM, Walk-ins, Counselling, Analytics, Chats, Goals, Calendar, Notifications, Users & Roles) — role-based access, multi-tenant, push notifications.
+- **Permissions (merged manifest):** INTERNET, ACCESS_NETWORK_STATE, WAKE_LOCK, BIND_JOB_SERVICE, POST_NOTIFICATIONS. No location/camera/contacts/SMS/CALL.
+- **Data Safety (declare):** Collected & sent to the app's own backend over HTTPS (encrypted in transit): email + password (app functionality: account auth), name/phone (account), user-entered CRM business data (app functionality), and an FCM **device token** (push). No third-party analytics/ads SDK found (FCM messaging only). Data is **not** sold. Deletion: link the §C deletion URL.
+- **Account deletion URL:** from §C (required).
+- **Operator still supplies:** feature graphic (1024×500), phone screenshots (take from the emulator once logged in), app icon (present in `res/`), privacy policy URL, content rating questionnaire, target audience, ads declaration (none), reviewer login (a dev/test account), release notes, testing track (internal/closed vs production).
+
 ### 2026-11-09 (16:32) — ✅ BACKEND CONNECTIVITY FIXED + LOGIN SCREEN VERIFIED ON DEVICE
 
 **Root cause of "Can't reach the server":** the debug build's `VITE_API_URL=http://10.0.2.2:4000` (emulator→host localhost) was **correct** — there was simply **no dev backend running** on the host. **No APK rebuild was needed.**
