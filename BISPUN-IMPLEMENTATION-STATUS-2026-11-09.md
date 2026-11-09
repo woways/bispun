@@ -306,3 +306,9 @@ CREATE INDEX IF NOT EXISTS "User_companyId_levelId_idx" ON "User"("companyId", "
 - **Order:** single statement block; no dependencies on other pending migrations. (`0001_add_device_token.sql` is independent; verify `DeviceToken` table exists separately.)
 
 **On approval, I will (Dev only):** apply the SQL → `prisma generate` → restart Dev backend → verify the 3 columns exist → smoke-test Users & Roles (list, add, edit, designation/level assignment) → run the suite. **Production application requires a separate, explicit Production authorization and is out of scope here.**
+
+### Execution log — 2026-11-09 (approved)
+- ✅ Target re-verified: `ep-blue-mouse-...neondb` (blue-mouse Dev, **not** pond).
+- ✅ SQL re-scanned: only additive `ADD COLUMN IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`; no destructive statements.
+- ⛔ **BLOCKED — Dev DB unreachable.** Connection attempts to Neon blue-mouse (pooler **and** direct endpoint, 45s timeout, IPv4-first per the Part B note) all returned `ETIMEDOUT`; a raw TCP probe to `:5432` also timed out. The compute almost certainly auto-suspended since the earlier successful read, or there is a network/allowlist block from this environment. **The migration was NOT applied** (correct per the STOP rule — cannot verify against an unreachable DB).
+- **To complete:** ensure the Neon blue-mouse compute is awake and reachable from the run environment (open it in the Neon console once, or confirm network/IP access), then re-run the approved apply (target + SQL already verified). Then `prisma generate` + the verification steps above.

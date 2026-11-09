@@ -13,12 +13,12 @@ Complexity key: **S** = <½ day, **M** = ~1–3 days, **L** = >3 days / cross-cu
 
 | # | Item | State |
 |---|---|---|
-| 1 | Apply designation/level migration | 🟡 **PREPARED — awaiting approval gate** (non-destructive; see status doc §8) |
+| 1 | Apply designation/level migration | ⛔ **APPROVED but BLOCKED — Dev DB unreachable** (Neon blue-mouse `ETIMEDOUT`, pooler+direct; compute likely suspended). Target+SQL re-verified; not applied. Needs DB reachable to complete (status doc §8). |
 | 2 | Lead-notification deep link (web + mobile) | ✅ **DONE** — `parseNotificationTarget`, encoded `actionModule`, focus handoff; 6 tests |
 | 3 | Calendar private-event protection | 🟡 **PARTIAL DONE** — edit/delete authz shipped (`canModifyCalendarEvent`, 6 tests); private-vs-shared **view** model still needs a schema column (migration-gated) |
 | 4 | Telephony call-history scoping | ✅ **DONE** — `callHistoryWhere`, 3 tests |
 | 5 | Lead-visibility hardening (name→id) | ⬜ Not started (recommend after migration) |
-| 6 | Google/Firebase config docs | ⬜ Not started |
+| 6 | Google/Firebase config docs | ✅ **DONE** — `.env.example` documents Google OAuth + Firebase (+core/telephony) vars; `env.js` warns when unconfigured (non-fatal). Provisioning real creds still required for the live features. |
 | 7 | Dashboard Leads-by-Source counting | ✅ **DONE** — `buildLeadsBySource` + `leadsBySourceTotal`, 5 tests |
 | 8–23 | (UTM tracking, Meet durability, volume, Android signing, etc.) | ⬜ Not started |
 
