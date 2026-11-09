@@ -70,6 +70,30 @@ Earliest incomplete **mandatory** stage with actionable, un-gated code work: **S
 - **ANDROID:** NOT READY — no release signing/keystore; all native runtime unverified (no emulator). Notification tap deep-links to the exact lead (code done); mobile tests now in CI.
 - **PRODUCTION:** NOT READY — separate prod migration + config authorization required; nothing merged to `main`.
 
+### 2026-11-09 (16:32) — ✅ BACKEND CONNECTIVITY FIXED + LOGIN SCREEN VERIFIED ON DEVICE
+
+**Root cause of "Can't reach the server":** the debug build's `VITE_API_URL=http://10.0.2.2:4000` (emulator→host localhost) was **correct** — there was simply **no dev backend running** on the host. **No APK rebuild was needed.**
+
+**Fix + verification (Pixel_6 emulator, live):**
+- Started the dev backend on the **host** (`DISABLE_BACKGROUND_WORKERS=true`, IPv4-first) → `/api/health` = `{success:true, database:"connected"}`.
+- Relaunched the app → it reached the backend: server log shows `GET /api/client/auth/me → 401` (expected, no token) → app routed to **Login**.
+- **Screenshot-verified the Login screen renders fully** (BISPUN logo, "Welcome back! Sign in to your Bispun workspace", Work Email, Password with show/hide, Remember me, Forgot password, Sign in, Contact support). Network = connected (5G).
+
+| Check | Result |
+|---|---|
+| Backend reachable from emulator (10.0.2.2:4000) | ✅ PASS (server log: /auth/me 401) |
+| Splash → Login routing (signed-out) | ✅ PASS (screenshot) |
+| Login screen renders | ✅ PASS (screenshot) |
+| **Actual login + authenticated navigation** (Dashboard, Lead Store, Admissions, Finance, Notifications, Calendar, Chats, More, logout, back button, native actions, role/tenant) | ⛔ **BLOCKED — human required.** Needs the dev QA admin password (`bispun.qa.admin@example.com`, set via `reset-dev-admin-password.mjs`); typing a password via `adb shell input` would expose the credential, so secure entry + multi-screen driving must be done by a person. The emulator + backend are left running and ready. |
+
+### 2026-11-09 — Google Play submission prep (Phase 4; derived from actual app behavior)
+- **Package / version:** `com.bispun.crm`, versionCode 1, versionName 1.0 (bump per release).
+- **Permissions (merged manifest):** `INTERNET`, `ACCESS_NETWORK_STATE`, `WAKE_LOCK`, `BIND_JOB_SERVICE`, `POST_NOTIFICATIONS` (Android 13+ push). **No** location/camera/contacts/SMS/CALL — native phone/SMS/WhatsApp use intents (no permissions).
+- **Data Safety (derived; operator to confirm in Console):** collected & sent to the app's own backend over HTTPS — account email + password (auth), user profile (name/phone), and the CRM business data the user enters/views (leads, admissions, etc.); an **FCM device token** for push. No evidence of third-party analytics/ads SDKs (only FCM messaging). Data encrypted in transit. 
+- **Account deletion (Play requirement for apps with accounts):** ⬜ **GAP** — users are provisioned/deactivated by a Client Admin; there is no in-app self-serve account deletion. Operator must provide an account-deletion process + URL (or add the flow).
+- **Still operator-supplied:** app name/short+full description, feature graphic, phone screenshots, privacy policy URL, content rating questionnaire, target-audience & ads declarations, reviewer test credentials, release notes, and the testing track choice.
+- **Signed AAB:** ⛔ BLOCKED on the keystore password (operator) — see signing section; keystore exists, don't regenerate.
+
 ### 2026-11-09 (16:12) — ✅ FRESH DEBUG APK BUILT (host terminal)
 
 The Gradle loopback blocker is specific to the agent's sandboxed shell. Running the
