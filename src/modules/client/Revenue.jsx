@@ -1375,6 +1375,26 @@ function DrilldownModal({
   onClose,
 }) {
   const { panelRef, onKeyDown } = useModalA11y(onClose);
+
+  // Center the modal within the content area (right of the sidebar), not the
+  // whole window. Measuring <main> adapts to the collapsed/expanded sidebar
+  // and to mobile (where <main> starts at x=0, so the offset is 0).
+  const [overlayPadLeft, setOverlayPadLeft] = useState(0);
+  useEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const main =
+        typeof document !== "undefined"
+          ? document.querySelector("main")
+          : null;
+      const left = main ? Math.max(0, main.getBoundingClientRect().left) : 0;
+      setOverlayPadLeft(left);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
+
   if (!open) return null;
 
   const rows = Array.isArray(records) ? records : [];
@@ -1382,6 +1402,7 @@ function DrilldownModal({
   return (
     <div
       className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      style={overlayPadLeft ? { paddingLeft: overlayPadLeft } : undefined}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
