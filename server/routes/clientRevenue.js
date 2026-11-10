@@ -455,6 +455,10 @@ router.get("/", async (req, res) => {
       0
     );
 
+    // Max records returned per at-risk category so drill-downs can show the
+    // full list (not just a preview). Kept bounded to protect the payload size.
+    const RADAR_ITEM_CAP = 500;
+
     const mapAdmissionRiskItem = ({ admission, pending, ageDays }) => ({
       id: admission.id,
       studentName: admission.studentName,
@@ -482,7 +486,7 @@ router.get("/", async (req, res) => {
       overdueCollections: {
         count: overdueCollections.length,
         amount: overdueCollections.reduce((sum, item) => sum + item.pending, 0),
-        items: overdueCollections.slice(0, 8).map(mapAdmissionRiskItem),
+        items: overdueCollections.slice(0, RADAR_ITEM_CAP).map(mapAdmissionRiskItem),
       },
       pendingFees: {
         count: pendingAdmissions.length,
@@ -490,12 +494,12 @@ router.get("/", async (req, res) => {
         items: pendingAdmissions
           .slice()
           .sort((a, b) => b.pending - a.pending)
-          .slice(0, 8)
+          .slice(0, RADAR_ITEM_CAP)
           .map(mapAdmissionRiskItem),
       },
       highValueNoFollowUp: {
         count: highValueNoFollowUp.length,
-        items: highValueNoFollowUp.slice(0, 8).map(({ lead, intelligence }) => ({
+        items: highValueNoFollowUp.slice(0, RADAR_ITEM_CAP).map(({ lead, intelligence }) => ({
           id: lead.id,
           leadName: lead.name,
           assignedToName: lead.assignedToName || "Unassigned",
@@ -510,7 +514,7 @@ router.get("/", async (req, res) => {
       stuckRevenue: {
         count: stuckRevenue.length,
         amount: stuckRevenue.reduce((sum, item) => sum + item.pending, 0),
-        items: stuckRevenue.slice(0, 8).map(mapAdmissionRiskItem),
+        items: stuckRevenue.slice(0, RADAR_ITEM_CAP).map(mapAdmissionRiskItem),
       },
     };
 
@@ -569,6 +573,28 @@ router.get("/", async (req, res) => {
         };
       });
 
+    // Per-admission records powering the overview KPI drill-downs
+    // (Total Admissions, Potential Revenue, In-Bucket, Buffer, Received, Pending).
+    // The same admissions list that produced the summary totals, so the
+    // drill-down figures always reconcile with the cards.
+    const admissionsBreakdown = admissions.map((admission) => {
+      const totalFee = Number(admission.totalFee || 0);
+      const paidAmount = Number(admission.paidAmount || 0);
+      return {
+        id: admission.id,
+        leadId: admission.leadId,
+        studentName: admission.studentName,
+        college: admission.college,
+        counsellorName: admission.counsellorName || "Unassigned",
+        totalFee,
+        paidAmount,
+        pendingAmount: Math.max(totalFee - paidAmount, 0),
+        revenueStatus: admission.revenueStatus,
+        amountStatus: admission.amountStatus,
+        admissionDate: admission.admissionDate,
+      };
+    });
+
     return res.json({
       success: true,
 
@@ -588,6 +614,13 @@ router.get("/", async (req, res) => {
         totalAdmissions:
           admissions.length,
       } : {},
+
+      // Record-level backing for the clickable overview KPI cards.
+      admissionsBreakdown: financeSectionAllowed(
+        req.clientUser.pageAccess,
+        req.clientUser.role,
+        "overview"
+      ) ? admissionsBreakdown : [],
 
       monthlyRevenue: financeSectionAllowed(
         req.clientUser.pageAccess,
