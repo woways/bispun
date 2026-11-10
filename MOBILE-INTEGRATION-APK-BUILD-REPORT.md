@@ -94,15 +94,19 @@ verification, and signed-AAB readiness. No merge, no deploy, no migrations.
 
 ## 10. Signed AAB readiness (HOLD — not built)
 
+> **UPDATE (signing config now integrated):** release signing is now wired into
+> `android/app/build.gradle` (fail-closed, from `keystore.properties`) — see
+> **MOBILE-ANDROID-SIGNING-REPORT.md** for the config details, verification, and the
+> operator-only steps to build the signed AAB. Item 1 below is now RESOLVED.
+
 Blocking items for a signed release bundle:
 
-1. **Release signing is NOT configured in Gradle.** `android/app/build.gradle` has
-   no `signingConfigs` block and `buildTypes.release` has no `signingConfig`.
-   `bundleRelease` would currently produce an **unsigned** artifact. Wire a
-   `signingConfigs.release` reading from an untracked `keystore.properties`
-   (storeFile/storePassword/keyAlias/keyPassword) and set
-   `buildTypes.release.signingConfig = signingConfigs.release`, OR sign manually
-   with `apksigner`/`jarsigner`, OR use Android Studio's Generate Signed Bundle.
+1. **~~Release signing is NOT configured~~ — RESOLVED.** `android/app/build.gradle` now
+   defines `signingConfigs.release` (populated only when a gitignored
+   `android/keystore.properties` exists), attaches it to `buildTypes.release` only when
+   present, and **fails closed** on `assembleRelease`/`bundleRelease` without credentials
+   (never unsigned / debug-signed). Debug builds unaffected. Verified via dry-runs + a full
+   `assembleDebug`. Integrated from `release/android-signing-prep` commit `47396dd`.
 2. **Existing keystore required.** No `*.jks` is present in the repo or parent dirs
    (correctly gitignored). Operator must supply the existing `bispun-release.jks`
    path + passwords at build time. **Do NOT create a new keystore. Do NOT commit or
