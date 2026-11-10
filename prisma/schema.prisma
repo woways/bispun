@@ -930,6 +930,11 @@ model AdmissionAttachmentFolder {
   name      String
   sortOrder Int    @default(0)
 
+  // Confidential/locked folder: visible and writable only to CLIENT_ADMIN.
+  // Files inside are never given a public proxy URL — they are served only
+  // through the admin-gated download route.
+  locked Boolean @default(false)
+
   attachments AdmissionPartnerAttachment[]
 
   createdAt DateTime @default(now())

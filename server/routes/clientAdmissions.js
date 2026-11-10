@@ -8,6 +8,7 @@ import {
   uploadAdmissionPartnerAttachment,
   deleteAdmissionPartnerAttachment,
 } from "../lib/admissionAttachmentStorage.js";
+import { presignGet, fileProxyUrl } from "../lib/s3Storage.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -93,6 +94,34 @@ async function currentAdmissionScope(req) {
 function attachmentAccessEnabled(req) {
   if (req.clientUser.role === "CLIENT_ADMIN") return true;
   return normalizePageAccess(req.clientUser.pageAccess).admissions.attachments === true;
+}
+
+// ---- Confidential (locked) college folder ----------------------------------
+// A single reserved folder per college. Only CLIENT_ADMIN can see it, open it,
+// upload to it or delete from it. Its files are never given a public proxy URL
+// (served only through the admin-gated /download route below).
+const CONFIDENTIAL_FOLDER_NAME = "Confidential";
+
+function isClientAdmin(req) {
+  return req.clientUser?.role === "CLIENT_ADMIN";
+}
+
+// Ensure the one locked folder exists for a college. Called only for admins,
+// so non-admins never trigger its creation and never see it.
+async function ensureLockedFolder(companyId, partnerId) {
+  const existing = await prisma.admissionAttachmentFolder.findFirst({
+    where: { companyId, partnerId, locked: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (existing) return existing;
+  return prisma.admissionAttachmentFolder.create({
+    data: {
+      companyId,
+      partnerId,
+      name: CONFIDENTIAL_FOLDER_NAME,
+      locked: true,
+    },
+  });
 }
 
 async function ensureAttachmentPartnerAccess(req, res, partnerId) {
@@ -1203,7 +1232,15 @@ router.get("/partners/:id/attachments", async (req, res) => {
     const partner = await ensureAttachmentPartnerAccess(req, res, req.params.id);
     if (!partner) return;
 
-    const [attachments, folders] = await Promise.all([
+    const admin = isClientAdmin(req);
+
+    // Make sure the one confidential folder exists — but only for admins, so
+    // it is never created or revealed for anyone else.
+    if (admin) {
+      await ensureLockedFolder(companyId, partner.id);
+    }
+
+    const [attachments, foldersAll] = await Promise.all([
       prisma.admissionPartnerAttachment.findMany({
         where: { companyId, partnerId: partner.id },
         orderBy: { createdAt: "desc" },
@@ -1214,29 +1251,85 @@ router.get("/partners/:id/attachments", async (req, res) => {
       }),
     ]);
 
+    // Non-admins must not see the locked folder OR any file inside it.
+    const lockedFolderIds = new Set(
+      foldersAll.filter((f) => f.locked).map((f) => f.id)
+    );
+    const folders = admin
+      ? foldersAll
+      : foldersAll.filter((f) => !f.locked);
+    const visibleAttachments = admin
+      ? attachments
+      : attachments.filter((a) => !lockedFolderIds.has(a.folderId));
+
     return res.json({
       success: true,
       partner,
       folders: folders.map((folder) => ({
         id: folder.id,
         name: folder.name,
-        fileCount: attachments.filter((a) => a.folderId === folder.id).length,
+        locked: Boolean(folder.locked),
+        fileCount: visibleAttachments.filter((a) => a.folderId === folder.id).length,
         createdAt: folder.createdAt,
       })),
-      attachments: attachments.map((item) => ({
-        id: item.id,
-        fileName: item.fileName,
-        mimeType: item.mimeType,
-        sizeBytes: item.sizeBytes,
-        url: item.url,
-        folderId: item.folderId || null,
-        uploadedByName: item.uploadedByName,
-        createdAt: item.createdAt,
-      })),
+      attachments: visibleAttachments.map((item) => {
+        const inLocked = lockedFolderIds.has(item.folderId);
+        return {
+          id: item.id,
+          fileName: item.fileName,
+          mimeType: item.mimeType,
+          sizeBytes: item.sizeBytes,
+          // Locked files carry NO public URL — only an admin-gated download path.
+          url: inLocked ? null : item.url,
+          downloadUrl: inLocked
+            ? `/api/client/admissions/partners/${partner.id}/attachments/${item.id}/download`
+            : null,
+          locked: inLocked,
+          folderId: item.folderId || null,
+          uploadedByName: item.uploadedByName,
+          createdAt: item.createdAt,
+        };
+      }),
     });
   } catch (error) {
     console.error("Failed to load college attachments:", error);
     return res.status(500).json({ success: false, message: "Unable to load college attachments" });
+  }
+});
+
+// Admin-gated download for confidential (locked) files. Mints a short-lived
+// presigned S3 URL only after confirming the caller is a CLIENT_ADMIN. This is
+// what keeps locked files truly private — they have no public proxy link.
+router.get("/partners/:partnerId/attachments/:attachmentId/download", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const partner = await ensureAttachmentPartnerAccess(req, res, req.params.partnerId);
+    if (!partner) return;
+
+    const attachment = await prisma.admissionPartnerAttachment.findFirst({
+      where: { id: req.params.attachmentId, partnerId: partner.id, companyId },
+      include: { folder: { select: { locked: true } } },
+    });
+    if (!attachment) {
+      return res.status(404).json({ success: false, message: "Attachment not found" });
+    }
+
+    if (attachment.folder?.locked && !isClientAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        message: "Only the Client Admin can open confidential files",
+      });
+    }
+
+    // Return the short-lived signed URL as JSON (not a redirect) so the client
+    // can send its auth (cookie on web, Bearer on mobile) and then open the
+    // link directly — avoiding cross-origin fetch/CORS issues with S3.
+    const signedUrl = await presignGet(attachment.publicId, 300);
+    return res.json({ success: true, url: signedUrl });
+  } catch (error) {
+    console.error("Failed to generate confidential download link:", error);
+    return res.status(500).json({ success: false, message: "Unable to open file" });
   }
 });
 
@@ -1255,12 +1348,26 @@ router.post(
 
       // Optional target folder — must belong to this college/company.
       let folderId = String(req.body?.folderId || "").trim() || null;
+      let targetLocked = false;
       if (folderId) {
         const folder = await prisma.admissionAttachmentFolder.findFirst({
           where: { id: folderId, companyId, partnerId: partner.id },
-          select: { id: true },
+          select: { id: true, locked: true },
         });
-        if (!folder) folderId = null;
+        if (!folder) {
+          folderId = null;
+        } else {
+          targetLocked = Boolean(folder.locked);
+        }
+      }
+
+      // Only an admin may upload into the confidential folder.
+      if (targetLocked && !isClientAdmin(req)) {
+        return res.status(403).json({
+          success: false,
+          forbidden: true,
+          message: "Only the Client Admin can upload confidential files",
+        });
       }
 
       const stored = await uploadAdmissionPartnerAttachment(req.file, companyId, partner.id);
@@ -1273,7 +1380,8 @@ router.post(
           fileName: stored.fileName,
           mimeType: stored.mimeType,
           sizeBytes: stored.sizeBytes,
-          url: stored.url,
+          // Confidential files get no public proxy URL — only the gated route.
+          url: targetLocked ? "" : stored.url,
           publicId: stored.publicId,
           resourceType: stored.resourceType,
           uploadedByUserId: req.clientUser.userId || null,
@@ -1289,7 +1397,11 @@ router.post(
           fileName: attachment.fileName,
           mimeType: attachment.mimeType,
           sizeBytes: attachment.sizeBytes,
-          url: attachment.url,
+          url: targetLocked ? null : attachment.url,
+          downloadUrl: targetLocked
+            ? `/api/client/admissions/partners/${partner.id}/attachments/${attachment.id}/download`
+            : null,
+          locked: targetLocked,
           folderId: attachment.folderId || null,
           uploadedByName: attachment.uploadedByName,
           createdAt: attachment.createdAt,
@@ -1332,10 +1444,20 @@ router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res)
         partnerId: req.params.partnerId,
         companyId,
       },
+      include: { folder: { select: { locked: true } } },
     });
 
     if (!attachment) {
       return res.status(404).json({ success: false, message: "Attachment not found" });
+    }
+
+    // Only an admin may delete a confidential file.
+    if (attachment.folder?.locked && !isClientAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        message: "Only the Client Admin can delete confidential files",
+      });
     }
 
     await deleteAdmissionPartnerAttachment({
@@ -1371,6 +1493,15 @@ router.post("/partners/:id/folders", async (req, res) => {
     }
     if (name.length > 80) {
       return res.status(400).json({ success: false, message: "Folder name must be 80 characters or less" });
+    }
+
+    // "Confidential" is the reserved name of the locked folder; no one may
+    // create a normal folder with that name via this route.
+    if (name.toLowerCase() === CONFIDENTIAL_FOLDER_NAME.toLowerCase()) {
+      return res.status(409).json({
+        success: false,
+        message: `"${CONFIDENTIAL_FOLDER_NAME}" is a reserved folder name`,
+      });
     }
 
     const existing = await prisma.admissionAttachmentFolder.findFirst({
@@ -1409,12 +1540,27 @@ router.patch("/partners/:partnerId/folders/:folderId", async (req, res) => {
       return res.status(404).json({ success: false, message: "Folder not found" });
     }
 
+    // The confidential folder is permanent and cannot be renamed.
+    if (folder.locked) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        message: "The confidential folder cannot be renamed",
+      });
+    }
+
     const name = String(req.body?.name || "").trim();
     if (!name) {
       return res.status(400).json({ success: false, message: "Folder name is required" });
     }
     if (name.length > 80) {
       return res.status(400).json({ success: false, message: "Folder name must be 80 characters or less" });
+    }
+    if (name.toLowerCase() === CONFIDENTIAL_FOLDER_NAME.toLowerCase()) {
+      return res.status(409).json({
+        success: false,
+        message: `"${CONFIDENTIAL_FOLDER_NAME}" is a reserved folder name`,
+      });
     }
 
     const clash = await prisma.admissionAttachmentFolder.findFirst({
@@ -1450,10 +1596,19 @@ router.delete("/partners/:partnerId/folders/:folderId", async (req, res) => {
     if (!partner) return;
     const folder = await prisma.admissionAttachmentFolder.findFirst({
       where: { id: req.params.folderId, partnerId: req.params.partnerId, companyId },
-      select: { id: true },
+      select: { id: true, locked: true },
     });
     if (!folder) {
       return res.status(404).json({ success: false, message: "Folder not found" });
+    }
+
+    // The confidential folder is permanent and cannot be deleted.
+    if (folder.locked) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        message: "The confidential folder cannot be deleted",
+      });
     }
 
     await prisma.admissionAttachmentFolder.delete({ where: { id: folder.id } });
@@ -1473,26 +1628,48 @@ router.patch("/partners/:partnerId/attachments/:attachmentId", async (req, res) 
     if (!partner) return;
     const attachment = await prisma.admissionPartnerAttachment.findFirst({
       where: { id: req.params.attachmentId, partnerId: req.params.partnerId, companyId },
-      select: { id: true },
+      select: { id: true, publicId: true, folder: { select: { locked: true } } },
     });
     if (!attachment) {
       return res.status(404).json({ success: false, message: "Attachment not found" });
     }
 
+    const sourceLocked = Boolean(attachment.folder?.locked);
+
     let folderId = req.body?.folderId ? String(req.body.folderId).trim() : null;
+    let targetLocked = false;
     if (folderId) {
       const folder = await prisma.admissionAttachmentFolder.findFirst({
         where: { id: folderId, companyId, partnerId: req.params.partnerId },
-        select: { id: true },
+        select: { id: true, locked: true },
       });
       if (!folder) {
         return res.status(404).json({ success: false, message: "Folder not found" });
       }
+      targetLocked = Boolean(folder.locked);
+    }
+
+    // Moving a file into or out of the confidential folder is admin-only.
+    if ((sourceLocked || targetLocked) && !isClientAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        forbidden: true,
+        message: "Only the Client Admin can move confidential files",
+      });
+    }
+
+    // Keep the stored URL consistent with the destination: locked files must
+    // have no public proxy URL; a file leaving the locked folder regains one.
+    let urlUpdate = {};
+    if (targetLocked && !sourceLocked) {
+      urlUpdate = { url: "" };
+    } else if (!targetLocked && sourceLocked) {
+      urlUpdate = { url: fileProxyUrl(attachment.publicId) };
     }
 
     const updated = await prisma.admissionPartnerAttachment.update({
       where: { id: attachment.id },
-      data: { folderId },
+      data: { folderId, ...urlUpdate },
     });
 
     return res.json({
