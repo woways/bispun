@@ -606,9 +606,18 @@ export default function ClientPortal({
     setModule("lead-store");
   }
 
-  function openDashboardKpi(key) {
+  function openDashboardKpi(key, opts = {}) {
     const metric = String(key || "").trim();
     if (!metric) return;
+
+    // Period-scoped drill-down (Analytics §10.3): when a KPI is clicked for a
+    // specific year (e.g. a Year Comparison column), switch the global workspace
+    // year first so the destination module fetches the SAME period the metric
+    // was computed for. Without this the list would not match the number.
+    const drillYear = Number(opts.year);
+    if (Number.isInteger(drillYear) && drillYear >= 2000 && drillYear <= 2100) {
+      setSelectedYear(String(drillYear));
+    }
 
     if (["total-leads", "new-leads", "qualified-leads"].includes(metric)) {
       setLeadStoreDashboardFilter({
@@ -619,6 +628,7 @@ export default function ClientPortal({
             : metric === "qualified-leads"
               ? "Qualified Leads"
               : "Total Leads",
+        status: opts.status || null,
       });
       setModule("lead-store");
       return;
@@ -4078,7 +4088,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       case "analytics":
         return (
-          <Analytics selectedYear={selectedYear} />
+          <Analytics selectedYear={selectedYear} onDrill={openDashboardKpi} />
         );
 
       case "help":

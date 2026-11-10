@@ -61,6 +61,7 @@ function AnalyticsMetric({
   icon: Icon,
   detail,
   tone = "indigo",
+  onClick = null,
 }) {
   const tones = {
     indigo:
@@ -76,8 +77,31 @@ function AnalyticsMetric({
       "bg-slate-500 text-white",
   };
 
+  // When onClick is provided the whole card becomes an interactive button that
+  // drills into the records behind the metric (Analytics §10.1).
+  const clickable = typeof onClick === "function";
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
+    <div
+      {...(clickable
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick,
+            onKeyDown: (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
+      className={`bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
+        clickable
+          ? "cursor-pointer hover:border-indigo-300 hover:shadow-[0_8px_24px_rgba(79,70,229,0.12)] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          : "hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+      }`}
+    >
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
@@ -89,7 +113,13 @@ function AnalyticsMetric({
           </div>
 
           <div className="mt-2 text-[13px] leading-5 text-slate-500">
-            {detail}
+            {clickable ? (
+              <span className="inline-flex items-center gap-1 text-indigo-600 font-medium">
+                {detail} <span aria-hidden>&rarr;</span>
+              </span>
+            ) : (
+              detail
+            )}
           </div>
         </div>
 
@@ -136,7 +166,7 @@ function ChartCard({
   );
 }
 
-export default function Analytics({ selectedYear = "all" }) {
+export default function Analytics({ selectedYear = "all", onDrill = null }) {
   const [
     data,
     setData,
@@ -250,6 +280,14 @@ export default function Analytics({ selectedYear = "all" }) {
   const comparison = data.comparison || null;
   const primaryYear = comparison?.primaryYear || baseYear;
   const comparisonYear = comparison?.compareYear || compareYear;
+
+  // The overview cards reflect the global workspace year. Pass it on drill-down
+  // only when it is a concrete year (not the "all" workspace), so the records
+  // list opens scoped to the same period (Analytics §10.3).
+  const overviewDrillYear =
+    selectedYear && selectedYear !== "all" && Number.isFinite(Number(selectedYear))
+      ? Number(selectedYear)
+      : undefined;
 
   function percentChange(current, previous) {
     const currentValue = Number(current || 0);
@@ -425,8 +463,13 @@ export default function Analytics({ selectedYear = "all" }) {
               icon={
                 Users
               }
-              detail="All leads recorded in the CRM"
+              detail={onDrill ? "View these leads" : "All leads recorded in the CRM"}
               tone="indigo"
+              onClick={
+                onDrill
+                  ? () => onDrill("total-leads", { year: overviewDrillYear })
+                  : null
+              }
             />
 
             <AnalyticsMetric
@@ -439,8 +482,13 @@ export default function Analytics({ selectedYear = "all" }) {
               icon={
                 UserCheck
               }
-              detail="Successful admissions recorded"
+              detail={onDrill ? "View these admissions" : "Successful admissions recorded"}
               tone="emerald"
+              onClick={
+                onDrill
+                  ? () => onDrill("admissions", { year: overviewDrillYear })
+                  : null
+              }
             />
 
             <AnalyticsMetric
@@ -546,38 +594,67 @@ export default function Analytics({ selectedYear = "all" }) {
                           current: comparison.primary.totalLeads,
                           previous: comparison.compare.totalLeads,
                           type: "number",
+                          drillKey: "total-leads",
                         },
                         {
                           label: "Admissions",
                           current: comparison.primary.totalAdmissions,
                           previous: comparison.compare.totalAdmissions,
                           type: "number",
+                          drillKey: "admissions",
                         },
                         {
+                          // Computed metric: no single record set. Its two inputs
+                          // are the Total Leads and Admissions rows above, each of
+                          // which is drillable on its own (Analytics §10.4).
                           label: "Conversion Rate",
                           current: comparison.primary.conversionRate,
                           previous: comparison.compare.conversionRate,
                           type: "percent",
+                          drillKey: null,
                         },
                         {
                           label: "Potential Revenue",
                           current: comparison.primary.potentialRevenue,
                           previous: comparison.compare.potentialRevenue,
                           type: "money",
+                          drillKey: "potential-revenue",
                         },
                         {
                           label: "Received Revenue",
                           current: comparison.primary.receivedAmount,
                           previous: comparison.compare.receivedAmount,
                           type: "money",
+                          drillKey: "received-revenue",
                         },
                         {
                           label: "Pending Revenue",
                           current: comparison.primary.pendingAmount,
                           previous: comparison.compare.pendingAmount,
                           type: "money",
+                          drillKey: "pending-revenue",
                         },
-                      ].map((row) => (
+                      ].map((row) => {
+                        const canDrill = Boolean(onDrill && row.drillKey);
+                        const cellBtn = (yr) =>
+                          canDrill
+                            ? {
+                                role: "button",
+                                tabIndex: 0,
+                                title: `View ${row.label} records for ${yr}`,
+                                onClick: () =>
+                                  onDrill(row.drillKey, { year: yr }),
+                                onKeyDown: (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    onDrill(row.drillKey, { year: yr });
+                                  }
+                                },
+                                className:
+                                  "cursor-pointer rounded-md -mx-1 px-1 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400",
+                              }
+                            : {};
+                        return (
                         <tr
                           key={row.label}
                           className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors"
@@ -587,22 +664,40 @@ export default function Analytics({ selectedYear = "all" }) {
                           </td>
 
                           <td className="px-4 py-2">
-                            <div className="text-[14px] font-bold tabular-nums text-slate-950">
-                              {formatComparisonValue(row.current, row.type)}
-                            </div>
-                            <div className="mt-0.5">
-                              <ComparisonChange
-                                current={row.current}
-                                previous={row.previous}
-                              />
+                            <div
+                              {...cellBtn(primaryYear)}
+                            >
+                              <div
+                                className={`text-[14px] font-bold tabular-nums ${
+                                  canDrill ? "text-indigo-700" : "text-slate-950"
+                                }`}
+                              >
+                                {formatComparisonValue(row.current, row.type)}
+                              </div>
+                              <div className="mt-0.5">
+                                <ComparisonChange
+                                  current={row.current}
+                                  previous={row.previous}
+                                />
+                              </div>
                             </div>
                           </td>
 
-                          <td className="px-4 py-2 text-[14px] font-semibold tabular-nums text-slate-600">
-                            {formatComparisonValue(row.previous, row.type)}
+                          <td className="px-4 py-2">
+                            <div
+                              {...cellBtn(comparisonYear)}
+                              className={
+                                canDrill
+                                  ? "cursor-pointer rounded-md -mx-1 px-1 text-[14px] font-semibold tabular-nums text-indigo-700 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                                  : "text-[14px] font-semibold tabular-nums text-slate-600"
+                              }
+                            >
+                              {formatComparisonValue(row.previous, row.type)}
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
