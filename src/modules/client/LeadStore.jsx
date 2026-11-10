@@ -3531,6 +3531,14 @@ export default function LeadStore({
       key,
       label: initialDashboardFilter?.label || "Dashboard Leads",
     });
+    // Period scoping comes from the global workspace year (set by the caller),
+    // which re-fetches this list for that year. An optional status narrows it
+    // further so the drill-down matches a status-specific KPI exactly.
+    const drillStatus = String(initialDashboardFilter?.status || "").trim();
+    setFilters((prev) => ({
+      ...prev,
+      status: drillStatus || "",
+    }));
     onInitialDashboardFilterApplied?.();
   }, [initialDashboardFilter]);
 
