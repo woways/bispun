@@ -211,3 +211,33 @@ Controlled main-merge + Production deployment checklist (for PR #13):
 ---
 
 *Items flagged 🔴/🟠/🟡 correspond to known defects/gaps in the roadmap; they are expected to FAIL until fixed. Everything else is "verify no regression." This checklist was authored from static review + automated checks; the manual sections were not executed during the audit.*
+
+---
+
+## PR #13 ↔ latest main — isolated integration (2026-11-10)
+
+**Branch:** `integration/pr13-main-20261110` (worktree `S:/Bispun-pr13-integration`), pushed. **Not merged to main; main untouched.**
+- Base: `origin/main` = `29283ec` (PRs #14 lead-store, #15/#16 finance, utm-leads — 8 commits since the `c618261` fork). Feature `e5e05d6` merged in → **no conflicts** (git auto-merged the 4 overlapping files — schema.prisma, clientAnalytics.js, clientLeadStore.js, ClientPortal.jsx — in non-overlapping hunks).
+- **Verified on the integrated candidate:** `prisma validate` ✅ · `npm test` **86/86** ✅ · `npm run build` ✅ · all merged server files `node --check` ✅. Schema keeps BOTH sides (AccountDeletionRequest + main's leadNumber/preferredColleges/influencerName). Android native unchanged from the feature branch.
+- **Migration collision resolved:** main shipped `0003_add_utm_influencer_name`, `0004_add_lead_types_and_preferred_colleges`, `0005_add_stable_lead_number`, `0006_add_lead_dataset_duplicate_details`; my two were renumbered to `0007_DRAFT_add_calendar_event_visibility` and `0008_add_account_deletion_request`.
+
+### Migration sequencing / deployment dependency matrix (for a future approved release)
+| Migration | Dev | Prod | Notes |
+|---|---|---|---|
+| 0002 designation/level | applied | present (verified) | — |
+| 0003 utm influencer name | pending | pending | from main |
+| 0004 lead types + preferred colleges | pending | pending | from main |
+| 0005 stable lead number | pending | pending | from main; has `@@unique([companyId, leadNumber])` |
+| 0006 lead dataset duplicate details | pending | pending | from main |
+| 0007 calendar visibility (DRAFT) | NOT applied | NOT applied | HOLD |
+| 0008 account deletion request | applied (Dev) | NOT applied | Prod HOLD |
+- **Apply order (Prod, when approved):** 0003→0004→0005→0006→0008 (0007 stays on HOLD). Each is additive. Account-deletion endpoint is guarded: without 0008 in Prod it returns an honest failure (never a false "accepted") and authenticated requests still record via AuditLog.
+- **Frontend:** needs real HTTPS `VITE_API_URL`; `/data-deletion` public page must be reachable. **Backend:** additive/backward-compatible; new account-deletion routes optional for existing flows. **Android:** native unchanged; release build needs HTTPS API URL + keystore.properties.
+
+### Release checklist (blockers)
+- 🔴 Prod migrations 0003–0006 + 0008 not applied (gated). 🔴 Signed AAB needs operator keystore password. 🔴 Account-deletion FULFILLMENT (actual deletion) not implemented (gated). 🔴 Production deploy on HOLD. 🟡 PR #13 behind main — this integration branch is the tested merge candidate. 🟡 Play listing assets + deletion URL deploy.
+
+### Branch inventory (Phase 9 — nothing deleted)
+- KEEP (worktree): feat/bispun-audit-fixes-mobile-completion, integration/mui-yc, integration/pr13-main-20261110, release/android-signing-prep, feat/referrals-integration.
+- KEEP (unmerged/unique): feat/bispun-audit-fixes-mobile-completion (open PR #13), finance-changes, rc/android-signed-20261109, integration/pr13-main-20261110.
+- ELIGIBLE after approval (fully merged to main, no worktree): feat/admissions-notifications-calendar, feat/mobile-ui-optimization, hotfix/prod-login-coldstart (hotfix — confirm before removing).
