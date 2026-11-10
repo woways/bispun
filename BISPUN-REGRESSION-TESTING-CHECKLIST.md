@@ -259,3 +259,12 @@ Controlled main-merge + Production deployment checklist (for PR #13):
 3. **Dev:** `0002` and `0008`(≡ old 0004) already applied; main's `0003–0006` are **not** applied to Dev yet (Dev `Lead` lacks `leadNumber`/`preferredColleges`/`influencerName`) — apply them to Dev when ready to test main's features locally.
 4. **Add a `prisma/MIGRATIONS.md` ledger** (recommended, not created here) recording which numbered SQL is applied per environment, since no tool tracks it. This is the durable fix for the numbering-collision class of problem.
 5. Verify-after-apply (per env): the expected columns/tables exist; `prisma generate`; app `/api/health` + Users&Roles + account-deletion persist smoke checks.
+
+---
+
+## 2026-11-10 consolidation run (see BISPUN-FINAL-CONSOLIDATION-REPORT-20261110.md)
+On `rc/consolidated-release-20261110` (`3c8ed47`): `npx prisma validate` valid · `npm test`
+**86/86 pass** · `npm run build` OK · Android `assembleDebug` **BUILD SUCCESSFUL** (host);
+debug APK byte-identical to the Pixel_6 launch-tested build (login + backend-401 + no crash).
+Signed AAB **blocked** on operator keystore. **Main merge held** at the production-deployment
+gate; `main` unchanged at `29283ec`. Full authenticated device QA on this build: **not run**.

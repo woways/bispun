@@ -63,3 +63,15 @@ Legend: ✅ protected · 🔵 active/under review · 🟢 keep (rollback) · �
 
 ## When to delete a branch (safety checklist)
 Delete only when **all** are true: fully merged into `main` · no unique commits · no open PR · not attached to a worktree · no one actively using it · not a needed backup/rollback/release branch. If any is uncertain → **keep it and ask**.
+
+---
+
+## 2026-11-10 consolidation (see BISPUN-FINAL-CONSOLIDATION-REPORT-20261110.md)
+Release candidate: **`rc/consolidated-release-20261110`** (`3c8ed47`+docs) = `origin/main`
+`29283ec` + PR#13 + fail-closed Android signing. Pushed to origin.
+- **Main merge HELD** at the production-deployment gate (push to `main` auto-deploys Vercel +
+  Render). `main` unchanged at `29283ec`.
+- **Branch cleanup HELD** (gated on merge). No branch deleted. Recovery refs pushed:
+  `backup/pre-consolidation/*-20261110` tags + `feat/client-admin-password-reset` (was local-only).
+- Unique un-merged work preserved & flagged: `feat/client-admin-password-reset` (`0084f2d`,
+  SuperAdmin password-reset, dev-only) — decision pending on inclusion.
