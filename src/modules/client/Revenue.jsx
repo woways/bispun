@@ -1225,6 +1225,7 @@ function RevenueMetric({
   detail,
   tone = "indigo",
   featured = false,
+  onClick,
 }) {
   const tones = {
     indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
@@ -1234,12 +1235,22 @@ function RevenueMetric({
     slate: "bg-slate-50 text-slate-600 border-slate-200",
   };
 
+  const clickable = typeof onClick === "function";
+  const Wrapper = clickable ? "button" : "div";
+
   return (
-    <div
-      className={`border rounded-xl p-4 transition-all ${
+    <Wrapper
+      type={clickable ? "button" : undefined}
+      onClick={clickable ? onClick : undefined}
+      aria-label={clickable ? `${label} — view details` : undefined}
+      className={`group block w-full text-left border rounded-xl p-4 transition-all ${
         featured
           ? "bg-indigo-600 border-indigo-600 shadow-[0_10px_30px_rgba(79,70,229,0.16)]"
           : "bg-white border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
+      } ${
+        clickable
+          ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2"
+          : ""
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -1273,13 +1284,199 @@ function RevenueMetric({
       </div>
 
       <div
-        className={`mt-3 pt-3 border-t text-[13px] leading-5 ${
+        className={`mt-3 pt-3 border-t text-[13px] leading-5 flex items-center justify-between gap-2 ${
           featured
             ? "border-white/20 text-indigo-100"
             : "border-slate-100 text-slate-500"
         }`}
       >
-        {detail}
+        <span className="min-w-0">{detail}</span>
+        {clickable ? (
+          <span
+            className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-bold ${
+              featured ? "text-indigo-100" : "text-indigo-600"
+            }`}
+          >
+            View
+            <ArrowUpRight
+              size={12}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </span>
+        ) : null}
+      </div>
+    </Wrapper>
+  );
+}
+
+/* =========================================================
+   KPI drill-down modal (reusable) + column presets
+========================================================= */
+
+const ADMISSION_COLUMNS = [
+  { key: "studentName", label: "Student", strong: true, render: (r) => r.studentName || "—" },
+  { key: "college", label: "College", render: (r) => r.college || "—" },
+  { key: "counsellorName", label: "Counsellor", render: (r) => r.counsellorName || "Unassigned" },
+  { key: "totalFee", label: "Total fee", align: "right", render: (r) => money(r.totalFee) },
+  { key: "paidAmount", label: "Received", align: "right", render: (r) => money(r.paidAmount) },
+  { key: "pendingAmount", label: "Pending", align: "right", render: (r) => money(r.pendingAmount) },
+];
+
+const EXPENSE_COLUMNS = [
+  { key: "title", label: "Title", strong: true, render: (r) => r.title || r.category || "—" },
+  { key: "category", label: "Category", render: (r) => r.category || "—" },
+  { key: "vendorName", label: "Vendor", render: (r) => r.vendorName || "—" },
+  { key: "expenseDate", label: "Date", render: (r) => formatUiDate(r.expenseDate) },
+  { key: "amount", label: "Amount", align: "right", render: (r) => money(r.amount) },
+];
+
+const INCENTIVE_COLUMNS = [
+  { key: "employeeName", label: "Employee", strong: true, render: (r) => r.employeeName || "—" },
+  { key: "title", label: "For", render: (r) => r.title || r.admission?.studentName || "—" },
+  { key: "incentiveDate", label: "Date", render: (r) => formatUiDate(r.incentiveDate) },
+  { key: "status", label: "Status", render: (r) => r.status || "—" },
+  { key: "amount", label: "Amount", align: "right", render: (r) => money(r.amount) },
+];
+
+const RISK_COLUMNS = [
+  { key: "studentName", label: "Student", strong: true, render: (r) => r.studentName || "—" },
+  { key: "college", label: "College", render: (r) => r.college || "—" },
+  { key: "counsellorName", label: "Counsellor", render: (r) => r.counsellorName || "Unassigned" },
+  { key: "ageDays", label: "Age", align: "right", render: (r) => `${Number(r.ageDays || 0)} d` },
+  { key: "pendingAmount", label: "Pending", align: "right", render: (r) => money(r.pendingAmount) },
+];
+
+const LEAD_COLUMNS = [
+  { key: "leadName", label: "Lead", strong: true, render: (r) => r.leadName || r.studentName || "—" },
+  { key: "assignedToName", label: "Owner", render: (r) => r.assignedToName || "Unassigned" },
+  { key: "conversionChance", label: "Chance", render: (r) => r.conversionChance || "—" },
+  { key: "score", label: "Score", align: "right", render: (r) => (r.score ?? "—") },
+  { key: "nextBestAction", label: "Next best action", render: (r) => r.nextBestAction || "—" },
+];
+
+const PROFIT_COLUMNS = [
+  { key: "label", label: "Component", strong: true, render: (r) => r.label },
+  {
+    key: "amount",
+    label: "Amount",
+    align: "right",
+    render: (r) => `${r.sign ? `${r.sign} ` : ""}${money(r.amount)}`,
+  },
+];
+
+function DrilldownModal({
+  open,
+  title,
+  subtitle,
+  note,
+  columns = [],
+  records = [],
+  emptyText = "No records found.",
+  onClose,
+}) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  if (!open) return null;
+
+  const rows = Array.isArray(records) ? records : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={onKeyDown}
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-bold text-slate-900">{title}</h2>
+            {subtitle ? (
+              <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {note ? (
+          <div className="border-b border-slate-100 bg-slate-50 px-5 py-3 text-[13px] leading-5 text-slate-600">
+            {note}
+          </div>
+        ) : null}
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {rows.length ? (
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
+                <tr>
+                  {columns.map((c) => (
+                    <th
+                      key={c.key}
+                      className={`px-4 py-2.5 ${
+                        c.align === "right" ? "text-right" : "text-left"
+                      }`}
+                    >
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, i) => (
+                  <tr key={r.id || i} className="hover:bg-slate-50/70">
+                    {columns.map((c) => (
+                      <td
+                        key={c.key}
+                        className={`px-4 py-2.5 align-top ${
+                          c.align === "right"
+                            ? "text-right tabular-nums"
+                            : "text-left"
+                        } ${
+                          c.strong
+                            ? "font-semibold text-slate-900"
+                            : "text-slate-600"
+                        }`}
+                      >
+                        {c.render ? c.render(r) : r[c.key] ?? "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-5 py-12 text-center text-[13px] text-slate-500">
+              {emptyText}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+          <span className="text-[12px] font-semibold text-slate-500">
+            {rows.length.toLocaleString("en-IN")} record
+            {rows.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 rounded-lg bg-slate-900 px-3.5 text-[12px] font-bold text-white hover:bg-slate-800"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1332,8 +1529,30 @@ function LeakageRadarView({ radar }) {
     slate: "border-slate-200 bg-slate-50 text-slate-700",
   };
 
+  const [drill, setDrill] = useState(null);
+
+  const openRisk = (cat) => {
+    const items = Array.isArray(cat.data?.items) ? cat.data.items : [];
+    setDrill({
+      title: cat.title,
+      subtitle: cat.subtitle,
+      columns: cat.key === "leads" ? LEAD_COLUMNS : RISK_COLUMNS,
+      records: items,
+      emptyText: "No cases in this category.",
+    });
+  };
+
   return (
     <div className="space-y-4">
+      <DrilldownModal
+        open={!!drill}
+        title={drill?.title}
+        subtitle={drill?.subtitle}
+        columns={drill?.columns || []}
+        records={drill?.records || []}
+        emptyText={drill?.emptyText}
+        onClose={() => setDrill(null)}
+      />
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1363,7 +1582,12 @@ function LeakageRadarView({ radar }) {
 
         <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
           {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
-            <div key={key} className="bg-white p-4">
+            <button
+              key={key}
+              type="button"
+              onClick={() => openRisk({ key, title, subtitle, data })}
+              className="group bg-white p-4 text-left w-full transition-colors hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-inset"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[13px] font-bold text-slate-900">{title}</div>
@@ -1386,24 +1610,34 @@ function LeakageRadarView({ radar }) {
                   </div>
                 ) : null}
               </div>
-            </div>
+
+              <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100">
+                View all records
+                <ArrowUpRight size={12} />
+              </div>
+            </button>
           ))}
         </div>
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {categories.map(({ key, title, data }) => {
+        {categories.map(({ key, title, subtitle, data }) => {
           const items = Array.isArray(data.items) ? data.items : [];
+          const totalCount = Number(data.count || 0);
           return (
-            <section key={`list-${key}`} className="rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+            <section key={`list-${key}`} className="flex flex-col rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                 <div>
                   <h3 className="text-[14px] font-bold text-slate-900">{title}</h3>
                   <p className="mt-0.5 text-[12px] text-slate-500">Top priority cases</p>
                 </div>
-                <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
-                  {Number(data.count || 0).toLocaleString("en-IN")}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => openRisk({ key, title, subtitle, data })}
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-200"
+                >
+                  {totalCount.toLocaleString("en-IN")}
+                </button>
               </div>
 
               {items.length ? (
@@ -1443,6 +1677,17 @@ function LeakageRadarView({ radar }) {
                   No cases in this category.
                 </div>
               )}
+
+              {totalCount > 5 ? (
+                <button
+                  type="button"
+                  onClick={() => openRisk({ key, title, subtitle, data })}
+                  className="mt-auto flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-2.5 text-[12px] font-bold text-indigo-600 hover:bg-indigo-50"
+                >
+                  View all {totalCount.toLocaleString("en-IN")} cases
+                  <ArrowUpRight size={13} />
+                </button>
+              ) : null}
             </section>
           );
         })}
@@ -1463,6 +1708,9 @@ export default function Revenue({
 }) {
   const [tab, setTab] =
     useState("overview");
+
+  // Overview KPI card drill-down (click a card → see the records behind it).
+  const [kpiDrill, setKpiDrill] = useState(null);
 
   const [dashboardMetricData, setDashboardMetricData] = useState(null);
   const [dashboardMetricLoading, setDashboardMetricLoading] = useState(false);
@@ -1955,8 +2203,52 @@ export default function Revenue({
   const summary =
     data.summary || {};
 
+  // ---- Record sets powering the overview KPI drill-downs ----
+  const admissionsBreakdown = Array.isArray(data.admissionsBreakdown)
+    ? data.admissionsBreakdown
+    : [];
+  const expenseRecords = Array.isArray(data.expenses) ? data.expenses : [];
+  const incentiveRecords = Array.isArray(data.incentives) ? data.incentives : [];
+
+  const inBucketAdmissions = admissionsBreakdown.filter(
+    (a) => a.revenueStatus === "IN_BUCKET"
+  );
+  const bufferAdmissions = admissionsBreakdown.filter(
+    (a) => a.revenueStatus === "BUFFER_ZONE"
+  );
+  const receivedAdmissions = admissionsBreakdown
+    .filter((a) => Number(a.paidAmount || 0) > 0)
+    .slice()
+    .sort((a, b) => Number(b.paidAmount || 0) - Number(a.paidAmount || 0));
+  const pendingAdmissions = admissionsBreakdown
+    .filter((a) => Number(a.pendingAmount || 0) > 0)
+    .slice()
+    .sort((a, b) => Number(b.pendingAmount || 0) - Number(a.pendingAmount || 0));
+  const approvedExpenseRecords = expenseRecords.filter(
+    (e) => e.status === "APPROVED"
+  );
+
+  const profitComponents = [
+    { id: "received", label: "Received amount", amount: Number(summary.receivedAmount || 0), sign: "+" },
+    { id: "expenses", label: "Approved expenses", amount: Number(summary.approvedExpenses || 0), sign: "−" },
+    { id: "incentives", label: "Incentives paid", amount: Number(summary.totalIncentives || 0), sign: "−" },
+    { id: "profit", label: "Current profit", amount: Number(summary.currentProfit || 0) },
+  ];
+
+  const openKpi = (config) => setKpiDrill(config);
+
   return (
     <div className="space-y-4">
+      <DrilldownModal
+        open={!!kpiDrill}
+        title={kpiDrill?.title}
+        subtitle={kpiDrill?.subtitle}
+        note={kpiDrill?.note}
+        columns={kpiDrill?.columns || []}
+        records={kpiDrill?.records || []}
+        emptyText={kpiDrill?.emptyText}
+        onClose={() => setKpiDrill(null)}
+      />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -2101,13 +2393,22 @@ export default function Revenue({
             </section>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
               icon={UserCheck}
               detail="Admissions included in revenue"
               tone="slate"
+              onClick={() =>
+                openKpi({
+                  title: "Total Admissions",
+                  subtitle: "Every admission counted in revenue",
+                  columns: ADMISSION_COLUMNS,
+                  records: admissionsBreakdown,
+                  emptyText: "No admissions found.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2116,6 +2417,18 @@ export default function Revenue({
               icon={TrendingUp}
               detail="Total admission revenue value"
               tone="indigo"
+              onClick={() =>
+                openKpi({
+                  title: "Total Potential Revenue",
+                  subtitle: "Admissions contributing to potential revenue",
+                  note: `Total potential revenue = sum of every admission's total fee = ${money(
+                    summary.potentialRevenue
+                  )}`,
+                  columns: ADMISSION_COLUMNS,
+                  records: admissionsBreakdown,
+                  emptyText: "No admissions found.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2124,6 +2437,18 @@ export default function Revenue({
               icon={CircleDollarSign}
               detail="Admission value currently in bucket"
               tone="emerald"
+              onClick={() =>
+                openKpi({
+                  title: "In Bucket Revenue",
+                  subtitle: "Admissions currently classified as In Bucket",
+                  note: `In-bucket revenue = total fee of admissions with status In Bucket = ${money(
+                    summary.inBucketRevenue
+                  )}`,
+                  columns: ADMISSION_COLUMNS,
+                  records: inBucketAdmissions,
+                  emptyText: "No in-bucket admissions.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2132,6 +2457,18 @@ export default function Revenue({
               icon={Clock}
               detail="Admission value currently classified as buffer revenue"
               tone="amber"
+              onClick={() =>
+                openKpi({
+                  title: "Buffer Revenue",
+                  subtitle: "Admissions currently classified as Buffer",
+                  note: `Buffer revenue = total fee of admissions with status Buffer = ${money(
+                    summary.bufferRevenue
+                  )}`,
+                  columns: ADMISSION_COLUMNS,
+                  records: bufferAdmissions,
+                  emptyText: "No buffer admissions.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2140,6 +2477,15 @@ export default function Revenue({
               icon={Receipt}
               detail="Approved operating costs"
               tone="rose"
+              onClick={() =>
+                openKpi({
+                  title: "Approved Expenses",
+                  subtitle: "Expense records with status Approved",
+                  columns: EXPENSE_COLUMNS,
+                  records: approvedExpenseRecords,
+                  emptyText: "No approved expenses.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2148,6 +2494,15 @@ export default function Revenue({
               icon={Award}
               detail="Approved and paid employee incentives"
               tone="slate"
+              onClick={() =>
+                openKpi({
+                  title: "Total Incentive Amount",
+                  subtitle: "Approved and paid employee incentives",
+                  columns: INCENTIVE_COLUMNS,
+                  records: incentiveRecords,
+                  emptyText: "No incentive records.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2156,6 +2511,15 @@ export default function Revenue({
               icon={DollarSign}
               detail="Collections received"
               tone="emerald"
+              onClick={() =>
+                openKpi({
+                  title: "Received Amount",
+                  subtitle: "Admissions that have collected part or all of their fee",
+                  columns: ADMISSION_COLUMNS,
+                  records: receivedAdmissions,
+                  emptyText: "No collections received yet.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2164,6 +2528,15 @@ export default function Revenue({
               icon={Clock}
               detail="Outstanding collections"
               tone="amber"
+              onClick={() =>
+                openKpi({
+                  title: "Pending Amount",
+                  subtitle: "Admissions with an outstanding balance",
+                  columns: ADMISSION_COLUMNS,
+                  records: pendingAdmissions,
+                  emptyText: "No pending collections.",
+                })
+              }
             />
 
             <RevenueMetric
@@ -2172,15 +2545,27 @@ export default function Revenue({
               icon={ArrowUpRight}
               detail="Received less approved expenses and incentives"
               featured
+              onClick={() =>
+                openKpi({
+                  title: "Current Profit",
+                  subtitle: "How the profit figure is built",
+                  note: `Current Profit = Received amount − Approved expenses − Incentives paid = ${money(
+                    summary.currentProfit
+                  )}`,
+                  columns: PROFIT_COLUMNS,
+                  records: profitComponents,
+                  emptyText: "No data.",
+                })
+              }
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] inline-flex gap-1">
+          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-wrap gap-1">
             {[
               ["overview", "Overview"],
               ["leakage", "At-Risk Revenue"],
               ["expenses", "Expenses"],
-              ["collegeSlabs", "College Revenue"],
+              ["collegeSlabs", "College Revenue / College Slab"],
               ["staffIncentives", "Employee Incentives"],
             ]
               .filter(
