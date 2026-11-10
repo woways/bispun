@@ -1481,7 +1481,7 @@ export default function Dashboard({
                           <div className="text-center">
                             <div className="text-[20px] font-bold tracking-[-0.04em] text-slate-950">
                               {
-                                summary.totalLeads ||
+                                data.leadsBySourceTotal ??
                                 data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
                               }
                             </div>
@@ -1494,7 +1494,7 @@ export default function Dashboard({
 
                       <p className="sr-only">
                         {`Total ${
-                          summary.totalLeads ||
+                          data.leadsBySourceTotal ??
                           data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
                         } leads for the period.`}
                       </p>

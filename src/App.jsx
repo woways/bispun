@@ -9,6 +9,7 @@ const ClientPortal = lazy(() => import("./ClientPortal"));
 const SuperAdmin = lazy(() => import("./SuperAdmin"));
 const PayPage = lazy(() => import("./PayPage"));
 const SignupPage = lazy(() => import("./SignupPage"));
+const DataDeletion = lazy(() => import("./DataDeletion"));
 
 function SkeletonBlock({ className = "" }) {
   return (
@@ -601,6 +602,11 @@ export default function App() {
         <Route
           path="/signup/:plan"
           element={<SignupPage />}
+        />
+
+        <Route
+          path="/data-deletion"
+          element={<DataDeletion />}
         />
 
         <Route

@@ -5,6 +5,8 @@ import {
   useState,
 } from "react";
 
+import AccountDeletionSection from "../../components/client/AccountDeletionSection";
+
 import {
   Building,
   Palette,
@@ -2664,6 +2666,8 @@ export default function SettingsView({
                   </div>
                 </div>
               </div>
+
+              <AccountDeletionSection />
             </div>
           )}
 
