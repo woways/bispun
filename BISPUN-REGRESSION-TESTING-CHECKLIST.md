@@ -241,3 +241,21 @@ Controlled main-merge + Production deployment checklist (for PR #13):
 - KEEP (worktree): feat/bispun-audit-fixes-mobile-completion, integration/mui-yc, integration/pr13-main-20261110, release/android-signing-prep, feat/referrals-integration.
 - KEEP (unmerged/unique): feat/bispun-audit-fixes-mobile-completion (open PR #13), finance-changes, rc/android-signed-20261109, integration/pr13-main-20261110.
 - ELIGIBLE after approval (fully merged to main, no worktree): feat/admissions-notifications-calendar, feat/mobile-ui-optimization, hotfix/prod-login-coldstart (hotfix — confirm before removing).
+
+### Migration-history reconciliation (audited 2026-11-10)
+**How this repo tracks/applies migrations (audit result):**
+- **No `prisma/migrations/` directory.** `prisma.config.ts` points `migrations.path` at `prisma/migrations`, but that folder does not exist — so Prisma **migrate** (tracked history) is NOT in use.
+- package.json has only `prisma:generate` and `prisma:push` (**`prisma db push`**), no `migrate deploy`. `db push` does **not** create/use a `_prisma_migrations` table.
+- **Nothing in code discovers or runs** `prisma/pending-migrations/*.sql` (grep clean). They are **manual, hand-applied** scripts; `prisma/manual/` holds more of the same. Their numeric filenames are **human bookkeeping only** — no tool keys off them.
+- (Live Dev `_prisma_migrations` confirm deferred — Neon dev compute was suspended/unreachable at audit time; the repo evidence above is conclusive regardless.)
+
+**Why the 0004→0008 rename is safe:**
+- Dev already has the `AccountDeletionRequest` table (applied by hand from the file formerly numbered 0004). The renamed `0008_add_account_deletion_request.sql` is **byte-identical additive SQL** (`CREATE TABLE IF NOT EXISTS` + indexes) → re-running is **idempotent (no-op)**; no duplicate application, no schema drift.
+- Because nothing auto-discovers filenames, the rename causes **no re-application** and **no history inconsistency**. The only risk is *human* ("which 0004?"); the rename removes that ambiguity by aligning with main's 0003–0006.
+
+**Reconciliation / safe apply plan (all HOLD until separately approved — do NOT run now):**
+1. Treat `schema.prisma` as the schema source of truth (the `db push` model). The pending-migration SQL files are the hand-apply path the team actually uses.
+2. **Prod apply order (additive, each idempotent):** `0003_utm_influencer_name` → `0004_lead_types_and_preferred_colleges` → `0005_stable_lead_number` → `0006_lead_dataset_duplicate_details` → `0008_add_account_deletion_request`. **Skip `0007` (calendar visibility — HOLD).** Do **not** re-apply `0002` (already present in Prod).
+3. **Dev:** `0002` and `0008`(≡ old 0004) already applied; main's `0003–0006` are **not** applied to Dev yet (Dev `Lead` lacks `leadNumber`/`preferredColleges`/`influencerName`) — apply them to Dev when ready to test main's features locally.
+4. **Add a `prisma/MIGRATIONS.md` ledger** (recommended, not created here) recording which numbered SQL is applied per environment, since no tool tracks it. This is the durable fix for the numbering-collision class of problem.
+5. Verify-after-apply (per env): the expected columns/tables exist; `prisma generate`; app `/api/health` + Users&Roles + account-deletion persist smoke checks.
