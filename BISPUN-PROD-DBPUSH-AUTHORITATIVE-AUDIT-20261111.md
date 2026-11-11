@@ -1,3 +1,10 @@
+> **⚠️ SUPERSEDED (see BISPUN-PROD-SCHEMA-CORRECTED-FINDING-20261111.md):** §2 below assumed prod
+> `Lead.leadNumber` might be NOT NULL and that db push would DROP NOT NULL. Operator read-only SQL
+> on 2026-11-11 proved the column is **MISSING entirely** (0005 never applied). The real next db
+> push therefore **ADDs a nullable `leadNumber` + unique index with no backfill/trigger** (feature
+> dead, no data loss) — not a DROP NOT NULL. Use the corrected doc for the verdict and the required
+> SQL (apply `0005P_prod_stable_lead_number_nullable.sql`).
+
 # Bispun — Authoritative Production `db push` Audit (2026-11-11)
 
 Corrects/extends `BISPUN-DBPUSH-IMPACT-AUDIT-20261111.md`. The main→RC diff is **not** proof of

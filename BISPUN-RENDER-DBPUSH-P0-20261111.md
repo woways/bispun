@@ -1,3 +1,9 @@
+> **⚠️ UPDATE (see BISPUN-PROD-SCHEMA-CORRECTED-FINDING-20261111.md):** the deployment-mechanism P0
+> here (Render build runs `prisma db push`) stands. But the `leadNumber` row in the table below
+> ("prod = NOT NULL → db push DROPs NOT NULL") is **wrong**: prod `Lead.leadNumber` is **MISSING**
+> (verified 2026-11-11), so db push would **ADD a nullable column + index** (no trigger/backfill),
+> leaving the feature non-functional. Fix by applying `0005P` first. Use the corrected doc.
+
 # Bispun — P0 CORRECTION: Render runs `prisma db push` on every deploy (2026-11-11)
 
 **Supersedes** the earlier statement in `BISPUN-RELEASE-GATE-REPORT-20261110.md` and

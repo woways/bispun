@@ -1,3 +1,9 @@
+> **⚠️ SUPERSEDED (see BISPUN-PROD-SCHEMA-CORRECTED-FINDING-20261111.md):** the `leadNumber`
+> section assumed prod has the column as NOT NULL. Operator-verified 2026-11-11: prod
+> `Lead.leadNumber` is **MISSING**. The main→RC diff here is correct for `AccountDeletionRequest`
+> but does not capture the `leadNumber` ADD COLUMN + index that the real prod→RC db push emits.
+> Use the corrected doc.
+
 # Bispun — `prisma db push` Impact Audit for this release (2026-11-11)
 
 Evidence-based audit of what Render's `prisma db push` would do to Production on an RC→main merge.
