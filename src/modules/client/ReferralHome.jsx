@@ -152,11 +152,13 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
   }
 
   const steps = [
-    { key: "link", label: "Referral link", value: "Share to start" },
-    { key: "referred", label: "Referred", value: `${referred.length} joined` },
-    { key: "earned", label: "Earned", value: money(earned) },
-    { key: "credited", label: "Credited", value: money(credited) },
+    { key: "link", label: "Referral link", value: "Share to start", icon: Link2, done: Boolean(code) },
+    { key: "referred", label: "Referred", value: `${referred.length} joined`, icon: Users, done: referred.length > 0 },
+    { key: "earned", label: "Earned", value: money(earned), icon: BadgeIndianRupee, done: earned > 0 },
+    { key: "credited", label: "Credited", value: money(credited), icon: Wallet, done: credited > 0 },
   ];
+  // First not-yet-done stage = the "current" step in the journey.
+  const currentStepIndex = steps.findIndex((s) => !s.done);
 
   return (
     <div className="space-y-5 cb-fade-in">
@@ -184,26 +186,56 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         </div>
       </div>
 
-      {/* JOURNEY STEPPER */}
+      {/* JOURNEY STEPPER — premium 4-stage cards with completed / current /
+          upcoming states. State is conveyed by icon + text, never colour alone. */}
       <nav aria-label="Referral journey">
-        <ol className="flex flex-wrap gap-2 sm:gap-3">
-          {steps.map((step, i) => (
-            <li key={step.key} className="flex-1 basis-[150px]">
-              <button
-                type="button"
-                onClick={() => goToStage(step.key)}
-                className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-3 text-left shadow-sm transition hover:border-indigo-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-              >
-                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-indigo-600 text-[12px] font-bold text-white">
-                  {i + 1}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-semibold text-slate-900">{step.label}</span>
-                  <span className="block truncate text-[12px] text-slate-500">{step.value}</span>
-                </span>
-              </button>
-            </li>
-          ))}
+        <ol className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+          {steps.map((step, i) => {
+            const Icon = step.icon;
+            const isCurrent = i === currentStepIndex;
+            const stateText = step.done ? "completed" : isCurrent ? "current step" : "upcoming";
+            return (
+              <li key={step.key}>
+                <button
+                  type="button"
+                  onClick={() => goToStage(step.key)}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    step.done
+                      ? "border-indigo-200 bg-indigo-50/50"
+                      : isCurrent
+                      ? "border-indigo-300 bg-white ring-1 ring-indigo-200"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <span
+                    className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+                      step.done || isCurrent ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    {step.done && (
+                      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white ring-2 ring-white">
+                        <Check size={10} aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-slate-900">
+                      {step.label}
+                      {isCurrent && (
+                        <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                          Now
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-slate-500">{step.value}</span>
+                    <span className="sr-only"> — {stateText}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       </nav>
 
@@ -285,8 +317,23 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         <p className="mt-1 text-[13px] text-slate-500">Businesses that signed up for Bispun CRM using your link.</p>
 
         {referred.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-[13px] text-slate-500">
-            No referrals yet. Share your link to get started.
+          <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-500">
+              <Users size={22} aria-hidden="true" />
+            </span>
+            <div className="mt-3 text-[14px] font-semibold text-slate-800">No referrals yet</div>
+            <p className="mt-1 max-w-xs text-[12.5px] text-slate-500">
+              Share your referral link — businesses that sign up with it will appear here.
+            </p>
+            <button
+              type="button"
+              onClick={() => copy(link, "link", "Referral link")}
+              disabled={!link}
+              className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Link2 size={15} aria-hidden="true" />
+              Copy referral link
+            </button>
           </div>
         ) : (
           <ul className="mt-3 divide-y divide-slate-100">

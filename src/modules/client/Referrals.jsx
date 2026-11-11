@@ -88,11 +88,15 @@ export default function Referrals({ currentUser }) {
         </div>
       </div>
 
-      {tab === "program" && (
-        <ReferralHome currentUser={currentUser} code={code} rewardProgram={rewardProgram} />
-      )}
-
-      {tab === "leads" && <MyReferrals currentUser={currentUser} />}
+      {/* Keyed wrapper gives a smooth, reduced-motion-safe fade on tab switch
+          (cb-fade-in is guarded by prefers-reduced-motion in index.css). */}
+      <div key={tab} className="cb-fade-in">
+        {tab === "program" ? (
+          <ReferralHome currentUser={currentUser} code={code} rewardProgram={rewardProgram} />
+        ) : (
+          <MyReferrals currentUser={currentUser} />
+        )}
+      </div>
     </div>
   );
 }
