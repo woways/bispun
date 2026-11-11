@@ -7,6 +7,8 @@ import {
   getReferralRewardSummary,
   getReferralCreditState,
   resolveCreditAmount,
+  isEarnedStatus,
+  EARNED_STATUSES,
 } from "../lib/referralRewards.js";
 import { createReferralCreditedNotification } from "../lib/notifications.js";
 
@@ -118,7 +120,7 @@ router.get("/", async (req, res) => {
     }
 
     const referrers = Array.from(grouped.values()).map((entry) => {
-      const earned = entry.referrals.filter((item) => item.status === "EARNED");
+      const earned = entry.referrals.filter((item) => isEarnedStatus(item.status));
       const summary = getReferralRewardSummary(earned.length);
       const userPayouts = payoutRequests.filter((item) => item.referrerId === entry.referrer.id);
       const payouts = payoutBreakdown(summary.totalEarnings, userPayouts);
@@ -155,7 +157,7 @@ router.get("/", async (req, res) => {
       };
     });
 
-    const totalSuccessful = rows.filter((row) => row.status === "EARNED").length;
+    const totalSuccessful = rows.filter((row) => isEarnedStatus(row.status)).length;
     const totalRewards = referrers.reduce(
       (sum, item) => sum + Number(item.summary.totalEarnings || 0),
       0
@@ -229,7 +231,7 @@ router.post("/credit", async (req, res) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${referrerId}))`;
 
       const [successfulCount, creditedAmount, reservedAmount] = await Promise.all([
-        tx.crmReferral.count({ where: { referrerId, status: "EARNED" } }),
+        tx.crmReferral.count({ where: { referrerId, status: { in: EARNED_STATUSES } } }),
         sumCreditedAmount(tx, referrerId),
         sumReservedAmount(tx, referrerId),
       ]);
@@ -333,7 +335,7 @@ router.patch("/payouts/:id", async (req, res) => {
     // used for this referrer).
     if (status === "PAID") {
       const [successfulCount, alreadyPaid] = await Promise.all([
-        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: "EARNED" } }),
+        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: { in: EARNED_STATUSES } } }),
         prisma.referralPayoutRequest.aggregate({
           _sum: { amount: true },
           where: { referrerId: existing.referrerId, status: "PAID" },

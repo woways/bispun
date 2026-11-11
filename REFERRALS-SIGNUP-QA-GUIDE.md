@@ -10,7 +10,7 @@ Lifecycle under test: **Referral link → Referred (verified signup/order starte
 
 | # | Prerequisite | Needed for |
 |---|---|---|
-| 0.1 | Migration **0008** applied to **Dev** DB (`bispun-mobile-dev`), backend restarted | all tests (schema columns) |
+| 0.1 | Referral schema present on **Dev** DB (`bispun-mobile-dev`), backend restarted. Dev already has the original all-in-one 0008 applied (final state). **Production uses the phased split: `0008a` (schema) → deploy dual-status code → `0008b` (backfill) — never the old all-in-one 0008.** | all tests (schema columns) |
 | 0.2 | Dev backend on `.env.development` (`:4000`) + frontend (`:5173`) running | all |
 | 0.3 | A **Client Admin** referrer account + a **Super Admin** account | SC-06/07/08 |
 | 0.4 | **MSG91 test** `MSG91_AUTH_KEY` + `MSG91_OTP_TEMPLATE_ID` on the Dev server | phone OTP (SC-03). Without it, phone OTP returns a clear 503 "Phone OTP is not configured…" → mark SC-03+ **BLOCKED** |

@@ -7,6 +7,7 @@ import {
   getReferralRewardSummary,
   getReferralCreditState,
   CREDIT_EXPECTATION_DAYS,
+  isEarnedStatus,
 } from "../lib/referralRewards.js";
 
 const router = Router();
@@ -146,11 +147,10 @@ router.get("/me", async (req, res) => {
       (r) => !["ADMITTED", "LOST"].includes(r.lead.stage)
     ).length;
 
-    // Rewards (slab/earnings) count EARNED referrals only. REFERRED rows are
+    // Rewards (slab/earnings) count earned referrals only — both new EARNED and
+    // legacy SUCCESSFUL during rollout (see EARNED_STATUSES). REFERRED rows are
     // signed-up-but-not-yet-paid and must not earn money.
-    const earnedRewards = rewardReferrals.filter(
-      (item) => item.status === "EARNED"
-    );
+    const earnedRewards = rewardReferrals.filter((item) => isEarnedStatus(item.status));
     const rewardSummary = getReferralRewardSummary(earnedRewards.length);
     const payoutSummary = buildPayoutSummary(rewardSummary.totalEarnings, payoutRequests);
     // PDF §11 lifecycle: Earned -> Pending credit -> Credited. Credited money is

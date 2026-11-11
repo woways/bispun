@@ -5,6 +5,7 @@ import {
   REFERRAL_SLABS,
   CREDIT_EXPECTATION_DAYS,
   REFERRAL_STATUS,
+  EARNED_STATUSES,
   getReferralRewardSummary,
   getReferralCreditState,
   resolveCreditAmount,
@@ -105,18 +106,54 @@ test("credit expectation window is the PDF 11.5 range", () => {
   assert.deepEqual(CREDIT_EXPECTATION_DAYS, { min: 5, max: 8 });
 });
 
-test("only EARNED referrals count toward rewards, not REFERRED", () => {
-  const rows = [
-    { status: "EARNED" },
-    { status: "REFERRED" },
-    { status: "EARNED" },
-    { status: "referred" },
-  ];
-  assert.equal(countEarned(rows), 2);
+test("earned statuses: both EARNED and legacy SUCCESSFUL count; REFERRED does not", () => {
+  assert.deepEqual(EARNED_STATUSES, ["EARNED", "SUCCESSFUL"]);
   assert.equal(isEarnedStatus("EARNED"), true);
+  assert.equal(isEarnedStatus("SUCCESSFUL"), true);
+  assert.equal(isEarnedStatus("successful"), true); // case-insensitive
   assert.equal(isEarnedStatus("REFERRED"), false);
+  assert.equal(isEarnedStatus(""), false);
   assert.equal(REFERRAL_STATUS.REFERRED, "REFERRED");
   assert.equal(REFERRAL_STATUS.EARNED, "EARNED");
+});
+
+test("SUCCESSFUL and EARNED produce identical earned/slab/credit behavior", () => {
+  // Same count via either status => identical slab, rate, earnings.
+  const legacy = [{ status: "SUCCESSFUL" }, { status: "SUCCESSFUL" }, { status: "SUCCESSFUL" }];
+  const migrated = [{ status: "EARNED" }, { status: "EARNED" }, { status: "EARNED" }];
+  assert.equal(countEarned(legacy), 3);
+  assert.equal(countEarned(migrated), 3);
+  const a = getReferralRewardSummary(countEarned(legacy));
+  const b = getReferralRewardSummary(countEarned(migrated));
+  assert.deepEqual(a, b); // same slab, rate, totalEarnings
+  // Credit state is driven by earnings, so it matches too.
+  assert.deepEqual(
+    getReferralCreditState({ totalEarnings: a.totalEarnings, creditedAmount: 0 }),
+    getReferralCreditState({ totalEarnings: b.totalEarnings, creditedAmount: 0 })
+  );
+});
+
+test("mixed legacy + new referrals: earned counts both, excludes REFERRED (creditable once)", () => {
+  const mixed = [
+    { status: "SUCCESSFUL" }, // legacy earned
+    { status: "EARNED" }, // new earned
+    { status: "REFERRED" }, // signed up, not paid — must NOT earn
+    { status: "SUCCESSFUL" },
+    { status: "REFERRED" },
+  ];
+  assert.equal(countEarned(mixed), 3);
+  const summary = getReferralRewardSummary(countEarned(mixed));
+  assert.equal(summary.successfulCount, 3);
+  assert.equal(summary.totalEarnings, 3 * 2500); // slab 1 rate
+  // Each earned referral is credited exactly once: creditable = earned - credited.
+  assert.equal(
+    getReferralCreditState({ totalEarnings: summary.totalEarnings, creditedAmount: 0 }).pendingCredit,
+    3 * 2500
+  );
+  assert.equal(
+    getReferralCreditState({ totalEarnings: summary.totalEarnings, creditedAmount: 3 * 2500 }).pendingCredit,
+    0
+  );
 });
 
 test("shouldAttributeReferral accepts a valid non-self active referrer", () => {

@@ -5,11 +5,19 @@ export const REFERRAL_SLABS = [
 ];
 
 // Referral lifecycle statuses (PDF §11). REFERRED = verified signup/order started;
-// EARNED = payment captured + account activated. Rewards count EARNED only.
+// EARNED = payment captured + account activated.
 export const REFERRAL_STATUS = { REFERRED: "REFERRED", EARNED: "EARNED" };
 
+// Rollout compatibility: "SUCCESSFUL" is the legacy pre-lifecycle value. Until the
+// 0008b backfill (SUCCESSFUL -> EARNED) runs in every environment, both legacy
+// SUCCESSFUL and new EARNED rows are treated as earned so earnings never drop to
+// zero during deploy. New writes only ever use REFERRED -> EARNED. After the
+// backfill this set still works (no SUCCESSFUL rows remain) and the legacy entry
+// can be dropped later. Used for both in-memory filters and Prisma `in` queries.
+export const EARNED_STATUSES = ["EARNED", "SUCCESSFUL"];
+
 export function isEarnedStatus(status) {
-  return String(status || "").trim().toUpperCase() === REFERRAL_STATUS.EARNED;
+  return EARNED_STATUSES.includes(String(status || "").trim().toUpperCase());
 }
 
 export function countEarned(referrals) {
