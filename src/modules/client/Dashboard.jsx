@@ -1232,7 +1232,7 @@ export default function Dashboard({
                       className="text-indigo-600"
                     />
                     <div className="text-[12px] font-bold uppercase tracking-[0.10em] text-indigo-600">
-                      My Work Overview
+                      My Workspace Overview
                     </div>
                   </div>
 

@@ -22,6 +22,7 @@ import {
   Eye,
   MessageSquareText,
   PhoneCall,
+  ArrowUpRight,
 } from "lucide-react";
 
 import {
@@ -293,6 +294,7 @@ function SupportMetric({
   icon: Icon,
   detail,
   tone = "indigo",
+  onClick,
 }) {
   const tones = {
     indigo:
@@ -311,8 +313,20 @@ function SupportMetric({
       "bg-slate-50 text-slate-600 border-slate-200",
   };
 
+  const clickable = typeof onClick === "function";
+  const Wrapper = clickable ? "button" : "div";
+
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all">
+    <Wrapper
+      type={clickable ? "button" : undefined}
+      onClick={clickable ? onClick : undefined}
+      aria-label={clickable ? `${label} — view tickets` : undefined}
+      className={`group block w-full text-left bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all ${
+        clickable
+          ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2"
+          : ""
+      }`}
+    >
       <div className="flex flex-row-reverse items-start justify-end gap-3">
         <div className="min-w-0">
           <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
@@ -338,8 +352,166 @@ function SupportMetric({
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
-        {detail}
+      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500 flex items-center justify-between gap-2">
+        <span className="min-w-0">{detail}</span>
+        {clickable ? (
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-indigo-600">
+            View
+            <ArrowUpRight
+              size={12}
+              className="transition-transform group-hover:translate-x-0.5"
+            />
+          </span>
+        ) : null}
+      </div>
+    </Wrapper>
+  );
+}
+
+/* =========================================================
+   Ticket drill-down modal (reusable) + column preset
+========================================================= */
+
+const TICKET_COLUMNS = [
+  { key: "ticketNumber", label: "Ticket #", strong: true, render: (t) => t.ticketNumber || "—" },
+  { key: "title", label: "Title", render: (t) => t.title || "—" },
+  { key: "typeLabel", label: "Type", render: (t) => t.typeLabel || t.type || "—" },
+  { key: "statusLabel", label: "Status", render: (t) => t.statusLabel || t.status || "—" },
+  { key: "priorityLabel", label: "Priority", render: (t) => t.priorityLabel || t.priority || "—" },
+  { key: "createdAt", label: "Created", render: (t) => formatUiDateTime(t.createdAt) },
+];
+
+function TicketDrilldownModal({
+  open,
+  title,
+  subtitle,
+  columns = [],
+  records = [],
+  emptyText = "No tickets found.",
+  onClose,
+}) {
+  // Center within the content area (right of the sidebar), not the whole
+  // window; also lock body scroll and close on Escape.
+  const [padLeft, setPadLeft] = useState(0);
+  useEffect(() => {
+    if (!open) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const measure = () => {
+      const main =
+        typeof document !== "undefined"
+          ? document.querySelector("main")
+          : null;
+      setPadLeft(main ? Math.max(0, main.getBoundingClientRect().left) : 0);
+    };
+    measure();
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose?.();
+    };
+    window.addEventListener("resize", measure);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const rows = Array.isArray(records) ? records : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      style={padLeft ? { paddingLeft: padLeft } : undefined}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose?.();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-bold text-slate-900">{title}</h2>
+            {subtitle ? (
+              <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {rows.length ? (
+            <table className="w-full border-collapse text-left text-[13px]">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
+                <tr>
+                  {columns.map((c) => (
+                    <th
+                      key={c.key}
+                      className={`px-4 py-2.5 ${
+                        c.align === "right" ? "text-right" : "text-left"
+                      }`}
+                    >
+                      {c.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, i) => (
+                  <tr key={r.id || i} className="hover:bg-slate-50/70">
+                    {columns.map((c) => (
+                      <td
+                        key={c.key}
+                        className={`px-4 py-2.5 align-top ${
+                          c.align === "right"
+                            ? "text-right tabular-nums"
+                            : "text-left"
+                        } ${
+                          c.strong
+                            ? "font-semibold text-slate-900"
+                            : "text-slate-600"
+                        }`}
+                      >
+                        {c.render ? c.render(r) : r[c.key] ?? "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-5 py-12 text-center text-[13px] text-slate-500">
+              {emptyText}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+          <span className="text-[12px] font-semibold text-slate-500">
+            {rows.length.toLocaleString("en-IN")} ticket
+            {rows.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 rounded-lg bg-slate-900 px-3.5 text-[12px] font-bold text-white hover:bg-slate-800"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -1296,52 +1468,32 @@ export default function Help({
     );
   }
 
-  const totalTickets =
-    tickets.length;
+  // Shared predicates so the KPI counts and their drill-down lists always match.
+  const isOpenTicket = (ticket) =>
+    !["COMPLETED", "CLOSED", "REJECTED"].includes(ticket.status);
+  const isActiveTicket = (ticket) =>
+    [
+      "IN_PROGRESS",
+      "DEVELOPMENT",
+      "RM_ASSIGNED",
+      "CALL_SCHEDULED",
+      "FOLLOW_UP_REQUIRED",
+    ].includes(ticket.status);
+  const isCompletedTicket = (ticket) =>
+    ["DISCUSSION_COMPLETED", "COMPLETED", "CLOSED"].includes(ticket.status);
 
-  const openTickets =
-    tickets.filter(
-      (
-        ticket
-      ) =>
-        ![
-          "COMPLETED",
-          "CLOSED",
-          "REJECTED",
-        ].includes(
-          ticket.status
-        )
-    ).length;
+  const openTicketList = tickets.filter(isOpenTicket);
+  const activeTicketList = tickets.filter(isActiveTicket);
+  const completedTicketList = tickets.filter(isCompletedTicket);
 
-  const activeTickets =
-    tickets.filter(
-      (
-        ticket
-      ) =>
-        [
-          "IN_PROGRESS",
-          "DEVELOPMENT",
-          "RM_ASSIGNED",
-          "CALL_SCHEDULED",
-          "FOLLOW_UP_REQUIRED",
-        ].includes(
-          ticket.status
-        )
-    ).length;
+  const totalTickets = tickets.length;
+  const openTickets = openTicketList.length;
+  const activeTickets = activeTicketList.length;
+  const completedTickets = completedTicketList.length;
 
-  const completedTickets =
-    tickets.filter(
-      (
-        ticket
-      ) =>
-        [
-          "DISCUSSION_COMPLETED",
-          "COMPLETED",
-          "CLOSED",
-        ].includes(
-          ticket.status
-        )
-    ).length;
+  // KPI card drill-down (click a card → see the tickets behind the number).
+  const [ticketDrill, setTicketDrill] = useState(null);
+  const openTicketDrill = (config) => setTicketDrill(config);
 
   const filteredTickets =
     useMemo(
@@ -1484,6 +1636,16 @@ export default function Help({
 
       {/* METRICS */}
 
+      <TicketDrilldownModal
+        open={!!ticketDrill}
+        title={ticketDrill?.title}
+        subtitle={ticketDrill?.subtitle}
+        columns={TICKET_COLUMNS}
+        records={ticketDrill?.records || []}
+        emptyText={ticketDrill?.emptyText}
+        onClose={() => setTicketDrill(null)}
+      />
+
       <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         <SupportMetric
           label="Total Tickets"
@@ -1495,6 +1657,14 @@ export default function Help({
           }
           detail="All support requests submitted"
           tone="indigo"
+          onClick={() =>
+            openTicketDrill({
+              title: "Total Tickets",
+              subtitle: "All support requests submitted",
+              records: tickets,
+              emptyText: "No support tickets yet.",
+            })
+          }
         />
 
         <SupportMetric
@@ -1507,6 +1677,14 @@ export default function Help({
           }
           detail="Requests requiring attention"
           tone="amber"
+          onClick={() =>
+            openTicketDrill({
+              title: "Open Tickets",
+              subtitle: "Requests requiring attention",
+              records: openTicketList,
+              emptyText: "No open tickets.",
+            })
+          }
         />
 
         <SupportMetric
@@ -1519,6 +1697,14 @@ export default function Help({
           }
           detail="Tickets currently being worked on"
           tone="indigo"
+          onClick={() =>
+            openTicketDrill({
+              title: "In Progress",
+              subtitle: "Tickets currently being worked on",
+              records: activeTicketList,
+              emptyText: "No tickets in progress.",
+            })
+          }
         />
 
         <SupportMetric
@@ -1531,6 +1717,14 @@ export default function Help({
           }
           detail="Resolved or closed support requests"
           tone="emerald"
+          onClick={() =>
+            openTicketDrill({
+              title: "Completed",
+              subtitle: "Resolved or closed support requests",
+              records: completedTicketList,
+              emptyText: "No completed tickets.",
+            })
+          }
         />
       </div>
 

@@ -920,17 +920,17 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       ? [
           [
             "business",
-            "Business Overview",
+            "Business Summary",
             "Company KPIs, revenue and performance",
           ],
           [
             "team",
-            "Team Operations",
+            "Team Activity",
             "Leads, admissions and team execution",
           ],
           [
             "my-work",
-            "My Work",
+            "My Workspace",
             "Your schedule and personal performance",
           ],
         ]
@@ -938,19 +938,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         ? [
             [
               "team",
-              "Team Operations",
+              "Team Activity",
               "Leads, admissions and team execution",
             ],
             [
               "my-work",
-              "My Work",
+              "My Workspace",
               "Your schedule and personal performance",
             ],
           ]
         : [
             [
               "my-work",
-              "My Work",
+              "My Workspace",
               "Your schedule and personal performance",
             ],
           ];
@@ -3205,10 +3205,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   <div className="mt-3 text-[10px] font-semibold text-slate-400">
                     Default for {formatRole(user.role)}:{" "}
                     {defaultDashboardView === "business"
-                      ? "Business Overview"
+                      ? "Business Summary"
                       : defaultDashboardView === "team"
-                        ? "Team Operations"
-                        : "My Work"}
+                        ? "Team Activity"
+                        : "My Workspace"}
                   </div>
                 </div>
 
@@ -3232,7 +3232,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   <div className="mt-4 divide-y divide-slate-100">
                     {[
                       ["showGreeting", "Show Greeting", "Good morning / afternoon / evening"],
-                      ["showCalendar", "Show Dashboard Calendar", "Calendar in Team Operations and My Work"],
+                      ["showCalendar", "Show Dashboard Calendar", "Calendar in Team Activity and My Workspace"],
                     ].map(([key, label, description]) => (
                       <div
                         key={key}
