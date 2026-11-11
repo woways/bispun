@@ -76,7 +76,7 @@ export default function Referrals() {
 
   async function confirmCredit() {
     if (!creditTarget) return;
-    const amount = Number(creditTarget.summary?.pendingCredit || 0);
+    const amount = Number(creditTarget.summary?.creditable ?? creditTarget.summary?.pendingCredit ?? 0);
     setCrediting(true);
     setDialogError("");
     try {
@@ -200,7 +200,7 @@ export default function Referrals() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => {
-                  const pending = Number(row.summary?.pendingCredit || 0);
+                  const pending = Number(row.summary?.creditable ?? row.summary?.pendingCredit ?? 0);
                   return (
                     <tr key={row.referrer.id} className="align-top">
                       <td className="px-4 py-3"><div className="font-semibold text-slate-900">{row.referrer.name}</div><div className="mt-0.5 text-slate-500">{row.referrer.company?.name || "—"}</div></td>
@@ -302,7 +302,7 @@ export default function Referrals() {
               Mark referral credited
             </h2>
             <p id="credit-dialog-desc" className="mt-2 text-[13px] leading-6 text-slate-600">
-              You are about to mark <span className="font-bold text-slate-900">{money(creditTarget.summary?.pendingCredit)}</span> as
+              You are about to mark <span className="font-bold text-slate-900">{money(creditTarget.summary?.creditable ?? creditTarget.summary?.pendingCredit)}</span> as
               credited to <span className="font-semibold text-slate-900">{creditTarget.referrer.name}</span>
               {creditTarget.referrer.company?.name ? ` (${creditTarget.referrer.company.name})` : ""}. This confirms the
               amount has been paid, records it in the credit history and sends them an “Amount credited” notification.

@@ -24,6 +24,18 @@ async function sumCreditedAmount(tx, referrerId) {
   return Number(paid._sum.amount || 0);
 }
 
+// Amounts tied up by legacy, still-open client payout requests (PENDING/APPROVED).
+// These are excluded from what a new Super-Admin credit may add, so that paying
+// a legacy request later can never push total credited above total earned
+// (prevents double-crediting across the old and new flows).
+async function sumReservedAmount(tx, referrerId) {
+  const reserved = await tx.referralPayoutRequest.aggregate({
+    _sum: { amount: true },
+    where: { referrerId, status: { in: ["PENDING", "APPROVED"] } },
+  });
+  return Number(reserved._sum.amount || 0);
+}
+
 function payoutBreakdown(totalEarnings, requests) {
   const paidAmount = requests
     .filter((item) => item.status === "PAID")
@@ -114,10 +126,12 @@ router.get("/", async (req, res) => {
         totalEarnings: summary.totalEarnings,
         creditedAmount: payouts.paidAmount,
       });
+      // Amount a new credit action may add now (excludes legacy reserved amounts).
+      const creditable = Math.max(0, creditState.pendingCredit - Number(payouts.reservedAmount || 0));
 
       return {
         referrer: entry.referrer,
-        summary: { ...summary, ...payouts, ...creditState },
+        summary: { ...summary, ...payouts, ...creditState, creditable },
         referrals: entry.referrals.map((item) => ({
           id: item.id,
           status: item.status,
@@ -209,15 +223,17 @@ router.post("/credit", async (req, res) => {
       // Serialize concurrent credit actions for this referrer.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${referrerId}))`;
 
-      const [successfulCount, creditedAmount] = await Promise.all([
+      const [successfulCount, creditedAmount, reservedAmount] = await Promise.all([
         tx.crmReferral.count({ where: { referrerId, status: "SUCCESSFUL" } }),
         sumCreditedAmount(tx, referrerId),
+        sumReservedAmount(tx, referrerId),
       ]);
 
       const reward = getReferralRewardSummary(successfulCount);
+      // Creditable = earned − already-credited − reserved-by-legacy-requests.
       const { pendingCredit } = getReferralCreditState({
         totalEarnings: reward.totalEarnings,
-        creditedAmount,
+        creditedAmount: creditedAmount + reservedAmount,
       });
 
       const resolved = resolveCreditAmount({ requestedAmount, pendingCredit });
@@ -305,6 +321,27 @@ router.patch("/payouts/:id", async (req, res) => {
         success: false,
         message: "Payment reference is required before marking a payout as paid",
       });
+    }
+
+    // Safety guard: paying a legacy request must never push total credited above
+    // total earned (defends against over-credit if the new credit flow was also
+    // used for this referrer).
+    if (status === "PAID") {
+      const [successfulCount, alreadyPaid] = await Promise.all([
+        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: "SUCCESSFUL" } }),
+        prisma.referralPayoutRequest.aggregate({
+          _sum: { amount: true },
+          where: { referrerId: existing.referrerId, status: "PAID" },
+        }),
+      ]);
+      const earned = getReferralRewardSummary(successfulCount).totalEarnings;
+      const paid = Number(alreadyPaid._sum.amount || 0);
+      if (paid + Number(existing.amount || 0) > earned) {
+        return res.status(409).json({
+          success: false,
+          message: "Crediting this payout would exceed the referrer's earned balance",
+        });
+      }
     }
 
     const now = new Date();

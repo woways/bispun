@@ -100,3 +100,16 @@ test("resolveCreditAmount accepts a valid partial credit", () => {
 test("credit expectation window is the PDF 11.5 range", () => {
   assert.deepEqual(CREDIT_EXPECTATION_DAYS, { min: 5, max: 8 });
 });
+
+test("a new credit excludes legacy reserved amounts (no double-credit)", () => {
+  // Models POST /credit: creditable = earned − (already-paid + reserved-by-legacy).
+  const earned = 10000;
+  const paid = 0;
+  const reserved = 4000; // a legacy PENDING/APPROVED payout request still open
+  const { pendingCredit } = getReferralCreditState({
+    totalEarnings: earned,
+    creditedAmount: paid + reserved,
+  });
+  assert.equal(pendingCredit, 6000);
+  assert.deepEqual(resolveCreditAmount({ pendingCredit }), { ok: true, amount: 6000 });
+});
