@@ -1,6 +1,9 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@prisma/client";
+// @prisma/client (v7 generated) is CommonJS; under "type": "module" Node cannot
+// statically resolve the named `PrismaClient` export, so use the default import.
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
 
 const connectionString = process.env.DATABASE_URL;
 
