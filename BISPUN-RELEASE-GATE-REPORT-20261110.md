@@ -1,5 +1,9 @@
 # Bispun CRM — Final Production Release-Gate Report (2026-11-10)
 
+> **⚠️ CORRECTION (2026-11-11, see BISPUN-RENDER-DBPUSH-P0-20261111.md):** §C's "A main push
+> does NOT auto-run DB migrations" is **WRONG for Render**. Render's Build Command includes
+> `npx prisma db push`, so deploys DO auto-sync the Production schema. Treat as **P0**.
+
 Evidence-backed GO/NO-GO audit. **Read-only / non-destructive only.** No merge, deploy,
 migration, branch deletion, or Play submission performed. Production `pond` not touched.
 

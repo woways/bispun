@@ -1,5 +1,11 @@
 # Bispun CRM — Final Merge / Release Report (2026-11-11)
 
+> **⚠️ CORRECTION (see BISPUN-RENDER-DBPUSH-P0-20261111.md):** the statement below that
+> "no build/start hook runs a DB migration" is **WRONG for Render**. The Render `bispun-api`
+> Build Command is `npm install && npx prisma generate && npx prisma db push`, so every deploy to
+> `main` runs `prisma db push` against Production. This is a **P0** — merge remains NO-GO until the
+> build command drops `db push`.
+
 Execution of the "FINAL MAIN MERGE, PRODUCTION VERIFICATION, BRANCH CLEANUP & NEXT
 DEVELOPMENT HANDOFF" authorization. The conditional authorization requires **all** release
 gates to pass before merge/deploy; where a gate is unverified, the unsafe operation is stopped.
