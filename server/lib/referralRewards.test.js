@@ -4,9 +4,13 @@ import assert from "node:assert/strict";
 import {
   REFERRAL_SLABS,
   CREDIT_EXPECTATION_DAYS,
+  REFERRAL_STATUS,
   getReferralRewardSummary,
   getReferralCreditState,
   resolveCreditAmount,
+  isEarnedStatus,
+  countEarned,
+  shouldAttributeReferral,
 } from "./referralRewards.js";
 
 test("no successful referrals earns nothing and targets slab 1", () => {
@@ -99,6 +103,55 @@ test("resolveCreditAmount accepts a valid partial credit", () => {
 
 test("credit expectation window is the PDF 11.5 range", () => {
   assert.deepEqual(CREDIT_EXPECTATION_DAYS, { min: 5, max: 8 });
+});
+
+test("only EARNED referrals count toward rewards, not REFERRED", () => {
+  const rows = [
+    { status: "EARNED" },
+    { status: "REFERRED" },
+    { status: "EARNED" },
+    { status: "referred" },
+  ];
+  assert.equal(countEarned(rows), 2);
+  assert.equal(isEarnedStatus("EARNED"), true);
+  assert.equal(isEarnedStatus("REFERRED"), false);
+  assert.equal(REFERRAL_STATUS.REFERRED, "REFERRED");
+  assert.equal(REFERRAL_STATUS.EARNED, "EARNED");
+});
+
+test("shouldAttributeReferral accepts a valid non-self active referrer", () => {
+  assert.deepEqual(
+    shouldAttributeReferral({
+      referralCode: "RAVI99",
+      referrerFound: true,
+      referrerActive: true,
+      referrerEmail: "ravi@x.com",
+      referredEmail: "new@y.com",
+    }),
+    { ok: true }
+  );
+});
+
+test("shouldAttributeReferral rejects: no code, unknown, inactive, self-referral", () => {
+  assert.equal(shouldAttributeReferral({ referralCode: "" }).reason, "NO_CODE");
+  assert.equal(
+    shouldAttributeReferral({ referralCode: "X", referrerFound: false }).reason,
+    "UNKNOWN_CODE"
+  );
+  assert.equal(
+    shouldAttributeReferral({ referralCode: "X", referrerFound: true, referrerActive: false }).reason,
+    "INACTIVE_REFERRER"
+  );
+  assert.equal(
+    shouldAttributeReferral({
+      referralCode: "X",
+      referrerFound: true,
+      referrerActive: true,
+      referrerEmail: "Same@X.com",
+      referredEmail: "same@x.com",
+    }).reason,
+    "SELF_REFERRAL"
+  );
 });
 
 test("a new credit excludes legacy reserved amounts (no double-credit)", () => {

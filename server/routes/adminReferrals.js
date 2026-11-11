@@ -118,8 +118,8 @@ router.get("/", async (req, res) => {
     }
 
     const referrers = Array.from(grouped.values()).map((entry) => {
-      const successful = entry.referrals.filter((item) => item.status === "SUCCESSFUL");
-      const summary = getReferralRewardSummary(successful.length);
+      const earned = entry.referrals.filter((item) => item.status === "EARNED");
+      const summary = getReferralRewardSummary(earned.length);
       const userPayouts = payoutRequests.filter((item) => item.referrerId === entry.referrer.id);
       const payouts = payoutBreakdown(summary.totalEarnings, userPayouts);
       const creditState = getReferralCreditState({
@@ -138,19 +138,24 @@ router.get("/", async (req, res) => {
           referralCode: item.referralCode,
           createdAt: item.createdAt,
           qualifiedAt: item.qualifiedAt,
-          referredCompany: {
-            id: item.referredCompany.id,
-            name: item.referredCompany.name,
-            ownerName: item.referredCompany.ownerName,
-            email: item.referredCompany.email,
-            planName: item.referredCompany.subscriptions?.[0]?.plan?.name || null,
-            amount: Number(item.referredCompany.subscriptions?.[0]?.amount || 0),
-          },
+          // Null for REFERRED (pre-payment) rows; fall back to captured identity.
+          referredCompany: item.referredCompany
+            ? {
+                id: item.referredCompany.id,
+                name: item.referredCompany.name,
+                ownerName: item.referredCompany.ownerName,
+                email: item.referredCompany.email,
+                planName: item.referredCompany.subscriptions?.[0]?.plan?.name || null,
+                amount: Number(item.referredCompany.subscriptions?.[0]?.amount || 0),
+              }
+            : null,
+          referredName: item.referredName || null,
+          referredEmail: item.referredEmail || null,
         })),
       };
     });
 
-    const totalSuccessful = rows.filter((row) => row.status === "SUCCESSFUL").length;
+    const totalSuccessful = rows.filter((row) => row.status === "EARNED").length;
     const totalRewards = referrers.reduce(
       (sum, item) => sum + Number(item.summary.totalEarnings || 0),
       0
@@ -224,7 +229,7 @@ router.post("/credit", async (req, res) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${referrerId}))`;
 
       const [successfulCount, creditedAmount, reservedAmount] = await Promise.all([
-        tx.crmReferral.count({ where: { referrerId, status: "SUCCESSFUL" } }),
+        tx.crmReferral.count({ where: { referrerId, status: "EARNED" } }),
         sumCreditedAmount(tx, referrerId),
         sumReservedAmount(tx, referrerId),
       ]);
@@ -328,7 +333,7 @@ router.patch("/payouts/:id", async (req, res) => {
     // used for this referrer).
     if (status === "PAID") {
       const [successfulCount, alreadyPaid] = await Promise.all([
-        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: "SUCCESSFUL" } }),
+        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: "EARNED" } }),
         prisma.referralPayoutRequest.aggregate({
           _sum: { amount: true },
           where: { referrerId: existing.referrerId, status: "PAID" },
