@@ -16,6 +16,7 @@ WHERE (table_name='User'        AND column_name IN ('designationId','levelId','l
    OR (table_name='UtmLink'     AND column_name='influencerName')
    OR (table_name='Lead'        AND column_name IN ('preferredColleges','leadNumber'))
    OR (table_name='LeadDataset' AND column_name='duplicateDetails')
+   OR (table_name='AdmissionAttachmentFolder' AND column_name='locked')
 ORDER BY table_name, column_name;
 -- 0004 enum values
 SELECT e.enumlabel FROM pg_enum e JOIN pg_type t ON e.enumtypid=t.oid
@@ -26,7 +27,9 @@ SELECT tgname FROM pg_trigger WHERE tgname='Lead_assign_lead_number';
 ```
 **GO needs:** User's 4 cols present; `UtmLink.influencerName` present; `Lead.preferredColleges`
 present; **`Lead.leadNumber` present AND `is_nullable=NO`** with index `Lead_companyId_leadNumber_key`
-and trigger `Lead_assign_lead_number`; `LeadDataset.duplicateDetails` present; enum has
+and trigger `Lead_assign_lead_number`; `LeadDataset.duplicateDetails` present;
+**`AdmissionAttachmentFolder.locked` present (BOOLEAN, default false)** — PR#18, new dependency,
+additive SQL in `prisma/pending-migrations/0009_add_admission_folder_locked.sql`; enum has
 GOOGLE_FORM, WEBSITE_FORM, IM, DM, INTERNAL. `AccountDeletionRequest` may be absent (fail-safe),
 but must be **present** before relying on the public deletion URL in production.
 
