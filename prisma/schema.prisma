@@ -1708,6 +1708,15 @@ model ReferralPayoutRequest {
   paidAt          DateTime?
   updatedAt       DateTime @updatedAt
 
+  // Credit audit (PDF 11.7). `source` distinguishes legacy client-initiated
+  // redemption requests from Super-Admin-initiated credits. `creditedById`
+  // stores the acting Super Admin's User id (plain column, no relation, so the
+  // migration stays additive + reversible). `notifiedAt` makes the "Amount
+  // credited" notification (11.8) idempotent across retries.
+  source        String   @default("CLIENT_REQUEST")
+  creditedById  String?
+  notifiedAt    DateTime?
+
   @@index([referrerId, status])
   @@index([status, requestedAt])
 }
