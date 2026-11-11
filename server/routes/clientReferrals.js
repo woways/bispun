@@ -2,7 +2,12 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
-import { REFERRAL_SLABS, getReferralRewardSummary } from "../lib/referralRewards.js";
+import {
+  REFERRAL_SLABS,
+  getReferralRewardSummary,
+  getReferralCreditState,
+  CREDIT_EXPECTATION_DAYS,
+} from "../lib/referralRewards.js";
 
 const router = Router();
 router.use(requireClientUser);
@@ -146,6 +151,12 @@ router.get("/me", async (req, res) => {
     );
     const rewardSummary = getReferralRewardSummary(successfulRewards.length);
     const payoutSummary = buildPayoutSummary(rewardSummary.totalEarnings, payoutRequests);
+    // PDF §11 lifecycle: Earned -> Pending credit -> Credited. Credited money is
+    // what Super Admin has confirmed (sum of PAID); the client view is read-only.
+    const creditState = getReferralCreditState({
+      totalEarnings: rewardSummary.totalEarnings,
+      creditedAmount: payoutSummary.paidAmount,
+    });
 
     return res.json({
       success: true,
@@ -155,7 +166,8 @@ router.get("/me", async (req, res) => {
       stageOrder: STAGE_ORDER,
       rewardProgram: {
         slabs: REFERRAL_SLABS,
-        summary: { ...rewardSummary, ...payoutSummary },
+        creditExpectationDays: CREDIT_EXPECTATION_DAYS,
+        summary: { ...rewardSummary, ...payoutSummary, ...creditState },
         referrals: rewardReferrals.map((item) => ({
           id: item.id,
           status: item.status,
@@ -187,58 +199,10 @@ router.get("/me", async (req, res) => {
   }
 });
 
-router.post("/redeem", async (req, res) => {
-  try {
-    const requestedAmount = Number(req.body?.amount);
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0 || !Number.isInteger(requestedAmount)) {
-      return res.status(400).json({
-        success: false,
-        message: "Enter a valid redemption amount in whole rupees",
-      });
-    }
-
-    const payout = await prisma.$transaction(async (tx) => {
-      const [successfulCount, existingRequests] = await Promise.all([
-        tx.crmReferral.count({
-          where: { referrerId: req.clientUser.userId, status: "SUCCESSFUL" },
-        }),
-        tx.referralPayoutRequest.findMany({
-          where: { referrerId: req.clientUser.userId },
-          select: { amount: true, status: true },
-        }),
-      ]);
-
-      const rewardSummary = getReferralRewardSummary(successfulCount);
-      const payoutSummary = buildPayoutSummary(rewardSummary.totalEarnings, existingRequests);
-
-      if (requestedAmount > payoutSummary.availableToRedeem) {
-        const error = new Error("Requested amount is greater than your available referral balance");
-        error.statusCode = 400;
-        throw error;
-      }
-
-      return tx.referralPayoutRequest.create({
-        data: {
-          referrerId: req.clientUser.userId,
-          amount: requestedAmount,
-          status: "PENDING",
-        },
-      });
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: "Redemption request sent to Bispun Super Admin",
-      payout,
-    });
-  } catch (error) {
-    console.error("Failed to request referral payout:", error);
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.statusCode ? error.message : "Unable to submit redemption request",
-    });
-  }
-});
+// NOTE: client-initiated payout/redemption was intentionally removed (PDF 11.6).
+// Clients are read-only with respect to crediting: they see earned, pending
+// credit and credited status only. Crediting is a Super Admin action
+// (POST /api/admin/referrals/credit).
 
 router.post("/tag", async (req, res) => {
   try {

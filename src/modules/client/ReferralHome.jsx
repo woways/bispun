@@ -7,7 +7,6 @@ import {
   Users,
   CheckCircle2,
   Clock3,
-  ArrowRight,
   BadgeIndianRupee,
   Wallet,
 } from "lucide-react";
@@ -26,39 +25,28 @@ function initialsOf(name) {
     .toUpperCase();
 }
 
-// Reward tiers are derived from the backend reward program (rewardProgram.slabs,
+function formatDate(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+// Reward tiers come from the backend reward program (rewardProgram.slabs,
 // sourced from REFERRAL_SLABS on the server) — never hardcoded here — so the UI
 // always reflects the approved business rules.
 function slabsToTiers(slabs) {
-  return (Array.isArray(slabs) ? slabs : []).map((s, i) => ({
-    name: `Tier ${i + 1}`,
+  return (Array.isArray(slabs) ? slabs : []).map((s) => ({
     range: s.label ?? (s.max == null ? `${s.min}+` : `${s.min}–${s.max}`),
     amount: Number(s.rate) || 0,
-    min: Number(s.min) || 0,
-    max: s.max == null ? Infinity : Number(s.max),
+    key: s.key,
   }));
-}
-
-function tierInfo(successful, tiers) {
-  if (!tiers.length) return null;
-  const n = Number(successful) || 0;
-  const idx = tiers.findIndex((t) => n >= t.min && n <= t.max);
-  const activeIndex = n <= 0 ? 0 : idx === -1 ? tiers.length - 1 : idx;
-  const active = tiers[activeIndex];
-  const toNext = active.max === Infinity ? 0 : Math.max(0, active.max + 1 - n);
-  const span = active.max === Infinity ? 1 : active.max - active.min + 1;
-  const done = Math.min(span, Math.max(0, n - active.min + 1));
-  const pct = active.max === Infinity ? 100 : Math.round((done / span) * 100);
-  return { activeIndex, active, toNext, pct };
-}
-
-function referralStatus(item) {
-  const stage = item?.lead?.stage ?? item?.stage;
-  const isLost = item?.lead?.isLost ?? item?.isLost;
-  if (isLost) return { label: "Lost", cls: "text-slate-500", dot: "bg-slate-300" };
-  if (stage === "ADMITTED")
-    return { label: "Admitted", cls: "text-emerald-700", dot: "bg-emerald-500" };
-  return { label: "In progress", cls: "text-amber-700", dot: "bg-amber-500" };
 }
 
 function prefersReducedMotion() {
@@ -86,11 +74,10 @@ function Count({ to, money: asMoney = false }) {
     }
     const duration = 900;
     const start = performance.now();
-    const from = 0;
     const tick = (now) => {
       const p = Math.min(1, (now - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-      setV(from + (target - from) * eased);
+      setV(target * eased);
       if (p < 1) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
@@ -101,42 +88,85 @@ function Count({ to, money: asMoney = false }) {
 
 const CARD = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
-export default function ReferralHome({
-  currentUser,
-  code,
-  stats,
-  rewardProgram,
-  referrals = [],
-  onGoReferrals,
-  onRedeem,
-}) {
+export default function ReferralHome({ currentUser, code, rewardProgram }) {
   const [copied, setCopied] = useState("");
+  // Persistent (always-mounted) live region text for screen-reader clipboard
+  // feedback — a late-inserted aria-live region is unreliable (WCAG 4.1.3).
+  const [copiedMsg, setCopiedMsg] = useState("");
+  const copyTimerRef = useRef(0);
 
   const summary = rewardProgram?.summary || {};
-  const successful = summary.successfulCount ?? stats?.admitted ?? 0;
-  const totalEarned = summary.totalEarnings ?? 0;
-  const redeemable = summary.availableToRedeem ?? 0;
+  const successful = summary.successfulCount ?? 0;
+  const earned = summary.earned ?? summary.totalEarnings ?? 0;
+  const credited = summary.credited ?? 0;
+  const pendingCredit = summary.pendingCredit ?? Math.max(0, earned - credited);
   const tiers = slabsToTiers(rewardProgram?.slabs);
-  const tier = tierInfo(successful, tiers);
+  const activeSlabKey = summary.slab?.key;
+  const expect = rewardProgram?.creditExpectationDays || { min: 5, max: 8 };
 
-  const link = code
-    ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}`
-    : "";
-  const recent = (referrals || []).slice(0, 4);
+  const referred = rewardProgram?.referrals || [];
+  const creditedHistory = (rewardProgram?.payouts || []).filter((p) => p.status === "PAID");
 
-  function copy(text, which) {
+  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
+
+  useEffect(() => () => window.clearTimeout(copyTimerRef.current), []);
+
+  function copy(text, which, label) {
     if (!text) return;
-    try {
-      navigator.clipboard.writeText(text);
+
+    const onSuccess = () => {
       setCopied(which);
-      window.setTimeout(() => setCopied(""), 1400);
-    } catch (error) {
+      setCopiedMsg(`${label} copied`);
+      window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => {
+        setCopied("");
+        setCopiedMsg("");
+      }, 1600);
+    };
+    const onFailure = (error) => {
       console.error("Unable to copy referral value:", error);
+      setCopied("");
+      setCopiedMsg(`Could not copy ${label.toLowerCase()}`);
+    };
+
+    try {
+      // Await the async clipboard write so success is announced only on success.
+      const result = navigator.clipboard?.writeText(text);
+      if (result && typeof result.then === "function") {
+        result.then(onSuccess).catch(onFailure);
+      } else {
+        onSuccess();
+      }
+    } catch (error) {
+      onFailure(error);
     }
   }
 
+  // Stepper navigation: move focus (not just scroll) to the target section so
+  // keyboard and screen-reader users land inside it (WCAG 2.4.3).
+  function goToStage(key) {
+    const el = document.getElementById(`referral-stage-${key}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    el.focus({ preventScroll: true });
+  }
+
+  const steps = [
+    { key: "link", label: "Referral link", value: "Share to start", icon: Link2, done: Boolean(code) },
+    { key: "referred", label: "Referred", value: `${referred.length} joined`, icon: Users, done: referred.length > 0 },
+    { key: "earned", label: "Earned", value: money(earned), icon: BadgeIndianRupee, done: earned > 0 },
+    { key: "credited", label: "Credited", value: money(credited), icon: Wallet, done: credited > 0 },
+  ];
+  // First not-yet-done stage = the "current" step in the journey.
+  const currentStepIndex = steps.findIndex((s) => !s.done);
+
   return (
     <div className="space-y-5 cb-fade-in">
+      {/* Always-mounted live region for clipboard feedback (WCAG 4.1.3). */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {copiedMsg}
+      </span>
+
       {/* IDENTITY */}
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[13px] font-bold text-slate-700">
@@ -144,9 +174,7 @@ export default function ReferralHome({
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[15px] font-semibold text-slate-900">
-              {currentUser?.name || "You"}
-            </span>
+            <span className="text-[15px] font-semibold text-slate-900">{currentUser?.name || "You"}</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
               Active referrer
@@ -158,61 +186,87 @@ export default function ReferralHome({
         </div>
       </div>
 
-      {/* EARNINGS SUMMARY */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
-        <div className={CARD}>
-          <BadgeIndianRupee size={18} aria-hidden="true" className="text-indigo-600" />
-          <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">
-            <Count to={totalEarned} money />
-          </div>
-          <div className="text-[13px] text-slate-500">Total earned</div>
-        </div>
+      {/* JOURNEY STEPPER — premium 4-stage cards with completed / current /
+          upcoming states. State is conveyed by icon + text, never colour alone. */}
+      <nav aria-label="Referral journey">
+        <ol className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+          {steps.map((step, i) => {
+            const Icon = step.icon;
+            const isCurrent = i === currentStepIndex;
+            const stateText = step.done ? "completed" : isCurrent ? "current step" : "upcoming";
+            return (
+              <li key={step.key}>
+                <button
+                  type="button"
+                  onClick={() => goToStage(step.key)}
+                  aria-current={isCurrent ? "step" : undefined}
+                  className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow motion-reduce:transition-none motion-reduce:hover:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                    step.done
+                      ? "border-indigo-200 bg-indigo-50/50"
+                      : isCurrent
+                      ? "border-indigo-300 bg-white ring-1 ring-indigo-200"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <span
+                    className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
+                      step.done || isCurrent ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    {step.done && (
+                      <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-white ring-2 ring-white">
+                        <Check size={10} aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold text-slate-900">
+                      {step.label}
+                      {isCurrent && (
+                        <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-700">
+                          Now
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[12px] text-slate-500">{step.value}</span>
+                    <span className="sr-only"> — {stateText}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
 
-        <div className={CARD}>
-          <CheckCircle2 size={18} aria-hidden="true" className="text-emerald-600" />
-          <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-slate-950">
-            <Count to={successful} />
-          </div>
-          <div className="text-[13px] text-slate-500">Successful referrals</div>
+      {/* STAGE 1 — REFERRAL LINK */}
+      <section
+        id="referral-stage-link"
+        tabIndex={-1}
+        aria-labelledby="stage-link-title"
+        className={`${CARD} scroll-mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      >
+        <div className="flex items-center gap-2">
+          <Link2 size={18} aria-hidden="true" className="text-indigo-600" />
+          <h2 id="stage-link-title" className="text-[17px] font-semibold text-slate-950">
+            1 · Your referral link
+          </h2>
         </div>
-
-        <div className="col-span-2 rounded-2xl border border-indigo-200 bg-indigo-50/60 p-5 shadow-sm lg:col-span-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <Wallet size={18} aria-hidden="true" className="text-indigo-600" />
-              <div className="mt-3 text-[20px] sm:text-[28px] font-bold break-words tabular-nums text-indigo-700">
-                <Count to={redeemable} money />
-              </div>
-              <div className="text-[13px] text-slate-600">Available to redeem</div>
-            </div>
-            <button
-              type="button"
-              onClick={onRedeem}
-              disabled={redeemable <= 0}
-              className="inline-flex h-9 flex-shrink-0 items-center rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white transition hover:bg-indigo-700 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              Redeem
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* SHARE & EARN */}
-      <div className={CARD}>
-        <h2 className="text-[17px] font-semibold text-slate-950">Share &amp; earn</h2>
-        <p className="mt-1 text-[13px] text-slate-500">Copy your code or link and share it anywhere.</p>
+        <p className="mt-1 text-[13px] text-slate-500">
+          Share your link or code. When a business signs up for Bispun CRM using it, they appear under
+          <span className="font-semibold text-slate-700"> Referred</span> and you start earning a reward.
+        </p>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-          <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Referral code</div>
+          <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Referral code</div>
           <div className="mt-1 flex items-center justify-between gap-2">
-            <span className="truncate text-[16px] font-bold tracking-[0.12em] text-slate-900">
-              {code || "…"}
-            </span>
+            <span className="truncate text-[16px] font-bold tracking-[0.12em] text-slate-900">{code || "…"}</span>
             <button
               type="button"
-              onClick={() => copy(code, "code")}
+              onClick={() => copy(code, "code", "Referral code")}
+              disabled={!code}
               aria-label="Copy referral code"
-              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 active:scale-[0.97] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 active:scale-[0.97] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {copied === "code" ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
               {copied === "code" ? "Copied" : "Copy"}
@@ -222,10 +276,13 @@ export default function ReferralHome({
 
         <div className="mt-3 flex flex-wrap gap-3">
           <a
-            href={`https://wa.me/?text=${encodeURIComponent(`Check this out: ${link}`)}`}
+            href={link ? `https://wa.me/?text=${encodeURIComponent(`Check this out: ${link}`)}` : undefined}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-11 flex-1 basis-[200px] items-center justify-center gap-2 rounded-xl bg-indigo-600 text-[14px] font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            aria-disabled={link ? undefined : "true"}
+            className={`inline-flex h-11 flex-1 basis-[200px] items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+              link ? "bg-indigo-600 hover:bg-indigo-700" : "pointer-events-none bg-slate-300"
+            }`}
           >
             <Share2 size={16} aria-hidden="true" />
             Share on WhatsApp
@@ -233,142 +290,230 @@ export default function ReferralHome({
           </a>
           <button
             type="button"
-            onClick={() => copy(link, "link")}
+            onClick={() => copy(link, "link", "Referral link")}
+            disabled={!link}
             aria-label="Copy referral link"
-            className="inline-flex h-11 flex-1 basis-[200px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[14px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            className="inline-flex h-11 flex-1 basis-[200px] items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[14px] font-semibold text-slate-700 transition hover:border-indigo-300 hover:text-indigo-700 active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {copied === "link" ? <Check size={16} aria-hidden="true" /> : <Link2 size={16} aria-hidden="true" />}
             {copied === "link" ? "Link copied" : "Copy referral link"}
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* PIPELINE + REWARD TIERS (side by side) */}
-      <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
-        {/* REFERRAL PIPELINE */}
-        <div className={CARD}>
-          <h2 className="text-[17px] font-semibold text-slate-950">Referral pipeline</h2>
-          <p className="mt-1 text-[13px] text-slate-500">How your referrals are progressing.</p>
-          <div className="mt-4 grid grid-cols-3 divide-x divide-slate-100">
-            <PipelineCell icon={Users} tone="brand" value={stats?.total ?? 0} label="Total referrals" />
-            <PipelineCell icon={CheckCircle2} tone="good" value={stats?.admitted ?? 0} label="Admitted" />
-            <PipelineCell icon={Clock3} tone="warn" value={stats?.inProgress ?? 0} label="In progress" />
+      {/* STAGE 2 — REFERRED */}
+      <section
+        id="referral-stage-referred"
+        tabIndex={-1}
+        aria-labelledby="stage-referred-title"
+        className={`${CARD} scroll-mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      >
+        <div className="flex items-center gap-2">
+          <Users size={18} aria-hidden="true" className="text-indigo-600" />
+          <h2 id="stage-referred-title" className="text-[17px] font-semibold text-slate-950">
+            2 · Referred <span className="text-[14px] font-medium text-slate-500">({referred.length})</span>
+          </h2>
+        </div>
+        <p className="mt-1 text-[13px] text-slate-500">Businesses that signed up for Bispun CRM using your link.</p>
+
+        {referred.length === 0 ? (
+          <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-500">
+              <Users size={22} aria-hidden="true" />
+            </span>
+            <div className="mt-3 text-[14px] font-semibold text-slate-800">No referrals yet</div>
+            <p className="mt-1 max-w-xs text-[12.5px] text-slate-500">
+              Share your referral link — businesses that sign up with it will appear here.
+            </p>
+            <button
+              type="button"
+              onClick={() => copy(link, "link", "Referral link")}
+              disabled={!link}
+              className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Link2 size={15} aria-hidden="true" />
+              Copy referral link
+            </button>
+          </div>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {referred.map((item) => (
+              <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">
+                    {initialsOf(item.company?.name)}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="truncate text-[14px] font-semibold text-slate-900">
+                      {item.company?.name || "Bispun client"}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-slate-500">
+                      {item.company?.planName || "CRM plan"} · Joined {formatDate(item.qualifiedAt || item.createdAt)}
+                    </div>
+                  </div>
+                </div>
+                <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                  <CheckCircle2 size={12} aria-hidden="true" /> Qualified
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* STAGE 3 — EARNED */}
+      <section
+        id="referral-stage-earned"
+        tabIndex={-1}
+        aria-labelledby="stage-earned-title"
+        className={`${CARD} scroll-mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      >
+        <div className="flex items-center gap-2">
+          <BadgeIndianRupee size={18} aria-hidden="true" className="text-indigo-600" />
+          <h2 id="stage-earned-title" className="text-[17px] font-semibold text-slate-950">
+            3 · Earned
+          </h2>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="text-[20px] sm:text-[26px] font-bold tabular-nums text-slate-950">
+              <Count to={earned} money />
+            </div>
+            <div className="text-[13px] text-slate-500">Total earned</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="text-[20px] sm:text-[26px] font-bold tabular-nums text-slate-950">
+              <Count to={successful} />
+            </div>
+            <div className="text-[13px] text-slate-500">Successful referrals</div>
+          </div>
+          <div className="col-span-2 rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 lg:col-span-1">
+            <div className="text-[20px] sm:text-[26px] font-bold tabular-nums text-indigo-700">
+              {money(summary.rate)}
+            </div>
+            <div className="text-[13px] text-slate-600">
+              Current rate{summary.slab?.label ? ` · ${summary.slab.label} slab` : ""}
+            </div>
           </div>
         </div>
 
-        {/* REWARD TIERS (rendered from backend reward slabs) */}
-        {tier && (
-          <div className={CARD}>
-            <div className="flex items-baseline justify-between gap-3">
-              <h2 className="text-[17px] font-semibold text-slate-950">Reward tiers</h2>
-              {tier.active.max !== Infinity && (
-                <span className="text-[13px] text-slate-500">
-                  {tier.toNext} more to{" "}
-                  {tiers[Math.min(tier.activeIndex + 1, tiers.length - 1)].name}
-                </span>
-              )}
-            </div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
-              <div
-                className="h-full rounded-full bg-indigo-600 transition-[width] duration-700 ease-out motion-reduce:transition-none"
-                style={{ width: `${tier.pct}%` }}
-              />
-            </div>
-            <div className="mt-4 grid grid-cols-3">
-              {tiers.map((t, i) => {
-                const here = i === tier.activeIndex;
+        {tiers.length > 0 && (
+          <div className="mt-4">
+            <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Reward slabs</h3>
+            <div className="mt-2 grid gap-3 sm:grid-cols-3">
+              {tiers.map((t) => {
+                const active = t.key === activeSlabKey;
                 return (
-                  <div key={t.name} className="border-l border-slate-100 px-4 first:border-l-0 first:pl-0">
-                    <div className="text-[12px] text-slate-500">{t.range}</div>
-                    <div className={`mt-0.5 text-[20px] sm:text-[22px] font-bold tracking-[-0.01em] ${here ? "text-indigo-700" : "text-slate-900"}`}>
-                      {money(t.amount)}
+                  <div
+                    key={t.key}
+                    className={`rounded-xl border p-3 ${
+                      active ? "border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200 bg-slate-50/60"
+                    }`}
+                  >
+                    <div className="text-[12px] font-bold uppercase tracking-wide text-slate-600">
+                      {t.range} referrals
                     </div>
-                    <div className={`text-[12.5px] ${here ? "font-semibold text-indigo-700" : "text-slate-500"}`}>
-                      {t.name}{here ? " · current" : ""}
-                    </div>
+                    <div className="mt-1 text-[20px] font-bold text-slate-950">{money(t.amount)}</div>
+                    <div className="text-[12px] text-slate-500">per successful referral</div>
+                    {active && (
+                      <div className="mt-2 inline-flex rounded-full bg-indigo-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                        Current slab
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           </div>
         )}
-      </div>
 
-      {/* RECENT REFERRALS */}
-      <div className={CARD}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-[17px] font-semibold text-slate-950">Recent referrals</h2>
-            <p className="mt-1 text-[13px] text-slate-500">Where your latest referrals stand.</p>
-          </div>
-          <button
-            type="button"
-            onClick={onGoReferrals}
-            className="inline-flex flex-shrink-0 items-center gap-1 rounded text-[13px] font-semibold text-indigo-700 hover:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            View all <ArrowRight size={15} aria-hidden="true" />
-          </button>
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-900">
+          Rewards unlock only after a referred business joins or purchases Bispun CRM with your code. Pending enquiries do
+          not earn rewards.
+        </div>
+      </section>
+
+      {/* STAGE 4 — CREDITED */}
+      <section
+        id="referral-stage-credited"
+        tabIndex={-1}
+        aria-labelledby="stage-credited-title"
+        className={`${CARD} scroll-mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      >
+        <div className="flex items-center gap-2">
+          <Wallet size={18} aria-hidden="true" className="text-indigo-600" />
+          <h2 id="stage-credited-title" className="text-[17px] font-semibold text-slate-950">
+            4 · Credited
+          </h2>
         </div>
 
-        {recent.length === 0 ? (
-          <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-[13px] text-slate-500">
-            No referrals yet. Share your link to get started.
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16} aria-hidden="true" className="text-emerald-600" />
+              <span className="text-[13px] font-semibold text-emerald-800">Credited to you</span>
+            </div>
+            <div className="mt-2 text-[22px] sm:text-[26px] font-bold tabular-nums text-emerald-700">
+              {money(credited)}
+            </div>
           </div>
-        ) : (
-          <div className="mt-2">
-            {recent.map((r, i) => {
-              const lead = r?.lead ?? r ?? {};
-              const name = lead.name ?? "—";
-              const course = lead.course ?? "";
-              const phone = lead.phone ?? "";
-              const sub = [phone, course].filter(Boolean).join(" · ");
-              const st = referralStatus(r);
-              return (
-                <div
-                  key={lead.id ?? r.id ?? i}
-                  className="flex items-center gap-3.5 border-t border-slate-100 py-3.5 first:border-t-0"
-                >
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">
-                    {initialsOf(name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[14px] font-medium text-slate-900">{name}</div>
-                    {sub && <div className="truncate text-[12px] text-slate-500">{sub}</div>}
-                  </div>
-                  <span className={`inline-flex flex-shrink-0 items-center gap-1.5 text-[12.5px] font-semibold ${st.cls}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} aria-hidden="true" />
-                    {st.label}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+            <div className="flex items-center gap-2">
+              <Clock3 size={16} aria-hidden="true" className="text-amber-600" />
+              <span className="text-[13px] font-semibold text-amber-800">Awaiting credit</span>
+            </div>
+            <div className="mt-2 text-[22px] sm:text-[26px] font-bold tabular-nums text-amber-700">
+              {money(pendingCredit)}
+            </div>
+            {pendingCredit > 0 && (
+              <div className="mt-1 text-[12px] text-amber-800">
+                Expected in about {expect.min}–{expect.max} days after being verified by Bispun.
+              </div>
+            )}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </div>
 
-function PipelineCell({ icon: Icon, tone, value, label }) {
-  const iconCls =
-    tone === "good"
-      ? "text-emerald-600"
-      : tone === "warn"
-      ? "text-amber-600"
-      : "text-indigo-600";
-  const valueCls =
-    tone === "good"
-      ? "text-emerald-700"
-      : tone === "warn"
-      ? "text-amber-700"
-      : "text-slate-950";
-  return (
-    <div className="px-4 first:pl-0 last:pr-0">
-      <Icon size={18} aria-hidden="true" className={iconCls} />
-      <div className={`mt-3 text-[22px] sm:text-[26px] font-bold tracking-[-0.01em] tabular-nums ${valueCls}`}>
-        <Count to={value} />
-      </div>
-      <div className="text-[12.5px] text-slate-500">{label}</div>
+        <p className="mt-3 text-[12px] leading-5 text-slate-500">
+          Credits are confirmed by the Bispun team. You cannot mark your own rewards as credited — you will get an
+          <span className="font-semibold text-slate-700"> “Amount credited”</span> notification when it is done.
+        </p>
+
+        <div className="mt-4">
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Credit history</h3>
+          {creditedHistory.length === 0 ? (
+            <div className="mt-2 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-6 text-center text-[13px] text-slate-500">
+              No amounts credited yet.
+            </div>
+          ) : (
+            <div
+              className="mt-2 overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              tabIndex={0}
+              role="group"
+              aria-label="Credit history (scrollable)"
+            >
+              <table className="min-w-full text-left text-xs">
+                <caption className="sr-only">Credit history: date credited, amount and reference</caption>
+                <thead className="border-b border-slate-200 text-slate-500">
+                  <tr>
+                    <th scope="col" className="px-2 py-2.5">Credited on</th>
+                    <th scope="col" className="px-2 py-2.5">Amount</th>
+                    <th scope="col" className="px-2 py-2.5">Reference</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {creditedHistory.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-2 py-2.5 text-slate-600">{formatDate(item.paidAt || item.processedAt)}</td>
+                      <td className="px-2 py-2.5 font-semibold text-slate-900">{money(item.amount)}</td>
+                      <td className="px-2 py-2.5 text-slate-500">{item.paymentReference || item.adminNote || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

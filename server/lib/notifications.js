@@ -45,6 +45,31 @@ export async function createClientNotification({
   }
 }
 
+function formatRupees(amount) {
+  return `₹${Number(amount || 0).toLocaleString("en-IN")}`;
+}
+
+// PDF 11.8: when Super Admin marks a referral reward as credited, the referring
+// Client Admin/user receives an "Amount credited" notification. Routed to the
+// referrals module so clicking it opens the referral history.
+export async function createReferralCreditedNotification({
+  companyId,
+  userId,
+  amount,
+}) {
+  return createClientNotification({
+    companyId,
+    userId,
+    title: "Amount credited",
+    message: `Your referral reward of ${formatRupees(
+      amount
+    )} has been marked as credited. View your referral history for details.`,
+    type: "REFERRAL",
+    actionModule: "my-referrals",
+    actionLabel: "View referrals",
+  });
+}
+
 export async function createSupportTicketCreatedNotification({
   companyId,
   userId,

@@ -177,8 +177,18 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   if (refCode) {
     referrer = await prisma.user.findUnique({
       where: { referralCode: refCode },
-      select: { id: true, referralCode: true },
+      select: { id: true, referralCode: true, email: true },
     });
+
+    // Self-referral guard: a user cannot earn a referral reward by signing their
+    // own new company up with their own code.
+    if (
+      referrer &&
+      String(referrer.email || "").trim().toLowerCase() ===
+        String(data.adminEmail || "").trim().toLowerCase()
+    ) {
+      referrer = null;
+    }
   }
 
   const settings = await prisma.systemSettings.upsert({
