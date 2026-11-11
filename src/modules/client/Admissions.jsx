@@ -5,6 +5,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   Plus,
@@ -27,6 +28,7 @@ import {
   ChevronRight,
   Folder,
   FolderPlus,
+  Lock,
   GraduationCap,
   Download,
   ArrowUpDown,
@@ -1167,6 +1169,24 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partner.id]);
 
+  // Open a file. Normal files have a public proxy URL. Confidential (locked)
+  // files have none — we ask the admin-gated endpoint for a short-lived signed
+  // link (sending auth) and open that.
+  async function openAttachment(attachment) {
+    if (!attachment.locked && attachment.url) {
+      window.open(attachment.url, "_blank", "noopener");
+      return;
+    }
+    try {
+      const res = await apiRequest(
+        `${base}/attachments/${attachment.id}/download`
+      );
+      if (res?.url) window.open(res.url, "_blank", "noopener");
+    } catch (openError) {
+      setError(openError?.data?.message || "Unable to open this file");
+    }
+  }
+
   async function uploadFile(file) {
     if (!file) return;
 
@@ -1312,7 +1332,10 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
 
   const folderName = (id) => folders.find((f) => f.id === id)?.name || "";
 
-  return (
+  // Rendered through a portal to <body> so the fixed overlay escapes the
+  // dashboard content wrapper (which uses transform: scale) — otherwise the
+  // modal is trapped in that box and sits half-behind the expanded sidebar.
+  return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
       <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
         <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
@@ -1381,7 +1404,28 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
                 <span className="text-[11px] opacity-80">{countFor(null)}</span>
               </button>
 
-              {folders.map((folder) => (
+              {folders.map((folder) =>
+                folder.locked ? (
+                  // Confidential folder: admin-only, permanent (no rename/delete).
+                  <button
+                    key={folder.id}
+                    type="button"
+                    onClick={() => setActiveFolderId(folder.id)}
+                    disabled={searching}
+                    title="Confidential — visible only to you (Admin)"
+                    className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-[13px] font-semibold transition ${
+                      activeFolderId === folder.id && !searching
+                        ? "border-amber-500 bg-amber-500 text-white"
+                        : "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    } ${searching ? "opacity-50" : ""}`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Lock size={14} className="shrink-0" />
+                      <span className="truncate">{folder.name}</span>
+                    </span>
+                    <span className="shrink-0 text-[11px] opacity-80">{countFor(folder.id)}</span>
+                  </button>
+                ) : (
                 <div
                   key={folder.id}
                   className={`group flex items-center gap-1 rounded-lg px-1.5 ${
@@ -1425,7 +1469,8 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
                     </button>
                   </div>
                 </div>
-              ))}
+                )
+              )}
             </div>
 
             {creatingFolder ? (
@@ -1570,18 +1615,19 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
                               className="h-8 max-w-[140px] rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-700 outline-none hover:bg-slate-50 focus:border-indigo-300"
                             >
                               <option value="">Unfiled</option>
-                              {folders.map((folder) => (
-                                <option key={folder.id} value={folder.id}>{folder.name}</option>
-                              ))}
+                              {folders
+                                .filter((folder) => !folder.locked)
+                                .map((folder) => (
+                                  <option key={folder.id} value={folder.id}>{folder.name}</option>
+                                ))}
                             </select>
-                            <a
-                              href={attachment.url}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openAttachment(attachment)}
                               className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
                             >
                               <ExternalLink size={12} /> Open
-                            </a>
+                            </button>
                             <button
                               type="button"
                               onClick={() => removeAttachment(attachment)}
@@ -1609,7 +1655,8 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
