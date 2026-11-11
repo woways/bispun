@@ -4,8 +4,50 @@ export const REFERRAL_SLABS = [
   { key: "SLAB_3", min: 11, max: null, rate: 4000, label: "11+" },
 ];
 
+// User-facing credit expectation (PDF 11.5). This is an expectation shown to
+// referrers, NOT an authorization to auto-pay — crediting is a manual Super
+// Admin action (11.6/11.7).
+export const CREDIT_EXPECTATION_DAYS = { min: 5, max: 8 };
+
+// Aggregate credit state for a referrer. Earnings are an aggregate of
+// count x slab-rate, so credit is tracked as an amount, not per referral:
+//   earned        = total reward the referrer has qualified for
+//   credited      = amount Super Admin has already marked credited (sum of PAID)
+//   pendingCredit  = earned still awaiting a Super Admin credit action
+export function getReferralCreditState({ totalEarnings, creditedAmount } = {}) {
+  const earned = Math.max(0, Math.round(Number(totalEarnings) || 0));
+  const credited = Math.max(0, Math.round(Number(creditedAmount) || 0));
+  const pendingCredit = Math.max(0, earned - credited);
+  return { earned, credited, pendingCredit };
+}
+
+// Resolve + validate how much a Super Admin credit action should record.
+// Omitting requestedAmount credits the full outstanding balance. Returns a
+// discriminated result so callers (and tests) can assert the guard without a DB.
+export function resolveCreditAmount({ requestedAmount, pendingCredit } = {}) {
+  const outstanding = Math.max(0, Math.round(Number(pendingCredit) || 0));
+  if (outstanding <= 0) {
+    return { ok: false, reason: "NOTHING_TO_CREDIT", amount: 0 };
+  }
+
+  let amount = outstanding;
+  if (requestedAmount !== undefined && requestedAmount !== null && requestedAmount !== "") {
+    const requested = Number(requestedAmount);
+    if (!Number.isFinite(requested) || !Number.isInteger(requested) || requested <= 0) {
+      return { ok: false, reason: "INVALID_AMOUNT", amount: 0 };
+    }
+    if (requested > outstanding) {
+      return { ok: false, reason: "EXCEEDS_OUTSTANDING", amount: 0 };
+    }
+    amount = requested;
+  }
+
+  return { ok: true, amount };
+}
+
 export function getReferralRewardSummary(successfulCount) {
-  const count = Math.max(0, Number(successfulCount || 0));
+  const parsed = Number(successfulCount);
+  const count = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
 
   if (count === 0) {
     return {

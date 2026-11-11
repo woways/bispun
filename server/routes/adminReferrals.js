@@ -2,10 +2,39 @@ import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
-import { REFERRAL_SLABS, getReferralRewardSummary } from "../lib/referralRewards.js";
+import {
+  REFERRAL_SLABS,
+  getReferralRewardSummary,
+  getReferralCreditState,
+  resolveCreditAmount,
+} from "../lib/referralRewards.js";
+import { createReferralCreditedNotification } from "../lib/notifications.js";
 
 const router = Router();
 router.use(requireSuperAdmin);
+
+// Credited money is the sum of PAID payout records (both legacy client-requested
+// payouts and Super-Admin-initiated credits). PDF §11 "Credited" == money the
+// Super Admin has confirmed.
+async function sumCreditedAmount(tx, referrerId) {
+  const paid = await tx.referralPayoutRequest.aggregate({
+    _sum: { amount: true },
+    where: { referrerId, status: "PAID" },
+  });
+  return Number(paid._sum.amount || 0);
+}
+
+// Amounts tied up by legacy, still-open client payout requests (PENDING/APPROVED).
+// These are excluded from what a new Super-Admin credit may add, so that paying
+// a legacy request later can never push total credited above total earned
+// (prevents double-crediting across the old and new flows).
+async function sumReservedAmount(tx, referrerId) {
+  const reserved = await tx.referralPayoutRequest.aggregate({
+    _sum: { amount: true },
+    where: { referrerId, status: { in: ["PENDING", "APPROVED"] } },
+  });
+  return Number(reserved._sum.amount || 0);
+}
 
 function payoutBreakdown(totalEarnings, requests) {
   const paidAmount = requests
@@ -93,10 +122,16 @@ router.get("/", async (req, res) => {
       const summary = getReferralRewardSummary(successful.length);
       const userPayouts = payoutRequests.filter((item) => item.referrerId === entry.referrer.id);
       const payouts = payoutBreakdown(summary.totalEarnings, userPayouts);
+      const creditState = getReferralCreditState({
+        totalEarnings: summary.totalEarnings,
+        creditedAmount: payouts.paidAmount,
+      });
+      // Amount a new credit action may add now (excludes legacy reserved amounts).
+      const creditable = Math.max(0, creditState.pendingCredit - Number(payouts.reservedAmount || 0));
 
       return {
         referrer: entry.referrer,
-        summary: { ...summary, ...payouts },
+        summary: { ...summary, ...payouts, ...creditState, creditable },
         referrals: entry.referrals.map((item) => ({
           id: item.id,
           status: item.status,
@@ -161,6 +196,96 @@ router.get("/", async (req, res) => {
   }
 });
 
+// PDF 11.7: Super Admin marks a referrer's earned referral money as credited.
+// Idempotent + race-safe: a per-referrer advisory lock serializes concurrent
+// credit actions, and the outstanding balance is recomputed inside the
+// transaction, so a double-click (or retry) credits nothing the second time.
+router.post("/credit", async (req, res) => {
+  try {
+    const referrerId = String(req.body?.referrerId || "").trim();
+    if (!referrerId) {
+      return res.status(400).json({ success: false, message: "referrerId is required" });
+    }
+
+    const paymentReference = String(req.body?.paymentReference || "").trim();
+    const adminNote = String(req.body?.adminNote || "").trim();
+    const requestedAmount = req.body?.amount;
+
+    const referrer = await prisma.user.findUnique({
+      where: { id: referrerId },
+      select: { id: true, companyId: true },
+    });
+    if (!referrer) {
+      return res.status(404).json({ success: false, message: "Referrer not found" });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent credit actions for this referrer.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${referrerId}))`;
+
+      const [successfulCount, creditedAmount, reservedAmount] = await Promise.all([
+        tx.crmReferral.count({ where: { referrerId, status: "SUCCESSFUL" } }),
+        sumCreditedAmount(tx, referrerId),
+        sumReservedAmount(tx, referrerId),
+      ]);
+
+      const reward = getReferralRewardSummary(successfulCount);
+      // Creditable = earned − already-credited − reserved-by-legacy-requests.
+      const { pendingCredit } = getReferralCreditState({
+        totalEarnings: reward.totalEarnings,
+        creditedAmount: creditedAmount + reservedAmount,
+      });
+
+      const resolved = resolveCreditAmount({ requestedAmount, pendingCredit });
+      if (!resolved.ok) {
+        const map = {
+          NOTHING_TO_CREDIT: "There is no earned amount awaiting credit for this referrer",
+          INVALID_AMOUNT: "Enter a valid credit amount in whole rupees",
+          EXCEEDS_OUTSTANDING: "Credit amount is greater than the earned amount awaiting credit",
+        };
+        const error = new Error(map[resolved.reason] || "Unable to credit referral");
+        error.statusCode = resolved.reason === "INVALID_AMOUNT" ? 400 : 409;
+        throw error;
+      }
+
+      const now = new Date();
+      const record = await tx.referralPayoutRequest.create({
+        data: {
+          referrerId,
+          amount: resolved.amount,
+          status: "PAID",
+          source: "ADMIN_CREDIT",
+          creditedById: req.admin.userId,
+          paymentReference: paymentReference || null,
+          adminNote: adminNote || null,
+          requestedAt: now,
+          processedAt: now,
+          paidAt: now,
+          notifiedAt: now,
+        },
+      });
+
+      return { record, companyId: referrer.companyId, amount: resolved.amount };
+    });
+
+    // Notify outside the transaction; failures must not roll back the credit
+    // (notifiedAt is already stamped, so this never double-fires on retry).
+    await createReferralCreditedNotification({
+      companyId: result.companyId,
+      userId: referrerId,
+      amount: result.amount,
+    });
+
+    return res.status(201).json({ success: true, payout: result.record });
+  } catch (error) {
+    console.error("Failed to credit referral:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Unable to credit referral",
+    });
+  }
+});
+
 router.patch("/payouts/:id", async (req, res) => {
   try {
     const id = String(req.params.id || "").trim();
@@ -198,7 +323,29 @@ router.patch("/payouts/:id", async (req, res) => {
       });
     }
 
+    // Safety guard: paying a legacy request must never push total credited above
+    // total earned (defends against over-credit if the new credit flow was also
+    // used for this referrer).
+    if (status === "PAID") {
+      const [successfulCount, alreadyPaid] = await Promise.all([
+        prisma.crmReferral.count({ where: { referrerId: existing.referrerId, status: "SUCCESSFUL" } }),
+        prisma.referralPayoutRequest.aggregate({
+          _sum: { amount: true },
+          where: { referrerId: existing.referrerId, status: "PAID" },
+        }),
+      ]);
+      const earned = getReferralRewardSummary(successfulCount).totalEarnings;
+      const paid = Number(alreadyPaid._sum.amount || 0);
+      if (paid + Number(existing.amount || 0) > earned) {
+        return res.status(409).json({
+          success: false,
+          message: "Crediting this payout would exceed the referrer's earned balance",
+        });
+      }
+    }
+
     const now = new Date();
+    const willNotify = status === "PAID" && !existing.notifiedAt;
     const updated = await prisma.referralPayoutRequest.update({
       where: { id },
       data: {
@@ -208,13 +355,23 @@ router.patch("/payouts/:id", async (req, res) => {
           status === "PAID" ? paymentReference : paymentReference || existing.paymentReference,
         processedAt: now,
         paidAt: status === "PAID" ? now : null,
+        notifiedAt: status === "PAID" ? existing.notifiedAt || now : existing.notifiedAt,
       },
       include: {
         referrer: {
-          select: { id: true, name: true, email: true, referralCode: true },
+          select: { id: true, name: true, email: true, referralCode: true, companyId: true },
         },
       },
     });
+
+    // PDF 11.8: notify the referrer once when their money is credited (PAID).
+    if (willNotify && updated.referrer?.companyId) {
+      await createReferralCreditedNotification({
+        companyId: updated.referrer.companyId,
+        userId: updated.referrer.id,
+        amount: updated.amount,
+      });
+    }
 
     return res.json({ success: true, payout: updated });
   } catch (error) {
