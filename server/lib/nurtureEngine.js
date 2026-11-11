@@ -362,7 +362,7 @@ async function notifyManager({ enrollment, lead, step }) {
       title: "Lead needs manager attention",
       message,
       type: "WARNING",
-      actionModule: "lead-store",
+      actionModule: lead?.id ? `lead-store#lead:${lead.id}` : "lead-store",
       actionLabel: "Open Lead Store",
     },
   });

@@ -5,6 +5,8 @@ import { requireClientUser } from "../middleware/clientAuth.js";
 import {
   getLeadVisibilityScope,
   canViewLead,
+  leadVisibilityWhere,
+  callHistoryWhere,
 } from "../lib/leadVisibility.js";
 
 const router = Router();
@@ -140,12 +142,32 @@ router.get("/history", async (req, res) => {
     const phone = digits(req.query.phone);
     const take = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
 
+    // Security: restrict call history to records the user may see. A non-admin
+    // sees only calls they placed themselves or calls on leads within their
+    // visibility scope — never a colleague's call history by passing a leadId
+    // or phone directly. (POST /calls already enforces canViewLead.)
+    const scope = await getLeadVisibilityScope(prisma, companyId, req.clientUser);
+    let visibleLeadIds;
+    if (!scope.isAdmin) {
+      const leadWhere = leadVisibilityWhere(scope);
+      const leads = await prisma.lead.findMany({
+        where: { companyId, ...(leadWhere || {}) },
+        select: { id: true },
+      });
+      visibleLeadIds = leads.map((lead) => lead.id);
+    }
+
+    const where = callHistoryWhere({
+      companyId,
+      scope,
+      actingUserId: req.clientUser.userId,
+      leadId: leadId || undefined,
+      phone: !leadId && phone ? phone : undefined,
+      visibleLeadIds,
+    });
+
     const calls = await prisma.callRecord.findMany({
-      where: {
-        companyId,
-        ...(leadId ? { leadId } : {}),
-        ...(!leadId && phone ? { phone } : {}),
-      },
+      where,
       orderBy: { startedAt: "desc" },
       take,
     });

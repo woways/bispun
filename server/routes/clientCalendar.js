@@ -8,6 +8,8 @@ import {
 
 import prisma from "../lib/prisma.js";
 
+import { canModifyCalendarEvent } from "../lib/calendarAccess.js";
+
 
 
 import {
@@ -1408,6 +1410,14 @@ router.patch(
 
 
 
+      if (!canModifyCalendarEvent(req.clientUser, existing)) {
+        return res.status(403).json({
+          success: false,
+          forbidden: true,
+          message: "You can only edit events you created or are assigned to",
+        });
+      }
+
       const data = {};
 
 
@@ -2157,6 +2167,14 @@ router.delete(
       }
 
 
+
+      if (!canModifyCalendarEvent(req.clientUser, existing)) {
+        return res.status(403).json({
+          success: false,
+          forbidden: true,
+          message: "You can only delete events you created or are assigned to",
+        });
+      }
 
       await prisma.calendarEvent.delete({
 
