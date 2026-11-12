@@ -88,6 +88,14 @@ function money(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
 
+// Screen-reader money: spells the unit instead of the ₹ glyph, whose SR
+// announcement is inconsistent (NVDA/JAWS may say "rupee sign", "rupees", or
+// nothing at default symbol levels). Used ONLY in the sr-only chart data tables;
+// the visible money() with ₹ is unchanged. (accessibility-lead requirement.)
+function srMoney(value) {
+  return `${new Intl.NumberFormat("en-IN").format(Number(value || 0))} rupees`;
+}
+
 function axisMoney(value) {
   const amount = Number(value || 0);
 
@@ -1202,23 +1210,59 @@ export default function Dashboard({
                     </span>
                   </div>
 
+                  {!(data.revenueTrend || []).some(
+                    (p) =>
+                      Number(p.potential) > 0 ||
+                      Number(p.received) > 0
+                  ) && (
+                    <div className="flex h-[280px] items-center justify-center text-[13px] text-slate-400">
+                      No revenue data yet.
+                    </div>
+                  )}
                   {(data.revenueTrend || []).some(
                     (p) =>
                       Number(p.potential) > 0 ||
                       Number(p.received) > 0
-                  ) ? (
-                  <Suspense fallback={<ChartSkeleton height={280} />}>
-                    <RevenueTrendChart
-                      data={data.revenueTrend}
-                      accentColor={accentColor}
-                      money={money}
-                      axisMoney={axisMoney}
-                    />
-                  </Suspense>
-                  ) : (
-                    <div className="flex h-[280px] items-center justify-center text-[13px] text-slate-400">
-                      No revenue data yet.
-                    </div>
+                  ) && (
+                    <>
+                      {/* Accessible data alternative: the chart SVG below is
+                          aria-hidden (recharts emits context-free text nodes),
+                          so this sr-only table is the screen-reader
+                          representation. Must be a SIBLING outside the
+                          aria-hidden subtree. */}
+                      <table className="sr-only">
+                        <caption>
+                          Revenue trend by month: potential versus received
+                          revenue
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Month</th>
+                            <th scope="col">Potential revenue</th>
+                            <th scope="col">Received revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.revenueTrend.map((row) => (
+                            <tr key={row.m}>
+                              <th scope="row">{row.m}</th>
+                              <td>{srMoney(row.potential)}</td>
+                              <td>{srMoney(row.received)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div aria-hidden="true">
+                        <Suspense fallback={<ChartSkeleton height={280} />}>
+                          <RevenueTrendChart
+                            data={data.revenueTrend}
+                            accentColor={accentColor}
+                            money={money}
+                            axisMoney={axisMoney}
+                          />
+                        </Suspense>
+                      </div>
+                    </>
                   )}
                 </section>
                 )}
@@ -1557,12 +1601,40 @@ export default function Dashboard({
                   </div>
 
                   {admissionsByMonthData.length ? (
-                    <Suspense fallback={<ChartSkeleton height={220} />}>
-                      <AdmissionsByMonthChart
-                        data={admissionsByMonthData}
-                        accentColor={accentColor}
-                      />
-                    </Suspense>
+                    <>
+                      {/* Accessible data alternative (chart SVG below is aria-hidden). */}
+                      <table className="sr-only">
+                        <caption>Admissions by month</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Month</th>
+                            <th scope="col">Admissions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {admissionsByMonthData.map((row, i) => {
+                            const label =
+                              row.m ?? row.month ?? row.name ?? `Row ${i + 1}`;
+                            const value =
+                              row.value ?? row.count ?? row.admissions ?? 0;
+                            return (
+                              <tr key={`${label}-${i}`}>
+                                <th scope="row">{label}</th>
+                                <td>{value}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div aria-hidden="true">
+                        <Suspense fallback={<ChartSkeleton height={220} />}>
+                          <AdmissionsByMonthChart
+                            data={admissionsByMonthData}
+                            accentColor={accentColor}
+                          />
+                        </Suspense>
+                      </div>
+                    </>
                   ) : (
                     <div className="flex h-[220px] flex-col items-center justify-center text-center">
                       <BarChart3 size={20} className="text-slate-300" />
