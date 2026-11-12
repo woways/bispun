@@ -1052,7 +1052,7 @@ export default function Dashboard({
               })()}
               ,{" "}
               <span className="font-bold text-slate-950">
-                {tenant?.name || tenant?.brandName || user?.name || tenant?.ownerName || "Company"}
+                {user?.name || tenant?.ownerName || "there"}
               </span>
             </h1>
             <p className="mt-1.5 text-[15px] font-medium tracking-normal text-slate-500">
