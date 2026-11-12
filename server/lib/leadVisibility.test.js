@@ -8,6 +8,7 @@ import {
   leadVisibilityWhere,
   canViewLead,
   datasetVisibilityWhere,
+  callHistoryWhere,
 } from "./leadVisibility.js";
 
 const COMPANY_USERS = [
@@ -50,14 +51,27 @@ test("admin scope has no restriction (null ids, where null)", () => {
   assert.equal(datasetVisibilityWhere(scope), null);
 });
 
-test("employee lead where matches only own assigned id (+ own name fallback)", () => {
+test("employee lead where matches own assigned id + case-insensitive name", () => {
   const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
   const where = leadVisibilityWhere(scope);
   assert.ok(where.OR, "expected an OR clause");
   const idClause = where.OR.find((c) => c.assignedToUserId?.in);
   assert.deepEqual(idClause.assignedToUserId.in, ["emp1"]);
-  const nameClause = where.OR.find((c) => c.assignedToName?.in);
-  assert.deepEqual(nameClause.assignedToName.in, ["Employee One"]);
+  // Name matching must be case-insensitive to stay consistent with canViewLead
+  // (which normalizes case). Each visible name is an insensitive equals clause.
+  const nameClause = where.OR.find((c) => c.assignedToName?.equals);
+  assert.equal(nameClause.assignedToName.equals, "Employee One");
+  assert.equal(nameClause.assignedToName.mode, "insensitive");
+  // No case-sensitive `in` clause should remain.
+  assert.equal(where.OR.find((c) => c.assignedToName?.in), undefined);
+});
+
+test("manager name matching is case-insensitive for each team member", () => {
+  const scope = buildScope(COMPANY_USERS[1], COMPANY_USERS); // Sales manager: mgr1, emp1, emp2
+  const where = leadVisibilityWhere(scope);
+  const nameClauses = where.OR.filter((c) => c.assignedToName?.equals);
+  assert.equal(nameClauses.length, 3);
+  assert.ok(nameClauses.every((c) => c.assignedToName.mode === "insensitive"));
 });
 
 test("canViewLead: employee can see own lead by id, not others", () => {
@@ -104,4 +118,47 @@ test("datasetVisibilityWhere scopes by assignedToUserId for employee", () => {
   assert.deepEqual(datasetVisibilityWhere(scope), {
     assignedToUserId: { in: ["emp1"] },
   });
+});
+
+test("callHistoryWhere: admin is companyId-only, no OR restriction", () => {
+  const scope = buildScope(COMPANY_USERS[0], COMPANY_USERS);
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "admin1",
+    leadId: "lead-9",
+  });
+  assert.deepEqual(where, { companyId: "c1", leadId: "lead-9" });
+});
+
+test("callHistoryWhere: employee restricted to own calls OR calls on visible leads", () => {
+  const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "emp1",
+    leadId: "lead-9",
+    visibleLeadIds: ["lead-9", "lead-10"],
+  });
+  assert.equal(where.companyId, "c1");
+  assert.equal(where.leadId, "lead-9");
+  assert.ok(Array.isArray(where.OR), "expected OR restriction for non-admin");
+  const ownClause = where.OR.find((c) => c.userId === "emp1");
+  assert.ok(ownClause, "own-calls clause missing");
+  const leadClause = where.OR.find((c) => c.leadId?.in);
+  assert.deepEqual(leadClause.leadId.in, ["lead-9", "lead-10"]);
+});
+
+test("callHistoryWhere: employee with no visible leads still sees only own calls", () => {
+  const scope = buildScope(COMPANY_USERS[2], COMPANY_USERS); // emp1
+  const where = callHistoryWhere({
+    companyId: "c1",
+    scope,
+    actingUserId: "emp1",
+    phone: "9998887777",
+    visibleLeadIds: [],
+  });
+  assert.equal(where.companyId, "c1");
+  assert.equal(where.phone, "9998887777");
+  assert.deepEqual(where.OR, [{ userId: "emp1" }]);
 });

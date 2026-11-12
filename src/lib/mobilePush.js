@@ -9,6 +9,7 @@
 import { Capacitor } from "@capacitor/core";
 import { apiRequest } from "./api.js";
 import { playNotificationSound } from "./sound.js";
+import { parseNotificationTarget } from "./notificationTarget.js";
 
 let initialized = false;
 let currentToken = null;
@@ -86,13 +87,19 @@ async function sendToken(token) {
 // Validate, then either navigate now (if authenticated) or buffer the target
 // for after login. Never navigates a logged-out user.
 function handleTapAction(action) {
-  const actionModule = action?.notification?.data?.actionModule;
-  if (!isAllowedModule(actionModule)) return;
+  const raw = action?.notification?.data?.actionModule;
+  const { moduleKey, leadId } = parseNotificationTarget(raw);
+  if (!isAllowedModule(moduleKey)) return;
+
+  // Preserve the lead deep-link target so the portal can open the exact lead.
+  // The base module key is validated against the allowlist above; the encoded
+  // "#lead:<id>" suffix is passed through for the navigation handler to resolve.
+  const target = leadId ? `${moduleKey}#lead:${leadId}` : moduleKey;
 
   if (typeof liveOnNavigate === "function") {
-    liveOnNavigate(actionModule);
+    liveOnNavigate(target);
   } else {
-    pendingNavigation = actionModule; // consumed by initMobilePush after login
+    pendingNavigation = target; // consumed by initMobilePush after login
   }
 }
 

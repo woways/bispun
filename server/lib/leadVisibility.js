@@ -165,8 +165,10 @@ export function leadVisibilityWhere(scope) {
     or.push({ assignedToUserId: { in: ids } });
   }
 
-  if (names.length) {
-    or.push({ assignedToName: { in: names } });
+  // Case-insensitive per-name match (Prisma `in` has no case-insensitive mode),
+  // so the list query stays consistent with canViewLead(), which normalizes case.
+  for (const name of names) {
+    or.push({ assignedToName: { equals: name, mode: "insensitive" } });
   }
 
   if (!or.length) {
@@ -195,6 +197,44 @@ export function canViewLead(scope, lead) {
   }
 
   return false;
+}
+
+/**
+ * Prisma `where` for CallRecord history, enforcing the same visibility rule.
+ *
+ * CallRecord has no assignee of its own, so a non-admin may see a call only
+ * when EITHER they placed it themselves (`userId`) OR it belongs to a lead
+ * they can view (`leadId` in the caller-supplied `visibleLeadIds`, computed
+ * from `leadVisibilityWhere`). The optional `leadId`/`phone` filters are ANDed
+ * on top. Admins are restricted by `companyId` only.
+ */
+export function callHistoryWhere({
+  companyId,
+  scope,
+  actingUserId,
+  leadId,
+  phone,
+  visibleLeadIds,
+}) {
+  const where = { companyId };
+  if (leadId) {
+    where.leadId = leadId;
+  } else if (phone) {
+    where.phone = phone;
+  }
+
+  if (scope?.isAdmin) return where;
+
+  const ids = Array.isArray(visibleLeadIds)
+    ? visibleLeadIds
+    : [...(visibleLeadIds || [])];
+
+  where.OR = [
+    { userId: actingUserId },
+    ...(ids.length ? [{ leadId: { in: ids } }] : []),
+  ];
+
+  return where;
 }
 
 /**

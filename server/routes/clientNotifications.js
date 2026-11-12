@@ -151,7 +151,7 @@ async function ensureLeadFollowUpReminders(req) {
           `${prefix}: ${lead.name}${contact}. ` +
           `Scheduled for ${formatLeadFollowUpAt(followUpAt)}. ${marker}`,
         type: "LEAD",
-        actionModule: "lead-store",
+        actionModule: `lead-store#lead:${lead.id}`,
         actionLabel: "Open Lead Store",
       },
     });

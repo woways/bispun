@@ -3288,6 +3288,14 @@ router.patch(
 
           data: {
 
+            // Hardening: set the authoritative assignee id (not only the name).
+            // Lead visibility prefers the id clause; writing it here makes
+            // bulk-assigned leads match reliably and prevents a STALE previous
+            // assignedToUserId from keeping the lead visible to the old owner.
+            assignedToUserId:
+
+              assignee.id,
+
             assignedToName:
 
               assignee.name,
