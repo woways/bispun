@@ -33,7 +33,7 @@ Scope = the **125 functional requirements** in PDF §1–§19. (§20 = 9 busines
 
 | Bug ID | Req | Severity | What | Status |
 |---|---|---|---|---|
-| **BUG-GREETING** | 18.1–18.3, 21.18 | **High** | Dashboard greeting shows the **company name**, not the logged-in user's name (`Dashboard.jsx:1169`) | **FIXED** on `qa-fix/e2e-20261112` (greeting → `user?.name || user?.email || tenant?.ownerName || "there"`); accessibility-reviewed (approved); `npm run build` passes. **Not merged.** |
+| **BUG-GREETING** | 18.1–18.3, 21.18 | **High** | Dashboard greeting shows the **company name**, not the logged-in user's name (`Dashboard.jsx:1169`) | **FIXED** on `qa-fix/e2e-20261112` (greeting → `user?.name \|\| user?.email \|\| tenant?.ownerName \|\| "there"`); accessibility-reviewed (approved); `npm run build` passes. **Not merged.** ⚠️ **Also fixed independently on Track B's mobile/integration branch** (`1deffa3` / integration HEAD `1df0c75`) with the accessibility-recommended variant `user?.name \|\| tenant?.ownerName \|\| "there"` (drops `user?.email`, which overflows/read-poorly in the 40px serif H1 on mobile). **Consolidate on ONE variant — recommend Track B's (a11y-recommended, already in the integration branch).** Both edit the same line → merge conflict if both are kept. |
 | **BUG-ORDER-HISTORY** | 15.1, 15.2, 21.16 | **High** | No "Order History" card above Current Subscription; only "Recent Payments" below | **Not fixed** — a new feature/UX, not a safe one-liner; needs product/design. Flagged. |
 | **BUG-SIGNIN-GROUP** | 16.3, 16.4, 21.17 | **Medium** | Sign-in notifications reduced but **not grouped into one entry with a count** | **Not fixed** — needs design of grouping/aggregation. Flagged. |
 | **BUG-REF-SIGNUP** | 11.3 | **Medium** | Automatic `?ref` signup attribution is **on an unmerged branch** (`origin/feat/referral-signup-lifecycle` `fa0518f`); `main` has only a manual referrer-code field | **Merge decision** — code exists, needs deliberate merge + review. |
@@ -53,7 +53,7 @@ Scope = the **125 functional requirements** in PDF §1–§19. (§20 = 9 busines
 
 ## 4. Exact next steps before a production release (sequence)
 
-1. **Decide & merge** the greeting fix (BUG-GREETING, prepared here) and the referral-signup branch (BUG-REF-SIGNUP) into `main` — deliberate, reviewed. *(Separately authorized; I merged nothing.)*
+1. **Consolidate the greeting fix (BUG-GREETING) to ONE variant** — it now exists on both `qa-fix/e2e-20261112` (with `user?.email` tier) and Track B's integration branch (a11y-recommended, without `user?.email`). Recommend keeping **Track B's variant** (already in the integration branch that carries the Dashboard refactor); drop the duplicate on `qa-fix`. Then **decide & merge** that + the referral-signup branch (BUG-REF-SIGNUP) into `main` — deliberate, reviewed. *(Separately authorized; I merged nothing.)*
 2. **Product decisions** on §20 open items (college master data, IMDM, coupon rules, Earned-event) and on BUG-ORDER-HISTORY / BUG-SIGNIN-GROUP scope.
 3. **Fix the Render build command** (remove `prisma db push`) — operator, approved.
 4. **Apply missing prod migrations** via reviewed SQL to Neon `production`, in order `0003→0004→0005P→0006→0009→0008` (skip `0007` calendar). After `0005P`: verify 0 NULL `leadNumber`, 0 duplicates, trigger present.
