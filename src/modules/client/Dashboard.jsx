@@ -1166,7 +1166,10 @@ export default function Dashboard({
               })()}
               ,{" "}
               <span className="font-bold text-slate-950">
-                {tenant?.name || tenant?.brandName || user?.name || tenant?.ownerName || "Company"}
+                {/* PDF §18: personalized greeting must use the logged-in person's
+                    own name, not the client/company name. The company brand stays
+                    elsewhere in the portal (§18.3). Fallback chain never empties. */}
+                {user?.name || user?.email || tenant?.ownerName || "there"}
               </span>
             </h1>
             <p className="mt-1.5 text-[15px] font-medium tracking-normal text-slate-500">
