@@ -835,19 +835,75 @@ router.post(
               }`
             : "";
 
-          await prisma.notification.create({
-            data: {
-              companyId: user.companyId,
-              userId: user.id,
-              title:
-                "New sign-in to your account",
-              message: `Your account was just signed in on ${device.deviceName}${place}. If this wasn't you, change your password and review your active sessions.`,
-              type: "USER",
-              actionModule: "settings",
-              actionLabel:
-                "Review sessions",
-            },
-          });
+          // 16.1–16.4: Group repeated sign-ins into ONE rolling notification
+          // instead of creating a new row on every login (which floods the list
+          // and buries important CRM notifications like Lead Added / Lead Status
+          // Changed). While the entry is still unread we update it in place —
+          // bumping a count and resurfacing it — and only start a fresh entry
+          // once the user has read/acknowledged the previous one. Full per-device
+          // details remain available via the "Review sessions" action (16.3).
+          // SIGNIN_GROUP / SIGNIN_COUNT are hidden markers stripped from display.
+          const groupMarker = `SIGNIN_GROUP:${user.id}`;
+          const latestDetail = `${device.deviceName}${place} on ${new Date().toLocaleString(
+            "en-IN",
+            {
+              day: "2-digit",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+              timeZone: "Asia/Kolkata",
+            }
+          )}`;
+
+          const existingSignIn =
+            await prisma.notification.findFirst({
+              where: {
+                companyId: user.companyId,
+                userId: user.id,
+                read: false,
+                message: { contains: groupMarker },
+              },
+              orderBy: { createdAt: "desc" },
+              select: { id: true, message: true },
+            });
+
+          if (existingSignIn) {
+            const prevCount = Number(
+              (existingSignIn.message.match(
+                /SIGNIN_COUNT:(\d+)/
+              ) || [])[1] || 1
+            );
+            const nextCount = prevCount + 1;
+
+            await prisma.notification.update({
+              where: { id: existingSignIn.id },
+              data: {
+                title:
+                  "Recent sign-ins to your account",
+                message: `Your account has been signed in ${nextCount} times recently. Latest: ${latestDetail}. If any of these weren't you, change your password and review your active sessions. ${groupMarker} SIGNIN_COUNT:${nextCount}`,
+                read: false,
+                readAt: null,
+                // Resurface the single entry to the top instead of adding a row.
+                createdAt: new Date(),
+                type: "USER",
+                actionModule: "settings",
+                actionLabel: "Review sessions",
+              },
+            });
+          } else {
+            await prisma.notification.create({
+              data: {
+                companyId: user.companyId,
+                userId: user.id,
+                title:
+                  "New sign-in to your account",
+                message: `Your account was just signed in on ${latestDetail}. If this wasn't you, change your password and review your active sessions. ${groupMarker} SIGNIN_COUNT:1`,
+                type: "USER",
+                actionModule: "settings",
+                actionLabel: "Review sessions",
+              },
+            });
+          }
         }
       } catch (notifyError) {
         console.error(
