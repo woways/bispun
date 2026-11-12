@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useState,
@@ -19,19 +21,17 @@ import {
   Loader2,
 } from "lucide-react";
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+// Chart code-split so recharts (~556KB) is not pulled onto the admin landing
+// paint; lazy-loaded behind <Suspense> with a height-reserving fallback.
+const ClientGrowthChart = lazy(() =>
+  import("./AdminDashboardCharts").then((m) => ({ default: m.ClientGrowthChart }))
+);
 
 import {
   Badge,
 } from "../../components/ui";
+
+import ChartSkeleton from "../../components/ChartSkeleton";
 
 import {
   apiRequest,
@@ -419,78 +419,9 @@ export default function AdminDashboard({
           </div>
 
           <div className="mt-5">
-            <ResponsiveContainer
-              width="100%"
-              height={280}
-            >
-              <AreaChart
-                data={growthData}
-                margin={{
-                  top: 5,
-                  right: 10,
-                  left: -10,
-                  bottom: 0,
-                }}
-              >
-                <defs>
-                  <linearGradient
-                    id="clientGrowthGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor="#6366f1"
-                      stopOpacity={0.25}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="#6366f1"
-                      stopOpacity={0}
-                    />
-                  </linearGradient>
-                </defs>
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                  stroke="#e2e8f0"
-                />
-
-                <XAxis
-                  dataKey="label"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{
-                    fontSize: 11,
-                    fill: "#64748b",
-                  }}
-                />
-
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  allowDecimals={false}
-                  tick={{
-                    fontSize: 11,
-                    fill: "#64748b",
-                  }}
-                />
-
-                <Tooltip />
-
-                <Area
-                  type="monotone"
-                  dataKey="cumulativeClients"
-                  name="Total Clients"
-                  stroke="#6366f1"
-                  strokeWidth={2.5}
-                  fill="url(#clientGrowthGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            <Suspense fallback={<ChartSkeleton height={280} />}>
+              <ClientGrowthChart data={growthData} />
+            </Suspense>
           </div>
         </div>
 

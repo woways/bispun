@@ -161,10 +161,31 @@ textarea {
   to   { opacity: 1; }
 }
 
-.cb-fade-in      { animation: cbFadeIn var(--cb-dur-base) var(--cb-ease) both; }
-.cb-fade-in-up   { animation: cbFadeInUp var(--cb-dur-base) var(--cb-ease) both; }
-.cb-sheet-in     { animation: cbSheetIn var(--cb-dur-slow) var(--cb-ease) both; }
-.cb-backdrop-in  { animation: cbBackdropIn var(--cb-dur-base) var(--cb-ease) both; }
+/* Shimmer for skeleton/loading placeholders (e.g. ChartSkeleton). Defined
+   globally so it works wherever a skeleton mounts, not only on the auth screen. */
+@keyframes skeletonShimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Entrance classes. Safety net (accessibility-lead checklist #9): the opacity:0
+   start state lives ONLY inside the animation, and the animation is declared
+   ONLY under `prefers-reduced-motion: no-preference`. The baseline below keeps
+   every element at opacity 1 whenever the animation does not run — reduced
+   motion, or any environment where animations never fire — so faded content can
+   never be stranded invisible. Final state is opacity 1 either way. */
+.cb-fade-in,
+.cb-fade-in-up,
+.cb-sheet-in,
+.cb-backdrop-in {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cb-fade-in      { animation: cbFadeIn var(--cb-dur-base) var(--cb-ease) both; }
+  .cb-fade-in-up   { animation: cbFadeInUp var(--cb-dur-base) var(--cb-ease) both; }
+  .cb-sheet-in     { animation: cbSheetIn var(--cb-dur-slow) var(--cb-ease) both; }
+  .cb-backdrop-in  { animation: cbBackdropIn var(--cb-dur-base) var(--cb-ease) both; }
+}
 
 /* Accessibility: honour the OS "reduce motion" setting app-wide. Near-zeros
    every transition/animation AND forces looping animations (skeleton shimmer,
