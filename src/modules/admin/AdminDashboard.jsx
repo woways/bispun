@@ -419,9 +419,40 @@ export default function AdminDashboard({
           </div>
 
           <div className="mt-5">
-            <Suspense fallback={<ChartSkeleton height={280} />}>
-              <ClientGrowthChart data={growthData} />
-            </Suspense>
+            {/* Accessible data alternative: the chart SVG is aria-hidden
+                (recharts emits context-free text nodes), so this sr-only table
+                is the screen-reader representation. Sibling OUTSIDE the hidden
+                subtree; rendered only when there is data. */}
+            {growthData?.length > 0 ? (
+              <>
+                <table className="sr-only">
+                  <caption>Client growth: cumulative clients by month</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Month</th>
+                      <th scope="col">Cumulative clients</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {growthData.map((row, i) => (
+                      <tr key={`${row.label}-${i}`}>
+                        <th scope="row">{row.label}</th>
+                        <td>{row.cumulativeClients}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div aria-hidden="true">
+                  <Suspense fallback={<ChartSkeleton height={280} />}>
+                    <ClientGrowthChart data={growthData} />
+                  </Suspense>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-[280px] items-center justify-center text-sm text-slate-400">
+                No client growth data yet.
+              </div>
+            )}
           </div>
         </div>
 
