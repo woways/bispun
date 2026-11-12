@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "test": "node --test server/lib/pushService.test.js server/lib/pushDispatch.test.js server/lib/leadVisibility.test.js server/lib/pageAccess.test.js server/lib/calendarAccess.test.js server/lib/leadsBySource.test.js server/lib/accountDeletion.test.js server/lib/referralRewards.test.js server/routes/adminReferralsAuth.test.js src/lib/notificationTarget.test.js src/lib/backStack.test.js src/lib/listViewState.test.js src/lib/logoutFlow.test.js src/lib/moduleBack.test.js src/lib/mobilePush.pluginLoad.test.js"
+    "test": "node --test server/lib/pushService.test.js server/lib/pushDispatch.test.js server/lib/leadVisibility.test.js server/lib/pageAccess.test.js server/lib/calendarAccess.test.js server/lib/leadsBySource.test.js server/lib/accountDeletion.test.js server/lib/referralRewards.test.js server/routes/adminReferralsAuth.test.js src/lib/notificationTarget.test.js src/lib/backStack.test.js src/lib/listViewState.test.js src/lib/logoutFlow.test.js src/lib/moduleBack.test.js src/lib/mobilePush.pluginLoad.test.js",
+    "test:integration": "node --test server/__tests__/api.integration.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.705.0",
