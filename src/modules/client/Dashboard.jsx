@@ -1166,7 +1166,7 @@ export default function Dashboard({
               })()}
               ,{" "}
               <span className="font-bold text-slate-950">
-                {tenant?.name || tenant?.brandName || user?.name || tenant?.ownerName || "Company"}
+                {user?.name || "there"}
               </span>
             </h1>
             <p className="mt-1.5 text-[15px] font-medium tracking-normal text-slate-500">
@@ -1481,7 +1481,7 @@ export default function Dashboard({
                           <div className="text-center">
                             <div className="text-[20px] font-bold tracking-[-0.04em] text-slate-950">
                               {
-                                data.leadsBySourceTotal ??
+                                summary.totalLeads ||
                                 data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
                               }
                             </div>
@@ -1494,7 +1494,7 @@ export default function Dashboard({
 
                       <p className="sr-only">
                         {`Total ${
-                          data.leadsBySourceTotal ??
+                          summary.totalLeads ||
                           data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
                         } leads for the period.`}
                       </p>
