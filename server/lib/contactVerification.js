@@ -2,6 +2,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
 import { sendMail } from "./mailer.js";
+import { getSmsConfig } from "./sms.js";
 
 const EMAIL_PURPOSES = new Set(["company_email", "admin_email"]);
 const PHONE_PURPOSES = new Set(["company_phone"]);
@@ -175,17 +176,20 @@ function msg91Mobile(target) {
   return `91${target}`;
 }
 
-function getMsg91Config() {
-  const authKey = String(process.env.MSG91_AUTH_KEY || "").trim();
-  const templateId = String(process.env.MSG91_OTP_TEMPLATE_ID || "").trim();
-  if (!authKey || !templateId) {
+// OTP config: auth key is the server secret (env); the OTP template id is read
+// from Super Admin (systemSettings.smsOtpTemplateId) with env fallback, so it
+// can be managed without a redeploy. Not gated by the master SMS toggle — OTP
+// is onboarding-critical and must work regardless of marketing-SMS settings.
+async function getMsg91Config() {
+  const { authKey, otpTemplateId } = await getSmsConfig();
+  if (!authKey || !otpTemplateId) {
     throw new ContactVerificationError(
-      "Phone OTP is not configured. Add MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID on the server.",
+      "Phone OTP is not configured. Add MSG91_AUTH_KEY on the server and set the OTP template in Super Admin (or MSG91_OTP_TEMPLATE_ID).",
       503,
       "PHONE_OTP_NOT_CONFIGURED"
     );
   }
-  return { authKey, templateId };
+  return { authKey, templateId: otpTemplateId };
 }
 
 async function msg91Json(url, options) {
@@ -215,7 +219,7 @@ async function msg91Json(url, options) {
 }
 
 async function sendPhoneOtp(target, purpose) {
-  const { authKey, templateId } = getMsg91Config();
+  const { authKey, templateId } = await getMsg91Config();
   const url = new URL("https://control.msg91.com/api/v5/otp");
   url.searchParams.set("template_id", templateId);
   url.searchParams.set("mobile", msg91Mobile(target));
@@ -234,7 +238,7 @@ async function sendPhoneOtp(target, purpose) {
 }
 
 async function verifyPhoneOtp(target, otp) {
-  const { authKey } = getMsg91Config();
+  const { authKey } = await getMsg91Config();
   const url = new URL("https://control.msg91.com/api/v5/otp/verify");
   url.searchParams.set("otp", otp);
   url.searchParams.set("mobile", msg91Mobile(target));

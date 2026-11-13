@@ -363,13 +363,15 @@ const NAV_GROUPS = [
     items: ["analytics"],
   },
 
-  {
-    key: "my-store",
-    label: "My Store",
-    icon: Store,
-    items: ["my-store"],
-    direct: true,
-  },
+  // My Store is temporarily hidden — image generation (Ideogram) needs rework
+  // before it's client-ready. Re-enable by uncommenting this block.
+  // {
+  //   key: "my-store",
+  //   label: "My Store",
+  //   icon: Store,
+  //   items: ["my-store"],
+  //   direct: true,
+  // },
 
   {
     key: "my-referrals",
@@ -1564,7 +1566,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     { title: "Work", keys: ["chats", "goals-and-targets", "utm-leads"] },
     { title: "Admissions", keys: ["domestic-admissions", "international-admissions"] },
     { title: "Insights", keys: ["analytics"] },
-    { title: "Grow", keys: ["my-store", "my-referrals"] },
+    { title: "Grow", keys: ["my-referrals"] }, // my-store hidden (image-gen rework pending)
   ]
     .map((group) => ({
       ...group,
@@ -3885,8 +3887,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       return <Referrals currentUser={user} />;
     }
 
+    // My Store temporarily hidden (image-gen rework pending). Guarded so a saved
+    // or deep-linked "my-store" state can't render it; re-enable with the nav.
     if (moduleKey === "my-store") {
-      return <MyStore company={company} />;
+      return null;
     }
 
     if (

@@ -9,6 +9,7 @@ import {
 import {
   createSupportTicketCreatedNotification,
 } from "../lib/notifications.js";
+import { sendEnquiryAckSms } from "../lib/sms.js";
 
 const router = Router();
 
@@ -486,6 +487,14 @@ router.post("/", async (req, res) => {
       userId,
       ticketNumber: ticket.ticketNumber,
       title: ticket.title,
+    });
+
+    // Enquiry acknowledgement SMS to the person who submitted the query/support
+    // request (best-effort; never blocks ticket creation). For a Call-to-RM the
+    // contact phone is preferred, otherwise the submitting user's own number.
+    await sendEnquiryAckSms({
+      mobile: rmData?.contactPhone || user.phone,
+      name: rmData?.contactName || user.name,
     });
 
     return res.status(201).json({
