@@ -155,6 +155,18 @@
 - **D07-07 Update/cancel:** Reminder time mundu event reschedule/cancel chేస్తే → paత reminder rాకూడదు; kొత్తది సరిగ్గా. Result: [ ]
 - **D07-08 Permission denied:** Notification permission deny chేస్తే → app crash avvakూండా gracefully handle cheyyali. Result: [ ]
 
+## 23. Deep-link notifications (kొత్త feature — notification tap → exact record)
+**Note:** Notification click (web bell) / FCM tap (Android) ippudు **module matrame kాదు, exact record** open chేస్తుంది — shared `navigateNotification` dispatcher (web + Android okే la behave avutundి). Contract: calendar event → `calendar#event:<id>`, support ticket → `help#ticket:<id>`, lead → legacy lead target. Actual FCM **delivery** D-07 blockers (real device + Firebase + worker ON) meeda depend; aa setup unnప్పుడే DL-01..DL-04 run cheyyandi. Legacy lead + module-only navigation inkా pani cheyyాలి (regression).
+**Preconditions:** latest APK (POST_NOTIFICATIONS allow), login, dev backend, calendar + a support ticket accessible.
+- **DL-01 Calendar tap:** Event reminder/notification tap → **aa exact event** open avvali (ప్రస్తుత week lo lేకpoyinా — server `/calendar/:id` tenant-scoped fetch). Result: [ ]
+- **DL-02 Ticket tap:** Support ticket notification tap → **aa exact ticket** details modal open avvali (dialog title + content సరిగ్గా). Result: [ ]
+- **DL-03 Lead tap (regression):** Lead notification tap → Lead Store lo aa lead detail open avvali (paత behavior maారకూడదు). Result: [ ]
+- **DL-04 Module-only (regression):** Record-id lేని notification (e.g. plain `help`/`lead-store`) tap → aa module open avvali, crash kాదు. Result: [ ]
+- **DL-05 Invalid/unauthorized target:** Delete ayin/vేరే-user event ni deep-link chేస్తే → calendar open avvali + "That calendar event is no longer available." safe notice; crash/blank kాదు. **Close chేసి malli calendar normal ga open chేస్తే aa error రాకూడదు** (F2 fix). Result: [ ]
+- **DL-06 Cold-start:** App fully closed (recent-apps nుంచి swipe) → notification tap → app login/session restore ayయాక aa record daగ్గర land avvali (target buffer avutundి). Result: [ ]
+- **DL-07 Android back:** Deep-link tho record open ayyాక hardware Back → background kి jaగకుండా modal/overlay matrame close avvali (topmost overlay). Result: [ ]
+- **DL-08 Accessibility (ticket path focus):** Ticket deep-link open ayyేటప్పుడు (Help module load avutున్న gap lo) focus `<body>` meeda drop avvakూడదు — `<main>` → modal కి velli, TalkBack lo silent gap undకూడదు (F1 fix). Result: [ ]
+
 ## Known blockers / needs (report after testing)
 - **2-user chat (M8.3 receive):** rendవ dev account (same tenant) kావాలి — cheppandi, create chేస్తాను/steps ఇస్తాను.
 - **FCM delivery (M19.3–19.5):** real device + Firebase test notification path కావాలి.
