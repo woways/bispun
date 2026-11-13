@@ -622,6 +622,14 @@ export default function CalendarModal({
     if (focusNotice) focusNoticeRef.current?.focus();
   }, [focusNotice]);
 
+  // A11y (deep-link F2): this modal stays mounted, so clear the deep-link notice
+  // when the calendar closes. Otherwise a stale "no longer available" alert from
+  // a bad deep-link would reappear at the top of the dialog on a later normal
+  // open — a false error for every user and for screen readers.
+  useEffect(() => {
+    if (!open) setFocusNotice("");
+  }, [open]);
+
   // Consume a notification deep-link that targets a specific event. We fetch the
   // event by id (tenant-scoped on the server) so it opens even when it is not in
   // the currently loaded week — covering both 10-minute reminders and invites to

@@ -728,6 +728,12 @@ export default function ClientPortal({
       openCalendarEvent(targetId);
     } else if (targetType === "ticket") {
       openSupportTicket(targetId);
+      // A11y (deep-link F1): Help is a lazy() module, so TicketDetailsModal only
+      // mounts (and grabs focus) after its chunk + loadTickets() resolve. Unlike
+      // the always-mounted calendar overlay, that leaves focus on <body> during
+      // the Suspense gap. Give <main> interim focus so keyboard/SR users aren't
+      // dropped to nowhere; the modal's useOverlayDismiss takes over on mount.
+      focusMainContentSoon();
     } else if (moduleKey === "calendar") {
       setCalendarOpen(true);
     } else if (moduleKey) {
