@@ -85,4 +85,11 @@ appId `com.bispun.crm`; minSdk 24 / target 36; cleartext limited to `10.0.2.2`/`
 
 **FCM config vs intended (no secrets):** packaged `google-services.json` → `project_id: bispun-crm`, package `com.bispun.crm`, api_key present (len 39, valid format). ⇒ **client config matches intended project; AUTHENTICATION_FAILED is a device-specific failure (emulator GMS check-in), NOT a config failure.** Do not regenerate credentials.
 
+**D-07 isolated test procedure (coordinated with Track A; device part still blocked):**
+- In-app reminder CREATION is already **API-verified by Track A** (exactly-once dedup via `CALENDAR_REMINDER:<eventId>` marker; 10-min threshold: 8-min event → reminder, 15-min → none). Not re-run here (no duplication).
+- To reproduce in-app on an ISOLATED non-prod backend (`bispun-mobile-dev`), least blast radius first:
+  - (a) ON-DEMAND (no workers): auth as the assigned user → create event `startAt` in (now, now+10min] → `GET /api/client/notifications` (or `/unread-count`); `ensureCalendarRemindersForUser` creates the REMINDER notification on that request (deduped). actionModule = `calendar#event:<id>`.
+  - (b) WORKER: set `ENABLE_CALENDAR_REMINDER_WORKER=true` while KEEPING `DISABLE_BACKGROUND_WORKERS=true` (starts ONLY the 20s reminder worker, not nurture/subscription). Never unset the prod guard; dev DB only.
+- **Remaining D-07 gap = device-observable only:** push fan-out (pushService→FCM) + audible sound + tap→event. Blocked by FCM token (AUTHENTICATION_FAILED / no device). Use a dev FCM project + test device tokens. Do NOT mark D-07 PASS until observed on a real device.
+
 **Android build-prep (candidate worktree):** `google-services.json` placed (gitignored), web assets synced, POST_NOTIFICATIONS in manifest, API `10.0.2.2:4001`. APK assembly = **Android Studio GUI** (Gradle CLI blocked by sandbox loopback). Note: this worktree's `node_modules` is a junction to `S:\Bispun-integration` — builds on this machine; run `npm install` if the worktree is moved.
