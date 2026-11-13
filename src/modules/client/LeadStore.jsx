@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 
+import { createPortal } from "react-dom";
+
 import {
   Plus,
   X,
@@ -1066,7 +1068,10 @@ function IndividualLeadModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay escapes the dashboard content
+  // wrapper's containing block (transform/scale ancestor) — otherwise the modal
+  // is trapped in that box and sits half-behind the expanded sidebar at ~1024px.
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[92vh] overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -1811,7 +1816,8 @@ function IndividualLeadModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2046,7 +2052,9 @@ function UploadDatasetModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay isn't trapped by the content
+  // wrapper's transform containing block (sits behind the sidebar at ~1024px).
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -2507,7 +2515,8 @@ function UploadDatasetModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2597,7 +2606,9 @@ function EditDatasetModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay isn't trapped by the content
+  // wrapper's transform containing block (sits behind the sidebar at ~1024px).
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -2803,7 +2814,8 @@ function EditDatasetModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
