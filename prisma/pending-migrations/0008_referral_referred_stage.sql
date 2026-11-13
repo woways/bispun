@@ -1,0 +1,15 @@
+-- ⛔ SUPERSEDED — DO NOT RUN THIS FILE ON PRODUCTION. ⛔
+--
+-- The original all-in-one 0008 combined schema changes WITH a
+-- SUCCESSFUL -> EARNED data backfill. That is NOT zero-downtime: the backfill
+-- breaks production code that still filters status = 'SUCCESSFUL' (earnings read
+-- as zero). It has been split for a safe phased rollout:
+--
+--   1) 0008a_referral_referred_stage_expand.sql   -- schema-only; run FIRST
+--   2) deploy the dual-status code to production   -- reads SUCCESSFUL + EARNED
+--   3) 0008b_referral_status_backfill.sql          -- backfill; run LAST
+--
+-- Dev already had this original all-in-one version applied, so Dev's schema/data
+-- are already at the final state — do NOT re-run anything on Dev.
+--
+-- This file intentionally contains NO executable statements.

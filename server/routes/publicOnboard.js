@@ -9,6 +9,7 @@ import {
   computeSelfServePricing,
   finalizeSelfServeSignup,
   buildSelfServeReceipt,
+  recordReferredIntent,
 } from "../lib/selfServeOnboard.js";
 import {
   assertContactVerified,
@@ -286,7 +287,7 @@ router.post("/start", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(adminPassword, 12);
 
-    await prisma.pendingSignup.create({
+    const pendingSignup = await prisma.pendingSignup.create({
       data: {
         providerOrderId: order.id,
         planId: plan.id,
@@ -311,6 +312,15 @@ router.post("/start", async (req, res) => {
           referralCode,
         },
       },
+    });
+
+    // PDF §11 lifecycle: record the REFERRED stage now (verified signup + order
+    // started). Backend-validated, non-fatal, idempotent — never blocks signup.
+    await recordReferredIntent({
+      pendingSignupId: pendingSignup.id,
+      referralCode,
+      referredEmail: adminEmail,
+      referredName: adminName,
     });
 
     const { keyId } = getRazorpayConfig();

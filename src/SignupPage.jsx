@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useParams } from "react-router-dom";
+
+import { readRefFromSearch } from "./lib/referralLink";
 import {
   Building2,
   UserRound,
@@ -70,14 +72,19 @@ function loadRazorpayCheckout() {
 
 // Module-level so the input is never re-created on each keystroke (keeps focus).
 function Input({ label, required, ...props }) {
+  // Associate <label> with <input> (WCAG 1.3.1/4.1.2). Prefer a caller-provided
+  // id/name; otherwise generate a stable one.
+  const autoId = useId();
+  const inputId = props.id || props.name || autoId;
   return (
     <div>
-      <label className="block text-xs font-medium text-slate-600 mb-1">
+      <label htmlFor={inputId} className="block text-xs font-medium text-slate-600 mb-1">
         {label}
         {required && <span className="text-rose-500 ml-0.5">*</span>}
       </label>
       <input
         {...props}
+        id={inputId}
         required={required}
         className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
       />
@@ -114,6 +121,25 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [processing, setProcessing] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [refApplied, setRefApplied] = useState(false);
+
+  // Auto-capture a referral code from the link (?ref=…) or the session it was
+  // stashed in (App.jsx), and prefill the field once. The field stays editable.
+  useEffect(() => {
+    let captured = "";
+    try {
+      captured =
+        readRefFromSearch(window.location.search) ||
+        window.sessionStorage.getItem("bispun_ref") ||
+        "";
+    } catch {
+      captured = readRefFromSearch(window.location.search);
+    }
+    if (captured) {
+      setForm((f) => (f.referralCode ? f : { ...f, referralCode: captured }));
+      setRefApplied(true);
+    }
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     apiRequest("/api/public/onboard/plans")
@@ -307,7 +333,7 @@ export default function SignupPage() {
           </p>
 
           {error && (
-            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm p-3">
+            <div role="alert" className="mt-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm p-3">
               {error}
             </div>
           )}
@@ -511,12 +537,14 @@ export default function SignupPage() {
                 />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label htmlFor="adminPassword" className="block text-xs font-medium text-slate-600 mb-1">
                   Password
                   <span className="text-rose-500 ml-0.5">*</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="adminPassword"
+                    name="adminPassword"
                     required
                     minLength={8}
                     type={showPassword ? "text" : "password"}
@@ -528,19 +556,23 @@ export default function SignupPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword((val) => !val)}
-                    className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute right-2 top-2 rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
-                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
                   </button>
                 </div>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
+                <label htmlFor="referralCode" className="block text-xs font-medium text-slate-600 mb-1">
                   Referral Code{" "}
-                  <span className="font-normal text-slate-400">(optional)</span>
+                  <span className="font-normal text-slate-500">(optional)</span>
                 </label>
                 <input
+                  id="referralCode"
+                  name="referralCode"
                   type="text"
+                  autoComplete="off"
                   value={form.referralCode}
                   onChange={(e) =>
                     updateField(
@@ -551,6 +583,10 @@ export default function SignupPage() {
                   className="w-full h-10 px-3 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                   placeholder="Enter referrer code if you have one"
                 />
+                {/* Announce auto-prefill to screen readers (value changed without user action). */}
+                <span role="status" aria-live="polite" className="sr-only">
+                  {refApplied ? "Referral code applied from your link" : ""}
+                </span>
               </div>
             </div>
           </section>

@@ -11,6 +11,8 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { buildReferralSignupUrl } from "../../lib/referralLink";
+
 function money(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
@@ -107,7 +109,15 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
   const referred = rewardProgram?.referrals || [];
   const creditedHistory = (rewardProgram?.payouts || []).filter((p) => p.status === "PAID");
 
-  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
+  // Configurable base (never hard-coded to prod); empty when there's no code so
+  // all share/copy controls stay disabled until a code exists.
+  const link = code
+    ? buildReferralSignupUrl({
+        configuredBase: import.meta.env.VITE_PUBLIC_SIGNUP_URL,
+        origin: typeof window !== "undefined" ? window.location.origin : "",
+        code,
+      })
+    : "";
 
   useEffect(() => () => window.clearTimeout(copyTimerRef.current), []);
 
@@ -337,26 +347,35 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
           </div>
         ) : (
           <ul className="mt-3 divide-y divide-slate-100">
-            {referred.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">
-                    {initialsOf(item.company?.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-semibold text-slate-900">
-                      {item.company?.name || "Bispun client"}
+            {referred.map((item) => {
+              const earned = item.status === "EARNED";
+              const displayName = item.company?.name || item.referredName || "New signup";
+              const sub = earned
+                ? `${item.company?.planName || "CRM plan"} · Joined ${formatDate(item.qualifiedAt || item.createdAt)}`
+                : `Signup started · ${formatDate(item.createdAt)}`;
+              return (
+                <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[12px] font-semibold text-slate-600">
+                      {initialsOf(displayName)}
                     </div>
-                    <div className="mt-0.5 text-[12px] text-slate-500">
-                      {item.company?.planName || "CRM plan"} · Joined {formatDate(item.qualifiedAt || item.createdAt)}
+                    <div className="min-w-0">
+                      <div className="truncate text-[14px] font-semibold text-slate-900">{displayName}</div>
+                      <div className="mt-0.5 text-[12px] text-slate-500">{sub}</div>
                     </div>
                   </div>
-                </div>
-                <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
-                  <CheckCircle2 size={12} aria-hidden="true" /> Qualified
-                </span>
-              </li>
-            ))}
+                  {earned ? (
+                    <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700">
+                      <CheckCircle2 size={12} aria-hidden="true" /> Earned
+                    </span>
+                  ) : (
+                    <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
+                      <Clock3 size={12} aria-hidden="true" /> Referred
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

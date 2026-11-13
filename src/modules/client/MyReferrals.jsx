@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
+import { buildReferralSignupUrl } from "../../lib/referralLink";
 
 const STAGE_LABELS = {
   NEW: "New",
@@ -155,7 +156,15 @@ export default function MyReferrals({ currentUser }) {
     currentUser?.role === "CLIENT_ADMIN" ||
     currentUser?.permissions?.canViewTeamTargets === true;
 
-  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
+  // Configurable base (never hard-coded to prod); empty when no code so share
+  // controls stay disabled.
+  const link = code
+    ? buildReferralSignupUrl({
+        configuredBase: import.meta.env.VITE_PUBLIC_SIGNUP_URL,
+        origin: typeof window !== "undefined" ? window.location.origin : "",
+        code,
+      })
+    : "";
 
   async function load() {
     setLoading(true);
@@ -413,8 +422,13 @@ export default function MyReferrals({ currentUser }) {
               <span className="sr-only"> (opens in new tab)</span>
             </a>
             <a
-              href={`mailto:?subject=${encodeURIComponent("My referral link")}&body=${encodeURIComponent(link)}`}
-              className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              href={link ? `mailto:?subject=${encodeURIComponent("My referral link")}&body=${encodeURIComponent(link)}` : undefined}
+              aria-disabled={link ? undefined : "true"}
+              className={`inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                link
+                  ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                  : "pointer-events-none border-slate-200 bg-slate-50 text-slate-400"
+              }`}
             >
               <Mail size={15} aria-hidden="true" /> Share via Email
             </a>

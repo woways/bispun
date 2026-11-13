@@ -1678,11 +1678,21 @@ model CrmReferral {
   referrerId String
   referrer   User @relation("CrmReferralReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
 
-  referredCompanyId String @unique
-  referredCompany   Company @relation("ReferredCompany", fields: [referredCompanyId], references: [id], onDelete: Cascade)
+  // Nullable until payment: a REFERRED row is created at verified signup (before
+  // the company exists) and the company is attached when it becomes EARNED.
+  referredCompanyId String? @unique
+  referredCompany   Company? @relation("ReferredCompany", fields: [referredCompanyId], references: [id], onDelete: Cascade)
+
+  // Links a pre-payment REFERRED row to its PendingSignup (one per order) so the
+  // same row can transition REFERRED -> EARNED at payment, idempotently.
+  pendingSignupId String? @unique
+  referredEmail   String?
+  referredName    String?
 
   referralCode String
-  status       String   @default("SUCCESSFUL")
+  // Lifecycle: REFERRED (verified signup/order started) -> EARNED (payment
+  // captured + account activated). Rewards count EARNED only.
+  status       String   @default("REFERRED")
   qualifiedAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
