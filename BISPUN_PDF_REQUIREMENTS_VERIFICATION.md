@@ -83,6 +83,8 @@ Each row's verdict uses PASS / PARTIAL / FAIL / BLOCKED / NOT TESTED. The five "
 | Clar: Duplicates KPI | IMPLEMENTED | 🔍 | "Duplicates Skipped" :4824 |
 | Clar: Processed view | PARTIAL | 🔍 | no standalone Processed view; surfaced as run banner text only |
 
+> **§3 LIVE/API VERIFICATION UPDATE (2026-11-13):** upgraded from code-inspection (🔍) to **live/API PASS** for 3.1, 3.2, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10, 3.11, 3.13, 3.14, 3.15, 3.17, 3.18 (export+wording+import-UI), 3.19, plus duplicate detection (409), lead search, and employee/role visibility (admin 17 / mgr 0 / emp 0). **3.3** PARTIAL (refresh control present; remark-refresh proven). **3.12 PARTIAL/BLOCKED** — IM Leads + DM Leads are two separate categories, no single literal "IMDM" option → needs a business decision. **Not tested:** real CSV file upload + import "Duplicates Skipped" counter. Full evidence: `BISPUN_LEADSTORE_SECTION3_VERIFICATION.md`. No regression (146/146).
+
 ## 4. UTM Leads — ALL IMPLEMENTED
 | Req | Code | Local | Evidence |
 |---|---|---|---|
