@@ -802,6 +802,44 @@ router.get(
 
 
 
+/* FETCH ONE EVENT — resolves a notification deep-link to the exact event.
+   Tenant-isolated: scoped strictly to the caller's company (same authorization
+   as the list endpoint). A missing or other-company event returns 404 so the
+   client shows a safe "no longer available" notice instead of leaking data. */
+
+router.get("/:id", async (req, res) => {
+  try {
+    const companyId = req.clientUser.companyId;
+    const id = cleanString(req.params.id);
+
+    if (!id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Event id is required" });
+    }
+
+    const event = await prisma.calendarEvent.findFirst({
+      where: { id, companyId },
+      include: includeUsers,
+    });
+
+    if (!event) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Calendar event not found" });
+    }
+
+    return res.json({ success: true, event: formatEvent(event) });
+  } catch (error) {
+    console.error("Failed to fetch calendar event:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Unable to fetch calendar event" });
+  }
+});
+
+
+
 /* CREATE EVENT */
 
 
@@ -1258,11 +1296,11 @@ router.post(
 
             actionModule:
 
-              "dashboard",
+              `calendar#event:${event.id}`,
 
             actionLabel:
 
-              "Open calendar",
+              "Open calendar event",
 
           },
 
@@ -2020,11 +2058,11 @@ router.patch(
 
             actionModule:
 
-              "dashboard",
+              `calendar#event:${event.id}`,
 
             actionLabel:
 
-              "Open calendar",
+              "Open calendar event",
 
           },
 

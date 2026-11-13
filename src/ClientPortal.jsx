@@ -670,6 +670,11 @@ export default function ClientPortal({
   // notification clicks and dashboard lead rows). Lead Store opens the detail
   // and calls back to clear this so it doesn't re-fire on list refreshes.
   const [leadFocusTarget, setLeadFocusTarget] = useState(null);
+  // Deep-link targets for the calendar modal and Help module, set when a
+  // notification points at a specific event or support ticket. Each child
+  // clears its token via onFocusConsumed so list refreshes don't re-fire.
+  const [calendarFocusEventId, setCalendarFocusEventId] = useState(null);
+  const [helpFocusTicketId, setHelpFocusTicketId] = useState(null);
   // A11y: after a notification navigates (the panel closes and the activated
   // control unmounts), move focus to the main content region so keyboard/screen
   // reader users aren't dropped to <body>. Best-effort; never throws.
@@ -691,6 +696,44 @@ export default function ClientPortal({
     if (!leadId) return;
     setLeadFocusTarget(String(leadId));
     setModule("lead-store");
+  }
+
+  // Open the calendar modal, focused on a specific event when an id is given.
+  // With no id (or a deleted/unauthorized event) the modal still opens and the
+  // modal itself shows a safe "no longer available" notice. The overlay owns
+  // focus (useOverlayDismiss), so callers must NOT also run focusMainContentSoon.
+  function openCalendarEvent(eventId) {
+    if (eventId) setCalendarFocusEventId(String(eventId));
+    setCalendarOpen(true);
+  }
+
+  // Open the Help module, focused on a specific ticket when an id is given.
+  // Help shows a safe notice if the ticket isn't in the user's accessible list.
+  function openSupportTicket(ticketId) {
+    if (ticketId) setHelpFocusTicketId(String(ticketId));
+    setModule("help");
+  }
+
+  // Single shared dispatcher for a parsed notification target. Used by BOTH the
+  // web notification-bell click and the Android push tap so navigation is
+  // identical across platforms. Focus handling is deliberately split: plain
+  // module/lead navigation hands focus to <main>, while overlay-opening targets
+  // (event/ticket/calendar) let the overlay's own focus management take over
+  // (per accessibility review — avoids a focus race with useOverlayDismiss).
+  function navigateNotification({ moduleKey, targetType, targetId }) {
+    if (targetType === "lead" && targetId) {
+      openLeadDetail(targetId);
+      focusMainContentSoon();
+    } else if (targetType === "event") {
+      openCalendarEvent(targetId);
+    } else if (targetType === "ticket") {
+      openSupportTicket(targetId);
+    } else if (moduleKey === "calendar") {
+      setCalendarOpen(true);
+    } else if (moduleKey) {
+      setModule(moduleKey);
+      focusMainContentSoon();
+    }
   }
 
   // Phase B: orientation + preload for the code-split modules. The document
@@ -1876,19 +1919,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     // Resolve a deep-link target so the click opens the exact record, not just
     // the module. The lead id is carried on actionModule ("lead-store#lead:<id>")
     // with a legacy fallback to the message marker. Shared with mobile push.
-    const { moduleKey, leadId } = parseNotificationTarget(
+    const { moduleKey, targetType, targetId } = parseNotificationTarget(
       notification.actionModule,
       notification.message
     );
 
-    if (leadId) {
-      openLeadDetail(leadId);
-    } else if (moduleKey) {
-      setModule(moduleKey);
-    }
+    navigateNotification({ moduleKey, targetType, targetId });
 
     setNotificationsOpen(false);
-    focusMainContentSoon();
   }
 
   async function markAllNotificationsRead() {
@@ -2090,10 +2128,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     if (!user?.id) return undefined;
     initMobilePush({
       onNavigate: (target) => {
-        const { moduleKey, leadId } = parseNotificationTarget(target);
-        if (leadId) openLeadDetail(leadId);
-        else if (moduleKey) setModule(moduleKey);
-        focusMainContentSoon();
+        const { moduleKey, targetType, targetId } = parseNotificationTarget(target);
+        navigateNotification({ moduleKey, targetType, targetId });
       },
     });
     return undefined;
@@ -4106,6 +4142,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             user={
               user
             }
+            focusTicketId={helpFocusTicketId}
+            onFocusConsumed={() => setHelpFocusTicketId(null)}
           />
         );
 
@@ -6453,6 +6491,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         open={calendarOpen}
         onClose={() => setCalendarOpen(false)}
         currentUser={user}
+        focusEventId={calendarFocusEventId}
+        onFocusConsumed={() => setCalendarFocusEventId(null)}
       />
 
       {addYearOpen && (
