@@ -10,6 +10,17 @@
 - **Local-verified:** ✅ = behaviour exercised at runtime by this session's automated suite; 🔍 = verified by code inspection only (no runtime UI test); — = n/a.
 - **Prod:** every code item below is subject to the **production caveat** (see §0): the **frontend deployed at bispun.com is a stale build that does NOT contain these changes**, so nothing here is "verified working in production." Backend routes are present.
 
+## Status dimensions (2026-11-13 re-verification — read with every row)
+Each row's verdict uses PASS / PARTIAL / FAIL / BLOCKED / NOT TESTED. The five "where does it exist" dimensions the spec asks for are **uniform across the matrix** unless a row says otherwise, so they are stated once here instead of repeated per row:
+- **Available locally:** yes for every IMPLEMENTED/PARTIAL row (code present in the worktree).
+- **Integrated on review branch (`integration/bispun-final-pdf-review`):** yes — this branch = `origin/main` + Track B (mobile/a11y/greeting) + QA suites + admin-reset + **counselling P1 fix**. Exceptions (NOT integrated, held): referral-signup `fa0518f` (§11.3 auto `?ref`), coupon (§17).
+- **Present in GitHub `main` (`8dff6d1`):** yes for IMPLEMENTED rows EXCEPT the counselling P1 fix (model field — on this branch only), §11.3 auto-`?ref` (unmerged branch), and the ABSENT items (15.1, 16.3, 17.2).
+- **Verified deployed (production):** **NO for all** — the Vercel frontend is a stale build (§0); backend routes present but UI absent.
+- **Actually working in production:** **NOT TESTED / BLOCKED for all** — needs authenticated prod access + a redeploy (you run this via the Manual QA Guide).
+- **Browser verification status:** **NOT TESTED for all rows here** — no browser/UI runtime was driven in this backend QA; `BISPUN_MANUAL_QA_GUIDE.md` + `BISPUN_MASTER_MANUAL_QA.csv` are the instruments for your per-module browser testing (they carry per-row navigation/action/expected + Actual/Pass-Fail fields).
+- **Next action:** per `BISPUN_FINAL_GO_NO_GO.md` §7 (merge held items, resolve §20 business decisions, fix Render `db push`, apply prod migrations incl. counselling `0010`, redeploy frontend, then run the manual matrix).
+- **Automated re-verification today:** unit 106/106, API integration 35/35, five-gap 5/5, build green (see `BISPUN_REGRESSION_RESULTS_20261113.md`). "✅" rows are backed by these runs; "🔍" rows remain code-only until browser/manual testing.
+
 ---
 
 ## 0. OVERARCHING PRODUCTION CAVEAT (applies to every row)
