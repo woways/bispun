@@ -210,12 +210,25 @@ test("GAP3: admission + synthetic payment → billing totals/GST/discount/receip
 // GAP 4 — Counselling: create/edit, lead linkage, follow-up, validation, roles
 // ===========================================================================
 test("GAP4: counselling create links a lead, edit updates status/follow-up, validation + role checks", async () => {
-  const create = await http("POST", "/api/client/counselling", { token: F.tA, body: { studentName: `Couns ${Date.now()}`, studentPhone: `9${String(Date.now()).slice(-9)}`, scheduledAt: new Date(Date.now() + 86400000).toISOString(), status: "SCHEDULED", course: "MBA", mode: "VIDEO_CALL" } });
+  const altPhone = `8${String(Date.now()).slice(-9)}`;
+  const create = await http("POST", "/api/client/counselling", { token: F.tA, body: { studentName: `Couns ${Date.now()}`, studentPhone: `9${String(Date.now()).slice(-9)}`, alternatePhone: altPhone, scheduledAt: new Date(Date.now() + 86400000).toISOString(), status: "SCHEDULED", course: "MBA", mode: "VIDEO_CALL" } });
   assert.ok([200, 201].includes(create.status), `counselling create (${create.status}) ${JSON.stringify(create.body).slice(0,160)}`);
   const sess = create.body.session || create.body.data || create.body;
   assert.ok(sess?.id, "session id");
   const dbSess = await prisma.counsellingSession.findUnique({ where: { id: sess.id } });
   assert.equal(dbSess.companyId, F.coA.id);
+  assert.equal(dbSess.studentAltPhone, altPhone, "studentAltPhone persisted (P1 field)");
+
+  // READ: list returns the session with alternatePhone mapped back
+  const list = await http("GET", "/api/client/counselling", { token: F.tA });
+  assert.equal(list.status, 200, "counselling list read");
+  const listed = (list.body.sessions || list.body.data || []).find((s) => s.id === sess.id);
+  assert.ok(listed && listed.alternatePhone === altPhone, "read-back exposes alternatePhone");
+
+  // SEARCH by alt phone (exercises the studentAltPhone where-clause that used to 500)
+  const search = await http("GET", `/api/client/counselling?search=${altPhone}`, { token: F.tA });
+  assert.equal(search.status, 200, "counselling search by alt phone");
+  assert.ok((search.body.sessions || search.body.data || []).some((s) => s.id === sess.id), "search by alt phone finds the session");
 
   // edit: status + follow-up
   const edit = await http("PATCH", `/api/client/counselling/${sess.id}`, { token: F.tA, body: { status: "COMPLETED", followUpAt: new Date(Date.now() + 7 * 86400000).toISOString() } });
