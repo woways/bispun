@@ -241,6 +241,9 @@ router.patch("/", async (req, res) => {
         "defaultSmsNotifications",
         "maintenanceMode",
         "allowNewClientOnboarding",
+        "smsEnabled",
+        "smsWelcomeEnabled",
+        "smsEnquiryEnabled",
       ]
     ) {
       if (
@@ -278,6 +281,27 @@ router.patch("/", async (req, res) => {
 
       data.defaultPrimaryColor =
         color;
+    }
+
+    // MSG91 SMS text fields (template IDs / sender) — trimmed, empty clears.
+    for (const field of [
+      "smsSenderId",
+      "smsOtpTemplateId",
+      "smsWelcomeTemplateId",
+      "smsEnquiryTemplateId",
+    ]) {
+      if (req.body[field] !== undefined) {
+        const value = String(req.body[field] || "").trim();
+        data[field] = value || null;
+      }
+    }
+
+    if (req.body.smsEnquiryHours !== undefined) {
+      const hours = Number(req.body.smsEnquiryHours);
+      data.smsEnquiryHours =
+        Number.isFinite(hours) && hours > 0 && hours <= 720
+          ? Math.round(hours)
+          : 24;
     }
 
     const settings =

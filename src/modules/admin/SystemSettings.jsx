@@ -179,6 +179,23 @@ export default function SystemSettings() {
           data.settings
             .defaultPrimaryColor ||
           "indigo",
+
+        smsEnabled:
+          data.settings.smsEnabled ?? false,
+        smsSenderId:
+          data.settings.smsSenderId || "",
+        smsOtpTemplateId:
+          data.settings.smsOtpTemplateId || "",
+        smsWelcomeTemplateId:
+          data.settings.smsWelcomeTemplateId || "",
+        smsWelcomeEnabled:
+          data.settings.smsWelcomeEnabled ?? true,
+        smsEnquiryTemplateId:
+          data.settings.smsEnquiryTemplateId || "",
+        smsEnquiryEnabled:
+          data.settings.smsEnquiryEnabled ?? true,
+        smsEnquiryHours:
+          String(data.settings.smsEnquiryHours ?? 24),
       });
     } catch (error) {
       setError(
@@ -626,6 +643,89 @@ export default function SystemSettings() {
               )
             }
           />
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex items-center gap-2">
+          <Phone
+            size={15}
+            className="text-indigo-600"
+          />
+
+          <h3 className="text-sm font-bold tracking-tight text-slate-950">
+            SMS (MSG91)
+          </h3>
+        </div>
+
+        <p className="text-xs text-slate-500 mt-1">
+          DLT-approved transactional SMS. Paste the <strong>MSG91 Template IDs</strong>
+          {" "}(from MSG91 → Templates) below. The secret auth key lives in the
+          server environment (MSG91_AUTH_KEY), not here.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          <Toggle
+            label="Enable SMS"
+            description="Master switch for all transactional SMS. Needs MSG91_AUTH_KEY set on the server. OTP works regardless of this switch."
+            enabled={form.smsEnabled}
+            onChange={(value) => setField("smsEnabled", value)}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field
+              label="Sender ID (DLT header)"
+              value={form.smsSenderId}
+              placeholder="BISPUN"
+              onChange={(value) => setField("smsSenderId", value)}
+            />
+
+            <Field
+              label="OTP Template ID (MSG91)"
+              value={form.smsOtpTemplateId}
+              placeholder="MSG91 template id for login OTP"
+              onChange={(value) => setField("smsOtpTemplateId", value)}
+            />
+          </div>
+
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            <Toggle
+              label="Welcome SMS"
+              description="Sent to the client admin when a new client is onboarded."
+              enabled={form.smsWelcomeEnabled}
+              onChange={(value) => setField("smsWelcomeEnabled", value)}
+            />
+            <Field
+              label="Welcome Template ID (MSG91)"
+              value={form.smsWelcomeTemplateId}
+              placeholder="MSG91 template id for welcome"
+              onChange={(value) => setField("smsWelcomeTemplateId", value)}
+            />
+          </div>
+
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            <Toggle
+              label="Enquiry Acknowledgement SMS"
+              description="Sent to the person who submits a query/support request on the client portal Help & Support page."
+              enabled={form.smsEnquiryEnabled}
+              onChange={(value) => setField("smsEnquiryEnabled", value)}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field
+                label="Enquiry Template ID (MSG91)"
+                value={form.smsEnquiryTemplateId}
+                placeholder="MSG91 template id for enquiry ack"
+                onChange={(value) => setField("smsEnquiryTemplateId", value)}
+              />
+              <Field
+                label="Contact within (hours)"
+                type="number"
+                value={form.smsEnquiryHours}
+                placeholder="24"
+                onChange={(value) => setField("smsEnquiryHours", value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

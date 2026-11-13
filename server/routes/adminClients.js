@@ -5,7 +5,11 @@ import { resolveMx } from "node:dns/promises";
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
+<<<<<<< Updated upstream
 import { createRateLimiter } from "../middleware/rateLimit.js";
+=======
+import { sendWelcomeSms } from "../lib/sms.js";
+>>>>>>> Stashed changes
 import {
   assertContactVerified,
   ContactVerificationError,
@@ -942,6 +946,9 @@ router.post("/", async (req, res) => {
 
     const actor = await getAdminActor(req);
     await writeSuperAdminAudit({ req, actor, action: "CLIENT_CREATED", entityType: "COMPANY", entityId: createdClient.id, companyId: createdClient.id, companyName: createdClient.name, summary: `${actor?.name || "Super Admin"} onboarded ${createdClient.name}.`, metadata: { plan: createdClient.subscriptions?.[0]?.plan?.key || null, billingCycle: createdClient.subscriptions?.[0]?.billingCycle || null, clientAdminEmail, referralCode: referralReferrer?.referralCode || null } });
+
+    // Welcome SMS to the client admin (best-effort; never blocks onboarding).
+    await sendWelcomeSms({ mobile: companyPhone, name: clientAdminName });
 
     return res.status(201).json({
       success: true,
