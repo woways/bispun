@@ -46,6 +46,7 @@ import {
 import { apiRequest } from "../../lib/api";
 import { brandColor } from "../../lib/brandTheme";
 import { formatUiDate, formatUiTime, formatUiDateTime } from "../../lib/uiPreferences";
+import { donutCenterTotal } from "../../lib/donutCenterTotal";
 import { MobileRecordCard } from "../../components/mobileUi";
 import { Badge, statusTone } from "../../components/ui";
 
@@ -1480,10 +1481,7 @@ export default function Dashboard({
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                           <div className="text-center">
                             <div className="text-[20px] font-bold tracking-[-0.04em] text-slate-950">
-                              {
-                                summary.totalLeads ||
-                                data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
-                              }
+                              {donutCenterTotal(data)}
                             </div>
                             <div className="text-[13px] text-slate-400">
                               Leads
@@ -1493,10 +1491,7 @@ export default function Dashboard({
                       </div>
 
                       <p className="sr-only">
-                        {`Total ${
-                          summary.totalLeads ||
-                          data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
-                        } leads for the period.`}
+                        {`Total ${donutCenterTotal(data)} leads for the period.`}
                       </p>
 
                       <ul className="mt-2 space-y-2">
