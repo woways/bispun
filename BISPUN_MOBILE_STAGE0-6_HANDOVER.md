@@ -63,3 +63,26 @@ Canonical: `calendar#event:<id>` + `help#ticket:<id>` (+ legacy lead + module-on
 
 ## Release-readiness snapshot
 appId `com.bispun.crm`; minSdk 24 / target 36; cleartext limited to `10.0.2.2`/`localhost`; `api.js` throws in prod without `VITE_API_URL`; release signing reads external `keystore.properties`; no secrets committed (only `.env.example`, `keystore.properties.example`).
+
+---
+
+## Cross-track convergence + PR-readiness (round 2 — no push)
+**Track A latest (verified live):** `integration/notif-deeplinks-consolidated` @ `3506059` (F1/F2 applied at `ab32470`, on `aa278d1`).
+**My candidate:** `integration/mobile-deeplinks-candidate-20261113` @ `96cec91`.
+
+**Reconciliation result — compatible, no divergence:**
+- Deep-link CORE files are **byte-identical** across the two lines (diff=0): `src/lib/notificationTarget.js`, `src/lib/mobilePush.js`, `server/lib/calendarReminders.js`, `server/lib/notifications.js`, `server/routes/clientCalendar.js`. ⇒ no duplicate F1/F2, **one canonical backend producer** (`calendar#event` / `help#ticket`).
+- **Contract parse verified live (all forms):** `dashboard#event:<id>`→event (back-compat), `calendar#event:<id>`→event (canonical), `help#ticket:<id>`→ticket, `lead-store#lead:<id>`→lead, module-only `help`→module, legacy `LEAD_FOLLOWUP:<id>` marker→lead. Tenant-scope + cold-start buffering unchanged.
+- My candidate additionally carries (NOT on Track A's line): `392722f` POST_NOTIFICATIONS, `8339b77` chat scroll, `4dba481` Stage-5 mobile a11y. **Recommend Track A pick up POST_NOTIFICATIONS** on any Android-shipping line.
+
+**PR-readiness (prepared, NOT pushed/opened per directive):**
+- Source: `integration/mobile-deeplinks-candidate-20261113` @ `96cec91`.
+- Proposed target: `integration/mobile-latest-20261113` @ `61a3bbd` (the mobile line) — **clean fast-forward, 0 behind / 7 ahead, no conflicts**. (NOT Production `main` — that needs separate authorization.)
+- Files changed vs target: 15 (manifest, 5 server deep-link files, 6 src files, 2 docs, QA guide).
+- Accessibility evidence: 2 independent accessibility-lead passes, all applied fixes PASS.
+- Automated: 104/105 (`adminReferralsAuth` env-gated only); vite build + cap sync green.
+- Blockers: FCM token (device), D-07 delivery (device + isolated worker), physical-device perf.
+
+**FCM config vs intended (no secrets):** packaged `google-services.json` → `project_id: bispun-crm`, package `com.bispun.crm`, api_key present (len 39, valid format). ⇒ **client config matches intended project; AUTHENTICATION_FAILED is a device-specific failure (emulator GMS check-in), NOT a config failure.** Do not regenerate credentials.
+
+**Android build-prep (candidate worktree):** `google-services.json` placed (gitignored), web assets synced, POST_NOTIFICATIONS in manifest, API `10.0.2.2:4001`. APK assembly = **Android Studio GUI** (Gradle CLI blocked by sandbox loopback). Note: this worktree's `node_modules` is a junction to `S:\Bispun-integration` — builds on this machine; run `npm install` if the worktree is moved.
