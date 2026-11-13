@@ -4639,7 +4639,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               <button
                 type="button"
                 onClick={() => setWorkspaceSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 aria-label="Clear search"
               >
                 <X size={14} aria-hidden="true" />
@@ -4711,7 +4711,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             </div>
           )}
           {notificationsLoading ? (
-            <div className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500">
+            <div
+              className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500"
+              role="status"
+              aria-live="polite"
+            >
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
               Loading...
             </div>
@@ -4733,6 +4737,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   notification.read ? "bg-white" : "bg-indigo-50/30"
                 }`}
               >
+                {!notification.read && (
+                  <span className="sr-only">Unread. </span>
+                )}
                 <div className="text-xs font-bold text-slate-900">
                   {notification.title}
                 </div>
