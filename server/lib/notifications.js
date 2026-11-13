@@ -73,6 +73,7 @@ export async function createReferralCreditedNotification({
 export async function createSupportTicketCreatedNotification({
   companyId,
   userId,
+  ticketId = null,
   ticketNumber,
   title,
 }) {
@@ -82,7 +83,9 @@ export async function createSupportTicketCreatedNotification({
     title: "Support ticket submitted",
     message: `${ticketNumber} · ${title} has been submitted successfully and is waiting for Bispun review.`,
     type: "SUPPORT",
-    actionModule: "help",
+    // Deep-link to the exact ticket when its id is known; fall back to the Help
+    // module otherwise. Resolved by parseNotificationTarget on web and mobile.
+    actionModule: ticketId ? `help#ticket:${ticketId}` : "help",
     actionLabel: "View support ticket",
   });
 }
@@ -90,6 +93,7 @@ export async function createSupportTicketCreatedNotification({
 export async function createSupportTicketUpdatedNotification({
   companyId,
   userId = null,
+  ticketId = null,
   ticketNumber,
   ticketTitle,
   statusLabel,
@@ -106,7 +110,7 @@ export async function createSupportTicketUpdatedNotification({
     title: "Support ticket updated",
     message: `${ticketNumber} · ${ticketTitle} is now ${statusLabel}.${remarks}`,
     type: "SUPPORT",
-    actionModule: "help",
-    actionLabel: "Open Help & Support",
+    actionModule: ticketId ? `help#ticket:${ticketId}` : "help",
+    actionLabel: "Open support ticket",
   });
 }

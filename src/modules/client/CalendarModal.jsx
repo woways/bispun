@@ -347,7 +347,13 @@ function formatTimeLabel(date) {
 
 
 
-export default function CalendarModal({ open, onClose, currentUser }) {
+export default function CalendarModal({
+  open,
+  onClose,
+  currentUser,
+  focusEventId = null,
+  onFocusConsumed,
+}) {
 
   const [anchorDate, setAnchorDate] = useState(() => new Date());
 
@@ -388,6 +394,12 @@ export default function CalendarModal({ open, onClose, currentUser }) {
 
 
   const [now, setNow] = useState(() => new Date());
+
+  // Deep-link focus: when a notification targets an event that is missing or no
+  // longer visible to this user, show an assertive, focusable notice (mirrors
+  // LeadStore's focusNotice pattern) instead of silently doing nothing.
+  const [focusNotice, setFocusNotice] = useState("");
+  const focusNoticeRef = useRef(null);
 
   const calendarRef = useRef(null);
 
@@ -603,6 +615,73 @@ export default function CalendarModal({ open, onClose, currentUser }) {
   }, [open]);
 
 
+
+  // A11y: move focus to the deep-link notice when it appears so keyboard and
+  // screen-reader users land on the explanation instead of nowhere.
+  useEffect(() => {
+    if (focusNotice) focusNoticeRef.current?.focus();
+  }, [focusNotice]);
+
+  // A11y (deep-link F2): this modal stays mounted, so clear the deep-link notice
+  // when the calendar closes. Otherwise a stale "no longer available" alert from
+  // a bad deep-link would reappear at the top of the dialog on a later normal
+  // open — a false error for every user and for screen readers.
+  useEffect(() => {
+    if (!open) setFocusNotice("");
+  }, [open]);
+
+  // Consume a notification deep-link that targets a specific event. We fetch the
+  // event by id (tenant-scoped on the server) so it opens even when it is not in
+  // the currently loaded week — covering both 10-minute reminders and invites to
+  // future events. A deleted/unauthorized event (404) shows a safe notice.
+  useEffect(() => {
+    if (!open || !focusEventId) return undefined;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const data = await apiRequest(
+          `/api/client/calendar/${encodeURIComponent(focusEventId)}`
+        );
+        if (cancelled) return;
+        const ev = data?.event;
+        if (ev && ev.id) {
+          const wasEditorOpen = editorOpen;
+          setSelectedDate(startOfDay(new Date(ev.startAt)));
+          setAnchorDate(new Date(ev.startAt));
+          openEdit(ev);
+          setFocusNotice("");
+          // If the editor was already open (deep-linking a second event while
+          // one is showing), useOverlayDismiss won't re-run its focus effect —
+          // move focus to the editor's first field so the switch is announced.
+          if (wasEditorOpen) {
+            window.requestAnimationFrame(() => {
+              try {
+                editorRef.current
+                  ?.querySelector("input, select, textarea, button, [tabindex]")
+                  ?.focus();
+              } catch {
+                /* non-fatal: focus handoff is best-effort */
+              }
+            });
+          }
+        } else {
+          setFocusNotice("That calendar event is no longer available.");
+        }
+      } catch {
+        if (!cancelled) {
+          setFocusNotice("That calendar event is no longer available.");
+        }
+      } finally {
+        if (!cancelled) onFocusConsumed?.();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, focusEventId]);
 
   // Lock body scroll while the modal is open.
 
@@ -1051,6 +1130,20 @@ export default function CalendarModal({ open, onClose, currentUser }) {
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {formatMonthYear(anchorDate)}
         </div>
+
+        {/* Deep-link fallback: assertive, focusable notice shown when a
+            notification pointed at an event that is missing or no longer
+            visible to this user. Mirrors LeadStore's focusNotice pattern. */}
+        {focusNotice && (
+          <div
+            ref={focusNoticeRef}
+            role="alert"
+            tabIndex={-1}
+            className="mx-4 mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-[13px] font-semibold text-amber-900 outline-none sm:mx-5"
+          >
+            {focusNotice}
+          </div>
+        )}
 
         {/* HEADER */}
 

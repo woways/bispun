@@ -40,8 +40,11 @@ async function createReminderIfMissing(event) {
       title: "Calendar event in 10 minutes",
       message: `${event.title} starts at ${formatEventTime(event.startAt)}. ${marker}`,
       type: "REMINDER",
-      actionModule: "dashboard",
-      actionLabel: "Open calendar",
+      // Deep-link to the exact event; the web bell and the Android tap handler
+      // both resolve "calendar#event:<id>" via parseNotificationTarget and open
+      // the calendar modal focused on this event.
+      actionModule: `calendar#event:${event.id}`,
+      actionLabel: "Open calendar event",
     },
   });
 

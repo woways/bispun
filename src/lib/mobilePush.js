@@ -38,6 +38,7 @@ const ALLOWED_MODULES = new Set([
   "counselling",
   "walkins",
   "chat",
+  "calendar",
   "notifications",
   "settings",
   "profile",
@@ -88,13 +89,18 @@ async function sendToken(token) {
 // for after login. Never navigates a logged-out user.
 function handleTapAction(action) {
   const raw = action?.notification?.data?.actionModule;
-  const { moduleKey, leadId } = parseNotificationTarget(raw);
+  const { moduleKey, targetType, targetId } = parseNotificationTarget(raw);
   if (!isAllowedModule(moduleKey)) return;
 
-  // Preserve the lead deep-link target so the portal can open the exact lead.
-  // The base module key is validated against the allowlist above; the encoded
-  // "#lead:<id>" suffix is passed through for the navigation handler to resolve.
-  const target = leadId ? `${moduleKey}#lead:${leadId}` : moduleKey;
+  // Preserve the exact-record deep-link target (lead / event / ticket) so the
+  // portal opens the precise record, not just the module. The base module key is
+  // validated against the allowlist above; the encoded "#<type>:<id>" suffix is
+  // passed through for navigateNotification (the SAME dispatcher the web bell
+  // uses) to resolve — keeping web and Android navigation identical.
+  const target =
+    targetType && targetId
+      ? `${moduleKey}#${targetType}:${targetId}`
+      : moduleKey;
 
   if (typeof liveOnNavigate === "function") {
     liveOnNavigate(target);
