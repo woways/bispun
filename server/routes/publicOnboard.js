@@ -22,8 +22,17 @@ import {
   releaseCouponRedemption,
   CouponError,
 } from "../lib/coupons.js";
+import { createRateLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
+
+// Throttle coupon quoting to prevent code brute-forcing / enumeration.
+const couponQuoteLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 15,
+  keyPrefix: "coupon_quote",
+  message: "Too many coupon attempts. Please wait a minute and try again.",
+});
 
 function isEmail(value) {
   const email = String(value || "").trim().toLowerCase();
@@ -123,7 +132,7 @@ router.get("/plans", async (_req, res) => {
  * selected plan and returns the server-computed GST-inclusive breakdown. The
  * browser never determines the payable amount — this is re-validated at /start.
  */
-router.post("/coupon/quote", async (req, res) => {
+router.post("/coupon/quote", couponQuoteLimiter, async (req, res) => {
   try {
     const planKey = String(req.body?.planKey || "").trim().toLowerCase();
     const couponCode = String(req.body?.couponCode || "").trim();
@@ -367,13 +376,24 @@ router.post("/start", async (req, res) => {
     // only increments on CONSUME (verified payment), so a reservation never exhausts
     // the coupon on its own.
     if (appliedCoupon) {
-      await reserveCouponRedemption({
-        couponId: appliedCoupon.id,
-        providerOrderId: order.id,
-        planKey: plan.key,
-        customerEmail: adminEmail,
-        amount: pricing.finalAmount,
-      }).catch((e) => console.error("Coupon reserve failed:", e.message));
+      try {
+        await reserveCouponRedemption({
+          couponId: appliedCoupon.id,
+          providerOrderId: order.id,
+          planKey: plan.key,
+          customerEmail: adminEmail,
+          amount: pricing.finalAmount,
+        });
+      } catch (error) {
+        // Over-limit at reserve time (race) -> stop before storing the signup;
+        // the just-created order is unused and never charged.
+        if (error instanceof CouponError) {
+          return res
+            .status(error.status || 400)
+            .json({ success: false, message: error.message, code: error.code });
+        }
+        console.error("Coupon reserve failed:", error.message);
+      }
     }
 
     const passwordHash = await bcrypt.hash(adminPassword, 12);

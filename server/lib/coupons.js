@@ -108,7 +108,12 @@ export async function quoteCoupon({ code, planKey, customerEmail, db = prisma })
   return { coupon, plan, pricing };
 }
 
-/** Reserve a redemption for one order. Idempotent on providerOrderId. */
+/**
+ * Reserve a redemption for one order. Idempotent on providerOrderId, and
+ * enforces maxRedemptions atomically inside a transaction (counts RESERVED +
+ * CONSUMED) so concurrent signups can't oversell a limited coupon. Throws
+ * CouponError("…usage limit") when the cap is reached.
+ */
 export async function reserveCouponRedemption({
   couponId,
   providerOrderId,
@@ -117,21 +122,41 @@ export async function reserveCouponRedemption({
   amount,
   db = prisma,
 }) {
-  const existing = await db.couponRedemption.findUnique({
-    where: { providerOrderId },
-  });
-  if (existing) return existing;
-  return db.couponRedemption.create({
-    data: {
-      couponId,
-      providerOrderId,
-      planKey: String(planKey || "").trim().toLowerCase(),
-      customerEmail: customerEmail
-        ? String(customerEmail).trim().toLowerCase()
-        : null,
-      amount,
-      status: "RESERVED",
-    },
+  return db.$transaction(async (tx) => {
+    const existing = await tx.couponRedemption.findUnique({
+      where: { providerOrderId },
+    });
+    if (existing) return existing; // idempotent retry
+
+    const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
+    if (!coupon || !coupon.active) {
+      throw new CouponError("This coupon code is not valid", 400, "COUPON_INVALID");
+    }
+    if (coupon.maxRedemptions != null) {
+      const held = await tx.couponRedemption.count({
+        where: { couponId, status: { in: ["RESERVED", "CONSUMED"] } },
+      });
+      if (held >= coupon.maxRedemptions) {
+        throw new CouponError(
+          "This coupon has reached its usage limit",
+          400,
+          "COUPON_EXHAUSTED"
+        );
+      }
+    }
+
+    return tx.couponRedemption.create({
+      data: {
+        couponId,
+        providerOrderId,
+        planKey: String(planKey || "").trim().toLowerCase(),
+        customerEmail: customerEmail
+          ? String(customerEmail).trim().toLowerCase()
+          : null,
+        amount,
+        status: "RESERVED",
+      },
+    });
   });
 }
 
