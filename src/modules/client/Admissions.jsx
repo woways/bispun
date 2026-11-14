@@ -2,10 +2,13 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+
+import { useModalA11y } from "../../lib/useModalA11y";
 
 import {
   Plus,
@@ -497,14 +500,22 @@ function ModalShell({
   children,
   max = "max-w-md",
 }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         className={`w-full ${max} overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl`}
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <div className="text-[17px] font-bold text-slate-950">
+            <div id={headingId} className="text-[17px] font-bold text-slate-950">
               {title}
             </div>
 
@@ -517,6 +528,7 @@ function ModalShell({
 
           <button
             type="button"
+            aria-label="Close"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
           >
@@ -1134,6 +1146,8 @@ function BranchModal({
 }
 
 function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   const [attachments, setAttachments] = useState([]);
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1337,18 +1351,26 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
   // modal is trapped in that box and sits half-behind the expanded sidebar.
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl"
+      >
         <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
               <Paperclip size={16} className="text-indigo-600" />
-              <h2 className="text-[17px] font-bold text-slate-950">College Attachments</h2>
+              <h2 id={headingId} className="text-[17px] font-bold text-slate-950">College Attachments</h2>
             </div>
             <p className="mt-1 text-[13px] text-slate-500">
               {partner.name} · organise brochures, fee structures, approvals and other files into folders.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
+          <button type="button" aria-label="Close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
             <X size={17} />
           </button>
         </div>
@@ -1359,6 +1381,7 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="Search files and folders"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search files and folders…"
@@ -3589,6 +3612,7 @@ function AdmissionsManager({
               />
 
               <input
+                aria-label="Search students"
                 value={allSearch}
                 onChange={(event) =>
                   setAllSearch(event.target.value)
@@ -4479,6 +4503,7 @@ function AdmissionsManager({
           />
 
           <input
+            aria-label="Search admissions"
             value={search}
             onChange={(event) =>
               setSearch(event.target.value)

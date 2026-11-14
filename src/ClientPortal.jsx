@@ -95,6 +95,7 @@ import {
   playNotificationSound,
   unlockUiSound,
 } from "./lib/sound";
+import { hydrateFromServer as hydrateNotifSoundPrefs } from "./lib/notificationPrefs";
 
 import CalendarModal from "./modules/client/CalendarModal";
 
@@ -672,6 +673,11 @@ export default function ClientPortal({
   // notification clicks and dashboard lead rows). Lead Store opens the detail
   // and calls back to clear this so it doesn't re-fire on list refreshes.
   const [leadFocusTarget, setLeadFocusTarget] = useState(null);
+  // Deep-link targets for the calendar modal and Help module, set when a
+  // notification points at a specific event or support ticket. Each child
+  // clears its token via onFocusConsumed so list refreshes don't re-fire.
+  const [calendarFocusEventId, setCalendarFocusEventId] = useState(null);
+  const [helpFocusTicketId, setHelpFocusTicketId] = useState(null);
   // A11y: after a notification navigates (the panel closes and the activated
   // control unmounts), move focus to the main content region so keyboard/screen
   // reader users aren't dropped to <body>. Best-effort; never throws.
@@ -695,6 +701,50 @@ export default function ClientPortal({
     setModule("lead-store");
   }
 
+  // Open the calendar modal, focused on a specific event when an id is given.
+  // With no id (or a deleted/unauthorized event) the modal still opens and the
+  // modal itself shows a safe "no longer available" notice. The overlay owns
+  // focus (useOverlayDismiss), so callers must NOT also run focusMainContentSoon.
+  function openCalendarEvent(eventId) {
+    if (eventId) setCalendarFocusEventId(String(eventId));
+    setCalendarOpen(true);
+  }
+
+  // Open the Help module, focused on a specific ticket when an id is given.
+  // Help shows a safe notice if the ticket isn't in the user's accessible list.
+  function openSupportTicket(ticketId) {
+    if (ticketId) setHelpFocusTicketId(String(ticketId));
+    setModule("help");
+  }
+
+  // Single shared dispatcher for a parsed notification target. Used by BOTH the
+  // web notification-bell click and the Android push tap so navigation is
+  // identical across platforms. Focus handling is deliberately split: plain
+  // module/lead navigation hands focus to <main>, while overlay-opening targets
+  // (event/ticket/calendar) let the overlay's own focus management take over
+  // (per accessibility review — avoids a focus race with useOverlayDismiss).
+  function navigateNotification({ moduleKey, targetType, targetId }) {
+    if (targetType === "lead" && targetId) {
+      openLeadDetail(targetId);
+      focusMainContentSoon();
+    } else if (targetType === "event") {
+      openCalendarEvent(targetId);
+    } else if (targetType === "ticket") {
+      openSupportTicket(targetId);
+      // A11y (deep-link F1): Help is a lazy() module, so TicketDetailsModal only
+      // mounts (and grabs focus) after its chunk + loadTickets() resolve. Unlike
+      // the always-mounted calendar overlay, that leaves focus on <body> during
+      // the Suspense gap. Give <main> interim focus so keyboard/SR users aren't
+      // dropped to nowhere; the modal's useOverlayDismiss takes over on mount.
+      focusMainContentSoon();
+    } else if (moduleKey === "calendar") {
+      setCalendarOpen(true);
+    } else if (moduleKey) {
+      setModule(moduleKey);
+      focusMainContentSoon();
+    }
+  }
+
   // Phase B: orientation + preload for the code-split modules. The document
   // title tracks the active module (the mobile nav's aria-current="page" already
   // confirms the selection synchronously, and the Suspense fallback announces
@@ -716,6 +766,14 @@ export default function ClientPortal({
     }
     const timer = setTimeout(warm, 2000);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Pull the user's notification-sound preference from the server once on mount
+  // (this shell only mounts when authenticated). Best-effort: the store swallows
+  // any error — including the agreed endpoint not existing yet — and keeps the
+  // local/default value, so there is nothing to await or handle here.
+  useEffect(() => {
+    hydrateNotifSoundPrefs();
   }, []);
 
   // Keep the selected module in the URL so browser refreshes and mobile web
@@ -1529,6 +1587,33 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     );
   }
 
+  // Module enablement, as controlled by Super Admin (Module / per-company
+  // CompanyModule rows surfaced on login as company.modules[].enabled).
+  function isModuleEnabledForCompany(key) {
+    return Boolean(
+      company?.modules?.some(
+        (m) => m.key === key && m.enabled
+      )
+    );
+  }
+
+  // Modules whose code ships but which stay fully HIDDEN (not shown as a locked
+  // upsell) until Super Admin enables them — e.g. "My Store", completed in v2.
+  // Visibility is driven entirely by the module system, so there is no hardcoded
+  // removal and the module returns the moment it is enabled.
+  const HIDDEN_UNTIL_ENABLED = ["my-store"];
+  function isModuleHiddenUntilEnabled(key) {
+    return (
+      HIDDEN_UNTIL_ENABLED.includes(key) &&
+      !isModuleEnabledForCompany(key)
+    );
+  }
+
+  // Portal search results with hidden-until-enabled modules removed (My Store).
+  const visibleMobileSearchResults = mobileSearchResults.filter(
+    (item) => !isModuleHiddenUntilEnabled(item.key)
+  );
+
   // Mobile bottom-nav primary items (permission-filtered) + which one is active.
   const bottomNavItems = [
     { key: "dashboard", label: "Dashboard", icon: Home },
@@ -1570,7 +1655,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   ]
     .map((group) => ({
       ...group,
-      keys: group.keys.filter((key) => hasModulePermission(key)),
+      keys: group.keys.filter(
+        (key) => hasModulePermission(key) && !isModuleHiddenUntilEnabled(key)
+      ),
     }))
     .filter((group) => group.keys.length > 0);
 
@@ -1878,19 +1965,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     // Resolve a deep-link target so the click opens the exact record, not just
     // the module. The lead id is carried on actionModule ("lead-store#lead:<id>")
     // with a legacy fallback to the message marker. Shared with mobile push.
-    const { moduleKey, leadId } = parseNotificationTarget(
+    const { moduleKey, targetType, targetId } = parseNotificationTarget(
       notification.actionModule,
       notification.message
     );
 
-    if (leadId) {
-      openLeadDetail(leadId);
-    } else if (moduleKey) {
-      setModule(moduleKey);
-    }
+    navigateNotification({ moduleKey, targetType, targetId });
 
     setNotificationsOpen(false);
-    focusMainContentSoon();
   }
 
   async function markAllNotificationsRead() {
@@ -2092,10 +2174,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     if (!user?.id) return undefined;
     initMobilePush({
       onNavigate: (target) => {
-        const { moduleKey, leadId } = parseNotificationTarget(target);
-        if (leadId) openLeadDetail(leadId);
-        else if (moduleKey) setModule(moduleKey);
-        focusMainContentSoon();
+        const { moduleKey, targetType, targetId } = parseNotificationTarget(target);
+        navigateNotification({ moduleKey, targetType, targetId });
       },
     });
     return undefined;
@@ -4110,6 +4190,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             user={
               user
             }
+            focusTicketId={helpFocusTicketId}
+            onFocusConsumed={() => setHelpFocusTicketId(null)}
           />
         );
 
@@ -4139,6 +4221,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   ) {
     const key =
       group.items[0];
+
+    // Hidden-until-enabled modules (e.g. My Store) are omitted from the sidebar
+    // entirely rather than shown as a locked upsell, until Super Admin enables.
+    if (isModuleHiddenUntilEnabled(key)) {
+      return null;
+    }
 
     const active =
       module === key;
@@ -4599,7 +4687,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               <button
                 type="button"
                 onClick={() => setWorkspaceSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                 aria-label="Clear search"
               >
                 <X size={14} aria-hidden="true" />
@@ -4609,18 +4697,18 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
           <p className="sr-only" role="status" aria-live="polite">
             {workspaceSearch.trim()
-              ? `${mobileSearchResults.length} results`
+              ? `${visibleMobileSearchResults.length} results`
               : ""}
           </p>
 
           {workspaceSearch.trim() && (
             <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
-              {mobileSearchResults.length === 0 ? (
+              {visibleMobileSearchResults.length === 0 ? (
                 <div className="px-3 py-6 text-center text-[13px] text-slate-500">
                   No matches
                 </div>
               ) : (
-                mobileSearchResults.map((item) => (
+                visibleMobileSearchResults.map((item) => (
                   <button
                     key={item.key}
                     type="button"
@@ -4671,7 +4759,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             </div>
           )}
           {notificationsLoading ? (
-            <div className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500">
+            <div
+              className="py-10 flex items-center justify-center gap-2 text-xs text-slate-500"
+              role="status"
+              aria-live="polite"
+            >
               <Loader2 size={14} className="animate-spin" aria-hidden="true" />
               Loading...
             </div>
@@ -4693,6 +4785,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   notification.read ? "bg-white" : "bg-indigo-50/30"
                 }`}
               >
+                {!notification.read && (
+                  <span className="sr-only">Unread. </span>
+                )}
                 <div className="text-xs font-bold text-slate-900">
                   {notification.title}
                 </div>
@@ -5384,6 +5479,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       }))
                     )
                       .filter((item, index, all) => all.findIndex((candidate) => candidate.key === item.key) === index)
+                      .filter((item) => !isModuleHiddenUntilEnabled(item.key))
                       .filter((item) => {
                         const query = workspaceSearch.trim().toLowerCase();
                         return item.label.toLowerCase().includes(query) || item.groupLabel.toLowerCase().includes(query) || item.key.toLowerCase().includes(query);
@@ -6457,6 +6553,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         open={calendarOpen}
         onClose={() => setCalendarOpen(false)}
         currentUser={user}
+        focusEventId={calendarFocusEventId}
+        onFocusConsumed={() => setCalendarFocusEventId(null)}
       />
 
       {addYearOpen && (

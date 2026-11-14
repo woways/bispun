@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 
 import {
   UserCheck,
@@ -28,26 +28,27 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+// Charts are code-split so the ~556KB recharts library is NOT loaded on the
+// initial authenticated paint (Dashboard is the landing route). Each chart body
+// lives in ./DashboardCharts and is lazy-loaded behind a <Suspense> with a
+// height-reserving ChartSkeleton fallback, so the dashboard shell paints first
+// and recharts streams in afterwards.
+const RevenueTrendChart = lazy(() =>
+  import("./DashboardCharts").then((m) => ({ default: m.RevenueTrendChart }))
+);
+const LeadsBySourceChart = lazy(() =>
+  import("./DashboardCharts").then((m) => ({ default: m.LeadsBySourceChart }))
+);
+const AdmissionsByMonthChart = lazy(() =>
+  import("./DashboardCharts").then((m) => ({ default: m.AdmissionsByMonthChart }))
+);
 
 import { apiRequest } from "../../lib/api";
 import { brandColor } from "../../lib/brandTheme";
 import { formatUiDate, formatUiTime, formatUiDateTime } from "../../lib/uiPreferences";
 import { donutCenterTotal } from "../../lib/donutCenterTotal";
 import { MobileRecordCard } from "../../components/mobileUi";
+import ChartSkeleton from "../../components/ChartSkeleton";
 import { Badge, statusTone } from "../../components/ui";
 
 const PIE_COLORS = [
@@ -88,6 +89,14 @@ const EVENT_TYPE_STYLES = {
 
 function money(value) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+// Screen-reader money: spells the unit instead of the ₹ glyph, whose SR
+// announcement is inconsistent (NVDA/JAWS may say "rupee sign", "rupees", or
+// nothing at default symbol levels). Used ONLY in the sr-only chart data tables;
+// the visible money() with ₹ is unchanged. (accessibility-lead requirement.)
+function srMoney(value) {
+  return `${new Intl.NumberFormat("en-IN").format(Number(value || 0))} rupees`;
 }
 
 function axisMoney(value) {
@@ -1326,97 +1335,59 @@ export default function Dashboard({
                     </span>
                   </div>
 
+                  {!(data.revenueTrend || []).some(
+                    (p) =>
+                      Number(p.potential) > 0 ||
+                      Number(p.received) > 0
+                  ) && (
+                    <div className="flex h-[280px] items-center justify-center text-[13px] text-slate-400">
+                      No revenue data yet.
+                    </div>
+                  )}
                   {(data.revenueTrend || []).some(
                     (p) =>
                       Number(p.potential) > 0 ||
                       Number(p.received) > 0
-                  ) ? (
-                  <ResponsiveContainer
-                    width="100%"
-                    height={280}
-                  >
-                    <LineChart
-                      data={
-                        data.revenueTrend
-                      }
-                      margin={{
-                        left: 4,
-                        right: 8,
-                        top: 8,
-                        bottom: 0,
-                      }}
-                    >
-                      <CartesianGrid
-                        vertical={false}
-                        stroke="#eef2f7"
-                      />
-
-                      <XAxis
-                        dataKey="m"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        stroke="#94a3b8"
-                      />
-
-                      <YAxis
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        stroke="#94a3b8"
-                        tickFormatter={
-                          axisMoney
-                        }
-                      />
-
-                      <Tooltip
-                        formatter={(
-                          value
-                        ) =>
-                          money(
-                            value
-                          )
-                        }
-                        contentStyle={{
-                          borderRadius:
-                            "10px",
-                          border:
-                            "1px solid #e2e8f0",
-                          boxShadow:
-                            "0 10px 30px rgba(15,23,42,.08)",
-                        }}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="potential"
-                        name="Potential"
-                        stroke="#94a3b8"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={false}
-                      />
-
-                      <Line
-                        type="monotone"
-                        dataKey="received"
-                        name="Received"
-                        stroke={accentColor}
-                        strokeWidth={2.75}
-                        dot={false}
-                        activeDot={{
-                          r: 5,
-                          fill: accentColor,
-                          stroke: "#ffffff",
-                          strokeWidth: 2,
-                        }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                  ) : (
-                    <div className="flex h-[280px] items-center justify-center text-[13px] text-slate-400">
-                      No revenue data yet.
-                    </div>
+                  ) && (
+                    <>
+                      {/* Accessible data alternative: the chart SVG below is
+                          aria-hidden (recharts emits context-free text nodes),
+                          so this sr-only table is the screen-reader
+                          representation. Must be a SIBLING outside the
+                          aria-hidden subtree. */}
+                      <table className="sr-only">
+                        <caption>
+                          Revenue trend by month: potential versus received
+                          revenue
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Month</th>
+                            <th scope="col">Potential revenue</th>
+                            <th scope="col">Received revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {data.revenueTrend.map((row) => (
+                            <tr key={row.m}>
+                              <th scope="row">{row.m}</th>
+                              <td>{srMoney(row.potential)}</td>
+                              <td>{srMoney(row.received)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div aria-hidden="true">
+                        <Suspense fallback={<ChartSkeleton height={280} />}>
+                          <RevenueTrendChart
+                            data={data.revenueTrend}
+                            accentColor={accentColor}
+                            money={money}
+                            axisMoney={axisMoney}
+                          />
+                        </Suspense>
+                      </div>
+                    </>
                   )}
                 </section>
                 )}
@@ -1440,43 +1411,12 @@ export default function Dashboard({
                           below is the accessible data (and reconciles to the
                           total). */}
                       <div className="relative" aria-hidden="true">
-                        <ResponsiveContainer
-                          width="100%"
-                          height={190}
-                        >
-                          <PieChart>
-                            <Pie
-                              data={
-                                data.leadsBySource
-                              }
-                              dataKey="value"
-                              nameKey="name"
-                              innerRadius={52}
-                              outerRadius={78}
-                              paddingAngle={1}
-                            >
-                              {data.leadsBySource.map(
-                                (
-                                  entry,
-                                  index
-                                ) => (
-                                  <Cell
-                                    key={
-                                      entry.name
-                                    }
-                                    fill={
-                                      pieColors[
-                                        index %
-                                          pieColors.length
-                                      ]
-                                    }
-                                  />
-                                )
-                              )}
-                            </Pie>
-                            <Tooltip />
-                          </PieChart>
-                        </ResponsiveContainer>
+                        <Suspense fallback={<ChartSkeleton height={190} />}>
+                          <LeadsBySourceChart
+                            data={data.leadsBySource}
+                            pieColors={pieColors}
+                          />
+                        </Suspense>
 
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                           <div className="text-center">
@@ -1702,6 +1642,7 @@ export default function Dashboard({
                         return (
                           <MobileRecordCard
                             key={item.id || `${student}-${index}`}
+                            index={index}
                             title={student}
                             badges={
                               status
@@ -1779,49 +1720,40 @@ export default function Dashboard({
                   </div>
 
                   {admissionsByMonthData.length ? (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={admissionsByMonthData}>
-                        <CartesianGrid vertical={false} stroke="#eef2f7" />
-                        <XAxis
-                          dataKey={
-                            admissionsByMonthData[0]?.m !== undefined
-                              ? "m"
-                              : admissionsByMonthData[0]?.month !== undefined
-                              ? "month"
-                              : "name"
-                          }
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={false}
-                          stroke="#94a3b8"
-                        />
-                        <YAxis
-                          fontSize={11}
-                          tickLine={false}
-                          axisLine={false}
-                          stroke="#94a3b8"
-                          allowDecimals={false}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: "10px",
-                            border: "1px solid #e2e8f0",
-                            boxShadow: "0 10px 30px rgba(15,23,42,.08)",
-                          }}
-                        />
-                        <Bar
-                          dataKey={
-                            admissionsByMonthData[0]?.value !== undefined
-                              ? "value"
-                              : admissionsByMonthData[0]?.count !== undefined
-                              ? "count"
-                              : "admissions"
-                          }
-                          fill={accentColor}
-                          radius={[4, 4, 0, 0]}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <>
+                      {/* Accessible data alternative (chart SVG below is aria-hidden). */}
+                      <table className="sr-only">
+                        <caption>Admissions by month</caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">Month</th>
+                            <th scope="col">Admissions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {admissionsByMonthData.map((row, i) => {
+                            const label =
+                              row.m ?? row.month ?? row.name ?? `Row ${i + 1}`;
+                            const value =
+                              row.value ?? row.count ?? row.admissions ?? 0;
+                            return (
+                              <tr key={`${label}-${i}`}>
+                                <th scope="row">{label}</th>
+                                <td>{value}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      <div aria-hidden="true">
+                        <Suspense fallback={<ChartSkeleton height={220} />}>
+                          <AdmissionsByMonthChart
+                            data={admissionsByMonthData}
+                            accentColor={accentColor}
+                          />
+                        </Suspense>
+                      </div>
+                    </>
                   ) : (
                     <div className="flex h-[220px] flex-col items-center justify-center text-center">
                       <BarChart3 size={20} className="text-slate-300" />

@@ -1,6 +1,8 @@
 import {
   useEffect,
+  useId,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -35,6 +37,8 @@ import {
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import { resolveListView } from "../../lib/listViewState";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
+import { useModalA11y } from "../../lib/useModalA11y";
 
 const TYPES = [
   {
@@ -526,6 +530,8 @@ function NewTicketModal({
   onClose,
   onCreated,
 }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   const [
     saving,
     setSaving,
@@ -687,13 +693,21 @@ function NewTicketModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col"
+      >
 
         {/* HEADER */}
 
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-bold text-slate-950">
+            <h2 id={headingId} className="text-[17px] font-bold text-slate-950">
               {form.type === "CALL_TO_RM"
                 ? "Request a Call to RM"
                 : "New Support Ticket"}
@@ -708,6 +722,7 @@ function NewTicketModal({
 
           <button
             type="button"
+            aria-label="Close"
             onClick={
               onClose
             }
@@ -1122,20 +1137,37 @@ function TicketDetailsModal({
   ticket,
   onClose,
 }) {
+  // A11y: treat this as a real modal dialog. useOverlayDismiss moves focus into
+  // the dialog on open (including when opened programmatically from a
+  // notification deep-link), traps focus, handles Escape / hardware-back, and
+  // restores focus to the opener on close. Hooks run before the early return so
+  // the Rules of Hooks hold.
+  const containerRef = useRef(null);
+  useOverlayDismiss(Boolean(ticket), onClose, { containerRef });
+
   if (!ticket) {
     return null;
   }
 
   return (
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl max-h-[92vh] overflow-hidden bg-white border border-white/70 rounded-2xl shadow-2xl">
+      <div
+        ref={containerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ticket-details-title"
+        className="w-full max-w-2xl max-h-[92vh] overflow-hidden bg-white border border-white/70 rounded-2xl shadow-2xl"
+      >
         <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-xs font-mono font-semibold text-slate-500">
               {ticket.ticketNumber}
             </div>
 
-            <h2 className="mt-1 text-xl font-bold text-slate-950 break-words">
+            <h2
+              id="ticket-details-title"
+              className="mt-1 text-xl font-bold text-slate-950 break-words"
+            >
               {ticket.title}
             </h2>
           </div>
@@ -1320,6 +1352,8 @@ export default function Help({
   plan = "basic",
   tenant,
   user,
+  focusTicketId = null,
+  onFocusConsumed,
 }) {
   const [
     tickets,
@@ -1368,6 +1402,12 @@ export default function Help({
   ] = useState(
     null
   );
+
+  // Deep-link focus: when a notification targets a ticket that isn't in this
+  // user's accessible list, show an assertive, focusable notice (mirrors
+  // LeadStore's focusNotice) instead of silently doing nothing.
+  const [focusNotice, setFocusNotice] = useState("");
+  const focusNoticeRef = useRef(null);
 
   const [
     search,
@@ -1447,6 +1487,30 @@ export default function Help({
     loadTickets();
     loadOrganization();
   }, []);
+
+  // A11y: move focus to the deep-link notice when it appears.
+  useEffect(() => {
+    if (focusNotice) focusNoticeRef.current?.focus();
+  }, [focusNotice]);
+
+  // Consume a notification deep-link that targets a specific ticket. Once the
+  // list has loaded, open the exact ticket's detail; if it isn't in the user's
+  // accessible list (deleted/unauthorized), show a safe notice. onFocusConsumed
+  // clears the token in BOTH branches so list refreshes don't re-fire it.
+  useEffect(() => {
+    if (!focusTicketId || loading) return;
+    const match = tickets.find(
+      (t) => String(t.id) === String(focusTicketId)
+    );
+    if (match) {
+      setSelectedTicket(match);
+      setFocusNotice("");
+    } else {
+      setFocusNotice("That support ticket isn't available to you.");
+    }
+    onFocusConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTicketId, loading, tickets]);
 
   function createTicket(
     type = null
@@ -1577,6 +1641,20 @@ export default function Help({
 
   return (
     <div className="space-y-4">
+
+      {/* Deep-link fallback: assertive, focusable notice shown when a
+          notification pointed at a ticket that is missing or not visible to
+          this user. Mirrors LeadStore's focusNotice pattern. */}
+      {focusNotice && (
+        <div
+          ref={focusNoticeRef}
+          role="alert"
+          tabIndex={-1}
+          className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-2.5 text-[13px] font-semibold text-amber-900 outline-none"
+        >
+          {focusNotice}
+        </div>
+      )}
 
       {/* PAGE HEADER */}
 
@@ -1837,6 +1915,7 @@ export default function Help({
           />
 
           <input
+            aria-label="Search tickets"
             value={
               search
             }
