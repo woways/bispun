@@ -3129,8 +3129,22 @@ export default function SettingsView({
                 !userModalOpen &&
                 !organizationModal &&
                 !resetPasswordUser && (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
-                    {usersError}
+                  <div
+                    role="alert"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700"
+                  >
+                    <span>{usersError}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loadUsers();
+                        loadOrganization();
+                      }}
+                      disabled={usersLoading}
+                      className="shrink-0 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                    >
+                      {usersLoading ? "Retrying…" : "Try again"}
+                    </button>
                   </div>
                 )}
 
