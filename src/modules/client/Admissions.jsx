@@ -3952,12 +3952,7 @@ function AdmissionsManager({
                   key={stream.id}
                   title={stream.name}
                   subtitle={`${stream.totalAdmissions || 0} Admissions`}
-                  description={
-                    stream.description ||
-                    `${stream.totalColleges || 0} colleges · ${
-                      stream.totalBranches || 0
-                    } branches`
-                  }
+                  description={stream.description || ""}
                   icon={Icon}
                   index={index}
                   color={
@@ -4105,10 +4100,7 @@ function AdmissionsManager({
               key={partner.id}
               title={partner.name}
               subtitle={`${partner.totalAdmissions || 0} Admissions`}
-              description={
-                partner.description ||
-                `${partner.totalBranches || 0} branches available`
-              }
+              description={partner.description || ""}
               icon={Building2}
               index={index + 1}
               color={selectedStream.color || "blue"}
