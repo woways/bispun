@@ -24,6 +24,7 @@ import adminSupportRoutes from "./routes/adminSupport.js";
 import adminUsageRoutes from "./routes/adminUsage.js";
 import adminBillingRoutes from "./routes/adminBilling.js";
 import adminPlansRoutes from "./routes/adminPlans.js";
+import adminCouponsRoutes from "./routes/adminCoupons.js";
 import adminModulesRoutes from "./routes/adminModules.js";
 import adminGlobalUsageRoutes from "./routes/adminGlobalUsage.js";
 import adminGlobalBillingRoutes from "./routes/adminGlobalBilling.js";
@@ -181,6 +182,7 @@ app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/usage", adminUsageRoutes);
 app.use("/api/admin/billing", adminBillingRoutes);
 app.use("/api/admin/plans", adminPlansRoutes);
+app.use("/api/admin/coupons", adminCouponsRoutes);
 app.use("/api/admin/modules", adminModulesRoutes);
 app.use("/api/admin/global-usage", adminGlobalUsageRoutes);
 app.use("/api/admin/s3-usage", adminS3UsageRoutes);
@@ -321,6 +323,18 @@ app.set("io", io);
 server.listen(config.port, () =>
   console.log(`Bispun API running on http://localhost:${config.port}`)
 );
+
+// Idempotently seed the initial signup coupons (never overwrites existing config
+// or redemption history). Best-effort and non-blocking — never fails boot.
+import("./lib/coupons.js")
+  .then(({ seedCoupons }) => seedCoupons())
+  .then((results) => {
+    const created = results.filter((r) => r.action === "created");
+    if (created.length) {
+      console.log(`[startup] Seeded ${created.length} coupon(s): ${created.map((r) => r.code).join(", ")}`);
+    }
+  })
+  .catch((error) => console.error("[startup] Coupon seed skipped:", error.message));
 
 async function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`);
