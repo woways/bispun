@@ -15,6 +15,7 @@ export default function ContactOtpVerification({
   valid,
   verifiedToken,
   onVerified,
+  contextLabel,
 }) {
   const [challengeToken, setChallengeToken] = useState("");
   const [otp, setOtp] = useState("");
@@ -100,7 +101,8 @@ export default function ContactOtpVerification({
     );
   }
 
-  const channelLabel = channel === "email" ? "email" : "phone number";
+  const channelLabel =
+    contextLabel || (channel === "email" ? "email" : "phone number");
 
   return (
     <div className="mt-1.5 space-y-2">
