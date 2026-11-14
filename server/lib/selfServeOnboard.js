@@ -306,6 +306,22 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
     return { company, payment };
   });
 
+  // Consume a coupon redemption exactly once, on first account creation (the
+  // alreadyDone branches above return before this). Idempotent and best-effort —
+  // it must never undo a completed signup. Dynamic import avoids a cycle
+  // (coupons.js imports this module for pricing).
+  if (data.couponCode) {
+    try {
+      const { consumeCouponRedemption } = await import("./coupons.js");
+      await consumeCouponRedemption({
+        providerOrderId: pending.providerOrderId,
+        companyId: result.company?.id,
+      });
+    } catch (error) {
+      console.error("Coupon redemption consume failed:", error.message);
+    }
+  }
+
   // Welcome email with the login link — best-effort, never blocks signup.
   // Only reached on first creation (the alreadyDone branches return earlier),
   // so the buyer gets exactly one email even if verify + webhook both run.
