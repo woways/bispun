@@ -60,6 +60,7 @@ const ActivityLog = lazy(() => import("./modules/admin/ActivityLog"));
 const WebsiteLeads = lazy(() => import("./modules/admin/WebsiteLeads"));
 const Referrals = lazy(() => import("./modules/admin/Referrals"));
 const StorageUsage = lazy(() => import("./modules/admin/StorageUsage"));
+const Coupons = lazy(() => import("./modules/admin/Coupons"));
 
 const MENU = [
   {
@@ -87,6 +88,11 @@ const MENU = [
     label:
       "Plans & Subscriptions",
     icon: CreditCard,
+  },
+  {
+    key: "coupons",
+    label: "Coupons",
+    icon: Ticket,
   },
   {
     key: "modules",
@@ -508,6 +514,9 @@ export default function SuperAdmin() {
 
       case "plans":
         return <Plans />;
+
+      case "coupons":
+        return <Coupons />;
 
       case "modules":
         return <Modules />;
