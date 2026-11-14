@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,7 @@ import {
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import { resolveListView } from "../../lib/listViewState";
 import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
+import { useModalA11y } from "../../lib/useModalA11y";
 
 const TYPES = [
   {
@@ -528,6 +530,8 @@ function NewTicketModal({
   onClose,
   onCreated,
 }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   const [
     saving,
     setSaving,
@@ -689,13 +693,21 @@ function NewTicketModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col"
+      >
 
         {/* HEADER */}
 
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-bold text-slate-950">
+            <h2 id={headingId} className="text-[17px] font-bold text-slate-950">
               {form.type === "CALL_TO_RM"
                 ? "Request a Call to RM"
                 : "New Support Ticket"}
@@ -710,6 +722,7 @@ function NewTicketModal({
 
           <button
             type="button"
+            aria-label="Close"
             onClick={
               onClose
             }
@@ -1902,6 +1915,7 @@ export default function Help({
           />
 
           <input
+            aria-label="Search tickets"
             value={
               search
             }

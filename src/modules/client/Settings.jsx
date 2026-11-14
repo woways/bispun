@@ -1,11 +1,13 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
 
 import AccountDeletionSection from "../../components/client/AccountDeletionSection";
+import { useModalA11y } from "../../lib/useModalA11y";
 
 import {
   Building,
@@ -236,6 +238,37 @@ function PlaceholderPanel({
           <ShieldCheck size={12} />
           Production configuration
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Accessible dialog shell for the bare inline modals below. Mounts with the
+// modal (rendered inside each `{open && (...)}`) so useModalA11y's focus trap,
+// Escape handling and scroll lock run on open/close. Renders the same two
+// nested divs (backdrop + panel) the modals used before; the panel carries the
+// dialog semantics. Children receive the generated heading id to put on the
+// modal title so aria-labelledby points at it. Visuals are unchanged.
+function A11yDialog({
+  onClose,
+  backdropClassName,
+  panelClassName,
+  children,
+}) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
+  return (
+    <div className={backdropClassName}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className={panelClassName}
+      >
+        {typeof children === "function" ? children(headingId) : children}
       </div>
     </div>
   );
@@ -4554,11 +4587,16 @@ export default function SettingsView({
       </div>
 
       {organizationModal && (
-        <div className="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <A11yDialog
+          onClose={() => setOrganizationModal(null)}
+          backdropClassName="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div><div className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
-              <button type="button" onClick={() => setOrganizationModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><X size={16}/></button>
+              <div><div id={headingId} className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
+              <button type="button" aria-label="Close" onClick={() => setOrganizationModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><X size={16}/></button>
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4576,16 +4614,22 @@ export default function SettingsView({
               </div></div>}
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-4"><button type="button" onClick={()=>{setOrganizationModal(null);setEditingOrganizationItem(null);}} className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-[12px] font-semibold">Cancel</button><button type="button" disabled={organizationSaving || !organizationForm.name.trim() || !organizationForm.code.trim()} onClick={saveOrganizationItem} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12px] font-semibold disabled:opacity-50">{organizationSaving ? "Saving..." : editingOrganizationItem ? "Save Changes" : "Create"}</button></div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
       {userModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
+        <A11yDialog
+          onClose={closeUserModal}
+          backdropClassName="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingUser
                     ? "Edit User"
                     : "Add User"}
@@ -4598,6 +4642,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={closeUserModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
@@ -5001,16 +5046,22 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
       {resetPasswordUser && (
-        <div className="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl">
+        <A11yDialog
+          onClose={() => setResetPasswordUser(null)}
+          backdropClassName="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   Reset Password
                 </div>
 
@@ -5021,6 +5072,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() =>
                   setResetPasswordUser(null)
                 }
@@ -5088,17 +5140,23 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
       {sourceModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+        <A11yDialog
+          onClose={closeSourceModal}
+          backdropClassName="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingSource
                     ? "Edit Lead Source"
                     : "Add Lead Source"}
@@ -5111,6 +5169,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={closeSourceModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
@@ -5326,17 +5385,23 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
       {customFieldModalOpen && (
-        <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
+        <A11yDialog
+          onClose={() => setCustomFieldModalOpen(false)}
+          backdropClassName="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingCustomField
                     ? "Edit Custom Field"
                     : "Add Custom Field"}
@@ -5349,6 +5414,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() =>
                   setCustomFieldModalOpen(false)
                 }
@@ -5672,8 +5738,9 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
