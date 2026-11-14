@@ -1418,6 +1418,17 @@ model SystemSettings {
   defaultEmailNotifications Boolean @default(true)
   defaultSmsNotifications   Boolean @default(false)
 
+  // MSG91 transactional SMS config (Super Admin managed). The secret auth key
+  // stays in server env (MSG91_AUTH_KEY); only non-secret config lives here.
+  smsEnabled           Boolean @default(false)
+  smsSenderId          String?
+  smsOtpTemplateId     String?
+  smsWelcomeTemplateId String?
+  smsWelcomeEnabled    Boolean @default(true)
+  smsEnquiryTemplateId String?
+  smsEnquiryEnabled    Boolean @default(true)
+  smsEnquiryHours      Int     @default(24)
+
   maintenanceMode Boolean @default(false)
 
   allowNewClientOnboarding Boolean @default(true)
