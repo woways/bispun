@@ -232,16 +232,20 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   if (refCode) {
     referrer = await prisma.user.findUnique({
       where: { referralCode: refCode },
-      select: { id: true, referralCode: true, email: true },
+      select: { id: true, referralCode: true, email: true, active: true },
     });
 
-    // Self-referral guard: a user cannot earn a referral reward by signing their
-    // own new company up with their own code.
-    if (
-      referrer &&
-      String(referrer.email || "").trim().toLowerCase() ===
-        String(data.adminEmail || "").trim().toLowerCase()
-    ) {
+    // Parity with recordReferredIntent: reject unknown code, INACTIVE referrer,
+    // or self-referral using the same pure, unit-tested decision function, so the
+    // fallback-create path can never credit an inactive referrer.
+    const decision = shouldAttributeReferral({
+      referralCode: refCode,
+      referrerFound: Boolean(referrer),
+      referrerActive: referrer?.active,
+      referrerEmail: referrer?.email,
+      referredEmail: data.adminEmail,
+    });
+    if (!decision.ok) {
       referrer = null;
     }
   }
