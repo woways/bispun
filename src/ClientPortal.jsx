@@ -95,6 +95,7 @@ import {
   playNotificationSound,
   unlockUiSound,
 } from "./lib/sound";
+import { hydrateFromServer as hydrateNotifSoundPrefs } from "./lib/notificationPrefs";
 
 import CalendarModal from "./modules/client/CalendarModal";
 
@@ -763,6 +764,14 @@ export default function ClientPortal({
     }
     const timer = setTimeout(warm, 2000);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Pull the user's notification-sound preference from the server once on mount
+  // (this shell only mounts when authenticated). Best-effort: the store swallows
+  // any error — including the agreed endpoint not existing yet — and keeps the
+  // local/default value, so there is nothing to await or handle here.
+  useEffect(() => {
+    hydrateNotifSoundPrefs();
   }, []);
 
   // Keep the selected module in the URL so browser refreshes and mobile web
@@ -1576,6 +1585,33 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     );
   }
 
+  // Module enablement, as controlled by Super Admin (Module / per-company
+  // CompanyModule rows surfaced on login as company.modules[].enabled).
+  function isModuleEnabledForCompany(key) {
+    return Boolean(
+      company?.modules?.some(
+        (m) => m.key === key && m.enabled
+      )
+    );
+  }
+
+  // Modules whose code ships but which stay fully HIDDEN (not shown as a locked
+  // upsell) until Super Admin enables them — e.g. "My Store", completed in v2.
+  // Visibility is driven entirely by the module system, so there is no hardcoded
+  // removal and the module returns the moment it is enabled.
+  const HIDDEN_UNTIL_ENABLED = ["my-store"];
+  function isModuleHiddenUntilEnabled(key) {
+    return (
+      HIDDEN_UNTIL_ENABLED.includes(key) &&
+      !isModuleEnabledForCompany(key)
+    );
+  }
+
+  // Portal search results with hidden-until-enabled modules removed (My Store).
+  const visibleMobileSearchResults = mobileSearchResults.filter(
+    (item) => !isModuleHiddenUntilEnabled(item.key)
+  );
+
   // Mobile bottom-nav primary items (permission-filtered) + which one is active.
   const bottomNavItems = [
     { key: "dashboard", label: "Dashboard", icon: Home },
@@ -1617,7 +1653,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   ]
     .map((group) => ({
       ...group,
-      keys: group.keys.filter((key) => hasModulePermission(key)),
+      keys: group.keys.filter(
+        (key) => hasModulePermission(key) && !isModuleHiddenUntilEnabled(key)
+      ),
     }))
     .filter((group) => group.keys.length > 0);
 
@@ -3927,7 +3965,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       return <Referrals currentUser={user} />;
     }
 
-    if (moduleKey === "my-store") {
+    if (moduleKey === "my-store" && isModuleEnabledForCompany("my-store")) {
       return <MyStore company={company} />;
     }
 
@@ -4179,6 +4217,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   ) {
     const key =
       group.items[0];
+
+    // Hidden-until-enabled modules (e.g. My Store) are omitted from the sidebar
+    // entirely rather than shown as a locked upsell, until Super Admin enables.
+    if (isModuleHiddenUntilEnabled(key)) {
+      return null;
+    }
 
     const active =
       module === key;
@@ -4649,18 +4693,18 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
           <p className="sr-only" role="status" aria-live="polite">
             {workspaceSearch.trim()
-              ? `${mobileSearchResults.length} results`
+              ? `${visibleMobileSearchResults.length} results`
               : ""}
           </p>
 
           {workspaceSearch.trim() && (
             <div className="mt-2 overflow-hidden rounded-xl border border-slate-200">
-              {mobileSearchResults.length === 0 ? (
+              {visibleMobileSearchResults.length === 0 ? (
                 <div className="px-3 py-6 text-center text-[13px] text-slate-500">
                   No matches
                 </div>
               ) : (
-                mobileSearchResults.map((item) => (
+                visibleMobileSearchResults.map((item) => (
                   <button
                     key={item.key}
                     type="button"
@@ -5431,6 +5475,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       }))
                     )
                       .filter((item, index, all) => all.findIndex((candidate) => candidate.key === item.key) === index)
+                      .filter((item) => !isModuleHiddenUntilEnabled(item.key))
                       .filter((item) => {
                         const query = workspaceSearch.trim().toLowerCase();
                         return item.label.toLowerCase().includes(query) || item.groupLabel.toLowerCase().includes(query) || item.key.toLowerCase().includes(query);

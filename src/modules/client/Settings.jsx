@@ -43,6 +43,12 @@ import {
   apiRequest,
 } from "../../lib/api";
 
+import {
+  getPrefs as getNotifSoundPrefs,
+  setPrefs as setNotifSoundPrefs,
+  subscribe as subscribeNotifSoundPrefs,
+} from "../../lib/notificationPrefs";
+
 import { applyBrandTheme, BRAND_COLORS, BRAND_PALETTE, brandHex } from "../../lib/brandTheme";
 import PermissionTree, {
   emptyPageAccess,
@@ -668,6 +674,18 @@ export default function SettingsView({
     notificationPreferencesMessage,
     setNotificationPreferencesMessage,
   ] = useState("");
+
+  // Notification SOUND preference (personal, client-side via notificationPrefs).
+  // This is separate from the server-backed notification delivery preferences
+  // above: it works immediately with no backend and the store handles any sync.
+  const [soundPrefs, setSoundPrefs] = useState(() => getNotifSoundPrefs());
+
+  useEffect(() => {
+    // Re-sync from the store on mount (e.g. after hydrateFromServer ran), then
+    // stay subscribed so the control reflects changes from anywhere.
+    setSoundPrefs(getNotifSoundPrefs());
+    return subscribeNotifSoundPrefs(setSoundPrefs);
+  }, []);
 
   const [
     form,
@@ -4045,6 +4063,93 @@ export default function SettingsView({
                   {notificationPreferencesError}
                 </div>
               )}
+
+              {/* NOTIFICATION SOUND — personal, per-device preference. Rendered
+                  outside the server-prefs loading state because it is handled
+                  entirely client-side by the notificationPrefs store and must be
+                  usable immediately (it syncs to the server when that endpoint
+                  exists). Not tied to any admin permission. */}
+              <div className="border border-slate-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                      <Bell size={16} />
+                    </div>
+
+                    <div>
+                      <div
+                        id="notif-sound-label"
+                        className="text-[15px] font-semibold text-slate-900"
+                      >
+                        Notification sound
+                      </div>
+
+                      <div className="text-[13px] text-slate-500 mt-1">
+                        Play a sound for new chat messages and workspace alerts on
+                        this device.
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={soundPrefs.soundEnabled}
+                    aria-labelledby="notif-sound-label"
+                    onClick={() =>
+                      setNotifSoundPrefs({
+                        soundEnabled: !soundPrefs.soundEnabled,
+                      })
+                    }
+                    className={`relative w-10 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                      soundPrefs.soundEnabled
+                        ? "bg-indigo-600"
+                        : "bg-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                        soundPrefs.soundEnabled ? "left-5" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="notif-sound-volume"
+                    className="text-[13px] font-semibold text-slate-600 w-16"
+                  >
+                    Volume
+                  </label>
+
+                  <input
+                    id="notif-sound-volume"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={soundPrefs.volume}
+                    disabled={!soundPrefs.soundEnabled}
+                    aria-valuetext={`${Math.round(
+                      soundPrefs.volume * 100
+                    )} percent`}
+                    onChange={(event) =>
+                      setNotifSoundPrefs({
+                        volume: Number(event.target.value),
+                      })
+                    }
+                    className="flex-1 accent-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+
+                  <span
+                    className="text-[13px] tabular-nums text-slate-500 w-10 text-right"
+                    aria-hidden="true"
+                  >
+                    {Math.round(soundPrefs.volume * 100)}%
+                  </span>
+                </div>
+              </div>
 
               {notificationPreferencesLoading ? (
                 <div className="py-16 flex items-center justify-center gap-2 text-[15px] text-slate-500">
