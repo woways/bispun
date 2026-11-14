@@ -5,11 +5,8 @@ import { resolveMx } from "node:dns/promises";
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
-<<<<<<< Updated upstream
 import { createRateLimiter } from "../middleware/rateLimit.js";
-=======
 import { sendWelcomeSms } from "../lib/sms.js";
->>>>>>> Stashed changes
 import {
   assertContactVerified,
   ContactVerificationError,
