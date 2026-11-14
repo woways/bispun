@@ -3991,6 +3991,60 @@ router.patch(
   }
 );
 
+// Inline edit of the "Interested College" (preferredColleges) free-text field
+// directly from the Lead Store table cell. Mirrors the temperature endpoint.
+router.patch(
+  "/manual/:id/preferred-colleges",
+  async (req, res) => {
+    try {
+      const companyId = req.clientUser.companyId;
+      const leadId = String(req.params.id || "").trim();
+      const preferredColleges = String(req.body?.preferredColleges || "").trim();
+
+      const lead = await prisma.lead.findFirst({
+        where: {
+          id: leadId,
+          companyId,
+          OR: [
+            { source: "LEAD_STORE" },
+            { notes: { contains: "Admissions origin:" } },
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          assignedToUserId: true,
+          assignedToName: true,
+        },
+      });
+
+      if (!lead) {
+        return res.status(404).json({ success: false, message: "Lead not found" });
+      }
+
+      if (!(await ensureLeadInScope(req, res, lead))) return;
+
+      const updated = await prisma.lead.update({
+        where: { id: lead.id },
+        data: { preferredColleges: preferredColleges || null },
+        select: { id: true, preferredColleges: true, updatedAt: true },
+      });
+
+      return res.json({
+        success: true,
+        message: "Interested college updated",
+        lead: updated,
+      });
+    } catch (error) {
+      console.error("Failed to update interested college:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Unable to update interested college",
+      });
+    }
+  }
+);
+
 
 
 /* =========================================================

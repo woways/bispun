@@ -213,6 +213,7 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "alternatePhone", label: "Alternative Phone" },
   { key: "email", label: "Email" },
   { key: "course", label: "Course" },
+  { key: "preferredColleges", label: "Interested College" },
   { key: "assignedTo", label: "Assigned To" },
   { key: "temperature", label: "Lead Type" },
   { key: "status", label: "Status" },
@@ -224,6 +225,7 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   alternatePhone: true,
   email: true,
   course: true,
+  preferredColleges: true,
   assignedTo: true,
   temperature: true,
   status: true,
@@ -237,6 +239,7 @@ const DEFAULT_INDIVIDUAL_COLUMN_ORDER = [
   "alternatePhone",
   "email",
   "course",
+  "preferredColleges",
   "assignedTo",
   "temperature",
   "status",
@@ -251,6 +254,7 @@ const INDIVIDUAL_COLUMN_LABELS = {
   alternatePhone: "Alternative Phone",
   email: "Email",
   course: "Course",
+  preferredColleges: "Interested College",
   assignedTo: "Assigned To",
   temperature: "Lead Type",
   status: "Status",
@@ -4151,6 +4155,39 @@ export default function LeadStore({
     }
   }
 
+  // Inline save of the "Interested College" cell (saves on blur/Enter).
+  async function updateLeadPreferredColleges(leadId, value) {
+    const trimmed = String(value || "").trim();
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${leadId}/preferred-colleges`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ preferredColleges: trimmed }),
+        }
+      );
+
+      setIndividualLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                preferredColleges:
+                  data?.lead?.preferredColleges ?? trimmed,
+              }
+            : lead
+        )
+      );
+
+      setSuccessMessage(data?.message || "Interested college updated.");
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to update interested college"
+      );
+    }
+  }
+
   async function updateLeadStatus(leadId, status, { custom = false } = {}) {
     setStatusUpdatingId(leadId);
     setError("");
@@ -4474,6 +4511,30 @@ export default function LeadStore({
           <div title={value || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">
             {value || "—"}
           </div>
+        </td>
+      );
+    }
+
+    if (columnKey === "preferredColleges") {
+      return (
+        <td key={columnKey} className={`min-w-[190px] max-w-[220px] px-4 ${individualCellPadding}`}>
+          <input
+            type="text"
+            defaultValue={lead.preferredColleges || ""}
+            placeholder="Add college"
+            title={lead.preferredColleges || ""}
+            onBlur={(event) => {
+              const next = event.target.value.trim();
+              if (next !== String(lead.preferredColleges || "").trim()) {
+                updateLeadPreferredColleges(lead.id, next);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.target.blur();
+            }}
+            className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px] text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            aria-label={`Interested college for ${lead.name}`}
+          />
         </td>
       );
     }
