@@ -1,43 +1,27 @@
-import nodemailer from "nodemailer";
+// System email (OTP, welcome, etc.) via the Gmail API — NOT raw SMTP.
+//
+// Why: Render (and most cloud PaaS) block outbound SMTP ports 25/465/587 on
+// free/entry tiers, so nodemailer+Gmail silently times out. The Gmail API runs
+// over HTTPS (port 443), which is never blocked, so this works on any tier.
+//
+// These are platform emails (no client user behind them), so they send from a
+// single connected Google account: a SUPER_ADMIN who has connected Google with
+// the gmail.send scope in Super Admin → System Settings. See
+// server/lib/google.js (getPlatformGmail / sendPlatformEmail).
+//
+// Optional env:
+//   PLATFORM_GMAIL_ADDRESS   which connected account to prefer as sender
+//                            (default info@bispun.com)
+//
+// If no platform Google account is connected, sendMail returns { sent:false }
+// instead of throwing, so a signup/onboarding is never hard-crashed by email.
 
-const BISPUN_FROM_EMAIL = "info@bispun.com";
-const BISPUN_FROM = `Bispun <${BISPUN_FROM_EMAIL}>`;
+import { sendPlatformEmail, isGoogleConfigured } from "./google.js";
 
-/**
- * Email sending via Gmail SMTP (or any SMTP).
- *
- * Required env vars (set these in server/.env and on Render):
- *   SMTP_USER   the Gmail / Workspace account that authenticates SMTP (use info@bispun.com)
- *   SMTP_PASS   a Gmail "App Password" (NOT your normal password)
- *   SMTP_FROM   optional display sender, e.g. "Bispun <info@bispun.com>"
- *                (defaults to the Bispun sender below)
- *   SMTP_HOST   optional, defaults to smtp.gmail.com
- *   SMTP_PORT   optional, defaults to 465 (SSL)
- *
- * If SMTP_USER / SMTP_PASS are missing, email is skipped silently so that
- * account creation is never blocked by email problems.
- */
-
-let cachedTransport = null;
-
-function getTransport() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!user || !pass) return null;
-
-  if (!cachedTransport) {
-    cachedTransport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: Number(process.env.SMTP_PORT || 465) === 465,
-      auth: { user, pass },
-    });
-  }
-  return cachedTransport;
-}
-
+// True when Google OAuth is configured on the server. (Whether an account is
+// actually connected is checked at send time.)
 export function isEmailConfigured() {
-  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  return isGoogleConfigured();
 }
 
 // Base URL of the client app, used to build the login link in emails.
@@ -58,27 +42,15 @@ const inr = (n) =>
   });
 
 /**
- * Low-level send. Best-effort: resolves to { sent: false } on any failure
- * instead of throwing, so callers never break their main flow.
+ * Low-level send via the Gmail API. Best-effort: resolves to { sent: false }
+ * on any failure instead of throwing, so callers never break their main flow.
+ * Keeps the same signature and return shape as the old SMTP sendMail().
  */
 export async function sendMail({ to, subject, html, text }) {
-  const transport = getTransport();
-  if (!transport) {
-    console.warn("[mailer] SMTP not configured; skipping email to", to);
-    return { sent: false, skipped: true };
-  }
+  if (!to) return { sent: false, skipped: true };
   try {
-    const from = process.env.SMTP_FROM || BISPUN_FROM;
-    const replyTo = process.env.SMTP_REPLY_TO || BISPUN_FROM_EMAIL;
-    const info = await transport.sendMail({
-      from,
-      replyTo,
-      to,
-      subject,
-      html,
-      text,
-    });
-    return { sent: true, messageId: info.messageId };
+    const result = await sendPlatformEmail({ to, subject, html, text });
+    return { sent: true, messageId: result?.id || null };
   } catch (error) {
     console.error("[mailer] Failed to send email to", to, error.message);
     return { sent: false, error: error.message };
