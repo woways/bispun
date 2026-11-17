@@ -4835,13 +4835,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         setMobileMoreOpen(false);
                         setModule(key);
                       }}
-                      className={`min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                      className={`min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:gap-2 native:p-3 ${
                         active
                           ? "border-indigo-200 bg-indigo-50 text-indigo-700"
                           : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
                     >
-                      <MoreIcon size={20} aria-hidden="true" />
+                      <span
+                        className={`native:flex native:h-10 native:w-10 native:items-center native:justify-center native:rounded-xl ${
+                          active ? "native:bg-indigo-100 native:text-indigo-700" : "native:bg-slate-100 native:text-slate-600"
+                        }`}
+                      >
+                        <MoreIcon size={20} aria-hidden="true" />
+                      </span>
                       <span className="text-[12px] font-medium leading-tight">
                         {meta.label}
                       </span>
@@ -4866,9 +4872,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   setMobileMoreOpen(false);
                   setMobileSearchOpen(true);
                 }}
-                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:gap-2 native:p-3"
               >
-                <Search size={20} aria-hidden="true" />
+                <span className="native:flex native:h-10 native:w-10 native:items-center native:justify-center native:rounded-xl native:bg-slate-100 native:text-slate-600">
+                  <Search size={20} aria-hidden="true" />
+                </span>
                 <span className="text-[12px] font-medium leading-tight">Search</span>
               </button>
               <button
@@ -4877,9 +4885,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   setMobileMoreOpen(false);
                   setCalendarOpen(true);
                 }}
-                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:gap-2 native:p-3"
               >
-                <CalendarDays size={20} aria-hidden="true" />
+                <span className="native:flex native:h-10 native:w-10 native:items-center native:justify-center native:rounded-xl native:bg-slate-100 native:text-slate-600">
+                  <CalendarDays size={20} aria-hidden="true" />
+                </span>
                 <span className="text-[12px] font-medium leading-tight">Calendar</span>
               </button>
             </div>
