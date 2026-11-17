@@ -1362,7 +1362,8 @@ export default function Dashboard({
                           so this sr-only table is the screen-reader
                           representation. Must be a SIBLING outside the
                           aria-hidden subtree. */}
-                      <table className="sr-only">
+                      <div className="sr-only">
+                      <table>
                         <caption>
                           Revenue trend by month: potential versus received
                           revenue
@@ -1384,6 +1385,7 @@ export default function Dashboard({
                           ))}
                         </tbody>
                       </table>
+                      </div>
                       <div aria-hidden="true">
                         <Suspense fallback={<ChartSkeleton height={280} />}>
                           <RevenueTrendChart
@@ -1729,7 +1731,8 @@ export default function Dashboard({
                   {admissionsByMonthData.length ? (
                     <>
                       {/* Accessible data alternative (chart SVG below is aria-hidden). */}
-                      <table className="sr-only">
+                      <div className="sr-only">
+                      <table>
                         <caption>Admissions by month</caption>
                         <thead>
                           <tr>
@@ -1752,6 +1755,7 @@ export default function Dashboard({
                           })}
                         </tbody>
                       </table>
+                      </div>
                       <div aria-hidden="true">
                         <Suspense fallback={<ChartSkeleton height={220} />}>
                           <AdmissionsByMonthChart

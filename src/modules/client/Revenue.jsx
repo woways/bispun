@@ -2693,7 +2693,8 @@ export default function Revenue({
                   </ResponsiveContainer>
                 </div>
 
-                <table className="sr-only">
+                <div className="sr-only">
+                <table>
                   <caption>
                     Monthly revenue: potential versus received
                   </caption>
@@ -2714,6 +2715,7 @@ export default function Revenue({
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
