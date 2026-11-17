@@ -1298,13 +1298,20 @@ export default function Dashboard({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                  {(isTeamView ? pulseMetrics.slice(0, 4) : pulseMetrics).map((metric) => (
-                    <MetricCard
-                      key={metric.label}
-                      {...metric}
-                      onClick={() => openKpiDetail(metric)}
-                    />
-                  ))}
+                  {(isTeamView ? pulseMetrics.slice(0, 4) : pulseMetrics).map((metric) => {
+                    // Exclude the business `key` field from the spread so it is not
+                    // forwarded as React's reserved `key` prop (React warns when a
+                    // `key` is spread into JSX). Use it as the stable list key, and
+                    // still pass the full metric (with key) to openKpiDetail.
+                    const { key: metricKey, ...cardProps } = metric;
+                    return (
+                      <MetricCard
+                        key={metricKey}
+                        {...cardProps}
+                        onClick={() => openKpiDetail(metric)}
+                      />
+                    );
+                  })}
                 </div>
               </section>
 
