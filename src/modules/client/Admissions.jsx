@@ -3577,7 +3577,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Total Admissions"
             value={filteredAllSummary.totalAdmissions}
@@ -3622,7 +3622,7 @@ function AdmissionsManager({
               />
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+            <div className="flex flex-wrap gap-2 native:flex-nowrap native:overflow-x-auto native:pb-1">
               {[
                 ["all", "All"],
                 ["today", "Today"],
@@ -3636,7 +3636,7 @@ function AdmissionsManager({
                   type="button"
                   aria-pressed={dateFilter === key}
                   onClick={() => setDateFilter(key)}
-                  className={`h-9 shrink-0 whitespace-nowrap rounded-xl px-3 text-[13px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
+                  className={`h-9 rounded-xl px-3 text-[13px] font-bold native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${
                     dateFilter === key
                       ? "bg-slate-950 text-white"
                       : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -4096,7 +4096,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Colleges"
             value={selectedStream.totalColleges || 0}
@@ -4280,7 +4280,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Branches"
             value={selectedPartner.totalBranches || branches.length}
@@ -4925,20 +4925,20 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">Overall Admissions</h1>
           <p className="mt-1 text-[15px] text-slate-500">View all admissions across Domestic and International.</p>
         </div>
-        <div className="inline-flex max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm native:max-w-full native:overflow-x-auto">
           {[['ALL','All'],['DOMESTIC','Domestic'],['INTERNATIONAL','International']].map(([value,label]) => (
-            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`h-9 shrink-0 whitespace-nowrap rounded-lg px-4 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label}</button>
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`h-9 rounded-lg px-4 text-[13px] font-semibold transition native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label}</button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
         {showSkeleton ? (
           [0, 1, 2].map((index) => (
             <div
               key={index}
               aria-hidden="true"
-              className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4"
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] native:p-3"
             >
               <div className="h-3 w-28 animate-pulse rounded bg-slate-200" />
               <div className="mt-2 h-6 w-12 animate-pulse rounded bg-slate-200" />
@@ -4974,17 +4974,17 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               setFilter(item.filter);
               window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
             }}
-            className="rounded-xl border border-slate-200 bg-white p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 sm:p-4"
+            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 native:p-3 native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1"
           >
-            <div className="break-words text-[11px] font-semibold uppercase tracking-normal text-slate-400 sm:text-[12px] sm:tracking-[0.09em]">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400 native:break-words native:text-[11px] native:tracking-normal">
               {item.label}
             </div>
 
-            <div className="mt-2 text-[20px] font-bold leading-none tracking-tight text-slate-950 sm:text-[24px]">
+            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950 native:text-[20px]">
               {item.value}
             </div>
 
-            <div className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-4 font-medium text-slate-500 sm:mt-3 sm:pt-3 sm:text-[13px] sm:leading-5">
+            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500 native:mt-2 native:pt-2 native:text-[11px] native:leading-4">
               {item.detail}
             </div>
           </button>
