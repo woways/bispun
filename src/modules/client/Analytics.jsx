@@ -708,6 +708,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   title={`Monthly Leads — ${primaryYear} vs ${comparisonYear}`}
                   subtitle="Month-by-month lead generation comparison."
                 >
+                  <div className="-mx-2 overflow-x-auto px-2 sm:mx-0 sm:overflow-visible sm:px-0" tabIndex={0} role="group" aria-label={`Monthly Leads chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`}>
+                  <div className="min-w-[460px] sm:min-w-0">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={comparison.monthly}>
                       <CartesianGrid
@@ -744,12 +746,16 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </ChartCard>
 
                 <ChartCard
                   title={`Monthly Admissions — ${primaryYear} vs ${comparisonYear}`}
                   subtitle="Month-by-month admissions comparison."
                 >
+                  <div className="-mx-2 overflow-x-auto px-2 sm:mx-0 sm:overflow-visible sm:px-0" tabIndex={0} role="group" aria-label={`Monthly Admissions chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`}>
+                  <div className="min-w-[460px] sm:min-w-0">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={comparison.monthly}>
                       <CartesianGrid
@@ -787,6 +793,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </ChartCard>
               </div>
 
@@ -794,6 +802,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                 title={`Monthly Received Revenue — ${primaryYear} vs ${comparisonYear}`}
                 subtitle="Compare actual received admission revenue month by month."
               >
+                <div className="-mx-2 overflow-x-auto px-2 sm:mx-0 sm:overflow-visible sm:px-0" tabIndex={0} role="group" aria-label={`Monthly Received Revenue chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`}>
+                <div className="min-w-[460px] sm:min-w-0">
                 <ResponsiveContainer width="100%" height={290}>
                   <BarChart data={comparison.monthly}>
                     <CartesianGrid
@@ -830,6 +840,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
+                </div>
               </ChartCard>
             </div>
           )}
