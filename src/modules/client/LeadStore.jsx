@@ -4932,7 +4932,7 @@ export default function LeadStore({
       <div className="space-y-3">
         <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center">
-            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0">
+            <label className="relative flex h-10 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:h-9 lg:w-[270px] lg:flex-shrink-0">
               <span className="flex-shrink-0 border-r border-slate-100 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-400">
                 Lead type
               </span>
@@ -4972,8 +4972,9 @@ export default function LeadStore({
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
+                aria-label="Search leads"
                 placeholder="Search lead ID, name, phone, email or course..."
-                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="h-10 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 lg:h-9"
               />
             </div>
 
@@ -4984,7 +4985,7 @@ export default function LeadStore({
                   setViewOpen(false);
                   setFiltersOpen((current) => !current);
                 }}
-                className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                className={`relative h-10 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors lg:h-9 ${
                   filtersOpen ||
                   activeFilterCount > 0
                     ? "border-indigo-200 bg-indigo-50 text-indigo-700"
@@ -5008,7 +5009,7 @@ export default function LeadStore({
                     setFiltersOpen(false);
                     setViewOpen((current) => !current);
                   }}
-                  className={`h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 shadow-sm ${viewOpen ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  className={`h-10 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 shadow-sm lg:h-9 ${viewOpen ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                 >
                   <Layers3 size={14} />
                   View
