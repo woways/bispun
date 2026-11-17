@@ -831,14 +831,6 @@ export default function SignupPage() {
       <div className="mx-auto w-full max-w-2xl">
         <div className="flex items-center justify-between mb-5">
           <div className="text-2xl font-bold text-indigo-600">Bispun</div>
-          {plan && (
-            <div className="text-right">
-              <div className="text-xs text-slate-500">{plan.name} · annual</div>
-              <div className="text-sm font-bold text-slate-900">
-                {inr((appliedCoupon?.breakdown || plan.breakdown).finalAmount)}
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
