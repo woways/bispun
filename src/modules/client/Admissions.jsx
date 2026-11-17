@@ -4830,6 +4830,11 @@ function AdmissionsOverall({ selectedYear = "all" }) {
 
   const rows = filter === "DOMESTIC" ? data.domestic : filter === "INTERNATIONAL" ? data.international : data.all;
 
+  // Show the loading skeleton only on the initial fetch (loading and no data yet).
+  // Subsequent refetches keep the existing inline spinner, and the empty/error
+  // states below stay distinct from this.
+  const showSkeleton = loading && data.all.length === 0 && !error;
+
   const filterValue = {
     stream: (admission) => admission.partner?.stream?.id || admission.partner?.stream?.name || "",
     college: (admission) => admission.partner?.id || admission.college || admission.partner?.name || "",
@@ -4927,7 +4932,21 @@ function AdmissionsOverall({ selectedYear = "all" }) {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {[
+        {showSkeleton ? (
+          [0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-hidden="true"
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+            >
+              <div className="h-3 w-28 animate-pulse rounded bg-slate-200" />
+              <div className="mt-2 h-6 w-12 animate-pulse rounded bg-slate-200" />
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="h-3 w-32 animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
+          ))
+        ) : [
           {
             label: "Overall Admissions",
             value: data.all.length,
@@ -5032,7 +5051,24 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           </label>
           <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900">Clear</button>
         </div>
-        {loading ? (
+        {showSkeleton ? (
+          <>
+            <span role="status" className="sr-only">Loading admissions…</span>
+            <div aria-hidden="true" className="divide-y divide-slate-100">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-4 px-5 py-4">
+                  <div className="h-6 w-16 animate-pulse rounded-lg bg-slate-100" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3.5 w-40 max-w-full animate-pulse rounded bg-slate-200" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                  </div>
+                  <div className="hidden h-6 w-20 animate-pulse rounded-full bg-slate-100 sm:block" />
+                  <div className="hidden h-3.5 w-24 animate-pulse rounded bg-slate-100 md:block" />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500"><Loader2 size={16} className="animate-spin" />Loading admissions...</div>
         ) : filteredRows.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-500">No admissions found.</div>
