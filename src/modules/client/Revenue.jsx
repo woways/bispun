@@ -2414,7 +2414,7 @@ export default function Revenue({
             </section>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 native:grid-cols-2">
             <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
@@ -2764,7 +2764,7 @@ export default function Revenue({
           {tab ===
             "expenses" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 native:grid-cols-2">
                 <RevenueMetric
                   label="Total Expenses"
                   value={money(expenseStats.total)}
@@ -2828,8 +2828,8 @@ export default function Revenue({
                   />
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto pb-1 xl:ml-auto xl:flex-wrap xl:overflow-visible xl:pb-0">
-                  <div className="relative shrink-0">
+                <div className="flex flex-wrap gap-2 xl:ml-auto native:flex-nowrap native:overflow-x-auto native:pb-1">
+                  <div className="relative native:shrink-0">
                     <Filter
                       size={13}
                       aria-hidden="true"
@@ -2869,7 +2869,7 @@ export default function Revenue({
                         event.target.value
                       )
                     }
-                    className="h-9 px-3 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700 shrink-0"
+                    className="h-9 px-3 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700 native:shrink-0"
                   >
                     <option value="ALL">
                       All Categories

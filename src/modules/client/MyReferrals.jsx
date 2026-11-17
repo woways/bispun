@@ -325,17 +325,17 @@ export default function MyReferrals({ currentUser }) {
       </div>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-4">
-        <div className={CARD.replace("p-5", "p-3 sm:p-5")}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+        <div className={CARD.replace("p-5", "p-5 native:p-3")}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-[13px] text-slate-500">
                 <Users size={16} aria-hidden="true" className="text-indigo-600" /> Total referrals
               </div>
-              <div className="mt-2 text-[22px] font-bold leading-none tabular-nums text-slate-950 sm:text-[28px]">{stats.total}</div>
+              <div className="mt-2 text-[28px] font-bold leading-none tabular-nums text-slate-950 native:text-[22px]">{stats.total}</div>
               <div className="mt-1 text-[12px] text-slate-500">{convRate}% reached Admitted</div>
             </div>
-            <div className="relative hidden h-16 w-16 flex-shrink-0 sm:block" aria-hidden="true">
+            <div className="relative h-16 w-16 flex-shrink-0 hidden sm:block native:hidden" aria-hidden="true">
               <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#eef2ff" strokeWidth="4" />
                 <circle cx="18" cy="18" r="15.9" fill="none" stroke="#4f46e5" strokeWidth="4" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - convRate} />
@@ -344,18 +344,18 @@ export default function MyReferrals({ currentUser }) {
             </div>
           </div>
         </div>
-        <div className={CARD.replace("p-5", "p-3 sm:p-5")}>
+        <div className={CARD.replace("p-5", "p-5 native:p-3")}>
           <div className="flex items-center gap-2 text-[13px] text-slate-500">
             <Clock3 size={16} aria-hidden="true" className="text-amber-600" /> In progress
           </div>
-          <div className="mt-2 text-[22px] font-bold leading-none tabular-nums text-amber-700 sm:text-[28px]">{stats.inProgress}</div>
+          <div className="mt-2 text-[28px] font-bold leading-none tabular-nums text-amber-700 native:text-[22px]">{stats.inProgress}</div>
           <div className="mt-1 text-[12px] text-slate-500">Moving through the stages</div>
         </div>
-        <div className={CARD.replace("p-5", "p-3 sm:p-5")}>
+        <div className={CARD.replace("p-5", "p-5 native:p-3")}>
           <div className="flex items-center gap-2 text-[13px] text-slate-500">
             <CheckCircle2 size={16} aria-hidden="true" className="text-emerald-600" /> Admitted
           </div>
-          <div className="mt-2 text-[22px] font-bold leading-none tabular-nums text-emerald-700 sm:text-[28px]">{stats.admitted}</div>
+          <div className="mt-2 text-[28px] font-bold leading-none tabular-nums text-emerald-700 native:text-[22px]">{stats.admitted}</div>
           <div className="mt-1 text-[12px] text-slate-500">Reached the final stage</div>
         </div>
       </div>

@@ -2478,7 +2478,7 @@ export default function SettingsView({
         {/* HORIZONTAL TAB BAR */}
 
         <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex gap-1 overflow-x-auto md:flex-wrap md:overflow-visible">
+          <div className="flex flex-wrap gap-1 native:flex-nowrap native:overflow-x-auto">
             {visibleTabs.map(
               (
                 item
@@ -2502,7 +2502,7 @@ export default function SettingsView({
                         item.k
                       )
                     }
-                    className={`flex shrink-0 items-center gap-2 whitespace-nowrap px-3.5 py-2.5 rounded-lg text-[15px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
+                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-[15px] transition-colors native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
                       active
                         ? "bg-indigo-600 text-white font-semibold shadow-sm"
                         : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"

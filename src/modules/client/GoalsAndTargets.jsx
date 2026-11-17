@@ -422,7 +422,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px]">
           <div className="flex items-center justify-center">
-            <div className="relative h-20 w-20 flex-shrink-0 sm:h-28 sm:w-28">
+            <div className="relative h-28 w-28 flex-shrink-0 native:h-20 native:w-20">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
                   cx="60"
@@ -448,7 +448,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[20px] font-extrabold leading-none tracking-tight sm:text-[24px]">
+                <div className="text-[24px] font-extrabold leading-none tracking-tight native:text-[20px]">
                   {avg}%
                 </div>
                 <div className="text-[11px] font-semibold text-slate-500">year avg</div>
@@ -456,7 +456,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
             </div>
           </div>
 
-          <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4 native:grid-cols-2">
             {cards.map((card) => {
               const Icon = card.icon;
 
@@ -875,18 +875,18 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
         ) : (
           <>
             <div className="text-[13px] font-medium text-slate-500">Company-wide performance overview</div>
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Team average · {year}</div>
-                <div className="mt-1 text-[22px] font-bold text-slate-900 sm:text-[30px]">{teamAverage}%</div>
+            <div className="grid gap-4 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
+                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Team average · {year}</div>
+                <div className="mt-1 text-[30px] font-bold text-slate-900 native:text-[22px]">{teamAverage}%</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Members</div>
-                <div className="mt-1 text-[22px] font-bold text-slate-900 sm:text-[30px]">{roster.length}</div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
+                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Members</div>
+                <div className="mt-1 text-[30px] font-bold text-slate-900 native:text-[22px]">{roster.length}</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Top performer</div>
-                <div className="mt-1 break-words text-sm font-bold text-emerald-600">
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
+                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Top performer</div>
+                <div className="mt-1 text-sm font-bold text-emerald-600 break-words">
                   {roster.length
                     ? `${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].name} — ${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].yearAveragePercent}%`
                     : "—"}
