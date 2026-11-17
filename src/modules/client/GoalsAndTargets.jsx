@@ -875,18 +875,18 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
         ) : (
           <>
             <div className="text-[13px] font-medium text-slate-500">Company-wide performance overview</div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Team average · {year}</div>
-                <div className="mt-1 text-[30px] font-bold text-slate-900">{teamAverage}%</div>
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Team average · {year}</div>
+                <div className="mt-1 text-[22px] font-bold text-slate-900 sm:text-[30px]">{teamAverage}%</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Members</div>
-                <div className="mt-1 text-[30px] font-bold text-slate-900">{roster.length}</div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Members</div>
+                <div className="mt-1 text-[22px] font-bold text-slate-900 sm:text-[30px]">{roster.length}</div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400">Top performer</div>
-                <div className="mt-1 text-sm font-bold text-emerald-600">
+              <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
+                <div className="break-words text-[11px] font-semibold uppercase tracking-wide text-slate-400 sm:text-[13px]">Top performer</div>
+                <div className="mt-1 break-words text-sm font-bold text-emerald-600">
                   {roster.length
                     ? `${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].name} — ${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].yearAveragePercent}%`
                     : "—"}
