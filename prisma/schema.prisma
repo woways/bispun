@@ -1809,6 +1809,74 @@ model PendingSignup {
   @@index([status, createdAt])
 }
 
+enum CouponRedemptionStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
+// Signup coupon. finalAmount is the GST-INCLUSIVE total the customer is charged
+// when the coupon is applied to an eligible plan. Authoritative on the server;
+// the browser never determines the payable amount. Managed by Super Admin.
+model Coupon {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  description String?
+
+  // GST-inclusive final payable amount (e.g. 25000.00 -> customer pays exactly
+  // ₹25,000 incl. 18% GST; the base/GST split is derived from this, never added
+  // on top).
+  finalAmount Decimal @db.Decimal(12, 2)
+  currency    String  @default("INR")
+
+  active     Boolean   @default(false)
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  // Null = unlimited. usedCount counts CONSUMED redemptions.
+  maxRedemptions   Int?
+  perCustomerLimit Int?
+  usedCount        Int  @default(0)
+
+  // Plan keys this coupon is valid for, e.g. ["advanced"]. Empty = none eligible.
+  eligiblePlanKeys String[]
+
+  // Super Admin who created it (plain id; detailed changes go to SuperAdminAuditLog).
+  createdByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions CouponRedemption[]
+
+  @@index([active])
+}
+
+// One redemption per Razorpay order. providerOrderId is unique so retries or
+// duplicate payment callbacks can never consume a coupon twice.
+model CouponRedemption {
+  id String @id @default(cuid())
+
+  couponId String
+  coupon   Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  status CouponRedemptionStatus @default(RESERVED)
+
+  providerOrderId String @unique
+
+  planKey       String
+  customerEmail String? // admin email at signup time, for per-customer limits
+  companyId     String?
+  amount        Decimal @db.Decimal(12, 2)
+
+  reservedAt DateTime  @default(now())
+  consumedAt DateTime?
+  releasedAt DateTime?
+
+  @@index([couponId, status])
+  @@index([customerEmail])
+}
+
 // One WhatsApp Business (Cloud API) connection per client company.
 // The client connects their OWN WhatsApp Business number via Meta Embedded
 // Signup; Bispun only stores the resulting IDs + token. Meta bills the client

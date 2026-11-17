@@ -407,6 +407,14 @@ export default function SignupPage() {
   const [receipt, setReceipt] = useState(null);
   const [step, setStep] = useState(0);
 
+  // Coupon (Step 4). appliedCoupon.breakdown is the backend-authoritative quote.
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [couponStatus, setCouponStatus] = useState("");
+  const couponAppliedRef = useRef(null);
+
   // "Other" toggles for the two dropdowns (initialised from any existing value,
   // e.g. when navigating back into the step).
   const [businessOther, setBusinessOther] = useState(
@@ -620,6 +628,62 @@ export default function SignupPage() {
     }
   }
 
+  // Coupon is backend-validated; the browser only displays the server's quote.
+  async function applyCoupon() {
+    const code = couponInput.trim().toUpperCase();
+    if (!code || couponBusy) return;
+    setCouponBusy(true);
+    setCouponError("");
+    try {
+      const data = await apiRequest("/api/public/onboard/coupon/quote", {
+        method: "POST",
+        body: JSON.stringify({
+          planKey,
+          couponCode: code,
+          adminEmail: form.adminEmail,
+        }),
+      });
+      setAppliedCoupon({ code: data.coupon.code, breakdown: data.breakdown });
+      setCouponStatus(
+        `Coupon ${data.coupon.code} applied. New total payable ${inr(
+          data.breakdown.finalAmount
+        )}.`
+      );
+      requestAnimationFrame(() => couponAppliedRef.current?.focus());
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(
+        err?.data?.message || "This coupon code is not valid for this order"
+      );
+    } finally {
+      setCouponBusy(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput("");
+    setCouponError("");
+    setCouponStatus(
+      `Coupon removed. Total payable restored to ${inr(
+        plan?.breakdown?.finalAmount || 0
+      )}.`
+    );
+    requestAnimationFrame(() => document.getElementById("su-couponCode")?.focus());
+  }
+
+  // A coupon is tied to the selected plan; if the plan changes it is cleared.
+  function selectPlan(key) {
+    setPlanKey(key);
+    clearFieldError("plan");
+    if (appliedCoupon) {
+      setAppliedCoupon(null);
+      setCouponInput("");
+      setCouponError("");
+      setCouponStatus("Plan changed — coupon removed. Re-apply it if it still qualifies.");
+    }
+  }
+
   // Authoritative final validation — unchanged backstop before payment.
   function validate() {
     if (!form.name.trim()) return "Company name is required";
@@ -654,6 +718,7 @@ export default function SignupPage() {
         body: JSON.stringify({
           planKey,
           ...form,
+          couponCode: appliedCoupon?.code || "",
           companyEmailVerificationToken: verificationTokens.companyEmail,
           phoneVerificationToken: verificationTokens.companyPhone,
           adminEmailVerificationToken: verificationTokens.adminEmail,
@@ -752,6 +817,13 @@ export default function SignupPage() {
 
   const businessSelectValue = businessOther ? "Other" : form.business;
   const citySelectValue = cityOther ? "Other" : form.city;
+  // Pricing shown + charged: the coupon's backend quote when applied, else the
+  // plan's normal breakdown.
+  const effectiveBreakdown = appliedCoupon
+    ? appliedCoupon.breakdown
+    : plan
+    ? plan.breakdown
+    : null;
 
   // ---- Guided multi-step signup (UI wrapper over the same submit/payment) ----
   return (
@@ -763,7 +835,7 @@ export default function SignupPage() {
             <div className="text-right">
               <div className="text-xs text-slate-500">{plan.name} · annual</div>
               <div className="text-sm font-bold text-slate-900">
-                {inr(plan.breakdown.finalAmount)}
+                {inr((appliedCoupon?.breakdown || plan.breakdown).finalAmount)}
               </div>
             </div>
           )}
@@ -1200,10 +1272,7 @@ export default function SignupPage() {
                                 type="button"
                                 role="radio"
                                 aria-checked={selected}
-                                onClick={() => {
-                                  setPlanKey(p.key);
-                                  clearFieldError("plan");
-                                }}
+                                onClick={() => selectPlan(p.key)}
                                 className={`flex h-full flex-col rounded-xl border p-4 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 ${
                                   selected
                                     ? "border-indigo-500 ring-2 ring-indigo-100 bg-indigo-50/70 shadow-sm"
@@ -1262,8 +1331,101 @@ export default function SignupPage() {
                     </div>
                   )}
 
+                  {/* Coupon code — separate from the referral code in Step 2 */}
+                  <div>
+                    <label
+                      htmlFor="su-couponCode"
+                      className="block text-xs font-medium text-slate-600 mb-1"
+                    >
+                      Coupon Code{" "}
+                      <span className="font-normal text-slate-400">(optional)</span>
+                    </label>
+                    <p id="su-coupon-help" className="sr-only">
+                      Enter a promo code for a discount on this order. This is
+                      separate from a referral code.
+                    </p>
+                    {appliedCoupon ? (
+                      <div
+                        ref={couponAppliedRef}
+                        tabIndex={-1}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 focus:outline-none"
+                      >
+                        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-800">
+                          <Check size={14} aria-hidden="true" strokeWidth={3} />
+                          Coupon {appliedCoupon.code} applied
+                        </span>
+                        <button
+                          type="button"
+                          onClick={removeCoupon}
+                          className="rounded-sm text-[12px] font-semibold text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          id="su-couponCode"
+                          type="text"
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(
+                              e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "")
+                            );
+                            if (couponError) setCouponError("");
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              applyCoupon();
+                            }
+                          }}
+                          aria-describedby={
+                            couponError
+                              ? "su-coupon-error su-coupon-help"
+                              : "su-coupon-help"
+                          }
+                          aria-invalid={couponError ? "true" : undefined}
+                          placeholder="Enter coupon code"
+                          className={`h-10 flex-1 px-3 text-sm bg-white border rounded-lg focus:outline-none focus:ring-2 ${
+                            couponError
+                              ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+                              : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
+                          }`}
+                        />
+                        <button
+                          type="button"
+                          onClick={applyCoupon}
+                          disabled={!couponInput.trim() || couponBusy}
+                          aria-busy={couponBusy}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2"
+                        >
+                          {couponBusy && (
+                            <Loader2
+                              size={14}
+                              className="animate-spin motion-reduce:animate-none"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {couponBusy ? "Applying…" : "Apply"}
+                        </button>
+                      </div>
+                    )}
+                    {couponError && (
+                      <p
+                        id="su-coupon-error"
+                        className="mt-1 text-[11px] font-medium text-rose-600"
+                      >
+                        {couponError}
+                      </p>
+                    )}
+                    <p role="status" aria-live="polite" className="sr-only">
+                      {couponStatus}
+                    </p>
+                  </div>
+
                   {/* Order summary — backend-authoritative values; total most prominent */}
-                  {plan && (
+                  {plan && effectiveBreakdown && (
                     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-4 py-2.5">
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -1276,30 +1438,37 @@ export default function SignupPage() {
                       <div className="px-4 py-3 text-sm">
                         <div className="flex items-center justify-between gap-6 text-slate-500">
                           <span>Plan price ({plan.name})</span>
-                          <span>{inr(plan.breakdown.listPrice)}</span>
+                          <span>{inr(effectiveBreakdown.listPrice)}</span>
                         </div>
-                        {Number(plan.breakdown.discount) > 0 && (
+                        {Number(effectiveBreakdown.discount) > 0 && (
                           <div className="mt-1 flex items-center justify-between gap-6 text-emerald-600">
-                            <span>Discount</span>
-                            <span>−{inr(plan.breakdown.discount)}</span>
+                            <span>
+                              {appliedCoupon
+                                ? `Coupon (${appliedCoupon.code})`
+                                : "Discount"}
+                            </span>
+                            <span>−{inr(effectiveBreakdown.discount)}</span>
                           </div>
                         )}
-                        {Number(plan.breakdown.discount) > 0 && (
+                        {Number(effectiveBreakdown.discount) > 0 && (
                           <div className="mt-1 flex items-center justify-between gap-6 text-slate-500">
-                            <span>Subtotal</span>
-                            <span>{inr(plan.breakdown.subtotal)}</span>
+                            <span>Taxable amount</span>
+                            <span>{inr(effectiveBreakdown.subtotal)}</span>
                           </div>
                         )}
                         <div className="mt-1 flex items-center justify-between gap-6 text-slate-500">
-                          <span>GST ({plan.breakdown.gstRate}%)</span>
-                          <span>+{inr(plan.breakdown.gstAmount)}</span>
+                          <span>GST ({effectiveBreakdown.gstRate}%)</span>
+                          <span>+{inr(effectiveBreakdown.gstAmount)}</span>
                         </div>
-                        <div className="mt-3 flex items-end justify-between gap-6 border-t border-slate-200 pt-3">
+                        <div
+                          aria-live="polite"
+                          className="mt-3 flex items-end justify-between gap-6 border-t border-slate-200 pt-3"
+                        >
                           <span className="text-sm font-semibold text-slate-900">
                             Total payable
                           </span>
                           <span className="text-2xl font-bold tracking-tight text-slate-900">
-                            {inr(plan.breakdown.finalAmount)}
+                            {inr(effectiveBreakdown.finalAmount)}
                           </span>
                         </div>
                       </div>
@@ -1325,8 +1494,8 @@ export default function SignupPage() {
                       )}
                       {processing
                         ? "Opening payment…"
-                        : plan
-                        ? `Pay ${inr(plan.breakdown.finalAmount)}`
+                        : effectiveBreakdown
+                        ? `Pay ${inr(effectiveBreakdown.finalAmount)}`
                         : "Pay"}
                     </button>
                     {!allContactsVerified && (

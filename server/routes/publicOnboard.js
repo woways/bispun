@@ -16,8 +16,23 @@ import {
   sendContactVerificationOtp,
   verifyContactVerificationOtp,
 } from "../lib/contactVerification.js";
+import {
+  quoteCoupon,
+  reserveCouponRedemption,
+  releaseCouponRedemption,
+  CouponError,
+} from "../lib/coupons.js";
+import { createRateLimiter } from "../middleware/rateLimit.js";
 
 const router = Router();
+
+// Throttle coupon quoting to prevent code brute-forcing / enumeration.
+const couponQuoteLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 15,
+  keyPrefix: "coupon_quote",
+  message: "Too many coupon attempts. Please wait a minute and try again.",
+});
 
 function isEmail(value) {
   const email = String(value || "").trim().toLowerCase();
@@ -111,6 +126,46 @@ router.get("/plans", async (_req, res) => {
   }
 });
 
+/**
+ * POST /api/public/onboard/coupon/quote
+ * Backend-authoritative coupon quote for Step 4. Validates the code against the
+ * selected plan and returns the server-computed GST-inclusive breakdown. The
+ * browser never determines the payable amount — this is re-validated at /start.
+ */
+router.post("/coupon/quote", couponQuoteLimiter, async (req, res) => {
+  try {
+    const planKey = String(req.body?.planKey || "").trim().toLowerCase();
+    const couponCode = String(req.body?.couponCode || "").trim();
+    const customerEmail =
+      String(req.body?.adminEmail || "").trim().toLowerCase() || null;
+
+    if (!couponCode) {
+      return res.status(400).json({ success: false, message: "Enter a coupon code" });
+    }
+
+    const { coupon, plan, pricing } = await quoteCoupon({
+      code: couponCode,
+      planKey,
+      customerEmail,
+    });
+
+    return res.json({
+      success: true,
+      coupon: { code: coupon.code, description: coupon.description || "" },
+      plan: { key: plan.key, name: plan.name },
+      breakdown: pricing,
+    });
+  } catch (error) {
+    if (error instanceof CouponError) {
+      return res
+        .status(error.status || 400)
+        .json({ success: false, message: error.message, code: error.code });
+    }
+    console.error("Coupon quote failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to apply coupon" });
+  }
+});
+
 /** Contact verification used before a public signup can start payment. */
 router.post("/verification/send", async (req, res) => {
   try {
@@ -191,6 +246,7 @@ router.post("/start", async (req, res) => {
     const adminEmail = String(b.adminEmail || "").trim().toLowerCase();
     const adminPassword = String(b.adminPassword || "");
     const referralCode = String(b.referralCode || "").trim().toUpperCase();
+    const couponCode = String(b.couponCode || "").trim();
     const companyEmailVerificationToken = String(b.companyEmailVerificationToken || "");
     const adminEmailVerificationToken = String(b.adminEmailVerificationToken || "");
     const phoneVerificationToken = String(b.phoneVerificationToken || "");
@@ -271,8 +327,35 @@ router.post("/start", async (req, res) => {
     const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } }).catch(() => null);
     if (existingAdmin) return res.status(409).json({ success: false, message: "An account with this admin email already exists. Please log in instead." });
 
-    const pricing = computeSelfServePricing(plan);
-    const amountPaise = Math.round(pricing.finalAmount * 100);
+    // Pricing is always derived server-side. With a coupon, the authoritative
+    // GST-inclusive total comes from the coupon config (re-validated here, never
+    // trusting any amount from the browser); otherwise it's the plan's list+GST.
+    let pricing;
+    let appliedCoupon = null;
+    if (couponCode) {
+      try {
+        const q = await quoteCoupon({
+          code: couponCode,
+          planKey: plan.key,
+          customerEmail: adminEmail,
+        });
+        pricing = q.pricing;
+        appliedCoupon = q.coupon;
+      } catch (error) {
+        if (error instanceof CouponError) {
+          return res
+            .status(error.status || 400)
+            .json({ success: false, message: error.message, code: error.code });
+        }
+        throw error;
+      }
+    } else {
+      pricing = computeSelfServePricing(plan);
+    }
+
+    const amountPaise = appliedCoupon
+      ? pricing.amountPaise
+      : Math.round(pricing.finalAmount * 100);
     if (amountPaise < 100) return res.status(400).json({ success: false, message: "Payable amount is invalid" });
 
     const receipt = `cbss_${Date.now()}`.slice(0, 40);
@@ -281,8 +364,37 @@ router.post("/start", async (req, res) => {
       amount: amountPaise,
       currency: "INR",
       receipt,
-      notes: { planKey: plan.key, source: "self_serve", company: companyName },
+      notes: {
+        planKey: plan.key,
+        source: "self_serve",
+        company: companyName,
+        ...(appliedCoupon ? { coupon: appliedCoupon.code } : {}),
+      },
     });
+
+    // Reserve the coupon redemption against this exact order (idempotent). usedCount
+    // only increments on CONSUME (verified payment), so a reservation never exhausts
+    // the coupon on its own.
+    if (appliedCoupon) {
+      try {
+        await reserveCouponRedemption({
+          couponId: appliedCoupon.id,
+          providerOrderId: order.id,
+          planKey: plan.key,
+          customerEmail: adminEmail,
+          amount: pricing.finalAmount,
+        });
+      } catch (error) {
+        // Over-limit at reserve time (race) -> stop before storing the signup;
+        // the just-created order is unused and never charged.
+        if (error instanceof CouponError) {
+          return res
+            .status(error.status || 400)
+            .json({ success: false, message: error.message, code: error.code });
+        }
+        console.error("Coupon reserve failed:", error.message);
+      }
+    }
 
     const passwordHash = await bcrypt.hash(adminPassword, 12);
 
@@ -309,6 +421,7 @@ router.post("/start", async (req, res) => {
           adminEmail,
           passwordHash,
           referralCode,
+          couponCode: appliedCoupon ? appliedCoupon.code : "",
         },
       },
     });
