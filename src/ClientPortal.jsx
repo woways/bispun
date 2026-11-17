@@ -4806,7 +4806,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         onClose={() => setMobileMoreOpen(false)}
         title="More"
       >
-        <div className="p-4 space-y-5">
+        <div className="p-4 space-y-5 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           {moreGroups.map((group, groupIndex) => (
             <section
               key={group.title}
