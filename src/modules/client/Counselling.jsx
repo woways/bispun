@@ -32,6 +32,7 @@ import {
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import CallCenterModal from "../../components/lead/CallCenterModal";
+import A11yDialog from "../../components/A11yDialog";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -707,11 +708,16 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
       />
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+        <A11yDialog
+          onClose={() => setModalOpen(false)}
+          backdropClassName="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4"
+          panelClassName="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editing ? "Edit Counselling Session" : "Schedule Counselling Session"}
                 </div>
                 <div className="text-[13px] text-slate-500 mt-1">
@@ -1015,8 +1021,9 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       ) : null}
     </div>
   );
