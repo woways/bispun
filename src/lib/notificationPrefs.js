@@ -4,12 +4,15 @@
 // preferences: whether notification/chat sounds play at all, and at what volume.
 //
 // Design goals (see PR brief):
-//  - Works immediately, client-side, with NO backend. The agreed endpoint
-//    (GET/PATCH /api/client/notification-preferences -> { soundEnabled, volume })
-//    does not exist yet, so every server call is best-effort: a 404 or any other
-//    error must NEVER throw to callers, revert the local value, or spam the
-//    console in a loop. The control stays fully responsive before the backend
-//    lands, and syncs automatically once it does.
+//  - Server-persisted (#11): the agreed endpoint
+//    (GET/PATCH /api/client/notifications/preferences) stores { soundEnabled,
+//    volume } per user, so the preference survives logout/login and syncs
+//    across devices. localStorage is kept as an INSTANT-effect cache + offline
+//    fallback, not the source of truth.
+//  - Every server call stays best-effort: a transient error (offline, cold
+//    backend, or a dev build before the migration is applied) must NEVER throw
+//    to callers, revert the local value, or spam the console in a loop. The
+//    control stays fully responsive and reconciles with the server on next load.
 //  - localStorage-backed for instant effect and persistence across reloads; all
 //    storage access is wrapped in try/catch (private mode, native WebView,
 //    disabled storage, quota).
@@ -19,7 +22,11 @@
 import { apiRequest } from "./api";
 
 const STORAGE_KEY = "bispun_notif_prefs";
-const ENDPOINT = "/api/client/notification-preferences";
+// Single agreed contract (#11): sound preferences live on the existing
+// notification-preferences route alongside the type toggles. The server nests
+// them under `preference` (see readServerPrefs); PATCH accepts a partial
+// { soundEnabled, volume } and never clears the type toggles.
+const ENDPOINT = "/api/client/notifications/preferences";
 
 const DEFAULTS = Object.freeze({
   soundEnabled: true,
@@ -143,11 +150,23 @@ export function setPrefs(partial) {
 // One-shot load from the server. On success, merge into memory + localStorage
 // and notify. On ANY error (no backend yet, offline, bad payload) keep the
 // local/default value silently — no throw, no console spam.
+// The server nests all preferences under `preference`; sound fields live there
+// alongside the type toggles. Fall back to the top level so a flat payload (or
+// a future shape) still hydrates instead of silently reverting to defaults.
+function readServerPrefs(data) {
+  if (!data || typeof data !== "object") return null;
+  if (data.preference && typeof data.preference === "object") {
+    return data.preference;
+  }
+  return data;
+}
+
 export async function hydrateFromServer() {
   try {
     const data = await apiRequest(ENDPOINT);
-    if (data && typeof data === "object") {
-      state = normalize({ ...state, ...data });
+    const server = readServerPrefs(data);
+    if (server) {
+      state = normalize({ ...state, ...server });
       writeStored(state);
       notify();
     }

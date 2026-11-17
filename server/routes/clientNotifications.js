@@ -1,6 +1,10 @@
 import { Router } from "express";
 
 import prisma from "../lib/prisma.js";
+import {
+  sanitizePreferencePatch,
+  projectSoundPrefs,
+} from "../lib/notificationPreferences.js";
 import { getSubscriptionGraceEndsAt } from "../lib/subscriptions.js";
 import { ensureCalendarRemindersForUser } from "../lib/calendarReminders.js";
 import {
@@ -431,6 +435,10 @@ async function getUserPreference(
 
       systemUpdates:
         preference?.systemUpdates ?? true,
+
+      // Sound preferences (#11) — defaults match the frontend so a user with
+      // no stored row (or a pre-migration client) behaves exactly as today.
+      ...projectSoundPrefs(preference),
     },
   };
 }
@@ -474,28 +482,10 @@ router.patch(
       const userId =
         req.clientUser.userId;
 
-      const allowedFields = [
-        "inAppEnabled",
-        "emailEnabled",
-        "smsEnabled",
-        "leadUpdates",
-        "admissionUpdates",
-        "billingUpdates",
-        "supportUpdates",
-        "systemUpdates",
-      ];
-
-      const data = {};
-
-      for (const field of allowedFields) {
-        if (
-          typeof req.body?.[field] ===
-          "boolean"
-        ) {
-          data[field] =
-            req.body[field];
-        }
-      }
+      // Partial update: only present, valid fields are written, so the sound
+      // control (sending just { soundEnabled, volume }) never clears the type
+      // toggles, and a types-only PATCH never clears the sound settings.
+      const data = sanitizePreferencePatch(req.body);
 
       await prisma.userNotificationPreference.upsert({
         where: {

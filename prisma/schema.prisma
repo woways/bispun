@@ -1223,6 +1223,12 @@ model UserNotificationPreference {
   supportUpdates   Boolean @default(true)
   systemUpdates    Boolean @default(true)
 
+  // Notification SOUND preferences (#11). soundEnabled gates whether
+  // notification/chat tones play; volume (0..1) scales their gain. Defaults
+  // match the frontend defaults so existing rows keep today's behavior.
+  soundEnabled Boolean @default(true)
+  volume       Float   @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
