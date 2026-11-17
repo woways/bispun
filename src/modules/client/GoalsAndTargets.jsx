@@ -422,7 +422,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
 
         <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px]">
           <div className="flex items-center justify-center">
-            <div className="relative h-28 w-28 flex-shrink-0">
+            <div className="relative h-20 w-20 flex-shrink-0 sm:h-28 sm:w-28">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
                   cx="60"
@@ -448,7 +448,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[24px] font-extrabold leading-none tracking-tight">
+                <div className="text-[20px] font-extrabold leading-none tracking-tight sm:text-[24px]">
                   {avg}%
                 </div>
                 <div className="text-[11px] font-semibold text-slate-500">year avg</div>
@@ -456,7 +456,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
             </div>
           </div>
 
-          <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-2 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4">
             {cards.map((card) => {
               const Icon = card.icon;
 
