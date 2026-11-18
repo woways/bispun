@@ -7,6 +7,7 @@ import {
   getReferralRewardSummary,
   getReferralCreditState,
   CREDIT_EXPECTATION_DAYS,
+  isEarnedStatus,
 } from "../lib/referralRewards.js";
 
 const router = Router();
@@ -146,10 +147,11 @@ router.get("/me", async (req, res) => {
       (r) => !["ADMITTED", "LOST"].includes(r.lead.stage)
     ).length;
 
-    const successfulRewards = rewardReferrals.filter(
-      (item) => item.status === "SUCCESSFUL"
-    );
-    const rewardSummary = getReferralRewardSummary(successfulRewards.length);
+    // Rewards (slab/earnings) count earned referrals only — both new EARNED and
+    // legacy SUCCESSFUL during rollout (see EARNED_STATUSES). REFERRED rows are
+    // signed-up-but-not-yet-paid and must not earn money.
+    const earnedRewards = rewardReferrals.filter((item) => isEarnedStatus(item.status));
+    const rewardSummary = getReferralRewardSummary(earnedRewards.length);
     const payoutSummary = buildPayoutSummary(rewardSummary.totalEarnings, payoutRequests);
     // PDF §11 lifecycle: Earned -> Pending credit -> Credited. Credited money is
     // what Super Admin has confirmed (sum of PAID); the client view is read-only.
@@ -170,16 +172,23 @@ router.get("/me", async (req, res) => {
         summary: { ...rewardSummary, ...payoutSummary, ...creditState },
         referrals: rewardReferrals.map((item) => ({
           id: item.id,
-          status: item.status,
+          status: item.status, // REFERRED | EARNED
           referralCode: item.referralCode,
           qualifiedAt: item.qualifiedAt,
           createdAt: item.createdAt,
-          company: {
-            id: item.referredCompany.id,
-            name: item.referredCompany.name,
-            ownerName: item.referredCompany.ownerName,
-            planName: item.referredCompany.subscriptions?.[0]?.plan?.name || null,
-          },
+          // Null before payment (REFERRED); fall back to the captured signup
+          // identity so the Referred list still shows who signed up.
+          company: item.referredCompany
+            ? {
+                id: item.referredCompany.id,
+                name: item.referredCompany.name,
+                ownerName: item.referredCompany.ownerName,
+                planName: item.referredCompany.subscriptions?.[0]?.plan?.name || null,
+              }
+            : null,
+          // Referrer-facing: expose a display name only — never the referred
+          // person's email (avoid leaking new PII to the referrer).
+          referredName: item.referredName || null,
         })),
         payouts: payoutRequests.map((item) => ({
           id: item.id,

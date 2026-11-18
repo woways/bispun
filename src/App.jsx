@@ -540,6 +540,27 @@ function AdminRoute({ children }) {
 }
 
 export default function App() {
+  // Capture a referral code from the landing URL (?ref=…) once, stash it for the
+  // signup session, and strip ONLY `ref` from the URL (path + other query params
+  // preserved). Silent background capture: no focus change, no visible UI.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      const ref = url.searchParams.get("ref");
+      if (!ref) return;
+      const clean = ref.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 32);
+      if (clean) window.sessionStorage.setItem("bispun_ref", clean);
+      url.searchParams.delete("ref");
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${url.pathname}${url.search}${url.hash}`
+      );
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <BackButtonHandler />
