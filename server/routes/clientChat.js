@@ -293,10 +293,23 @@ router.post("/:id/meet", async (req, res) => {
     }
 
     const creationPromise = (async () => {
+      // Invite every member of the conversation as a Google Calendar attendee so
+      // they are recognized guests and can join the same Meet room directly.
+      // Without this, only the creator was on the event, so everyone else was
+      // refused entry and bounced to the Google Meet home page.
+      const members = await prisma.conversationMember.findMany({
+        where: { conversationId },
+        include: { user: { select: { email: true } } },
+      });
+      const attendees = members
+        .map((m) => m.user?.email)
+        .filter((email) => Boolean(email));
+
       const result = await createMeetEvent(req.clientUser.userId, {
         summary: "Bispun call",
         startISO: new Date(now).toISOString(),
         endISO: new Date(now + 60 * 60 * 1000).toISOString(),
+        attendees,
       });
       if (!result.meetLink) {
         const error = new Error(
