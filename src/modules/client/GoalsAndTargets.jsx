@@ -323,13 +323,13 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-400">Quarter</span>
-          <div className="flex flex-wrap rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="flex flex-wrap rounded-xl border border-slate-200 bg-white p-1 shadow-sm native:flex-nowrap native:max-w-full native:overflow-x-auto">
             {QUARTER_TABS.map(([key, label]) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setQuarter(key)}
-                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold ${
+                className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold native:shrink-0 native:whitespace-nowrap ${
                   quarter === key
                     ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
@@ -420,9 +420,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-[84px_minmax(0,1fr)] native:items-stretch native:gap-2.5">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-[92px_minmax(0,1fr)] native:items-stretch native:gap-2">
           <div className="flex items-center justify-center native:h-full">
-            <div className="relative h-28 w-28 flex-shrink-0 native:h-[76px] native:w-[76px]">
+            <div className="relative h-28 w-28 flex-shrink-0 native:h-[84px] native:w-[84px]">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
                   cx="60"
@@ -474,10 +474,10 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                       <div className="truncate text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 native:whitespace-normal native:leading-[1.1]">
                         {card.label}
                       </div>
-                      <div className="mt-0.5 truncate text-[16px] font-bold tracking-tight text-slate-900">
+                      <div className="mt-0.5 truncate text-[16px] font-bold tracking-tight text-slate-900 native:whitespace-normal native:leading-[1.1]">
                         {card.value}
                       </div>
-                      <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400">
+                      <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400 native:whitespace-normal native:leading-[1.15]">
                         {card.note}
                       </div>
                     </div>
@@ -907,8 +907,8 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
             </div>
 
             {/* Search + department filter */}
-            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
-              <div className="relative min-w-[220px] flex-1">
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm native:relative native:flex-nowrap native:max-w-full native:overflow-x-auto">
+              <div className="relative min-w-[220px] flex-1 native:w-[200px] native:flex-none native:shrink-0">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
                   value={rosterSearch}
@@ -927,7 +927,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 )}
               </div>
 
-              <div className="relative">
+              <div className="relative native:shrink-0">
                 <button
                   type="button"
                   onClick={() => setDeptOpen((o) => !o)}
@@ -988,7 +988,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 )}
               </div>
 
-              <div className="relative">
+              <div className="relative native:shrink-0">
                 <button
                   type="button"
                   onClick={() => setRoleOpen((o) => !o)}
@@ -1029,7 +1029,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 )}
               </div>
 
-              <span className="ml-auto text-[13px] font-semibold text-slate-400">
+              <span className="ml-auto text-[13px] font-semibold text-slate-400 native:ml-1 native:shrink-0 native:self-center native:whitespace-nowrap">
                 {filteredRoster.length} of {roster.length}
               </span>
             </div>
