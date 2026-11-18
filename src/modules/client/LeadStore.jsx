@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -58,6 +59,7 @@ import NurtureCenter from "../../components/lead/NurtureCenter";
 import CallCenterModal from "../../components/lead/CallCenterModal";
 import LeadDetailsView from "../../components/lead/LeadDetailsView";
 import { openWhatsApp, openSMS, telHref } from "../../lib/nativeActions";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
 const TYPES = [
   {
@@ -2979,31 +2981,35 @@ export default function LeadStore({
   const viewBtnRef = useRef(null);
   const viewPanelRef = useRef(null);
 
-  // Dismiss the View (columns) panel on Escape or an outside tap, returning
-  // focus to the View button. Important in the native app, where the panel is
-  // a bottom-sheet and its trigger can scroll out of the horizontal toolbar.
+  // Close the View (columns) panel and return focus to its trigger. Routed
+  // through the shared overlay back-stack (below) so the Android hardware back
+  // button and Escape both close THIS popover first — in correct LIFO order
+  // with any other open overlay — instead of navigating the app away. Important
+  // in the native app, where the panel is a bottom-sheet and its trigger can
+  // scroll out of the horizontal toolbar.
+  const closeViewPanel = useCallback(() => {
+    setViewOpen(false);
+    viewBtnRef.current?.focus();
+  }, []);
+
+  // Hardware back + Escape -> close this popover first (centralized back-stack,
+  // same path drawers/sheets/modals use). manageFocus:false keeps it a
+  // lightweight disclosure (no focus-trap, no focus-move-in); closeViewPanel
+  // handles focus-return itself. Equivalent on web (Escape still closes).
+  useOverlayDismiss(viewOpen, closeViewPanel, { manageFocus: false });
+
+  // Outside-tap dismissal (the back-stack does not cover pointer-outside).
   useEffect(() => {
     if (!viewOpen) return undefined;
-    const close = () => {
-      setViewOpen(false);
-      viewBtnRef.current?.focus();
-    };
-    const onKey = (event) => {
-      if (event.key === "Escape") close();
-    };
     const onOutside = (event) => {
       const t = event.target;
       if (viewBtnRef.current?.contains(t)) return;
       if (viewPanelRef.current?.contains(t)) return;
-      close();
+      closeViewPanel();
     };
     document.addEventListener("pointerdown", onOutside);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onOutside);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [viewOpen]);
+    return () => document.removeEventListener("pointerdown", onOutside);
+  }, [viewOpen, closeViewPanel]);
 
   const [leadStoreMetricFilter, setLeadStoreMetricFilter] = useState(null);
   const [metricPanel, setMetricPanel] = useState(null);
