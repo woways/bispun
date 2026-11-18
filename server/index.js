@@ -8,6 +8,7 @@ import { loadServerConfig } from "./lib/env.js";
 import { syncDueSubscriptionLifecycles } from "./lib/subscriptions.js";
 import { startNurtureWorker } from "./lib/nurtureEngine.js";
 import { startCalendarReminderWorker } from "./lib/calendarReminders.js";
+import { startCouponReservationSweeper } from "./lib/couponReservationSweeper.js";
 import {
   requestId,
   securityHeaders,
@@ -24,6 +25,7 @@ import adminSupportRoutes from "./routes/adminSupport.js";
 import adminUsageRoutes from "./routes/adminUsage.js";
 import adminBillingRoutes from "./routes/adminBilling.js";
 import adminPlansRoutes from "./routes/adminPlans.js";
+import adminCouponsRoutes from "./routes/adminCoupons.js";
 import adminModulesRoutes from "./routes/adminModules.js";
 import adminGlobalUsageRoutes from "./routes/adminGlobalUsage.js";
 import adminGlobalBillingRoutes from "./routes/adminGlobalBilling.js";
@@ -181,6 +183,7 @@ app.use("/api/admin/support", adminSupportRoutes);
 app.use("/api/admin/usage", adminUsageRoutes);
 app.use("/api/admin/billing", adminBillingRoutes);
 app.use("/api/admin/plans", adminPlansRoutes);
+app.use("/api/admin/coupons", adminCouponsRoutes);
 app.use("/api/admin/modules", adminModulesRoutes);
 app.use("/api/admin/global-usage", adminGlobalUsageRoutes);
 app.use("/api/admin/s3-usage", adminS3UsageRoutes);
@@ -284,15 +287,16 @@ async function reconcileSubscriptions() {
 }
 
 // Development safeguard: when DISABLE_BACKGROUND_WORKERS=true, the nurture
-// worker, calendar reminder worker and subscription-lifecycle timer do NOT
-// auto-start. This lets a
+// worker, calendar reminder worker, coupon reservation sweeper and
+// subscription-lifecycle timer do NOT auto-start. This lets a
 // backend pointed at a dev/clone database run without contacting real
 // customers (email/WhatsApp/SMS) or mutating records on a schedule. Production
 // leaves this unset, so the original behaviour is completely unchanged.
 if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
   console.warn(
     "[startup] DISABLE_BACKGROUND_WORKERS=true — nurture worker, calendar " +
-      "reminder worker and subscription lifecycle timer are DISABLED (development mode)."
+      "reminder worker, coupon reservation sweeper and subscription lifecycle " +
+      "timer are DISABLED (development mode)."
   );
   // Safe mobile-reminder QA escape hatch: a cloned/dev database can opt into
   // ONLY the calendar reminder worker without re-enabling Smart Nurture or the
@@ -307,6 +311,9 @@ if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
   reconcileSubscriptions();
   startNurtureWorker();
   startCalendarReminderWorker();
+  // Release abandoned coupon reservations so a limited coupon can't be silently
+  // "used up" by checkouts that were started but never paid (see C2).
+  startCouponReservationSweeper();
   const subscriptionLifecycleTimer = setInterval(
     reconcileSubscriptions,
     60 * 60 * 1000
@@ -321,6 +328,18 @@ app.set("io", io);
 server.listen(config.port, () =>
   console.log(`Bispun API running on http://localhost:${config.port}`)
 );
+
+// Idempotently seed the initial signup coupons (never overwrites existing config
+// or redemption history). Best-effort and non-blocking — never fails boot.
+import("./lib/coupons.js")
+  .then(({ seedCoupons }) => seedCoupons())
+  .then((results) => {
+    const created = results.filter((r) => r.action === "created");
+    if (created.length) {
+      console.log(`[startup] Seeded ${created.length} coupon(s): ${created.map((r) => r.code).join(", ")}`);
+    }
+  })
+  .catch((error) => console.error("[startup] Coupon seed skipped:", error.message));
 
 async function shutdown(signal) {
   console.log(`${signal} received. Shutting down...`);

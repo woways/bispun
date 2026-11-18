@@ -526,12 +526,99 @@ export default function SettingsView({
     }
   }
 
+  // ---- SMS integration state (per-company, client-owned provider e.g. MSG91) ----
+  const [smsConfig, setSmsConfig] = useState({
+    enabled: false,
+    provider: "MSG91",
+    senderId: "",
+    apiKeyMasked: "",
+    hasApiKey: false,
+    templates: [],
+  });
+  const [smsApiKeyInput, setSmsApiKeyInput] = useState("");
+  const [smsCanManage, setSmsCanManage] = useState(false);
+  const [smsBusy, setSmsBusy] = useState(false);
+  const [smsNotice, setSmsNotice] = useState("");
+
+  async function loadSmsConfig() {
+    try {
+      const data = await apiRequest("/api/client/communications/sms-config");
+      setSmsConfig(
+        data?.config || {
+          enabled: false,
+          provider: "MSG91",
+          senderId: "",
+          apiKeyMasked: "",
+          hasApiKey: false,
+          templates: [],
+        }
+      );
+      setSmsCanManage(Boolean(data?.canManage));
+    } catch (error) {
+      console.error("Unable to load SMS config:", error);
+    }
+  }
+
+  function addSmsTemplate() {
+    setSmsConfig((c) => ({
+      ...c,
+      templates: [
+        ...(c.templates || []),
+        { id: `tpl_${Date.now()}`, name: "", templateId: "", body: "" },
+      ],
+    }));
+  }
+
+  function updateSmsTemplate(index, field, value) {
+    setSmsConfig((c) => ({
+      ...c,
+      templates: (c.templates || []).map((t, i) =>
+        i === index ? { ...t, [field]: value } : t
+      ),
+    }));
+  }
+
+  function removeSmsTemplate(index) {
+    setSmsConfig((c) => ({
+      ...c,
+      templates: (c.templates || []).filter((_, i) => i !== index),
+    }));
+  }
+
+  async function saveSmsConfig() {
+    setSmsBusy(true);
+    setSmsNotice("");
+    try {
+      const payload = {
+        enabled: smsConfig.enabled,
+        provider: smsConfig.provider,
+        senderId: smsConfig.senderId,
+        templates: smsConfig.templates,
+      };
+      // Only send the key when the admin typed a new one (they see a mask otherwise).
+      if (smsApiKeyInput.trim()) payload.apiKey = smsApiKeyInput.trim();
+
+      const data = await apiRequest("/api/client/communications/sms-config", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setSmsConfig(data?.config || smsConfig);
+      setSmsApiKeyInput("");
+      setSmsNotice(data?.message || "SMS integration saved.");
+    } catch (error) {
+      setSmsNotice(error?.data?.message || "Unable to save SMS integration.");
+    } finally {
+      setSmsBusy(false);
+    }
+  }
+
   // Load status when opening the Integrations tab, and show the result of a
   // just-completed OAuth redirect (?google=connected|error|norefresh).
   useEffect(() => {
     if (tab !== "integrations") return;
     loadGoogleStatus();
     loadWhatsAppStatus();
+    loadSmsConfig();
     try {
       const params = new URLSearchParams(window.location.search);
       const g = params.get("google");
@@ -4587,7 +4674,7 @@ export default function SettingsView({
               <div>
                 <h3 className="text-[15px] font-bold text-slate-900">Communication Integrations</h3>
                 <p className="text-[13px] text-slate-500 mt-1">
-                  Connect your own communication accounts. Gmail is available now; WhatsApp and SMS are prepared for the next phase.
+                  Connect your own communication accounts. Gmail and SMS are available now; WhatsApp is prepared for the next phase.
                 </p>
               </div>
 
@@ -4689,11 +4776,73 @@ export default function SettingsView({
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200"><Smartphone size={20} /></span>
-                    <div><div className="text-[15px] font-bold text-slate-900">SMS</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Send transactional and follow-up messages to lead phone numbers.</p></div>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white text-slate-500 ring-1 ring-slate-200"><Smartphone size={20} /></span>
+                      <div>
+                        <div className="text-[15px] font-bold text-slate-900">SMS</div>
+                        <p className="mt-1 text-[13px] leading-5 text-slate-500">Connect your company&apos;s own SMS provider (e.g. MSG91) with DLT-approved templates. Everyone in your company can then send template SMS to leads from Lead Store.</p>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${smsConfig.enabled && smsConfig.hasApiKey ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>{smsConfig.enabled && smsConfig.hasApiKey ? "Connected" : "Not connected"}</span>
                   </div>
-                  <span className="mt-4 inline-flex rounded-full bg-slate-200 px-2.5 py-1 text-[11px] font-bold text-slate-600">Coming Soon</span>
+
+                  {!smsCanManage ? (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can connect SMS for the company.</div>
+                  ) : (
+                    <div className="mt-4 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Provider</label>
+                          <input value={smsConfig.provider} onChange={(e) => setSmsConfig((c) => ({ ...c, provider: e.target.value }))} placeholder="MSG91" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Sender ID (DLT header)</label>
+                          <input value={smsConfig.senderId} onChange={(e) => setSmsConfig((c) => ({ ...c, senderId: e.target.value }))} placeholder="BISPUN" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
+                        </div>
+                        <div>
+                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Auth key</label>
+                          <input type="password" value={smsApiKeyInput} onChange={(e) => setSmsApiKeyInput(e.target.value)} placeholder={smsConfig.hasApiKey ? (smsConfig.apiKeyMasked || "••••••") : "Paste provider auth key"} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="mb-2 flex items-center justify-between">
+                          <label className="text-[12px] font-semibold text-slate-600">DLT-approved templates</label>
+                          <button type="button" onClick={addSmsTemplate} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700"><Plus size={13} /> Add template</button>
+                        </div>
+                        {(smsConfig.templates || []).length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-center text-[12px] text-slate-400">No templates yet. Add your DLT-approved templates so your team can pick them when sending.</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(smsConfig.templates || []).map((t, index) => (
+                              <div key={t.id || index} className="rounded-xl border border-slate-200 bg-white p-3">
+                                <div className="flex items-center gap-2">
+                                  <input value={t.name} onChange={(e) => updateSmsTemplate(index, "name", e.target.value)} placeholder="Template name (e.g. Follow-up)" className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-[13px]" />
+                                  <input value={t.templateId} onChange={(e) => updateSmsTemplate(index, "templateId", e.target.value)} placeholder="Provider template ID" className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] font-mono" />
+                                  <button type="button" onClick={() => removeSmsTemplate(index)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={15} /></button>
+                                </div>
+                                <textarea value={t.body} onChange={(e) => updateSmsTemplate(index, "body", e.target.value)} rows={2} placeholder="Approved template content (for preview). Put the lead's name where the name variable goes." className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-[12px] leading-5" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
+                        <span className="text-[13px] font-semibold text-slate-700">Enable SMS sending for this company</span>
+                        <input type="checkbox" checked={smsConfig.enabled} onChange={(e) => setSmsConfig((c) => ({ ...c, enabled: e.target.checked }))} />
+                      </label>
+
+                      {smsNotice && <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-800">{smsNotice}</div>}
+
+                      <div className="flex justify-end">
+                        <button type="button" onClick={saveSmsConfig} disabled={smsBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{smsBusy ? "Saving…" : "Save SMS integration"}</button>
+                      </div>
+
+                      <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[12px] leading-5 text-amber-800">India DLT note: SMS content must match your provider&apos;s DLT-approved templates exactly, and each template&apos;s name variable must be set so the lead&apos;s name fills correctly.</div>
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -2,7 +2,7 @@ import {
   useEffect,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import {
   ArrowRight,
   AlertCircle,
@@ -22,6 +22,7 @@ import bispunLogo from "./assets/bispun-logo.svg";
 
 export default function ClientLogin() {
   const nav = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState(
     () => localStorage.getItem("cb_remembered_email") || ""
@@ -476,6 +477,18 @@ export default function ClientLogin() {
                   ? "Signing in..."
                   : "Sign in"}
               </button>
+
+              {/* CREATE ACCOUNT */}
+
+              <p className="text-center text-[14px] text-slate-600">
+                New to Bispun?{" "}
+                <Link
+                  to={`/signup${location.search}`}
+                  className="rounded-sm font-semibold text-blue-600 underline-offset-2 hover:text-blue-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                >
+                  Create an account
+                </Link>
+              </p>
             </form>
 
             {/* FOOTER */}

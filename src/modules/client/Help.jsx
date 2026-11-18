@@ -692,7 +692,7 @@ function NewTicketModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div
         ref={panelRef}
         role="dialog"

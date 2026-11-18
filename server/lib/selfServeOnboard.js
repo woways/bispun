@@ -1,5 +1,6 @@
 import prisma from "./prisma.js";
 import { sendWelcomeEmail, getAppLoginUrl } from "./mailer.js";
+import { shouldAttributeReferral } from "./referralRewards.js";
 
 // GST percent — kept in sync with adminClients.js / clientBilling.js.
 export const GST_RATE = 18;
@@ -101,6 +102,60 @@ async function uniqueSubdomain(base) {
  * signup. Idempotent: safe to call from both the verify endpoint and the webhook.
  * Returns { company, payment } or throws.
  */
+// PDF §11 lifecycle, stage REFERRED: called from /start once a signup is
+// verified and a payment order is created. Records a referral row (no company
+// yet) linked to the PendingSignup. Backend-validated and non-fatal: an invalid/
+// unknown code, a self-referral, or any error never blocks signup and never
+// creates a reward. Idempotent via the unique pendingSignupId.
+export async function recordReferredIntent({
+  pendingSignupId,
+  referralCode,
+  referredEmail,
+  referredName,
+}) {
+  try {
+    const refCode = String(referralCode || "").trim().toUpperCase();
+    if (!refCode || !pendingSignupId) return null;
+
+    const referrer = await prisma.user.findUnique({
+      where: { referralCode: refCode },
+      select: { id: true, referralCode: true, email: true, active: true },
+    });
+
+    // Invalid/unknown code, inactive referrer, or self-referral -> no referral
+    // row (signup still proceeds). Decision is a pure, unit-tested function.
+    const decision = shouldAttributeReferral({
+      referralCode: refCode,
+      referrerFound: Boolean(referrer),
+      referrerActive: referrer?.active,
+      referrerEmail: referrer?.email,
+      referredEmail,
+    });
+    if (!decision.ok) return null;
+
+    // Idempotent: one REFERRED row per pending signup/order.
+    const existing = await prisma.crmReferral.findUnique({ where: { pendingSignupId } });
+    if (existing) return existing;
+
+    return await prisma.crmReferral.create({
+      data: {
+        referrerId: referrer.id,
+        referredCompanyId: null,
+        pendingSignupId,
+        referralCode: referrer.referralCode,
+        referredEmail: String(referredEmail || "").trim().toLowerCase() || null,
+        referredName: referredName || null,
+        status: "REFERRED",
+        qualifiedAt: null,
+      },
+    });
+  } catch (error) {
+    // Never break signup because of referral attribution.
+    console.error("recordReferredIntent failed (non-fatal):", error);
+    return null;
+  }
+}
+
 export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   // Already done? Return the existing company + its payment.
   if (pending.status === "CONSUMED" && pending.createdCompanyId) {
@@ -177,16 +232,20 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
   if (refCode) {
     referrer = await prisma.user.findUnique({
       where: { referralCode: refCode },
-      select: { id: true, referralCode: true, email: true },
+      select: { id: true, referralCode: true, email: true, active: true },
     });
 
-    // Self-referral guard: a user cannot earn a referral reward by signing their
-    // own new company up with their own code.
-    if (
-      referrer &&
-      String(referrer.email || "").trim().toLowerCase() ===
-        String(data.adminEmail || "").trim().toLowerCase()
-    ) {
+    // Parity with recordReferredIntent: reject unknown code, INACTIVE referrer,
+    // or self-referral using the same pure, unit-tested decision function, so the
+    // fallback-create path can never credit an inactive referrer.
+    const decision = shouldAttributeReferral({
+      referralCode: refCode,
+      referrerFound: Boolean(referrer),
+      referrerActive: referrer?.active,
+      referrerEmail: referrer?.email,
+      referredEmail: data.adminEmail,
+    });
+    if (!decision.ok) {
       referrer = null;
     }
   }
@@ -267,13 +326,35 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
       },
     });
 
-    if (referrer) {
+    // Referred -> Earned. A REFERRED row created at verified signup is
+    // transitioned to EARNED now that payment is captured + the company exists.
+    // If none was recorded (legacy/direct), create the EARNED row as a fallback
+    // so any paid referral is still attributed. This whole finalize runs once
+    // per order (guarded above), so the transition is idempotent.
+    const existingReferred = await tx.crmReferral.findUnique({
+      where: { pendingSignupId: pending.id },
+    });
+    if (existingReferred) {
+      if (existingReferred.status !== "EARNED") {
+        await tx.crmReferral.update({
+          where: { id: existingReferred.id },
+          data: {
+            status: "EARNED",
+            referredCompanyId: company.id,
+            qualifiedAt: new Date(),
+          },
+        });
+      }
+    } else if (referrer) {
       await tx.crmReferral.create({
         data: {
           referrerId: referrer.id,
           referredCompanyId: company.id,
+          pendingSignupId: pending.id,
           referralCode: referrer.referralCode,
-          status: "SUCCESSFUL",
+          referredEmail: data.adminEmail || null,
+          referredName: data.adminName || null,
+          status: "EARNED",
           qualifiedAt: new Date(),
         },
       });
@@ -305,6 +386,22 @@ export async function finalizeSelfServeSignup(pending, providerPaymentId) {
 
     return { company, payment };
   });
+
+  // Consume a coupon redemption exactly once, on first account creation (the
+  // alreadyDone branches above return before this). Idempotent and best-effort —
+  // it must never undo a completed signup. Dynamic import avoids a cycle
+  // (coupons.js imports this module for pricing).
+  if (data.couponCode) {
+    try {
+      const { consumeCouponRedemption } = await import("./coupons.js");
+      await consumeCouponRedemption({
+        providerOrderId: pending.providerOrderId,
+        companyId: result.company?.id,
+      });
+    } catch (error) {
+      console.error("Coupon redemption consume failed:", error.message);
+    }
+  }
 
   // Welcome email with the login link — best-effort, never blocks signup.
   // Only reached on first creation (the alreadyDone branches return earlier),

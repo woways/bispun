@@ -35,6 +35,11 @@ export default function Referrals() {
   const [creditTarget, setCreditTarget] = useState(null);
   const [crediting, setCrediting] = useState(false);
   const [dialogError, setDialogError] = useState("");
+  // Optional payout reference + note captured when marking credited. The DB and
+  // the /credit endpoint already persist these; this records the ACTUAL payment
+  // reference rather than implying one just because the status changed.
+  const [creditReference, setCreditReference] = useState("");
+  const [creditNote, setCreditNote] = useState("");
 
   async function load() {
     setLoading(true);
@@ -72,6 +77,9 @@ export default function Referrals() {
   function handleDialogClose() {
     setCreditTarget(null);
     setCrediting(false);
+    // Reset so one referrer's reference/note never leaks into the next dialog.
+    setCreditReference("");
+    setCreditNote("");
   }
 
   async function confirmCredit() {
@@ -82,7 +90,11 @@ export default function Referrals() {
     try {
       await apiRequest("/api/admin/referrals/credit", {
         method: "POST",
-        body: JSON.stringify({ referrerId: creditTarget.referrer.id }),
+        body: JSON.stringify({
+          referrerId: creditTarget.referrer.id,
+          paymentReference: creditReference.trim(),
+          adminNote: creditNote.trim(),
+        }),
       });
       setFeedback(`Credited ${money(amount)} to ${creditTarget.referrer.name}.`);
       closeDialog();
@@ -238,18 +250,19 @@ export default function Referrals() {
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
             <div>
-              <div className="text-sm font-semibold text-slate-900">Legacy Payout Requests</div>
-              <div className="mt-0.5 text-xs text-slate-500">Earlier client-initiated requests. Resolve any that are still open; new crediting uses “Mark credited” above.</div>
+              <div className="text-sm font-semibold text-slate-900">Payout &amp; credit history</div>
+              <div className="mt-0.5 text-xs text-slate-500">All credits and legacy client-initiated requests. “Admin credit” rows were marked credited here; resolve any legacy request still open.</div>
             </div>
             <div className="text-xs font-semibold text-slate-500">Pending {money(data.totals?.pending)} · Approved {money(data.totals?.approved)}</div>
           </div>
-          <div className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" tabIndex={0} role="group" aria-label="Legacy payout requests (scrollable)">
+          <div className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500" tabIndex={0} role="group" aria-label="Payout and credit history (scrollable)">
             <table className="min-w-full text-left text-xs">
-              <caption className="sr-only">Legacy client-initiated payout requests</caption>
+              <caption className="sr-only">Payout and credit history, including Super Admin credits and legacy client-initiated requests</caption>
               <thead className="bg-slate-50 text-slate-500">
                 <tr>
                   <th scope="col" className="px-4 py-3">User</th>
                   <th scope="col" className="px-4 py-3">Company</th>
+                  <th scope="col" className="px-4 py-3">Source</th>
                   <th scope="col" className="px-4 py-3">Requested</th>
                   <th scope="col" className="px-4 py-3">Amount</th>
                   <th scope="col" className="px-4 py-3">Status</th>
@@ -262,6 +275,7 @@ export default function Referrals() {
                   <tr key={item.id} className="align-top">
                     <td className="px-4 py-3"><div className="font-semibold text-slate-900">{item.referrer?.name || "—"}</div><div className="mt-0.5 text-slate-500">{item.referrer?.email || ""}</div></td>
                     <td className="px-4 py-3 text-slate-600">{item.referrer?.company?.name || "—"}</td>
+                    <td className="px-4 py-3 text-slate-700">{item.source === "ADMIN_CREDIT" ? "Admin credit" : "Client request"}</td>
                     <td className="px-4 py-3 text-slate-600">{new Date(item.requestedAt).toLocaleDateString("en-IN")}</td>
                     <td className="px-4 py-3 font-bold text-slate-900">{money(item.amount)}</td>
                     <td className="px-4 py-3"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${statusClass(item.status)}`}>{item.status}</span></td>
@@ -315,10 +329,41 @@ export default function Referrals() {
               </div>
             )}
 
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="credit-ref" className="block text-[12px] font-medium text-slate-700">
+                  Payment / UTR reference (optional)
+                </label>
+                <input
+                  id="credit-ref"
+                  type="text"
+                  autoFocus
+                  aria-describedby="credit-dialog-desc"
+                  value={creditReference}
+                  onChange={(e) => setCreditReference(e.target.value)}
+                  disabled={crediting}
+                  placeholder="e.g. UTR / NEFT / UPI reference"
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-500 bg-white px-3 text-[13px] text-slate-900 placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60"
+                />
+              </div>
+              <div>
+                <label htmlFor="credit-note" className="block text-[12px] font-medium text-slate-700">
+                  Note (optional)
+                </label>
+                <textarea
+                  id="credit-note"
+                  rows={2}
+                  value={creditNote}
+                  onChange={(e) => setCreditNote(e.target.value)}
+                  disabled={crediting}
+                  className="mt-1 w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-[13px] text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60"
+                />
+              </div>
+            </div>
+
             <div className="mt-5 flex flex-wrap justify-end gap-3">
               <button
                 type="button"
-                autoFocus
                 onClick={closeDialog}
                 disabled={crediting}
                 className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60"

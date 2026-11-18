@@ -4,6 +4,47 @@ export const REFERRAL_SLABS = [
   { key: "SLAB_3", min: 11, max: null, rate: 4000, label: "11+" },
 ];
 
+// Referral lifecycle statuses (PDF §11). REFERRED = verified signup/order started;
+// EARNED = payment captured + account activated.
+export const REFERRAL_STATUS = { REFERRED: "REFERRED", EARNED: "EARNED" };
+
+// Rollout compatibility: "SUCCESSFUL" is the legacy pre-lifecycle value. Until the
+// 0008b backfill (SUCCESSFUL -> EARNED) runs in every environment, both legacy
+// SUCCESSFUL and new EARNED rows are treated as earned so earnings never drop to
+// zero during deploy. New writes only ever use REFERRED -> EARNED. After the
+// backfill this set still works (no SUCCESSFUL rows remain) and the legacy entry
+// can be dropped later. Used for both in-memory filters and Prisma `in` queries.
+export const EARNED_STATUSES = ["EARNED", "SUCCESSFUL"];
+
+export function isEarnedStatus(status) {
+  return EARNED_STATUSES.includes(String(status || "").trim().toUpperCase());
+}
+
+export function countEarned(referrals) {
+  return (Array.isArray(referrals) ? referrals : []).filter((r) => isEarnedStatus(r?.status)).length;
+}
+
+// Pure decision for whether a signup should be attributed to a referrer. Keeps
+// the self-referral / invalid-code / inactive-referrer rules testable without a DB.
+export function shouldAttributeReferral({
+  referralCode,
+  referrerFound,
+  referrerActive,
+  referrerEmail,
+  referredEmail,
+} = {}) {
+  if (!String(referralCode || "").trim()) return { ok: false, reason: "NO_CODE" };
+  if (!referrerFound) return { ok: false, reason: "UNKNOWN_CODE" };
+  if (referrerActive === false) return { ok: false, reason: "INACTIVE_REFERRER" };
+  if (
+    String(referrerEmail || "").trim().toLowerCase() ===
+    String(referredEmail || "").trim().toLowerCase()
+  ) {
+    return { ok: false, reason: "SELF_REFERRAL" };
+  }
+  return { ok: true };
+}
+
 // User-facing credit expectation (PDF 11.5). This is an expectation shown to
 // referrers, NOT an authorization to auto-pay — crediting is a manual Super
 // Admin action (11.6/11.7).

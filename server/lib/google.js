@@ -284,3 +284,103 @@ export async function sendGmailMessage(
     from: email,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Platform (system) email sender.
+//
+// Onboarding OTP, welcome and other system emails are NOT tied to a client
+// user, so they send from a single connected Google account at the platform
+// level: a SUPER_ADMIN whose Google is connected with the gmail.send scope.
+// This runs over the Gmail API (HTTPS), so it works where outbound SMTP is
+// blocked (e.g. Render free tier). Prefers PLATFORM_GMAIL_ADDRESS
+// (default info@bispun.com) when several SUPER_ADMINs have connected.
+// ---------------------------------------------------------------------------
+export async function getPlatformGmail() {
+  const preferred = String(
+    process.env.PLATFORM_GMAIL_ADDRESS || "info@bispun.com"
+  )
+    .trim()
+    .toLowerCase();
+
+  const base = {
+    role: "SUPER_ADMIN",
+    googleRefreshToken: { not: null },
+    googleScopes: { has: "https://www.googleapis.com/auth/gmail.send" },
+  };
+
+  const user =
+    (await prisma.user.findFirst({
+      where: {
+        ...base,
+        googleEmail: { equals: preferred, mode: "insensitive" },
+      },
+      select: { id: true },
+    })) ||
+    (await prisma.user.findFirst({
+      where: base,
+      orderBy: { googleConnectedAt: "desc" },
+      select: { id: true },
+    }));
+
+  if (!user) {
+    throw new Error(
+      "No system email sender connected. Connect a Google account (with Gmail send) in Super Admin → System Settings."
+    );
+  }
+  return getGmailForUser(user.id);
+}
+
+// Send an HTML (with optional plain-text alternative) system email from the
+// platform Gmail account. Mirrors sendGmailMessage but supports HTML bodies.
+export async function sendPlatformEmail({ to, subject, html, text }) {
+  const { gmail, email } = await getPlatformGmail();
+
+  const recipient = String(to || "").trim();
+  if (!recipient) throw new Error("Missing recipient");
+
+  const headers = [
+    `To: ${recipient}`,
+    email ? `From: ${email}` : null,
+    `Subject: ${encodeHeader(subject)}`,
+    "MIME-Version: 1.0",
+  ].filter(Boolean);
+
+  let mimeMessage;
+  if (html && text) {
+    const boundary = `bispun_alt_${crypto.randomBytes(12).toString("hex")}`;
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    mimeMessage =
+      `${headers.join("\r\n")}\r\n\r\n` +
+      [
+        `--${boundary}`,
+        'Content-Type: text/plain; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        wrapBase64(Buffer.from(String(text), "utf8").toString("base64")),
+        `--${boundary}`,
+        'Content-Type: text/html; charset="UTF-8"',
+        "Content-Transfer-Encoding: base64",
+        "",
+        wrapBase64(Buffer.from(String(html), "utf8").toString("base64")),
+        `--${boundary}--`,
+        "",
+      ].join("\r\n");
+  } else {
+    const isHtml = Boolean(html);
+    headers.push(
+      `Content-Type: text/${isHtml ? "html" : "plain"}; charset="UTF-8"`,
+      "Content-Transfer-Encoding: base64"
+    );
+    const body = wrapBase64(
+      Buffer.from(String(html || text || ""), "utf8").toString("base64")
+    );
+    mimeMessage = `${headers.join("\r\n")}\r\n\r\n${body}`;
+  }
+
+  const raw = base64Url(mimeMessage);
+  const result = await gmail.users.messages.send({
+    userId: "me",
+    requestBody: { raw },
+  });
+  return { id: result.data.id || null, from: email };
+}
