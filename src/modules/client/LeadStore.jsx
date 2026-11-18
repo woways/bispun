@@ -4931,8 +4931,8 @@ export default function LeadStore({
 
       <div className="space-y-3">
         <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center">
-            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0 native:h-10">
+          <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center native:flex-row native:flex-nowrap native:items-center native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0 native:h-10 native:w-[210px] native:shrink-0">
               <span className="flex-shrink-0 border-r border-slate-100 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-400">
                 Lead type
               </span>
@@ -4961,7 +4961,7 @@ export default function LeadStore({
               />
             </label>
 
-            <div className="relative min-w-0 flex-1">
+            <div className="relative min-w-0 flex-1 native:w-[220px] native:flex-none native:shrink-0">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -4978,7 +4978,7 @@ export default function LeadStore({
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+            <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap native:flex-nowrap native:shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -5005,6 +5005,9 @@ export default function LeadStore({
               <div className="relative">
                 <button
                   type="button"
+                  aria-expanded={viewOpen}
+                  aria-haspopup="true"
+                  aria-controls="leadstore-columns-panel"
                   onClick={() => {
                     setFiltersOpen(false);
                     setViewOpen((current) => !current);
@@ -5016,7 +5019,7 @@ export default function LeadStore({
                 </button>
 
                 {viewOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                  <div id="leadstore-columns-panel" className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl native:fixed native:inset-x-4 native:top-auto native:bottom-24 native:w-auto native:max-h-[55vh] native:overflow-y-auto">
                     <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
                     <div className="mt-2 space-y-1">
                       {INDIVIDUAL_COLUMN_OPTIONS.map((column) => (
