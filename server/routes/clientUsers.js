@@ -10,7 +10,7 @@ import {
   fullPageAccess,
   clampPageAccessToActor,
 } from "../lib/pageAccess.js";
-import { normalizeLevelPermissions, flagsFromComponents } from "../lib/levelAccess.js";
+import { normalizeLevelPermissions, flagsFromComponents, fullLevelPermissions } from "../lib/levelAccess.js";
 
 const router = Router();
 
@@ -116,6 +116,12 @@ const DEFAULT_DEPARTMENTS = [
   },
 ];
 
+const DEFAULT_LEVELS = [
+  { id: "level-admin", name: "Admin", code: "ADM", rank: 1, system: true, permissions: fullLevelPermissions() },
+  { id: "level-manager", name: "Manager", code: "MGR", rank: 2, system: true, permissions: { scope: "team", components: {}, admissions: { all: false, streamIds: [], collegeIds: [] } } },
+  { id: "level-employee", name: "Employee", code: "EMP", rank: 3, system: true, permissions: { scope: "self", components: {}, admissions: { all: false, streamIds: [], collegeIds: [] } } },
+];
+
 function cleanCode(value, fallback = "GEN") {
   const code = String(value || "")
     .toUpperCase()
@@ -164,15 +170,18 @@ function normalizeOrganizationConfig(raw) {
     description: String(item.description || ""),
     active: item.active !== false,
   }));
-  const levels = (Array.isArray(source.levels) ? source.levels : []).map((item) => ({
+  const storedLevels = Array.isArray(source.levels) ? source.levels : [];
+  const levelSource = storedLevels.length ? storedLevels : DEFAULT_LEVELS;
+  const levels = levelSource.map((item) => ({
     id: String(item.id),
     name: String(item.name || "Level"),
     code: cleanCode(item.code, "LVL"),
     description: String(item.description || ""),
     rank: Math.max(1, Number(item.rank) || 1),
     active: item.active !== false,
+    system: item.system === true || DEFAULT_LEVELS.some((level) => level.id === item.id),
     // Level-keyed Access: scope + component-action matrix + admissions college scope.
-    permissions: normalizeLevelPermissions(item.permissions),
+    permissions: item.id === "level-admin" ? fullLevelPermissions() : normalizeLevelPermissions(item.permissions),
   })).sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   return { departments, designations, levels, roles };
 }
@@ -575,13 +584,34 @@ router.post(["/designations", "/levels"], async (req, res) => {
     if (config[type].some((item) => item.name.toLowerCase() === name.toLowerCase() || item.code === code)) {
       return res.status(409).json({ success: false, message: "Name or code already exists" });
     }
-    config[type].push({ id: slugId(type === "levels" ? "level" : "designation", name), name, code, description: String(req.body?.description || "").trim(), active: true, ...(type === "levels" ? { rank: Math.max(1, Number(req.body?.rank) || config.levels.length + 1) } : {}) });
+    config[type].push({ id: slugId(type === "levels" ? "level" : "designation", name), name, code, description: String(req.body?.description || "").trim(), active: true, ...(type === "levels" ? { rank: Math.max(1, Number(req.body?.rank) || config.levels.length + 1), system: false } : {}) });
     const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
     await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: `${type.slice(0, -1).toUpperCase()}_CREATED`, entityType: "ORGANIZATION", summary: `${actor.name} created ${name}.`, metadata: { type, name, code } });
     return res.status(201).json({ success: true, ...organization });
   } catch (error) {
     console.error("Create organization item failed:", error);
     return res.status(500).json({ success: false, message: "Unable to create item" });
+  }
+});
+
+router.patch("/levels/reorder", async (req, res) => {
+  try {
+    const actor = await requireUserManager(req, res);
+    if (!actor) return;
+    if (actor.role !== "CLIENT_ADMIN") return res.status(403).json({ success: false, message: "Only Client Admin can reorder levels" });
+    const orderedIds = Array.isArray(req.body?.orderedIds) ? req.body.orderedIds.map(String) : [];
+    const config = await loadOrganizationConfig(req.clientUser.companyId);
+    if (orderedIds.length !== config.levels.length || new Set(orderedIds).size !== config.levels.length || config.levels.some((level) => !orderedIds.includes(level.id))) {
+      return res.status(400).json({ success: false, message: "Level order is incomplete" });
+    }
+    const rank = new Map(orderedIds.map((id, index) => [id, index + 1]));
+    config.levels.forEach((level) => { level.rank = rank.get(level.id); });
+    const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
+    await writeAuditLog({ req, companyId: req.clientUser.companyId, actor, action: "LEVELS_REORDERED", entityType: "ORGANIZATION", summary: `${actor.name} reordered levels.`, metadata: { orderedIds } });
+    return res.json({ success: true, ...organization });
+  } catch (error) {
+    console.error("Reorder levels failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to reorder levels" });
   }
 });
 
@@ -624,7 +654,7 @@ router.patch("/levels/:id/access", async (req, res) => {
     const target = config.levels.find((item) => item.id === req.params.id);
     if (!target) return res.status(404).json({ success: false, message: "Level not found" });
 
-    target.permissions = normalizeLevelPermissions(req.body?.permissions);
+    target.permissions = target.id === "level-admin" ? fullLevelPermissions() : normalizeLevelPermissions(req.body?.permissions);
     const organization = await saveOrganizationConfig(req.clientUser.companyId, config);
 
     // Propagate derived legacy flags to users on this level who have NO per-user
@@ -663,6 +693,7 @@ router.delete(["/designations/:id", "/levels/:id"], async (req, res) => {
     const config = await loadOrganizationConfig(req.clientUser.companyId);
     const target = config[type].find((item) => item.id === req.params.id);
     if (!target) return res.status(404).json({ success: false, message: "Item not found" });
+    if (type === "levels" && target.system) return res.status(409).json({ success: false, message: "Default levels cannot be deleted" });
     const inUse = await prisma.user.count({ where: { companyId: req.clientUser.companyId, ...(type === "levels" ? { levelId: target.id } : { designationId: target.id }) } });
     if (inUse) return res.status(409).json({ success: false, message: "Reassign employees before deleting this item" });
     config[type] = config[type].filter((item) => item.id !== target.id);

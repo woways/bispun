@@ -12,7 +12,7 @@
  * flag roll-up in sync between the two.
  */
 
-export const ACTIONS = ["View", "Create", "Edit", "Delete", "Assign", "Review", "Approve", "Comment", "Export"];
+export const ACTIONS = ["View", "Create", "Edit", "Delete", "Assign", "Review", "Approve", "Comment", "Import", "Message", "Export"];
 export const SCOPE_VALUES = ["self", "team", "dept", "everyone"];
 
 export const ALL_FLAGS = [
@@ -32,7 +32,7 @@ export const COMPONENT_TO_FLAG = {
   "dash.kpi": null, "dash.action": null, "dash.cal": null,
   "chat.convo": null, "chat.delete": null, "chat.meet": null,
   "goals.targets": "canViewTeamTargets",
-  "ls.list": "canManageLeads", "ls.detail": "canManageLeads", "ls.add": "canManageLeads",
+  "ls.list": "canManageLeads", "ls.detail": "canManageLeads", "ls.add": "canManageLeads", "ls.message": "canManageLeads",
   "ls.import": "canManageLeads", "ls.activity": "canManageLeads", "ls.nurture": "canManageLeads", "ls.kpi": "canManageLeads",
   "utm.links": "canManageLeads", "utm.analytics": "canManageLeads",
   "adm.list": "canManageAdmissions", "adm.kpi": "canManageAdmissions",
