@@ -37,6 +37,7 @@ import {
 
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import { telHref } from "../../lib/nativeActions";
 
 const UTM_MEDIUM_OPTIONS = [
   "Social",
@@ -1203,7 +1204,7 @@ function PhoneAction({ phone, name }) {
           </button>
 
           <a
-            href={`tel:${phone}`}
+            href={telHref(phone)}
             onClick={() => setMenu(null)}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >

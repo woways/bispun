@@ -57,7 +57,7 @@ import { formatUiDate } from "../../lib/uiPreferences";
 import NurtureCenter from "../../components/lead/NurtureCenter";
 import CallCenterModal from "../../components/lead/CallCenterModal";
 import LeadDetailsView from "../../components/lead/LeadDetailsView";
-import { openWhatsApp, openSMS } from "../../lib/nativeActions";
+import { openWhatsApp, openSMS, telHref } from "../../lib/nativeActions";
 
 const TYPES = [
   {
@@ -497,7 +497,7 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
             Copy number
           </button>
           <a
-            href={`tel:${phone}`}
+            href={telHref(phone)}
             onClick={() => setMenu(null)}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >
@@ -5658,7 +5658,7 @@ export default function LeadStore({
                             <div className="flex items-center justify-end gap-1">
                               {lead.phone ? (
                                 <a
-                                  href={`tel:${lead.phone}`}
+                                  href={telHref(lead.phone)}
                                   title={`Call ${lead.name}`}
                                   aria-label={`Call ${lead.name}`}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50"
