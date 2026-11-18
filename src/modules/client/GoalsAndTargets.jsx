@@ -420,9 +420,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3">
-          <div className="flex items-center justify-center native:justify-start native:gap-3">
-            <div className="relative h-28 w-28 flex-shrink-0 native:h-[72px] native:w-[72px]">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-[84px_minmax(0,1fr)] native:items-stretch native:gap-2.5">
+          <div className="flex items-center justify-center native:h-full">
+            <div className="relative h-28 w-28 flex-shrink-0 native:h-[76px] native:w-[76px]">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
                   cx="60"
@@ -465,13 +465,13 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                   key={card.label}
                   className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
+                  <div className="flex items-center gap-2.5 native:gap-2">
+                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600 native:h-7 native:w-7">
                       <Icon size={15} />
                     </span>
 
                     <div className="min-w-0">
-                      <div className="truncate text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500">
+                      <div className="truncate text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 native:whitespace-normal native:leading-[1.1]">
                         {card.label}
                       </div>
                       <div className="mt-0.5 truncate text-[16px] font-bold tracking-tight text-slate-900">
