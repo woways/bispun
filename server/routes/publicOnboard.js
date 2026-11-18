@@ -392,7 +392,16 @@ router.post("/start", async (req, res) => {
             .status(error.status || 400)
             .json({ success: false, message: error.message, code: error.code });
         }
+        // A non-coupon (e.g. transient DB) error must NOT silently continue:
+        // proceeding would charge the discounted coupon price with no redemption
+        // recorded (escaping limits + audit). Fail so the order is abandoned and
+        // the customer can retry.
         console.error("Coupon reserve failed:", error.message);
+        return res.status(503).json({
+          success: false,
+          message: "Could not apply the coupon right now. Please try again.",
+          code: "COUPON_RESERVE_FAILED",
+        });
       }
     }
 

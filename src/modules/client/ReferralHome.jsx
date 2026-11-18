@@ -107,7 +107,7 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
   const referred = rewardProgram?.referrals || [];
   const creditedHistory = (rewardProgram?.payouts || []).filter((p) => p.status === "PAID");
 
-  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
+  const link = code ? `https://www.bispun.com/signup?ref=${encodeURIComponent(code)}` : "";
 
   useEffect(() => () => window.clearTimeout(copyTimerRef.current), []);
 

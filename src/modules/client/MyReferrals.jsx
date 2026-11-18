@@ -7,7 +7,6 @@ import {
   Check,
   Users,
   TrendingUp,
-  Gift,
   QrCode,
   Plus,
   Search,
@@ -51,29 +50,29 @@ const HOW_STEPS = [
     key: "share",
     label: "Share",
     title: "Share your referral link",
-    body: "Copy your unique code or link and send it to anyone — via WhatsApp, email, or a QR code. Every share is tracked to you.",
+    body: "Copy your unique code or link and send it to anyone — via WhatsApp, email, or a QR code.",
     icon: Share2,
   },
   {
-    key: "refer",
-    label: "They refer",
-    title: "They get referred",
-    body: "When the person enters the pipeline, they're tagged to you. No manual work — the system links them to your referral.",
+    key: "tag",
+    label: "Tag",
+    title: "Tag the people you refer",
+    body: "Add anyone you've referred using “Tag a referral”, so they're linked to you and appear on this page.",
     icon: Users,
   },
   {
     key: "track",
     label: "Track",
     title: "Track their progress",
-    body: "Watch each referral move through the stages live on this page. Nudge them with a reminder whenever they stall.",
+    body: "Watch each tagged referral move through the admissions stages live on this page, and send a reminder whenever one stalls.",
     icon: TrendingUp,
   },
   {
-    key: "earn",
-    label: "Earn",
-    title: "Earn your reward",
-    body: "When your referral reaches the reward stage, your earning unlocks automatically.",
-    icon: Gift,
+    key: "admitted",
+    label: "Admitted",
+    title: "They reach admitted",
+    body: "Follow every referral all the way to the admitted stage — the full journey stays in one place here.",
+    icon: CheckCircle2,
   },
 ];
 
@@ -84,7 +83,7 @@ function HowItWorks() {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="text-[17px] font-semibold text-slate-950">How referral works</h2>
-      <p className="mt-1 text-[13px] text-slate-500">From share to reward in 4 steps — tap a step to learn more.</p>
+      <p className="mt-1 text-[13px] text-slate-500">From share to admitted in 4 steps — tap a step to learn more.</p>
 
       <div className="mt-5 grid grid-cols-4 gap-2">
         {HOW_STEPS.map((s, i) => {
@@ -155,7 +154,7 @@ export default function MyReferrals({ currentUser }) {
     currentUser?.role === "CLIENT_ADMIN" ||
     currentUser?.permissions?.canViewTeamTargets === true;
 
-  const link = code ? `https://www.bispun.com/?ref=${encodeURIComponent(code)}` : "";
+  const link = code ? `https://www.bispun.com/signup?ref=${encodeURIComponent(code)}` : "";
 
   async function load() {
     setLoading(true);
@@ -363,7 +362,7 @@ export default function MyReferrals({ currentUser }) {
       {/* SHARE + QR */}
       <div className="grid gap-5 lg:grid-cols-[1.6fr_auto]">
         <div className={CARD}>
-          <h2 className="text-[17px] font-semibold text-slate-950">Share &amp; earn</h2>
+          <h2 className="text-[17px] font-semibold text-slate-950">Share your link</h2>
           <p className="mt-1 text-[13px] text-slate-500">Copy your code or link and share it anywhere.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">

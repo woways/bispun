@@ -25,7 +25,10 @@ const toDateInput = (d) => {
   if (!d) return "";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "";
-  return dt.toISOString().slice(0, 10);
+  // Coupons store IST-anchored instants (validFrom = IST midnight = 18:30 UTC the
+  // previous day). Formatting in UTC (toISOString) would show/round-trip the
+  // date one day early, so format in IST for the date picker.
+  return dt.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 };
 
 function couponState(c) {

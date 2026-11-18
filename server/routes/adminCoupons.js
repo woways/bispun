@@ -146,14 +146,20 @@ router.post("/", async (req, res) => {
 
     const eligiblePlanKeys = await validEligiblePlanKeys(req.body?.eligiblePlanKeys);
 
+    const validFrom = parseDate(req.body?.validFrom);
+    const validUntil = parseDate(req.body?.validUntil, { endOfDay: true });
+    if (validFrom && validUntil && validFrom > validUntil) {
+      return res.status(400).json({ success: false, message: "Valid-from must be on or before valid-until" });
+    }
+
     const coupon = await prisma.coupon.create({
       data: {
         code,
         description: req.body?.description ? String(req.body.description).trim() : null,
         finalAmount,
         active: req.body?.active === true,
-        validFrom: parseDate(req.body?.validFrom),
-        validUntil: parseDate(req.body?.validUntil, { endOfDay: true }),
+        validFrom,
+        validUntil,
         maxRedemptions,
         perCustomerLimit,
         eligiblePlanKeys,
@@ -208,6 +214,12 @@ router.patch("/:id", async (req, res) => {
     }
     if (req.body.eligiblePlanKeys !== undefined) {
       data.eligiblePlanKeys = await validEligiblePlanKeys(req.body.eligiblePlanKeys);
+    }
+
+    const effFrom = data.validFrom !== undefined ? data.validFrom : existing.validFrom;
+    const effUntil = data.validUntil !== undefined ? data.validUntil : existing.validUntil;
+    if (effFrom && effUntil && new Date(effFrom) > new Date(effUntil)) {
+      return res.status(400).json({ success: false, message: "Valid-from must be on or before valid-until" });
     }
 
     const updated = await prisma.coupon.update({ where: { id: existing.id }, data });

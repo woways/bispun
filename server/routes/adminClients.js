@@ -900,7 +900,13 @@ router.post("/", async (req, res) => {
           },
         });
 
-        if (referralReferrer) {
+        // Skip self-referral (a referrer onboarding a company under their own
+        // email), mirroring the self-serve guard in selfServeOnboard.js.
+        const isSelfReferral =
+          referralReferrer &&
+          String(referralReferrer.email || "").toLowerCase() ===
+            String(clientAdminEmail || "").toLowerCase();
+        if (referralReferrer && !isSelfReferral) {
           await tx.crmReferral.create({
             data: {
               referrerId: referralReferrer.id,
