@@ -3,6 +3,7 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import {
   sanitizePreferencePatch,
+  gateSoundPersistence,
   projectSoundPrefs,
 } from "../lib/notificationPreferences.js";
 import { getSubscriptionGraceEndsAt } from "../lib/subscriptions.js";
@@ -485,7 +486,10 @@ router.patch(
       // Partial update: only present, valid fields are written, so the sound
       // control (sending just { soundEnabled, volume }) never clears the type
       // toggles, and a types-only PATCH never clears the sound settings.
-      const data = sanitizePreferencePatch(req.body);
+      // #11 sound persistence is deferred (migration 0011 not applied), so
+      // gateSoundPersistence strips soundEnabled/volume until it is — the upsert
+      // never references columns that are absent in Production.
+      const data = gateSoundPersistence(sanitizePreferencePatch(req.body));
 
       await prisma.userNotificationPreference.upsert({
         where: {

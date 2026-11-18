@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import {
   clampVolume,
   sanitizePreferencePatch,
+  gateSoundPersistence,
   projectSoundPrefs,
   SOUND_DEFAULTS,
+  SOUND_PERSISTENCE_ENABLED,
 } from "./notificationPreferences.js";
 
 test("clampVolume keeps valid values and bounds out-of-range", () => {
@@ -66,6 +68,39 @@ test("sanitize: non-object body yields an empty (no-op) patch", () => {
   assert.deepEqual(sanitizePreferencePatch(undefined), {});
   assert.deepEqual(sanitizePreferencePatch("nope"), {});
   assert.deepEqual(sanitizePreferencePatch(42), {});
+});
+
+test("gate: #11 persistence is deferred (flag off) until migration 0011", () => {
+  // Guards the approval-gated state: the DB write must stay isolated so Prisma
+  // never references the not-yet-migrated soundEnabled/volume columns.
+  assert.equal(SOUND_PERSISTENCE_ENABLED, false);
+});
+
+test("gate: strips sound fields but preserves type toggles while deferred", () => {
+  const sanitized = sanitizePreferencePatch({
+    soundEnabled: false,
+    volume: 0.5,
+    leadUpdates: true,
+    inAppEnabled: false,
+  });
+  // sanitizer still produces the full #11 shape (feature preserved) ...
+  assert.deepEqual(sanitized, {
+    leadUpdates: true,
+    inAppEnabled: false,
+    soundEnabled: false,
+    volume: 0.5,
+  });
+  // ... but the gate drops the DB-backed sound fields so the upsert is safe.
+  const gated = gateSoundPersistence(sanitized);
+  assert.deepEqual(gated, { leadUpdates: true, inAppEnabled: false });
+  assert.ok(!("soundEnabled" in gated));
+  assert.ok(!("volume" in gated));
+});
+
+test("gate: handles empty / nullish input without throwing", () => {
+  assert.deepEqual(gateSoundPersistence({}), {});
+  assert.deepEqual(gateSoundPersistence(null), {});
+  assert.deepEqual(gateSoundPersistence(undefined), {});
 });
 
 test("project: existing-data compatibility — a null/pre-migration row uses defaults", () => {

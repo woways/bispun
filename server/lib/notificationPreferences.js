@@ -25,6 +25,30 @@ export const BOOLEAN_PREFERENCE_FIELDS = Object.freeze([
 // on web, native, and after a logout/login round-trip.
 export const SOUND_DEFAULTS = Object.freeze({ soundEnabled: true, volume: 1 });
 
+// ---------------------------------------------------------------------------
+// #11 server-side SOUND persistence — DEFERRED (approval-gated).
+//
+// The soundEnabled/volume columns only exist after migration 0011
+// (prisma/pending-migrations/0011_add_notification_sound_prefs.sql), which is
+// NOT applied to Production. Until it is, we must never let Prisma write those
+// columns, or the notification-preferences PATCH would fail against the live DB.
+//
+// This flag isolates ONLY the DB write. The read path (projectSoundPrefs) still
+// returns safe defaults, and the frontend keeps its per-device localStorage
+// fallback, so NO existing behavior changes. The full #11 logic below is kept
+// intact: re-enable by (1) applying 0011, (2) restoring the two fields in
+// prisma/schema.prisma, (3) `npm run prisma:generate`, (4) flipping this flag.
+export const SOUND_PERSISTENCE_ENABLED = false;
+
+// Drop the DB-backed sound fields from a sanitized patch while persistence is
+// gated off, so the Prisma upsert never references columns absent in Production.
+// A no-op once SOUND_PERSISTENCE_ENABLED is true.
+export function gateSoundPersistence(data) {
+  if (SOUND_PERSISTENCE_ENABLED) return data;
+  const { soundEnabled, volume, ...rest } = data || {};
+  return rest;
+}
+
 // Coerce an arbitrary value into a volume in [0, 1]. Returns null when the
 // value is not a finite number, so callers can distinguish "not provided /
 // invalid" (skip) from a real 0.
