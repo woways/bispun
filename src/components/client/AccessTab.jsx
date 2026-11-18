@@ -93,12 +93,22 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
         if (g.locked) return;
         g.pages.forEach((pg) =>
           pg.comps.forEach((c) => {
-            if (!c.acts.includes(act) || act === "View") return;
+            if (!c.acts.includes(act)) return;
             p.components[c.id] = p.components[c.id] || {};
             if (on) p.components[c.id][act] = true;
             else delete p.components[c.id][act];
           })
         );
+      });
+    });
+  const setPageEnabled = (page, enabled) =>
+    mutate((p) => {
+      page.comps.forEach((component) => {
+        if (enabled) {
+          p.components[component.id] = Object.fromEntries(component.acts.map((action) => [action, true]));
+        } else {
+          delete p.components[component.id];
+        }
       });
     });
   const toggleCollege = (streamId, collegeId) =>
@@ -198,7 +208,15 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
               <h3 className="mt-1 text-[20px] font-extrabold text-slate-900">{selectedPage.name} permissions</h3>
               <p className="mt-1 text-[12.5px] text-slate-500">Configure every component and applicable action for <b>{cur.name}</b>.</p>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{selectedPage.comps.length} components</span>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{selectedPage.comps.length} components</span>
+              <ToggleSwitch
+                on={adminLevel || pageState(selectedPage) !== "none"}
+                disabled={!editable}
+                label={`${selectedPage.name} access`}
+                onClick={() => setPageEnabled(selectedPage, pageState(selectedPage) === "none")}
+              />
+            </div>
           </div>
           <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full text-left">
@@ -270,25 +288,17 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
       <Question
         n={2}
         title={`What can ${levelName} do?`}
-        sub="A quick roll-up across everything they can see — or fine-tune per component below. View is always on. Everyone can still do their own daily work; Settings & Organization stay with Admins."
+        sub="Use these master toggles for an action across all pages, or fine-tune it inside each page. Settings & Organization stay with Admins."
       >
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           {ACTIONS.map((a) => {
             const locked = adminLevel;
             const on = adminLevel || anyAction[a];
             return (
-              <button
-                key={a}
-                type="button"
-                disabled={locked || !editable}
-                onClick={() => bulkAction(a, !on)}
-                className={`flex items-center gap-2 text-[14px] ${
-                  locked ? "cursor-not-allowed text-slate-400" : "text-slate-800"
-                }`}
-              >
-                <CheckBox on={on} locked={locked} />
-                {a}
-              </button>
+              <div key={a} className="flex min-w-[118px] items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <span className={`text-[13px] font-semibold ${locked ? "text-slate-400" : "text-slate-700"}`}>{a}</span>
+                <ToggleSwitch on={on} disabled={locked || !editable} label={`${a} all pages`} onClick={() => bulkAction(a, !on)} />
+              </div>
             );
           })}
         </div>
@@ -320,11 +330,11 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
             {grp.pages.map((page) => {
               const st = adminLevel ? "all" : grp.locked ? "none" : pageState(page);
               return (
-                <div key={page.id} className={`mb-2 overflow-hidden rounded-xl border border-slate-200 ${grp.locked ? "opacity-60" : ""}`}>
+                <div key={page.id} className={`mb-2 flex items-center gap-3 overflow-hidden rounded-xl border border-slate-200 px-3.5 py-3 ${grp.locked ? "opacity-60" : ""}`}>
                   <button
                     type="button"
                     onClick={() => !grp.locked && navigateToPage(page.id)}
-                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
                     <PageCircle state={st} />
                     <span className="flex-1 text-[14.5px] font-bold text-slate-800">{page.name}</span>
@@ -333,6 +343,13 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
                       {!grp.locked && <ChevronRight size={13} />}
                     </span>
                   </button>
+                  <ToggleSwitch
+                    on={adminLevel || st !== "none"}
+                    mixed={!adminLevel && st === "some"}
+                    disabled={!editable || grp.locked}
+                    label={`${page.name} access`}
+                    onClick={() => setPageEnabled(page, st === "none")}
+                  />
                 </div>
               );
             })}
@@ -383,24 +400,6 @@ function Question({ n, title, sub, children }) {
   );
 }
 
-function CheckBox({ on, locked }) {
-  return (
-    <span
-      className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border-2 ${
-        locked
-          ? on
-            ? "border-slate-400 bg-slate-400"
-            : "border-slate-300 bg-slate-200"
-          : on
-          ? "border-emerald-600 bg-emerald-600"
-          : "border-slate-300 bg-white"
-      }`}
-    >
-      {on && <Check size={12} strokeWidth={3.5} className="text-white" />}
-    </span>
-  );
-}
-
 function PageCircle({ state }) {
   const on = state !== "none";
   return (
@@ -420,20 +419,34 @@ function ActionPill({ label, on, disabled, onClick }) {
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11.5px] transition ${
+      className={`flex min-w-[112px] items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px] transition ${
         on
           ? "border-emerald-200 bg-emerald-50 font-bold text-emerald-700"
           : "border-slate-200 bg-white text-slate-500"
       } ${disabled ? "opacity-40" : "hover:border-slate-300"}`}
     >
-      <span
-        className={`flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.6px] ${
-          on ? "border-emerald-600 bg-emerald-600" : "border-slate-300"
-        }`}
-      >
-        {on && <Check size={9} strokeWidth={4} className="text-white" />}
-      </span>
       {label}
+      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-600" : "bg-slate-300"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+      </span>
+    </button>
+  );
+}
+
+function ToggleSwitch({ on, mixed = false, disabled = false, label, onClick }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+        on ? (mixed ? "bg-amber-500" : "bg-emerald-600") : "bg-slate-300"
+      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+    >
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
     </button>
   );
 }
