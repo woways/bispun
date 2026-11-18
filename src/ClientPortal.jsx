@@ -1563,12 +1563,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
     // Users & Roles lives inside Settings, but it has its own permission.
     // A user manager must be able to open that screen without receiving
-    // unrelated company-settings access.
+    // unrelated company-settings access. Integrations is available to every
+    // signed-in user, while SettingsView hides restricted company tabs.
     if (moduleKey === "settings") {
-      return (
-        permissions.canManageSettings === true ||
-        permissions.canManageUsers === true
-      );
+      return true;
     }
 
     const permission =

@@ -12,6 +12,8 @@ export const ACTIONS = [
   "Review",
   "Approve",
   "Comment",
+  "Import",
+  "Message",
   "Export",
 ];
 
@@ -66,9 +68,10 @@ export const ACCESS_GROUPS = [
         flag: "canManageLeads",
         comps: [
           { id: "ls.list", name: "Lead list", acts: ["View", "Export"] },
-          { id: "ls.detail", name: "Lead details", acts: ["View", "Edit", "Comment"] },
+          { id: "ls.detail", name: "Lead details", acts: ["View", "Edit", "Delete", "Comment"] },
           { id: "ls.add", name: "Add Lead", acts: ["Create"] },
-          { id: "ls.import", name: "Import Leads", acts: ["Create"] },
+          { id: "ls.import", name: "Import Leads", acts: ["Import"] },
+          { id: "ls.message", name: "Send Message", acts: ["Message"] },
           { id: "ls.activity", name: "Activity history", acts: ["View", "Comment"] },
           { id: "ls.nurture", name: "Smart Nurture", acts: ["View", "Create", "Edit"] },
           { id: "ls.kpi", name: "KPI Cards", acts: ["View", "Export"] },
