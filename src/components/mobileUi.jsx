@@ -159,9 +159,27 @@ export function MobileRecordCard({
   badges = [],
   fields = [],
   actions,
+  index,
 }) {
+  // Optional subtle staggered entrance (animation polish step 5). When `index`
+  // is passed, the card fades/rises in with a capped per-item delay
+  // (min(index,5) * 30ms → max 150ms, so late/off-screen rows are never left
+  // waiting). Opacity-only + `cb-fade-in-up` is neutralised under
+  // prefers-reduced-motion and keeps an opacity:1 baseline if the animation
+  // never runs, so content is never stranded invisible (accessibility-lead #7-9).
+  // The delay is presentation-only: the listitem is in the a11y tree and fully
+  // operable from frame 0 regardless of visual opacity.
+  const animate = Number.isInteger(index);
   return (
-    <div role="listitem" className="px-4 py-4">
+    <div
+      role="listitem"
+      className={`px-4 py-4${animate ? " cb-fade-in-up" : ""}`}
+      style={
+        animate
+          ? { animationDelay: `${Math.min(index, 5) * 30}ms` }
+          : undefined
+      }
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {eyebrow && (
