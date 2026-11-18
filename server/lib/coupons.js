@@ -128,10 +128,19 @@ export async function reserveCouponRedemption({
     });
     if (existing) return existing; // idempotent retry
 
+    // Serialize concurrent reservations for THIS coupon by taking a row lock on
+    // the Coupon first. Without it, the count-then-create below runs under
+    // Read Committed and two simultaneous checkouts near the cap can both pass
+    // the count and both insert, overselling a limited coupon.
+    await tx.$queryRaw`SELECT id FROM "Coupon" WHERE id = ${couponId} FOR UPDATE`;
+
     const coupon = await tx.coupon.findUnique({ where: { id: couponId } });
     if (!coupon || !coupon.active) {
       throw new CouponError("This coupon code is not valid", 400, "COUPON_INVALID");
     }
+    const emailNorm = customerEmail
+      ? String(customerEmail).trim().toLowerCase()
+      : null;
     if (coupon.maxRedemptions != null) {
       const held = await tx.couponRedemption.count({
         where: { couponId, status: { in: ["RESERVED", "CONSUMED"] } },
@@ -144,15 +153,32 @@ export async function reserveCouponRedemption({
         );
       }
     }
+    // Enforce the per-customer limit inside the same lock (counting both held
+    // reservations and consumed redemptions), so concurrent/duplicate signups by
+    // the same customer can't both slip past the quote-time CONSUMED-only check.
+    if (coupon.perCustomerLimit != null && emailNorm) {
+      const usedByCustomer = await tx.couponRedemption.count({
+        where: {
+          couponId,
+          customerEmail: emailNorm,
+          status: { in: ["RESERVED", "CONSUMED"] },
+        },
+      });
+      if (usedByCustomer >= coupon.perCustomerLimit) {
+        throw new CouponError(
+          "You have already used this coupon",
+          400,
+          "COUPON_CUSTOMER_LIMIT"
+        );
+      }
+    }
 
     return tx.couponRedemption.create({
       data: {
         couponId,
         providerOrderId,
         planKey: String(planKey || "").trim().toLowerCase(),
-        customerEmail: customerEmail
-          ? String(customerEmail).trim().toLowerCase()
-          : null,
+        customerEmail: emailNorm,
         amount,
         status: "RESERVED",
       },
