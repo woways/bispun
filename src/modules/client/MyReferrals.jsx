@@ -96,7 +96,7 @@ function HowItWorks() {
               type="button"
               onClick={() => setActive(i)}
               aria-current={on ? "step" : undefined}
-              className="group flex flex-col items-center gap-3 rounded-xl p-1 text-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="group flex flex-col items-center gap-3 rounded-xl p-1 text-center native:gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
               <span
                 className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${
@@ -107,7 +107,7 @@ function HowItWorks() {
               >
                 <Icon size={18} aria-hidden="true" />
               </span>
-              <span className={`text-[12.5px] font-semibold ${on ? "text-indigo-700" : "text-slate-600"}`}>
+              <span className={`text-[12.5px] font-semibold native:text-[11px] native:leading-tight ${on ? "text-indigo-700" : "text-slate-600"}`}>
                 {s.label}
               </span>
             </button>

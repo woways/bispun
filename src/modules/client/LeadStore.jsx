@@ -2976,6 +2976,35 @@ export default function LeadStore({
     useState(false);
 
   const [viewOpen, setViewOpen] = useState(false);
+  const viewBtnRef = useRef(null);
+  const viewPanelRef = useRef(null);
+
+  // Dismiss the View (columns) panel on Escape or an outside tap, returning
+  // focus to the View button. Important in the native app, where the panel is
+  // a bottom-sheet and its trigger can scroll out of the horizontal toolbar.
+  useEffect(() => {
+    if (!viewOpen) return undefined;
+    const close = () => {
+      setViewOpen(false);
+      viewBtnRef.current?.focus();
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") close();
+    };
+    const onOutside = (event) => {
+      const t = event.target;
+      if (viewBtnRef.current?.contains(t)) return;
+      if (viewPanelRef.current?.contains(t)) return;
+      close();
+    };
+    document.addEventListener("pointerdown", onOutside);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onOutside);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [viewOpen]);
+
   const [leadStoreMetricFilter, setLeadStoreMetricFilter] = useState(null);
   const [metricPanel, setMetricPanel] = useState(null);
 
@@ -5004,6 +5033,7 @@ export default function LeadStore({
 
               <div className="relative">
                 <button
+                  ref={viewBtnRef}
                   type="button"
                   aria-expanded={viewOpen}
                   aria-haspopup="true"
@@ -5019,7 +5049,7 @@ export default function LeadStore({
                 </button>
 
                 {viewOpen && (
-                  <div id="leadstore-columns-panel" className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl native:fixed native:inset-x-4 native:top-auto native:bottom-24 native:w-auto native:max-h-[55vh] native:overflow-y-auto">
+                  <div ref={viewPanelRef} id="leadstore-columns-panel" className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl native:fixed native:inset-x-4 native:top-auto native:bottom-24 native:w-auto native:max-h-[55vh] native:overflow-y-auto">
                     <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
                     <div className="mt-2 space-y-1">
                       {INDIVIDUAL_COLUMN_OPTIONS.map((column) => (

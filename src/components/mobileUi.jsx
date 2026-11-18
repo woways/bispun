@@ -329,7 +329,7 @@ export function MobileFilterSheet({ activeCount = 0, title = "Filters", children
  */
 export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreOpen }) {
   const cell =
-    "relative flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 transition-[color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+    "relative flex-1 min-w-0 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 transition-[color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
   return (
     <nav
       aria-label="Primary"
@@ -355,7 +355,7 @@ export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreO
                 />
               )}
               <Icon size={20} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
-              <span className={`text-[11px] leading-tight ${active ? "font-bold" : "font-medium"}`}>
+              <span className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-bold" : "font-medium"}`}>
                 {item.label}
               </span>
             </button>
@@ -369,7 +369,7 @@ export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreO
           className={`${cell} text-slate-600`}
         >
           <LayoutGrid size={20} strokeWidth={2} aria-hidden="true" />
-          <span className="text-[11px] leading-tight font-medium">More</span>
+          <span className="max-w-full truncate text-[11px] leading-tight font-medium">More</span>
         </button>
       </div>
     </nav>

@@ -2478,7 +2478,7 @@ export default function SettingsView({
         {/* HORIZONTAL TAB BAR */}
 
         <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex flex-wrap gap-1 native:flex-nowrap native:overflow-x-auto">
+          <div className="flex flex-wrap gap-1 native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
             {visibleTabs.map(
               (
                 item
@@ -2864,7 +2864,7 @@ export default function SettingsView({
                             </div>
 
                             <div className="max-h-[calc(100vh-180px)] overflow-y-auto overscroll-contain p-4">
-                              <div className="grid grid-cols-10 gap-2">
+                              <div className="grid grid-cols-10 gap-2 native:grid-cols-6">
                                 {BRAND_PALETTE.map((hex) => {
                                   const selected =
                                     brandHex(selectedColor) === hex.toLowerCase();

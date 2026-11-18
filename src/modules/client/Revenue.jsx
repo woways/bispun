@@ -2581,7 +2581,7 @@ export default function Revenue({
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-wrap gap-1">
+          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-wrap gap-1 native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
             {[
               ["overview", "Overview"],
               ["leakage", "At-Risk Revenue"],
@@ -2604,7 +2604,7 @@ export default function Revenue({
                 type="button"
                 aria-pressed={tab === item}
                 onClick={() => setTab(item)}
-                className={`h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors ${
+                className={`h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
                   tab === item
                     ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
@@ -2830,7 +2830,7 @@ export default function Revenue({
                   />
                 </div>
 
-                <div className="flex flex-wrap gap-2 xl:ml-auto native:flex-nowrap native:overflow-x-auto native:pb-1">
+                <div className="flex flex-wrap gap-2 xl:ml-auto native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:pb-1">
                   <div className="relative native:shrink-0">
                     <Filter
                       size={13}
