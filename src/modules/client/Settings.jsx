@@ -255,6 +255,7 @@ export default function SettingsView({
     currentUser?.permissions?.canManageSettings === true;
 
   const visibleTabs = TABS.filter((item) => {
+    if (item.k === "integrations") return true;
     if (item.k === "users") return canManageUsers;
     if (item.k === "activity") return canManageUsers || canManageSettings;
     return canManageSettings;
@@ -264,7 +265,7 @@ export default function SettingsView({
     tab,
     setTab,
   ] = useState(
-    canManageSettings ? "company" : "users"
+    canManageSettings ? "company" : canManageUsers ? "users" : "integrations"
   );
 
   useEffect(() => {
@@ -1386,6 +1387,25 @@ export default function SettingsView({
       showSettingsSuccess(`${type[0].toUpperCase()}${type.slice(1)} deleted successfully`);
     } catch (error) {
       setUsersError(error?.data?.message || `Unable to delete ${type}`);
+    }
+  }
+
+  async function moveLevel(levelId, direction) {
+    const ordered = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    const index = ordered.findIndex((level) => level.id === levelId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
+    [ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
+    setUsersError("");
+    try {
+      const data = await apiRequest("/api/client/users/levels/reorder", {
+        method: "PATCH",
+        body: JSON.stringify({ orderedIds: ordered.map((level) => level.id) }),
+      });
+      setOrganization({ departments: data.departments || [], designations: data.designations || [], levels: data.levels || [], roles: data.roles || [] });
+      showSettingsSuccess("Level order updated");
+    } catch (error) {
+      setUsersError(error?.data?.message || "Unable to reorder levels");
     }
   }
 
@@ -3144,7 +3164,6 @@ export default function SettingsView({
                 {[
                   ["users", "Users", users.length],
                   ["departments", "Departments", organization.departments.length],
-                  ["designations", "Designations", organization.designations.length],
                   ["levels", "Levels", organization.levels.length],
                   ["access", "Access", organization.levels.length],
                   ["roles", "Roles", organization.roles.length],
@@ -3259,11 +3278,7 @@ export default function SettingsView({
                                   <div className="mt-0.5 text-[13px] text-slate-500">
                                     {user.email}
                                   </div>
-                                  {user.jobTitle && (
-                                    <div className="mt-1 text-[13px] text-slate-400">
-                                      {user.jobTitle}{user.levelName ? ` · ${user.levelName}` : ""}
-                                    </div>
-                                  )}
+                                  {user.levelName && <div className="mt-1 text-[13px] text-slate-400">{user.levelName}</div>}
                                 </td>
 
                                 <td className="px-4 py-3">
@@ -3499,36 +3514,36 @@ export default function SettingsView({
                 </div>
               )}
 
-              {(usersManagementTab === "designations" || usersManagementTab === "levels") && (() => {
-                const isLevel = usersManagementTab === "levels";
-                const items = isLevel ? organization.levels : organization.designations;
-                const type = isLevel ? "level" : "designation";
+              {usersManagementTab === "levels" && (() => {
+                const items = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+                const type = "level";
                 return (
                   <div className="space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <div className="text-[14px] font-bold text-slate-900">{isLevel ? "Levels" : "Designations"}</div>
+                        <div className="text-[14px] font-bold text-slate-900">Levels</div>
                         <div className="mt-0.5 text-[12px] text-slate-500">
-                          {isLevel ? "Define organizational seniority independently from functional roles." : "Maintain consistent employee job titles."}
+                          Define organizational access levels, create custom levels and control their order.
                         </div>
                       </div>
                       {currentUser?.role === "CLIENT_ADMIN" && (
                         <button type="button" onClick={() => openOrganizationModal(type)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700">
-                          <Plus size={14} /> Add {isLevel ? "Level" : "Designation"}
+                          <Plus size={14} /> Add Level
                         </button>
                       )}
                     </div>
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <div className="divide-y divide-slate-100">
                         {items.map((item) => {
-                          const memberCount = users.filter((user) => isLevel ? user.levelId === item.id : (user.designationId === item.id || user.jobTitle === item.name)).length;
+                          const memberCount = users.filter((user) => user.levelId === item.id).length;
                           return (
                             <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-slate-50/70">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-[13px] font-semibold text-slate-800">{item.name}</span>
                                   <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{item.code}</span>
-                                  {isLevel && <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Rank {item.rank}</span>}
+                                  <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Rank {item.rank}</span>
+                                  {item.system && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Default</span>}
                                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{item.active !== false ? "Active" : "Inactive"}</span>
                                 </div>
                                 {item.description && <div className="mt-1 text-[12px] text-slate-500">{item.description}</div>}
@@ -3536,14 +3551,16 @@ export default function SettingsView({
                               </div>
                               {currentUser?.role === "CLIENT_ADMIN" && (
                                 <div className="flex items-center gap-1">
+                                  <button type="button" onClick={() => moveLevel(item.id, -1)} disabled={item.rank <= 1} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level up">↑</button>
+                                  <button type="button" onClick={() => moveLevel(item.id, 1)} disabled={item.rank >= items.length} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level down">↓</button>
                                   <button type="button" onClick={() => openEditOrganizationModal(type, item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title={`Edit ${type}`}><Pencil size={13}/></button>
-                                  <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${type}`}><Trash2 size={13}/></button>
+                                  {!item.system && <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${type}`}><Trash2 size={13}/></button>}
                                 </div>
                               )}
                             </div>
                           );
                         })}
-                        {!items.length && <div className="px-4 py-12 text-center text-[13px] text-slate-400">No {isLevel ? "levels" : "designations"} yet.</div>}
+                        {!items.length && <div className="px-4 py-12 text-center text-[13px] text-slate-400">No levels yet.</div>}
                       </div>
                     </div>
                   </div>
@@ -4817,17 +4834,6 @@ export default function SettingsView({
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Employee ID</label>
                   <input readOnly value={editingUser ? (userForm.employeeId || "") : "Generated automatically after creation"} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-slate-50 text-[13px] font-mono text-slate-600" />
-                </div>
-
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Designation</label>
-                  <select value={userForm.designationId || ""} onChange={(event) => {
-                    const designation = organization.designations.find((item) => item.id === event.target.value);
-                    setUserForm((current) => ({ ...current, designationId: event.target.value, jobTitle: designation?.name || "" }));
-                  }} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
-                    <option value="">— Select designation —</option>
-                    {organization.designations.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
-                  </select>
                 </div>
 
                 <div>
