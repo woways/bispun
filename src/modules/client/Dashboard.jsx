@@ -46,6 +46,7 @@ import {
 import { apiRequest } from "../../lib/api";
 import { brandColor } from "../../lib/brandTheme";
 import { formatUiDate, formatUiTime, formatUiDateTime } from "../../lib/uiPreferences";
+import { donutCenterTotal } from "../../lib/donutCenterTotal";
 import { MobileRecordCard } from "../../components/mobileUi";
 import { Badge, statusTone } from "../../components/ui";
 
@@ -1166,7 +1167,7 @@ export default function Dashboard({
               })()}
               ,{" "}
               <span className="font-bold text-slate-950">
-                {tenant?.name || tenant?.brandName || user?.name || tenant?.ownerName || "Company"}
+                {user?.name || "there"}
               </span>
             </h1>
             <p className="mt-1.5 text-[15px] font-medium tracking-normal text-slate-500">
@@ -1480,10 +1481,7 @@ export default function Dashboard({
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                           <div className="text-center">
                             <div className="text-[20px] font-bold tracking-[-0.04em] text-slate-950">
-                              {
-                                data.leadsBySourceTotal ??
-                                data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
-                              }
+                              {donutCenterTotal(data)}
                             </div>
                             <div className="text-[13px] text-slate-400">
                               Leads
@@ -1493,10 +1491,7 @@ export default function Dashboard({
                       </div>
 
                       <p className="sr-only">
-                        {`Total ${
-                          data.leadsBySourceTotal ??
-                          data.leadsBySource.reduce((sum, item) => sum + Number(item.value || 0), 0)
-                        } leads for the period.`}
+                        {`Total ${donutCenterTotal(data)} leads for the period.`}
                       </p>
 
                       <ul className="mt-2 space-y-2">

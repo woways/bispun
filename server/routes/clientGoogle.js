@@ -95,9 +95,16 @@ router.get("/callback", async (req, res) => {
       return res.redirect(`${base}/?google=error`);
     }
 
+    // Admin (platform email sender) connects land back on the Super Admin page;
+    // client-user connects land on the app root.
+    const landing = (status) =>
+      decoded.admin
+        ? `${base}/admin/system?google=${status}`
+        : `${base}/?google=${status}`;
+
     const tokens = await exchangeCodeForTokens(code);
     if (!tokens.refresh_token) {
-      return res.redirect(`${base}/?google=norefresh`);
+      return res.redirect(landing("norefresh"));
     }
 
     await prisma.user.update({
@@ -110,7 +117,7 @@ router.get("/callback", async (req, res) => {
       },
     });
 
-    return res.redirect(`${base}/?google=connected`);
+    return res.redirect(landing("connected"));
   } catch (error) {
     console.error("Google callback failed:", error);
     return res.redirect(`${base}/?google=error`);

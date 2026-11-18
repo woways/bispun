@@ -1,0 +1,54 @@
+name: guard
+
+# Preventive guard added after a P0 where an unresolved git merge conflict
+# (conflict markers committed into server/routes/adminClients.js via PR #32)
+# shipped to main and broke the backend on startup. This fails CI on genuine
+# unresolved conflict markers and on backend JavaScript syntax errors, so the
+# same class of break can never reach main again.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  conflict-and-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail on unresolved git conflict markers
+        shell: bash
+        run: |
+          # Match ONLY real conflict markers, not "===== ... */" comment rules:
+          #   <<<<<<< <label>   |||||||  (diff3)   =======  (exactly 7, EOL)   >>>>>>> <label>
+          pattern='^(<<<<<<< |\|\|\|\|\|\|\| |={7}$|>>>>>>> )'
+          # Scan tracked source only; exclude this workflow, tests, examples, docs, lockfiles.
+          if git grep -nE "$pattern" -- \
+               '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.css' '*.json' '*.prisma' \
+               ':!*.test.*' ':!*.spec.*' ':!*.example*' ':!*.md' ':!package-lock.json' \
+               ':!.github/workflows/guard.yml' ; then
+            echo "::error::Unresolved git conflict markers found in tracked source. Resolve them before merging."
+            exit 1
+          fi
+          echo "No unresolved conflict markers."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Backend JavaScript syntax check (node --check)
+        shell: bash
+        run: |
+          # Parse every backend .js/.mjs/.cjs (plain JS — JSX is covered by the
+          # frontend build, which node --check cannot parse). A syntax error in
+          # any backend module would crash the server on boot.
+          set -e
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! node --check "$f"; then
+              echo "::error file=$f::Backend syntax error"
+              fail=1
+            fi
+          done < <(git ls-files -z 'server/**/*.js' 'server/**/*.mjs' 'server/**/*.cjs' 'prisma/**/*.js' '*.js' '*.mjs' | grep -zvE '\.(test|spec)\.')
+          exit $fail

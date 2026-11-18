@@ -6,6 +6,7 @@ import {
   markPaymentFailed,
 } from "../lib/subscriptions.js";
 import { finalizeSelfServeSignup } from "../lib/selfServeOnboard.js";
+import { releaseCouponRedemption } from "../lib/coupons.js";
 
 function safeEqualHex(a, b) {
   try {
@@ -157,6 +158,14 @@ export default async function razorpayWebhook(
           payment.error_reason ||
           null,
       });
+
+      // Free any coupon reservation held for this order so a failed payment
+      // never permanently consumes a usage slot (best-effort, idempotent).
+      await releaseCouponRedemption({
+        providerOrderId: payment.order_id,
+      }).catch((e) =>
+        console.error("Coupon release failed:", e.message)
+      );
     }
 
     return res.status(200).json({

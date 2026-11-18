@@ -2,6 +2,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 
 import { sendMail } from "./mailer.js";
+import { getSmsConfig, sendTemplatedSms } from "./sms.js";
 
 const EMAIL_PURPOSES = new Set(["company_email", "admin_email"]);
 const PHONE_PURPOSES = new Set(["company_phone"]);
@@ -175,86 +176,55 @@ function msg91Mobile(target) {
   return `91${target}`;
 }
 
-function getMsg91Config() {
-  const authKey = String(process.env.MSG91_AUTH_KEY || "").trim();
-  const templateId = String(process.env.MSG91_OTP_TEMPLATE_ID || "").trim();
-  if (!authKey || !templateId) {
+// OTP config: auth key is the server secret (env); the OTP template id is read
+// from Super Admin (systemSettings.smsOtpTemplateId) with env fallback, so it
+// can be managed without a redeploy. Not gated by the master SMS toggle — OTP
+// is onboarding-critical and must work regardless of marketing-SMS settings.
+async function getMsg91Config() {
+  const { authKey, otpTemplateId } = await getSmsConfig();
+  if (!authKey || !otpTemplateId) {
     throw new ContactVerificationError(
-      "Phone OTP is not configured. Add MSG91_AUTH_KEY and MSG91_OTP_TEMPLATE_ID on the server.",
+      "Phone OTP is not configured. Add MSG91_AUTH_KEY on the server and set the OTP template in Super Admin (or MSG91_OTP_TEMPLATE_ID).",
       503,
       "PHONE_OTP_NOT_CONFIGURED"
     );
   }
-  return { authKey, templateId };
-}
-
-async function msg91Json(url, options) {
-  const response = await fetch(url, options);
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  const failed =
-    !response.ok ||
-    String(body?.type || "").toLowerCase() === "error" ||
-    String(body?.status || "").toLowerCase() === "error";
-
-  if (failed) {
-    const message =
-      body?.message || body?.error || `MSG91 request failed (${response.status})`;
-    throw new ContactVerificationError(
-      String(message),
-      response.status >= 500 ? 503 : 400,
-      "MSG91_ERROR"
-    );
-  }
-  return body || {};
+  return { authKey, templateId: otpTemplateId };
 }
 
 async function sendPhoneOtp(target, purpose) {
-  const { authKey, templateId } = getMsg91Config();
-  const url = new URL("https://control.msg91.com/api/v5/otp");
-  url.searchParams.set("template_id", templateId);
-  url.searchParams.set("mobile", msg91Mobile(target));
+  const { authKey, templateId } = await getMsg91Config();
+  const otp = String(crypto.randomInt(100000, 1000000));
+  const digest = otpDigest("phone", purpose, target, otp);
 
-  await msg91Json(url, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      authkey: authKey,
-    },
+  // Send via the MSG91 Flow API (same route as welcome/enquiry SMS), filling
+  // the DLT template's `##number##` variable with the generated code. We create
+  // and verify the OTP ourselves (digest carried in the signed challenge),
+  // rather than using MSG91's OTP widget — so the existing DLT template works
+  // as-is and there is no dependency on an `##OTP##`-style OTP template.
+  const result = await sendTemplatedSms({
+    templateId,
+    mobile: msg91Mobile(target),
+    variables: { number: otp },
+    authKey,
   });
 
-  return {
-    challengeToken: signChallenge({ channel: "phone", purpose, target }),
-  };
-}
-
-async function verifyPhoneOtp(target, otp) {
-  const { authKey } = getMsg91Config();
-  const url = new URL("https://control.msg91.com/api/v5/otp/verify");
-  url.searchParams.set("otp", otp);
-  url.searchParams.set("mobile", msg91Mobile(target));
-
-  const body = await msg91Json(url, {
-    method: "GET",
-    headers: {
-      accept: "application/json",
-      authkey: authKey,
-    },
-  });
-
-  const type = String(body?.type || body?.status || "").toLowerCase();
-  if (type && !["success", "verified", "true"].includes(type)) {
+  if (!result?.ok) {
     throw new ContactVerificationError(
-      body?.message || "Incorrect phone OTP",
-      400,
-      "OTP_INCORRECT"
+      result?.error || "Phone OTP could not be sent. Please try again.",
+      503,
+      "PHONE_OTP_SEND_FAILED"
     );
   }
+
+  return {
+    challengeToken: signChallenge({
+      channel: "phone",
+      purpose,
+      target,
+      digest,
+    }),
+  };
 }
 
 export async function sendContactVerificationOtp({ channel, purpose, target }) {
@@ -314,7 +284,19 @@ export async function verifyContactVerificationOtp({
       );
     }
   } else {
-    await verifyPhoneOtp(normalizedTarget, cleanOtp);
+    const providedDigest = otpDigest(
+      normalizedChannel,
+      normalizedPurpose,
+      normalizedTarget,
+      cleanOtp
+    );
+    if (!timingSafeHexEqual(challenge.digest, providedDigest)) {
+      throw new ContactVerificationError(
+        "Incorrect OTP. Please check the code and try again.",
+        400,
+        "OTP_INCORRECT"
+      );
+    }
   }
 
   return {

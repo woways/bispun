@@ -3,6 +3,7 @@ import multer from "multer";
 
 import prisma from "../lib/prisma.js";
 import { sendGmailMessage } from "../lib/google.js";
+import { sendTemplatedSms } from "../lib/sms.js";
 import {
   requireClientUser,
   requireClientPermission,
@@ -203,6 +204,18 @@ router.get("/status", async (req, res) => {
       },
     });
 
+    // Per-company SMS integration status (for the Lead Store SMS tab).
+    const smsCfg = await readCompanySmsConfig(req.clientUser.companyId);
+    const smsActive = smsCfg.enabled && Boolean(smsCfg.apiKey);
+    const smsSentToday = await prisma.leadCommunication.count({
+      where: {
+        companyId: req.clientUser.companyId,
+        channel: "SMS",
+        status: "SENT",
+        createdAt: { gte: startOfToday() },
+      },
+    });
+
     return res.json({
       success: true,
       gmail: {
@@ -211,10 +224,23 @@ router.get("/status", async (req, res) => {
         email: user?.googleEmail || null,
         sentToday,
       },
+      sms: {
+        connected: Boolean(smsCfg.apiKey),
+        enabled: smsActive,
+        provider: smsCfg.provider,
+        senderId: smsCfg.senderId,
+        templates: smsCfg.templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          templateId: t.templateId,
+          body: t.body,
+        })),
+        sentToday: smsSentToday,
+      },
       channels: {
         email: true,
         whatsapp: false,
-        sms: false,
+        sms: smsActive,
       },
       maxPerRequest: MAX_EMAILS_PER_REQUEST,
       emailAttachments: {
@@ -414,6 +440,278 @@ router.post("/email", runAttachmentUpload, async (req, res) => {
     return res.status(400).json({
       success: false,
       message: error?.message || "Unable to send emails",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Per-company SMS integration (client-owned provider, e.g. MSG91).
+//
+// Each client org connects their OWN SMS provider + DLT-approved templates, just
+// like they connect their own email. Config is stored per company in
+// Company.organizationConfig.sms (no schema change). Only a Client Admin (or a
+// user with canManageSettings) can connect/edit it; any user in the company can
+// then send template SMS to leads. India DLT only permits pre-approved template
+// content, so sending is template-based, never free text.
+// ---------------------------------------------------------------------------
+
+const MAX_SMS_PER_REQUEST = 100;
+
+function canManageIntegration(clientUser) {
+  return (
+    clientUser?.role === "CLIENT_ADMIN" || Boolean(clientUser?.canManageSettings)
+  );
+}
+
+function maskKey(key) {
+  const value = String(key || "");
+  if (!value) return "";
+  if (value.length <= 4) return "••••";
+  return `${"•".repeat(Math.max(4, value.length - 4))}${value.slice(-4)}`;
+}
+
+function normalizeTemplates(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((t, i) => ({
+      id: String(t?.id || `tpl_${i + 1}`),
+      name: String(t?.name || "").trim(),
+      templateId: String(t?.templateId || "").trim(),
+      body: String(t?.body || "").trim(),
+    }))
+    .filter((t) => t.name && t.templateId)
+    .slice(0, 50);
+}
+
+async function readCompanySmsConfig(companyId) {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { organizationConfig: true },
+  });
+  const cfg =
+    (company?.organizationConfig &&
+      typeof company.organizationConfig === "object" &&
+      company.organizationConfig.sms) ||
+    {};
+  return {
+    enabled: Boolean(cfg.enabled),
+    provider: String(cfg.provider || "MSG91"),
+    apiKey: String(cfg.apiKey || ""),
+    senderId: String(cfg.senderId || ""),
+    templates: normalizeTemplates(cfg.templates),
+  };
+}
+
+// GET the company's SMS integration config (api key masked) — for Settings UI.
+router.get("/sms-config", async (req, res) => {
+  try {
+    const cfg = await readCompanySmsConfig(req.clientUser.companyId);
+    return res.json({
+      success: true,
+      config: {
+        enabled: cfg.enabled,
+        provider: cfg.provider,
+        senderId: cfg.senderId,
+        apiKeyMasked: maskKey(cfg.apiKey),
+        hasApiKey: Boolean(cfg.apiKey),
+        templates: cfg.templates,
+      },
+      canManage: canManageIntegration(req.clientUser),
+    });
+  } catch (error) {
+    console.error("Read SMS config failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to load SMS integration" });
+  }
+});
+
+// Save the company's SMS integration config. Client Admin / settings-manager only.
+router.put("/sms-config", async (req, res) => {
+  try {
+    if (!canManageIntegration(req.clientUser)) {
+      return res.status(403).json({
+        success: false,
+        message: "Only a Client Admin can connect SMS for the company.",
+      });
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: req.clientUser.companyId },
+      select: { organizationConfig: true },
+    });
+
+    const existing =
+      (company?.organizationConfig &&
+        typeof company.organizationConfig === "object" &&
+        company.organizationConfig.sms) ||
+      {};
+
+    const provider = String(req.body?.provider || existing.provider || "MSG91").trim();
+    const senderId = String(req.body?.senderId ?? existing.senderId ?? "").trim();
+    const enabled = Boolean(req.body?.enabled);
+    const templates = normalizeTemplates(req.body?.templates);
+
+    // Keep the stored key when the client leaves it blank (they only see a mask).
+    const incomingKey = String(req.body?.apiKey ?? "").trim();
+    const apiKey = incomingKey || String(existing.apiKey || "");
+
+    const nextOrgConfig = {
+      ...(company?.organizationConfig &&
+      typeof company.organizationConfig === "object"
+        ? company.organizationConfig
+        : {}),
+      sms: { enabled, provider, apiKey, senderId, templates },
+    };
+
+    await prisma.company.update({
+      where: { id: req.clientUser.companyId },
+      data: { organizationConfig: nextOrgConfig },
+    });
+
+    return res.json({
+      success: true,
+      message: "SMS integration saved.",
+      config: {
+        enabled,
+        provider,
+        senderId,
+        apiKeyMasked: maskKey(apiKey),
+        hasApiKey: Boolean(apiKey),
+        templates,
+      },
+    });
+  } catch (error) {
+    console.error("Save SMS config failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to save SMS integration" });
+  }
+});
+
+// Send a DLT-approved template SMS to selected leads using the company's own SMS
+// provider. Any user in the company can send; the config is company-wide.
+router.post("/sms", async (req, res) => {
+  try {
+    const leadIds = parseLeadIds(req.body?.leadIds);
+    const templateKey = String(req.body?.templateId || "").trim();
+
+    if (!leadIds.length) {
+      return res.status(400).json({ success: false, message: "Select at least one lead." });
+    }
+    if (leadIds.length > MAX_SMS_PER_REQUEST) {
+      return res.status(400).json({
+        success: false,
+        message: `Send to a maximum of ${MAX_SMS_PER_REQUEST} leads at a time.`,
+      });
+    }
+
+    const cfg = await readCompanySmsConfig(req.clientUser.companyId);
+    if (!cfg.enabled || !cfg.apiKey) {
+      return res.status(400).json({
+        success: false,
+        message: "SMS is not connected. Ask your admin to connect it in Settings → Integrations.",
+      });
+    }
+
+    const template = cfg.templates.find(
+      (t) => t.id === templateKey || t.templateId === templateKey
+    );
+    if (!template) {
+      return res.status(400).json({ success: false, message: "Choose a valid SMS template." });
+    }
+
+    const scope = await getLeadVisibilityScope(
+      prisma,
+      req.clientUser.companyId,
+      req.clientUser
+    );
+    const visibilityWhere = leadVisibilityWhere(scope);
+
+    const leads = await prisma.lead.findMany({
+      where: {
+        companyId: req.clientUser.companyId,
+        id: { in: leadIds },
+        ...(visibilityWhere ? { AND: [visibilityWhere] } : {}),
+      },
+      select: { id: true, name: true, phone: true, course: true },
+    });
+
+    const orderedLeads = leadIds
+      .map((id) => leads.find((lead) => lead.id === id))
+      .filter(Boolean);
+
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+    const failures = [];
+
+    for (const lead of orderedLeads) {
+      const phone = String(lead.phone || "").trim();
+      if (!phone) {
+        skipped += 1;
+        failures.push({ leadId: lead.id, name: lead.name, reason: "No phone number" });
+        continue;
+      }
+
+      // DLT templates use variables; the first var is the lead's name (##name##).
+      const variables = { name: lead.name || "there" };
+
+      const result = await sendTemplatedSms({
+        templateId: template.templateId,
+        mobile: phone,
+        variables,
+        authKey: cfg.apiKey,
+      });
+
+      if (result?.ok) {
+        sent += 1;
+        await prisma.leadCommunication.create({
+          data: {
+            companyId: req.clientUser.companyId,
+            userId: req.clientUser.userId,
+            leadId: lead.id,
+            channel: "SMS",
+            status: "SENT",
+            recipient: phone,
+            subject: template.name,
+            message: template.body || template.name,
+          },
+        });
+      } else {
+        failed += 1;
+        const reason = String(
+          result?.error || result?.reason || "Unable to send SMS"
+        ).slice(0, 500);
+        failures.push({ leadId: lead.id, name: lead.name, reason });
+        await prisma.leadCommunication.create({
+          data: {
+            companyId: req.clientUser.companyId,
+            userId: req.clientUser.userId,
+            leadId: lead.id,
+            channel: "SMS",
+            status: "FAILED",
+            recipient: phone,
+            subject: template.name,
+            message: template.body || template.name,
+            errorMessage: reason,
+          },
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message:
+        sent > 0
+          ? `${sent} SMS sent${skipped ? ` · ${skipped} skipped` : ""}${failed ? ` · ${failed} failed` : ""}.`
+          : "No SMS were sent.",
+      sent,
+      failed,
+      skipped,
+      failures,
+    });
+  } catch (error) {
+    console.error("Bulk SMS send failed:", error);
+    return res.status(400).json({
+      success: false,
+      message: error?.message || "Unable to send SMS",
     });
   }
 });

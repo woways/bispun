@@ -1270,6 +1270,9 @@ export default function UTMLeads({
   const [generateError, setGenerateError] = useState("");
   const [manualError, setManualError] = useState("");
   const [copiedGenerated, setCopiedGenerated] = useState(false);
+  // Keeps the just-generated link visible in the panel after Generate & Save
+  // (the form resets, but the saved link should still be shown + copyable here).
+  const [lastSavedLink, setLastSavedLink] = useState(null);
   const [analysisDetail, setAnalysisDetail] = useState(null);
 
   async function loadData() {
@@ -1396,6 +1399,9 @@ export default function UTMLeads({
     setGenerateSaving(true);
     setGenerateError("");
 
+    // Capture the generated URL before the form resets, so it stays on screen.
+    const savedUrl = generatedUrl;
+
     try {
       await apiRequest(
         "/api/client/leads/utm/links",
@@ -1412,6 +1418,8 @@ export default function UTMLeads({
           }),
         }
       );
+
+      setLastSavedLink(savedUrl);
 
       setGenerateForm({
         url: "",
@@ -1496,10 +1504,11 @@ export default function UTMLeads({
   }
 
   async function copyGeneratedLink() {
-    if (!generatedUrl) return;
+    const linkToCopy = generatedUrl || lastSavedLink;
+    if (!linkToCopy) return;
 
     try {
-      await navigator.clipboard.writeText(generatedUrl);
+      await navigator.clipboard.writeText(linkToCopy);
       setCopiedGenerated(true);
       window.setTimeout(
         () => setCopiedGenerated(false),
@@ -1864,11 +1873,16 @@ export default function UTMLeads({
 
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
             <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-indigo-600">
-              Generated Link
+              {generatedUrl
+                ? "Generated Link"
+                : lastSavedLink
+                  ? "Last Generated Link (saved)"
+                  : "Generated Link"}
             </div>
 
             <div className="mt-2 min-h-[22px] break-all font-mono text-[13px] text-slate-700">
               {generatedUrl ||
+                lastSavedLink ||
                 "Complete the fields to preview the generated UTM URL."}
             </div>
           </div>
@@ -1899,7 +1913,7 @@ export default function UTMLeads({
             <button
               type="button"
               onClick={copyGeneratedLink}
-              disabled={!generatedUrl}
+              disabled={!generatedUrl && !lastSavedLink}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 disabled:opacity-50"
             >
               {copiedGenerated ? (

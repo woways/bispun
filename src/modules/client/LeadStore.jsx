@@ -213,6 +213,7 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "alternatePhone", label: "Alternative Phone" },
   { key: "email", label: "Email" },
   { key: "course", label: "Course" },
+  { key: "preferredColleges", label: "Interested College" },
   { key: "assignedTo", label: "Assigned To" },
   { key: "temperature", label: "Lead Type" },
   { key: "status", label: "Status" },
@@ -224,6 +225,7 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   alternatePhone: true,
   email: true,
   course: true,
+  preferredColleges: true,
   assignedTo: true,
   temperature: true,
   status: true,
@@ -237,6 +239,7 @@ const DEFAULT_INDIVIDUAL_COLUMN_ORDER = [
   "alternatePhone",
   "email",
   "course",
+  "preferredColleges",
   "assignedTo",
   "temperature",
   "status",
@@ -251,6 +254,7 @@ const INDIVIDUAL_COLUMN_LABELS = {
   alternatePhone: "Alternative Phone",
   email: "Email",
   course: "Course",
+  preferredColleges: "Interested College",
   assignedTo: "Assigned To",
   temperature: "Lead Type",
   status: "Status",
@@ -3063,6 +3067,10 @@ export default function LeadStore({
     driveLinks: "",
   });
 
+  // Send Message channel: "email" (default) or "sms" (per-company SMS integration).
+  const [messageChannel, setMessageChannel] = useState("email");
+  const [smsTemplateId, setSmsTemplateId] = useState("");
+
   useEffect(() => {
     let active = true;
 
@@ -3311,6 +3319,56 @@ export default function LeadStore({
       }
     } catch (error) {
       setCommunicationError(error?.data?.message || "Unable to send email");
+    } finally {
+      setCommunicationSending(false);
+    }
+  }
+
+  async function sendSelectedSms() {
+    if (!smsTemplateId) {
+      setCommunicationError("Choose an SMS template.");
+      return;
+    }
+
+    setCommunicationSending(true);
+    setCommunicationError("");
+    setCommunicationResult("");
+    try {
+      const data = await apiRequest("/api/client/communications/sms", {
+        method: "POST",
+        body: JSON.stringify({
+          leadIds: messageLeadIds,
+          templateId: smsTemplateId,
+        }),
+      });
+      const sentCount = Number(data?.sent || 0);
+
+      if (sentCount > 0) {
+        const successText =
+          data?.message || `${sentCount} SMS sent successfully.`;
+        setCommunicationResult(successText);
+        setSuccessMessage(successText);
+      } else {
+        const firstFailure =
+          Array.isArray(data?.failures) && data.failures.length
+            ? data.failures[0]?.reason
+            : "";
+        setCommunicationResult("");
+        setCommunicationError(
+          firstFailure
+            ? `No SMS were sent. ${firstFailure}`
+            : "No SMS were sent. Check that the selected lead has a phone number and that SMS is connected."
+        );
+      }
+
+      const status = await apiRequest("/api/client/communications/status");
+      setCommunicationStatus(status);
+      if (messageLeadIds.length === 1) {
+        const history = await apiRequest(`/api/client/communications/history?leadId=${encodeURIComponent(messageLeadIds[0])}&limit=10`);
+        setCommunicationHistory(history.logs || []);
+      }
+    } catch (error) {
+      setCommunicationError(error?.data?.message || "Unable to send SMS");
     } finally {
       setCommunicationSending(false);
     }
@@ -4151,6 +4209,39 @@ export default function LeadStore({
     }
   }
 
+  // Inline save of the "Interested College" cell (saves on blur/Enter).
+  async function updateLeadPreferredColleges(leadId, value) {
+    const trimmed = String(value || "").trim();
+    try {
+      const data = await apiRequest(
+        `/api/client/lead-store/manual/${leadId}/preferred-colleges`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ preferredColleges: trimmed }),
+        }
+      );
+
+      setIndividualLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                preferredColleges:
+                  data?.lead?.preferredColleges ?? trimmed,
+              }
+            : lead
+        )
+      );
+
+      setSuccessMessage(data?.message || "Interested college updated.");
+    } catch (error) {
+      setError(
+        error?.data?.message ||
+          "Unable to update interested college"
+      );
+    }
+  }
+
   async function updateLeadStatus(leadId, status, { custom = false } = {}) {
     setStatusUpdatingId(leadId);
     setError("");
@@ -4474,6 +4565,30 @@ export default function LeadStore({
           <div title={value || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">
             {value || "—"}
           </div>
+        </td>
+      );
+    }
+
+    if (columnKey === "preferredColleges") {
+      return (
+        <td key={columnKey} className={`min-w-[190px] max-w-[220px] px-4 ${individualCellPadding}`}>
+          <input
+            type="text"
+            defaultValue={lead.preferredColleges || ""}
+            placeholder="Add college"
+            title={lead.preferredColleges || ""}
+            onBlur={(event) => {
+              const next = event.target.value.trim();
+              if (next !== String(lead.preferredColleges || "").trim()) {
+                updateLeadPreferredColleges(lead.id, next);
+              }
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.target.blur();
+            }}
+            className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px] text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+            aria-label={`Interested college for ${lead.name}`}
+          />
         </td>
       );
     }
@@ -6027,22 +6142,85 @@ export default function LeadStore({
             <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <div className="text-[17px] font-bold text-slate-950">Send Message</div>
-                <div className="mt-1 text-[12px] text-slate-500">{messageLeadIds.length} lead{messageLeadIds.length === 1 ? "" : "s"} selected · Email is active now; WhatsApp and SMS can plug into this same flow later.</div>
+                <div className="mt-1 text-[12px] text-slate-500">{messageLeadIds.length} lead{messageLeadIds.length === 1 ? "" : "s"} selected · Send email or a DLT-approved template SMS to the selected leads.</div>
               </div>
               <button type="button" onClick={closeMessageComposer} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"><X size={16} /></button>
             </div>
 
             <div className="border-b border-slate-200 px-5 pt-4">
               <div className="flex gap-2">
-                <button type="button" className="inline-flex items-center gap-2 rounded-t-xl border border-b-white border-indigo-200 bg-white px-4 py-2.5 text-[13px] font-bold text-indigo-700"><Mail size={14} /> Email</button>
+                <button type="button" onClick={() => setMessageChannel("email")} className={`inline-flex items-center gap-2 rounded-t-xl border px-4 py-2.5 text-[13px] font-bold ${messageChannel === "email" ? "border-b-white border-indigo-200 bg-white text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-800"}`}><Mail size={14} /> Email</button>
                 <button type="button" disabled className="inline-flex items-center gap-2 rounded-t-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-semibold text-slate-400"><MessageCircle size={14} /> WhatsApp · Soon</button>
-                <button type="button" disabled className="inline-flex items-center gap-2 rounded-t-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-semibold text-slate-400"><Smartphone size={14} /> SMS · Soon</button>
+                {communicationStatus?.sms?.enabled ? (
+                  <button type="button" onClick={() => setMessageChannel("sms")} className={`inline-flex items-center gap-2 rounded-t-xl border px-4 py-2.5 text-[13px] font-bold ${messageChannel === "sms" ? "border-b-white border-indigo-200 bg-white text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-800"}`}><Smartphone size={14} /> SMS</button>
+                ) : (
+                  <button type="button" disabled className="inline-flex items-center gap-2 rounded-t-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-semibold text-slate-400"><Smartphone size={14} /> SMS · Soon</button>
+                )}
               </div>
             </div>
 
             <div className="space-y-4 p-5">
               {communicationLoading ? (
                 <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-4 text-[13px] text-slate-500"><Loader2 size={15} className="animate-spin" /> Checking Gmail connection...</div>
+              ) : messageChannel === "sms" ? (
+                <>
+                  <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[12px] font-bold uppercase tracking-wide text-slate-500">SMS Sender</div>
+                      <div className="mt-1 text-[14px] font-semibold text-slate-900">{communicationStatus?.sms?.senderId || communicationStatus?.sms?.provider || "SMS connected"}</div>
+                    </div>
+                    <div className="text-left sm:text-right">
+                      <div className="text-[12px] font-semibold text-slate-500">SMS sent today</div>
+                      <div className="mt-1 text-[14px] font-bold text-slate-900">{communicationStatus?.sms?.sentToday ?? 0}</div>
+                    </div>
+                  </div>
+
+                  {!(communicationStatus?.sms?.templates || []).length ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-semibold text-amber-800">
+                      No SMS templates yet. Ask your admin to add DLT-approved templates in Settings → Integrations.
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Template *</label>
+                      <select value={smsTemplateId} onChange={(e) => setSmsTemplateId(e.target.value)} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100">
+                        <option value="">Select a template…</option>
+                        {(communicationStatus?.sms?.templates || []).map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {smsTemplateId && (
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="text-[12px] font-bold text-slate-700">Message preview</div>
+                      <div className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-slate-600">
+                        {(communicationStatus?.sms?.templates || []).find((t) => t.id === smsTemplateId)?.body || "(The DLT-approved template content will be sent.)"}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 text-[12px] leading-5 text-indigo-800">
+                    This sends one DLT-approved template SMS per selected lead using your company&apos;s connected SMS provider. The lead&apos;s name fills the template&apos;s name variable. Leads without a phone number are skipped. Limited to {communicationStatus?.maxPerRequest || 100} leads per send.
+                  </div>
+
+                  {communicationError && <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-semibold text-rose-700">{communicationError}</div>}
+                  {communicationResult && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">{communicationResult}</div>}
+
+                  {messageLeadIds.length === 1 && communicationHistory.length > 0 && (
+                    <div className="rounded-xl border border-slate-200">
+                      <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 text-[12px] font-bold text-slate-700"><History size={14} /> Communication History</div>
+                      <div className="max-h-44 divide-y divide-slate-100 overflow-y-auto">
+                        {communicationHistory.map((item) => (
+                          <div key={item.id} className="px-4 py-3">
+                            <div className="flex items-center justify-between gap-3"><span className="text-[12px] font-semibold text-slate-800">{item.subject || item.channel}</span><span className={`text-[11px] font-bold ${item.status === "SENT" ? "text-emerald-600" : "text-rose-600"}`}>{item.status}</span></div>
+                            <div className="mt-1 text-[11px] text-slate-400">{item.recipient} · {new Date(item.createdAt).toLocaleString()}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -6160,10 +6338,17 @@ export default function LeadStore({
 
             <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-4">
               <button type="button" onClick={closeMessageComposer} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700">Cancel</button>
-              <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || (!emailForm.message.trim() && !emailAttachments.length && !emailForm.driveLinks.trim())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-                {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                {communicationSending ? "Sending..." : `Send ${messageLeadIds.length > 1 ? `to ${messageLeadIds.length} leads` : "Email"}`}
-              </button>
+              {messageChannel === "sms" ? (
+                <button type="button" onClick={sendSelectedSms} disabled={communicationSending || communicationLoading || !communicationStatus?.sms?.enabled || !smsTemplateId} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  {communicationSending ? "Sending..." : `Send SMS${messageLeadIds.length > 1 ? ` to ${messageLeadIds.length} leads` : ""}`}
+                </button>
+              ) : (
+                <button type="button" onClick={sendSelectedEmail} disabled={communicationSending || communicationLoading || !communicationStatus?.gmail?.enabled || !emailForm.subject.trim() || (!emailForm.message.trim() && !emailAttachments.length && !emailForm.driveLinks.trim())} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
+                  {communicationSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  {communicationSending ? "Sending..." : `Send ${messageLeadIds.length > 1 ? `to ${messageLeadIds.length} leads` : "Email"}`}
+                </button>
+              )}
             </div>
           </div>
         </div>

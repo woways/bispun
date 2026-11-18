@@ -1,12 +1,92 @@
 import { Router } from "express";
+import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
 import { requireSuperAdmin } from "../middleware/adminAuth.js";
 import { writeSuperAdminAudit } from "../lib/adminAuditLog.js";
+import {
+  isGoogleConfigured,
+  getAuthUrl,
+  hasGmailSendScope,
+} from "../lib/google.js";
 
 const router = Router();
 
 router.use(requireSuperAdmin);
+
+// ---------------------------------------------------------------------------
+// System email sender (Google) — connect ONE Google account at the platform
+// level so OTP / welcome / system emails send via the Gmail API (HTTPS), which
+// works where outbound SMTP is blocked (e.g. Render free tier). Tokens are
+// stored on the SUPER_ADMIN user record by the shared OAuth callback
+// (server/routes/clientGoogle.js), attributed via the signed `state`.
+// ---------------------------------------------------------------------------
+
+// Is the platform email sender connected (for the current super admin)?
+router.get("/google/status", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.admin.userId },
+      select: {
+        googleRefreshToken: true,
+        googleEmail: true,
+        googleConnectedAt: true,
+        googleScopes: true,
+      },
+    });
+    return res.json({
+      success: true,
+      configured: isGoogleConfigured(),
+      connected: Boolean(user?.googleRefreshToken),
+      email: user?.googleEmail || null,
+      connectedAt: user?.googleConnectedAt || null,
+      gmailEnabled: hasGmailSendScope(user?.googleScopes || []),
+    });
+  } catch (error) {
+    console.error("Admin Google status failed:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Unable to load Google status" });
+  }
+});
+
+// Start the connect flow: returns the Google consent URL. Identity + an `admin`
+// flag ride in a short-lived signed `state`, so the public callback can both
+// attribute the tokens and redirect back to the admin page.
+router.get("/google/connect", async (req, res) => {
+  if (!isGoogleConfigured()) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Google is not configured on the server" });
+  }
+  const state = jwt.sign(
+    { sub: req.admin.userId, admin: true },
+    process.env.JWT_SECRET,
+    { expiresIn: "10m" }
+  );
+  return res.json({ success: true, url: getAuthUrl(state) });
+});
+
+// Disconnect the platform email sender.
+router.post("/google/disconnect", async (req, res) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.admin.userId },
+      data: {
+        googleRefreshToken: null,
+        googleEmail: null,
+        googleConnectedAt: null,
+        googleScopes: [],
+      },
+    });
+    return res.json({ success: true, message: "Disconnected" });
+  } catch (error) {
+    console.error("Admin Google disconnect failed:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Unable to disconnect" });
+  }
+});
 
 const SETTINGS_KEY =
   "global";
@@ -241,6 +321,9 @@ router.patch("/", async (req, res) => {
         "defaultSmsNotifications",
         "maintenanceMode",
         "allowNewClientOnboarding",
+        "smsEnabled",
+        "smsWelcomeEnabled",
+        "smsEnquiryEnabled",
       ]
     ) {
       if (
@@ -278,6 +361,27 @@ router.patch("/", async (req, res) => {
 
       data.defaultPrimaryColor =
         color;
+    }
+
+    // MSG91 SMS text fields (template IDs / sender) — trimmed, empty clears.
+    for (const field of [
+      "smsSenderId",
+      "smsOtpTemplateId",
+      "smsWelcomeTemplateId",
+      "smsEnquiryTemplateId",
+    ]) {
+      if (req.body[field] !== undefined) {
+        const value = String(req.body[field] || "").trim();
+        data[field] = value || null;
+      }
+    }
+
+    if (req.body.smsEnquiryHours !== undefined) {
+      const hours = Number(req.body.smsEnquiryHours);
+      data.smsEnquiryHours =
+        Number.isFinite(hours) && hours > 0 && hours <= 720
+          ? Math.round(hours)
+          : 24;
     }
 
     const settings =

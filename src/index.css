@@ -123,6 +123,60 @@ textarea {
 }
 
 
+/* 19.3 — Dropdown standard: one consistent chevron across the portal for
+   single-select controls, with breathing room so the arrow never sits flush
+   against the box edge. Scoped to single <select> so multiple / sized
+   listboxes keep their native rendering. RTL-aware spacing/placement via
+   logical properties; no !important, so component-level overrides still win. */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.85rem center;
+  background-size: 1rem;
+  padding-inline-end: 2.4rem;
+}
+
+/* RTL: mirror the chevron to the leading (left) edge. */
+[dir="rtl"] select:not([multiple]):not([size]) {
+  background-position: left 0.85rem center;
+}
+
+/* Keep the chevron readable in dark mode. */
+[data-cb-theme="dark"] select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+
+/* Explicit, token-based focus ring so keyboard focus is never lost once the
+   native appearance is removed (does not depend on UA defaults).
+   Light mode: brand-600 (#4F46E5) ~6.3:1 on a white field.
+   Dark mode: brand-600 drops to ~2.3:1 on dark-slate, so use the lighter
+   brand-400 (#818CF8) which clears 3:1 non-text contrast there. (WCAG 2.4.7) */
+select:not([multiple]):not([size]):focus-visible {
+  outline: 2px solid rgb(var(--brand-600));
+  outline-offset: 2px;
+}
+
+[data-cb-theme="dark"] select:not([multiple]):not([size]):focus-visible {
+  outline-color: rgb(var(--brand-400));
+}
+
+/* Windows forced-colors / High-Contrast: appearance:none strips the custom
+   chevron and leaves no dropdown affordance, so restore the native control
+   (the OS then draws its own indicator and a system focus ring). */
+@media (forced-colors: active) {
+  select:not([multiple]):not([size]) {
+    -webkit-appearance: auto;
+    -moz-appearance: auto;
+    appearance: auto;
+    background-image: none;
+    padding-inline-end: revert;
+  }
+}
+
+
 /* Readability pass: keep secondary CRM copy visible while retaining compact density. */
 .cb-readable-copy,
 .cb-card-description,

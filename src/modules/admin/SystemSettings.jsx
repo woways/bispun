@@ -107,6 +107,12 @@ export default function SystemSettings() {
   const [message, setMessage] =
     useState("");
 
+  const [googleStatus, setGoogleStatus] =
+    useState(null);
+
+  const [googleBusy, setGoogleBusy] =
+    useState(false);
+
   async function loadSettings() {
     setLoading(true);
     setError("");
@@ -179,6 +185,23 @@ export default function SystemSettings() {
           data.settings
             .defaultPrimaryColor ||
           "indigo",
+
+        smsEnabled:
+          data.settings.smsEnabled ?? false,
+        smsSenderId:
+          data.settings.smsSenderId || "",
+        smsOtpTemplateId:
+          data.settings.smsOtpTemplateId || "",
+        smsWelcomeTemplateId:
+          data.settings.smsWelcomeTemplateId || "",
+        smsWelcomeEnabled:
+          data.settings.smsWelcomeEnabled ?? true,
+        smsEnquiryTemplateId:
+          data.settings.smsEnquiryTemplateId || "",
+        smsEnquiryEnabled:
+          data.settings.smsEnquiryEnabled ?? true,
+        smsEnquiryHours:
+          String(data.settings.smsEnquiryHours ?? 24),
       });
     } catch (error) {
       setError(
@@ -192,7 +215,83 @@ export default function SystemSettings() {
 
   useEffect(() => {
     loadSettings();
+    loadGoogleStatus();
+    const g = new URLSearchParams(
+      window.location.search
+    ).get("google");
+    if (g === "connected") {
+      setMessage(
+        "Google account connected for system email."
+      );
+    } else if (g === "norefresh") {
+      setError(
+        "Google did not return a refresh token. Remove Bispun from your Google account's third-party access, then connect again."
+      );
+    } else if (g === "error") {
+      setError(
+        "Google connection failed. Please try again."
+      );
+    }
   }, []);
+
+  async function loadGoogleStatus() {
+    try {
+      const data =
+        await apiRequest(
+          "/api/admin/system-settings/google/status"
+        );
+      setGoogleStatus(data);
+    } catch {
+      setGoogleStatus(null);
+    }
+  }
+
+  async function connectGoogle() {
+    setGoogleBusy(true);
+    setError("");
+    try {
+      const data =
+        await apiRequest(
+          "/api/admin/system-settings/google/connect"
+        );
+      if (data?.url) {
+        window.location.href =
+          data.url;
+        return;
+      }
+      setError(
+        "Could not start Google connect"
+      );
+    } catch (err) {
+      setError(
+        err?.data?.message ||
+          "Could not start Google connect"
+      );
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
+
+  async function disconnectGoogle() {
+    setGoogleBusy(true);
+    try {
+      await apiRequest(
+        "/api/admin/system-settings/google/disconnect",
+        { method: "POST" }
+      );
+      await loadGoogleStatus();
+      setMessage(
+        "System email sender disconnected"
+      );
+    } catch (err) {
+      setError(
+        err?.data?.message ||
+          "Could not disconnect"
+      );
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   function setField(
     field,
@@ -626,6 +725,179 @@ export default function SystemSettings() {
               )
             }
           />
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex items-center gap-2">
+          <Mail
+            size={15}
+            className="text-indigo-600"
+          />
+
+          <h3 className="text-sm font-bold tracking-tight text-slate-950">
+            System email sender (Google)
+          </h3>
+        </div>
+
+        <p className="text-xs text-slate-500 mt-1">
+          OTP, welcome and system emails are sent via the Gmail API (not SMTP),
+          so they work even where outbound SMTP is blocked. Connect one Google
+          account (e.g. <strong>info@bispun.com</strong>) and grant the
+          &ldquo;send email&rdquo; permission.
+        </p>
+
+        <div className="mt-5 flex items-center justify-between gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50/60">
+          <div className="min-w-0">
+            {googleStatus?.connected ? (
+              <>
+                <div className="text-sm font-medium text-slate-900 truncate">
+                  Connected: {googleStatus.email || "Google account"}
+                </div>
+                <div className="text-xs mt-1">
+                  {googleStatus.gmailEnabled ? (
+                    <span className="text-emerald-600">
+                      Email sending is active.
+                    </span>
+                  ) : (
+                    <span className="text-rose-600">
+                      Missing &ldquo;send email&rdquo; permission — reconnect and
+                      allow it.
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-medium text-slate-900">
+                  No account connected
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {googleStatus?.configured === false
+                    ? "Google OAuth is not configured on the server."
+                    : "Emails will not send until you connect one."}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {googleStatus?.connected && (
+              <button
+                type="button"
+                onClick={disconnectGoogle}
+                disabled={googleBusy}
+                className="h-9 px-3.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-sm transition-colors"
+              >
+                Disconnect
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={connectGoogle}
+              disabled={
+                googleBusy ||
+                googleStatus?.configured === false
+              }
+              className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold inline-flex items-center gap-2 shadow-sm transition-colors"
+            >
+              {googleBusy ? (
+                <Loader2
+                  size={14}
+                  className="animate-spin"
+                />
+              ) : (
+                <Mail size={14} />
+              )}
+              {googleStatus?.connected
+                ? "Reconnect"
+                : "Connect Google"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="flex items-center gap-2">
+          <Phone
+            size={15}
+            className="text-indigo-600"
+          />
+
+          <h3 className="text-sm font-bold tracking-tight text-slate-950">
+            SMS (MSG91)
+          </h3>
+        </div>
+
+        <p className="text-xs text-slate-500 mt-1">
+          DLT-approved transactional SMS. Paste the <strong>MSG91 Template IDs</strong>
+          {" "}(from MSG91 → Templates) below. The secret auth key lives in the
+          server environment (MSG91_AUTH_KEY), not here.
+        </p>
+
+        <div className="mt-5 space-y-4">
+          <Toggle
+            label="Enable SMS"
+            description="Master switch for all transactional SMS. Needs MSG91_AUTH_KEY set on the server. OTP works regardless of this switch."
+            enabled={form.smsEnabled}
+            onChange={(value) => setField("smsEnabled", value)}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field
+              label="Sender ID (DLT header)"
+              value={form.smsSenderId}
+              placeholder="BISPUN"
+              onChange={(value) => setField("smsSenderId", value)}
+            />
+
+            <Field
+              label="OTP Template ID (MSG91)"
+              value={form.smsOtpTemplateId}
+              placeholder="MSG91 template id for login OTP"
+              onChange={(value) => setField("smsOtpTemplateId", value)}
+            />
+          </div>
+
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            <Toggle
+              label="Welcome SMS"
+              description="Sent to the client admin when a new client is onboarded."
+              enabled={form.smsWelcomeEnabled}
+              onChange={(value) => setField("smsWelcomeEnabled", value)}
+            />
+            <Field
+              label="Welcome Template ID (MSG91)"
+              value={form.smsWelcomeTemplateId}
+              placeholder="MSG91 template id for welcome"
+              onChange={(value) => setField("smsWelcomeTemplateId", value)}
+            />
+          </div>
+
+          <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+            <Toggle
+              label="Enquiry Acknowledgement SMS"
+              description="Sent to the person who submits a query/support request on the client portal Help & Support page."
+              enabled={form.smsEnquiryEnabled}
+              onChange={(value) => setField("smsEnquiryEnabled", value)}
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field
+                label="Enquiry Template ID (MSG91)"
+                value={form.smsEnquiryTemplateId}
+                placeholder="MSG91 template id for enquiry ack"
+                onChange={(value) => setField("smsEnquiryTemplateId", value)}
+              />
+              <Field
+                label="Contact within (hours)"
+                type="number"
+                value={form.smsEnquiryHours}
+                placeholder="24"
+                onChange={(value) => setField("smsEnquiryHours", value)}
+              />
+            </div>
+          </div>
         </div>
       </div>
 

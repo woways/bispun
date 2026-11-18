@@ -363,13 +363,15 @@ const NAV_GROUPS = [
     items: ["analytics"],
   },
 
-  {
-    key: "my-store",
-    label: "My Store",
-    icon: Store,
-    items: ["my-store"],
-    direct: true,
-  },
+  // My Store is temporarily hidden — image generation (Ideogram) needs rework
+  // before it's client-ready. Re-enable by uncommenting this block.
+  // {
+  //   key: "my-store",
+  //   label: "My Store",
+  //   icon: Store,
+  //   items: ["my-store"],
+  //   direct: true,
+  // },
 
   {
     key: "my-referrals",
@@ -1173,6 +1175,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     setReceiptLoading,
   ] = useState(false);
 
+  // Order History modal (previous purchases, invoices & order details).
+  const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
+
   const [
     openGroups,
     setOpenGroups,
@@ -1561,7 +1566,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     { title: "Work", keys: ["chats", "goals-and-targets", "utm-leads"] },
     { title: "Admissions", keys: ["domestic-admissions", "international-admissions"] },
     { title: "Insights", keys: ["analytics"] },
-    { title: "Grow", keys: ["my-store", "my-referrals"] },
+    { title: "Grow", keys: ["my-referrals"] }, // my-store hidden (image-gen rework pending)
   ]
     .map((group) => ({
       ...group,
@@ -3882,8 +3887,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       return <Referrals currentUser={user} />;
     }
 
+    // My Store temporarily hidden (image-gen rework pending). Guarded so a saved
+    // or deep-linked "my-store" state can't render it; re-enable with the nav.
     if (moduleKey === "my-store") {
-      return <MyStore company={company} />;
+      return null;
     }
 
     if (
@@ -5767,6 +5774,37 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
               ) : (
                 <>
+                  {/* ORDER HISTORY — sits above Current Subscription */}
+                  <button
+                    type="button"
+                    onClick={() => setOrderHistoryOpen(true)}
+                    className="group w-full text-left bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4 transition-all hover:border-indigo-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <CalendarClock size={18} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900">
+                          Order History
+                        </div>
+                        <div className="text-[12px] text-slate-500 mt-0.5">
+                          Previous purchases, invoices &amp; order details
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
+                        {(billingData.payments?.length || 0).toLocaleString("en-IN")} order
+                        {(billingData.payments?.length || 0) === 1 ? "" : "s"}
+                      </span>
+                      <ChevronRight
+                        size={16}
+                        className="text-slate-400 group-hover:text-indigo-600 transition-colors"
+                      />
+                    </div>
+                  </button>
+
                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <div className="text-[12px] uppercase tracking-wider font-semibold text-slate-400">
@@ -6177,87 +6215,140 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <CalendarClock
-                        size={14}
-                        className="text-indigo-600"
-                      />
-                      <div className="text-sm font-bold text-slate-900">
-                        Recent Payments
-                      </div>
-                    </div>
-
-                    <div className="mt-3 border border-slate-200 rounded-xl overflow-hidden">
-                      {billingData.payments.length ? (
-                        billingData.payments.map(
-                          (payment) => (
-                            <div
-                              key={payment.id}
-                              className="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3"
-                            >
-                              <div>
-                                <div className="text-xs font-semibold text-slate-800">
-                                  {payment.plan.name} · Annual
-                                </div>
-                                <div className="text-[12px] text-slate-500 mt-0.5">
-                                  {new Date(
-                                    payment.paidAt ||
-                                      payment.createdAt
-                                  ).toLocaleDateString(
-                                    "en-IN"
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="text-right">
-                                <div className="text-xs font-bold text-slate-900">
-                                  ₹{Number(
-                                    payment.amount
-                                  ).toLocaleString("en-IN")}
-                                </div>
-                                <div
-                                  className={`text-[12px] font-semibold mt-0.5 ${
-                                    payment.status ===
-                                    "CAPTURED"
-                                      ? "text-indigo-600"
-                                      : payment.status ===
-                                        "FAILED"
-                                      ? "text-rose-600"
-                                      : "text-amber-600"
-                                  }`}
-                                >
-                                  {payment.status}
-                                </div>
-
-                                {payment.status === "CAPTURED" && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      openPaymentReceipt(
-                                        payment.id
-                                      )
-                                    }
-                                    className="mt-1.5 text-[12px] font-semibold text-indigo-600 hover:text-indigo-700"
-                                  >
-                                    View Receipt
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        )
-                      ) : (
-                        <div className="py-8 text-center text-xs text-slate-500">
-                          No payment history yet.
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {orderHistoryOpen && (
+        <div
+          className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setOrderHistoryOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Order History"
+            className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 className="text-[16px] font-bold text-slate-900">
+                  Order History
+                </h2>
+                <p className="mt-0.5 text-[13px] text-slate-500">
+                  Previous purchases, invoices and order details
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOrderHistoryOpen(false)}
+                aria-label="Close"
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-4 space-y-3">
+              {billingData.payments?.length ? (
+                billingData.payments.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="rounded-xl border border-slate-200 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900">
+                          {payment.plan?.name || "Subscription"} · Annual
+                        </div>
+                        <div className="text-[12px] text-slate-500 mt-0.5">
+                          {new Date(
+                            payment.paidAt || payment.createdAt
+                          ).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </div>
+                        {payment.providerOrderId ? (
+                          <div className="text-[11px] text-slate-400 mt-1 break-all">
+                            Order ID: {payment.providerOrderId}
+                          </div>
+                        ) : null}
+                        {payment.providerPaymentId ? (
+                          <div className="text-[11px] text-slate-400 mt-0.5 break-all">
+                            Payment ID: {payment.providerPaymentId}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-sm font-bold text-slate-900">
+                          ₹{Number(payment.amount).toLocaleString("en-IN")}
+                        </div>
+                        <div
+                          className={`text-[12px] font-semibold mt-0.5 ${
+                            payment.status === "CAPTURED"
+                              ? "text-indigo-600"
+                              : payment.status === "FAILED"
+                              ? "text-rose-600"
+                              : "text-amber-600"
+                          }`}
+                        >
+                          {payment.status}
+                        </div>
+                      </div>
+                    </div>
+
+                    {Number(payment.discountAmount || 0) > 0 ? (
+                      <div className="mt-2 text-[12px] text-slate-500">
+                        List ₹
+                        {Number(payment.listPrice || 0).toLocaleString("en-IN")}{" "}
+                        · Discount − ₹
+                        {Number(payment.discountAmount || 0).toLocaleString(
+                          "en-IN"
+                        )}
+                      </div>
+                    ) : null}
+
+                    {payment.status === "CAPTURED" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOrderHistoryOpen(false);
+                          openPaymentReceipt(payment.id);
+                        }}
+                        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-[12px] font-bold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        View / download invoice
+                      </button>
+                    ) : null}
+                  </div>
+                ))
+              ) : (
+                <div className="py-12 text-center text-[13px] text-slate-500">
+                  No orders yet.
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+              <span className="text-[12px] font-semibold text-slate-500">
+                {(billingData.payments?.length || 0).toLocaleString("en-IN")} order
+                {(billingData.payments?.length || 0) === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setOrderHistoryOpen(false)}
+                className="h-8 rounded-lg bg-slate-900 px-3.5 text-[12px] font-bold text-white hover:bg-slate-800"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

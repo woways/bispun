@@ -6,6 +6,7 @@ import { deleteChatFile, uploadChatFile } from "../lib/chatStorage.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
 import { normalizePageAccess } from "../lib/pageAccess.js";
 import { createMeetEvent } from "../lib/google.js";
+import { postConversationMessage } from "../socket.js";
 
 const router = Router();
 
@@ -293,10 +294,23 @@ router.post("/:id/meet", async (req, res) => {
     }
 
     const creationPromise = (async () => {
+      // Invite every member of the conversation as a Google Calendar attendee so
+      // they are recognized guests and can join the same Meet room directly.
+      // Without this, only the creator was on the event, so everyone else was
+      // refused entry and bounced to the Google Meet home page.
+      const members = await prisma.conversationMember.findMany({
+        where: { conversationId },
+        include: { user: { select: { email: true } } },
+      });
+      const attendees = members
+        .map((m) => m.user?.email)
+        .filter((email) => Boolean(email));
+
       const result = await createMeetEvent(req.clientUser.userId, {
         summary: "Bispun call",
         startISO: new Date(now).toISOString(),
         endISO: new Date(now + 60 * 60 * 1000).toISOString(),
+        attendees,
       });
       if (!result.meetLink) {
         const error = new Error(
@@ -321,7 +335,29 @@ router.post("/:id/meet", async (req, res) => {
         link: meetLink,
         expiresAt: Date.now() + ACTIVE_MEET_WINDOW_MS,
       });
-      return res.json({ success: true, meetLink, reused: false, announce: true });
+
+      // Post the "Meeting started" announcement from the server so every member
+      // reliably receives it and can join the SAME link — regardless of whether
+      // the starter's websocket happens to be connected right now. If this fails
+      // for any reason, fall back to announce:true so the client still posts it.
+      let announced = false;
+      try {
+        const posted = await postConversationMessage({
+          conversationId,
+          senderUserId: req.clientUser.userId,
+          body: `${MEETING_PREFIX}${meetLink}`,
+        });
+        announced = Boolean(posted);
+      } catch (announceError) {
+        console.error("Failed to post Meet announcement:", announceError);
+      }
+
+      return res.json({
+        success: true,
+        meetLink,
+        reused: false,
+        announce: !announced,
+      });
     } catch (error) {
       activeMeetCache.delete(conversationId);
       throw error;
