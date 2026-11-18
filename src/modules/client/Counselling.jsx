@@ -484,7 +484,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4 native:grid-cols-2 native:gap-2.5">
         <CounsellingMetric
           label="Sessions Today"
           value={summary.sessionsToday}
@@ -523,8 +523,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
         />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="relative flex-1 min-w-0 max-w-lg">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-2 native:flex-row native:flex-nowrap native:items-center native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+        <div className="relative flex-1 min-w-0 max-w-lg native:w-[220px] native:flex-none native:shrink-0">
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -532,12 +532,13 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            aria-label="Search sessions"
             placeholder="Search student, course, counsellor or mode..."
             className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           />
         </div>
 
-        <div className="sm:ml-auto inline-flex items-center gap-2">
+        <div className="sm:ml-auto inline-flex items-center gap-2 native:shrink-0">
           <SlidersHorizontal size={13} className="text-slate-400" />
           <select
             value={statusFilter}

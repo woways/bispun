@@ -308,7 +308,7 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         </div>
 
         {/* Scan to refer */}
-        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-xl border border-slate-200 bg-slate-50/70 p-4 native:flex-nowrap">
           <div className="flex-shrink-0 rounded-xl border border-slate-200 bg-white p-2">
             {link ? (
               <img src={qrUrl(link)} alt="QR code linking to your referral signup page" width="104" height="104" className="rounded" />

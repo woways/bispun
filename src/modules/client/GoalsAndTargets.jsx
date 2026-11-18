@@ -420,8 +420,8 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-[92px_minmax(0,1fr)] native:items-stretch native:gap-2">
-          <div className="flex items-center justify-center native:h-full">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-1 native:gap-3">
+          <div className="flex items-center justify-center">
             <div className="relative h-28 w-28 flex-shrink-0 native:h-[84px] native:w-[84px]">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
@@ -456,14 +456,14 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
             </div>
           </div>
 
-          <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4 native:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4 native:grid-cols-2 native:items-stretch native:auto-rows-fr">
             {cards.map((card) => {
               const Icon = card.icon;
 
               return (
                 <div
                   key={card.label}
-                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5"
+                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 native:h-full"
                 >
                   <div className="flex items-center gap-2.5 native:gap-2">
                     <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600 native:h-7 native:w-7">

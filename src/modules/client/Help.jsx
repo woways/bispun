@@ -1808,7 +1808,7 @@ export default function Help({
 
       {/* SUPPORT TYPES */}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 native:grid-cols-2 native:gap-2.5">
         {TYPES.map(
           (
             type
@@ -1907,8 +1907,8 @@ export default function Help({
 
       {/* SEARCH / FILTERS */}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-col xl:flex-row xl:items-center gap-2">
-        <div className="relative flex-1 min-w-0">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-col xl:flex-row xl:items-center gap-2 native:flex-row native:flex-nowrap native:items-center native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+        <div className="relative flex-1 min-w-0 native:w-[230px] native:flex-none native:shrink-0">
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1942,7 +1942,7 @@ export default function Help({
               event.target.value
             )
           }
-          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700"
+          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700 native:w-[150px] native:shrink-0"
         >
           <option value="">
             All Statuses
@@ -1996,7 +1996,7 @@ export default function Help({
               event.target.value
             )
           }
-          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700"
+          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700 native:w-[150px] native:shrink-0"
         >
           <option value="">
             All Types
@@ -2026,7 +2026,7 @@ export default function Help({
               event.target.value
             )
           }
-          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700"
+          className="h-9 px-3 border border-slate-200 bg-white rounded-lg text-[13px] font-semibold text-slate-700 native:w-[150px] native:shrink-0"
         >
           <option value="">
             All Priorities
