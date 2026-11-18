@@ -37,6 +37,10 @@ function authenticateSocket(socket) {
   }
 }
 
+// Module-level handle to the live Socket.IO server so backend routes (e.g. the
+// chat Meet route) can broadcast messages without depending on a client socket.
+let ioRef = null;
+
 const miniUser = (u) => u ? ({ id: u.id, name: u.name, email: u.email }) : null;
 const attachmentShape = (a) => ({
   id: a.id,
@@ -50,6 +54,66 @@ const attachmentShape = (a) => ({
   height: a.height,
 });
 
+/**
+ * Persist a plain-text chat message and broadcast it to every member, reusing
+ * the exact same realtime path as the socket "message:send" handler. This lets
+ * server-side flows (like starting a Meet) post a message reliably, even when
+ * the initiating user's websocket is momentarily disconnected. Returns the
+ * broadcast payload, or null if the realtime server isn't attached yet.
+ */
+export async function postConversationMessage({ conversationId, senderUserId, body }) {
+  const cid = String(conversationId || "");
+  const text = String(body || "").trim();
+  if (!ioRef || !cid || !senderUserId || !text) return null;
+
+  const message = await prisma.chatMessage.create({
+    data: { conversationId: cid, senderId: senderUserId, body: text },
+    include: {
+      sender: { select: { id: true, name: true, email: true } },
+      replyTo: { include: { sender: { select: { id: true, name: true, email: true } } } },
+      reactions: { include: { user: { select: { id: true, name: true, email: true } } } },
+      attachments: true,
+    },
+  });
+
+  await prisma.conversationMember.updateMany({
+    where: { conversationId: cid },
+    data: { hiddenAt: null },
+  });
+  await prisma.conversation.update({ where: { id: cid }, data: { updatedAt: new Date() } });
+
+  const payload = {
+    id: message.id,
+    conversationId: cid,
+    body: message.body,
+    pinned: message.pinned,
+    deletedForEveryone: false,
+    createdAt: message.createdAt,
+    sender: miniUser(message.sender),
+    replyTo: message.replyTo
+      ? { id: message.replyTo.id, body: message.replyTo.body, sender: miniUser(message.replyTo.sender) }
+      : null,
+    reactions: (message.reactions || []).map((r) => ({ id: r.id, emoji: r.emoji, user: miniUser(r.user) })),
+    attachments: (message.attachments || []).map(attachmentShape),
+  };
+
+  ioRef.to(`conversation:${cid}`).emit("message:new", payload);
+
+  const members = await prisma.conversationMember.findMany({
+    where: { conversationId: cid },
+    select: { userId: true, isMuted: true },
+  });
+  members.forEach((m) =>
+    ioRef.to(`user:${m.userId}`).emit("conversation:activity", {
+      conversationId: cid,
+      lastMessage: payload,
+      isMuted: Boolean(m.isMuted),
+    })
+  );
+
+  return payload;
+}
+
 export function attachSocketServer(httpServer, config) {
   const io = new SocketIOServer(httpServer, {
     path: "/socket.io",
@@ -61,6 +125,8 @@ export function attachSocketServer(httpServer, config) {
       credentials: true,
     },
   });
+
+  ioRef = io;
 
   io.use(async (socket, next) => {
     const auth = authenticateSocket(socket);
