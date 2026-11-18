@@ -8,6 +8,7 @@ import { loadServerConfig } from "./lib/env.js";
 import { syncDueSubscriptionLifecycles } from "./lib/subscriptions.js";
 import { startNurtureWorker } from "./lib/nurtureEngine.js";
 import { startCalendarReminderWorker } from "./lib/calendarReminders.js";
+import { releaseStaleCouponReservations } from "./lib/coupons.js";
 import {
   requestId,
   securityHeaders,
@@ -314,6 +315,20 @@ if (process.env.DISABLE_BACKGROUND_WORKERS === "true") {
     60 * 60 * 1000
   );
   subscriptionLifecycleTimer.unref?.();
+
+  // C2: periodically release abandoned coupon reservations so dead holds stop
+  // counting against a limited coupon. Idempotent and paid-order-safe (see
+  // releaseStaleCouponReservations). Hourly, plus one sweep at startup.
+  const couponSweep = () =>
+    releaseStaleCouponReservations().catch((error) =>
+      console.error(
+        "[coupons] stale-reservation sweep failed:",
+        error?.message || error
+      )
+    );
+  couponSweep();
+  const couponReservationSweepTimer = setInterval(couponSweep, 60 * 60 * 1000);
+  couponReservationSweepTimer.unref?.();
 }
 
 // Attach Socket.IO for real-time chat (shares cookie-JWT auth).

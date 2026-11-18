@@ -199,6 +199,66 @@ export async function releaseCouponRedemption({ providerOrderId, db = prisma }) 
 }
 
 /**
+ * How long a redemption may stay RESERVED before it is treated as an abandoned
+ * checkout. Deliberately generous: Razorpay sets no short order TTL here and its
+ * webhooks can retry for hours, so a short window risks releasing a slot while a
+ * legitimate (slow or delayed-webhook) payment is still in flight. Paid orders
+ * are protected independently of this window (see releaseStaleCouponReservations).
+ * Override with COUPON_RESERVATION_TTL_MS. Default: 24h.
+ */
+export function couponReservationTtlMs() {
+  const v = Number(process.env.COUPON_RESERVATION_TTL_MS);
+  return Number.isFinite(v) && v > 0 ? v : 24 * 60 * 60 * 1000;
+}
+
+/**
+ * C2 — release coupon reservations from checkouts that were abandoned (the
+ * customer never paid and neither the capture nor the failure webhook ever
+ * arrived), so a limited coupon is not permanently "used up" by dead holds.
+ *
+ * Safe by construction:
+ *  - only RESERVED rows older than the TTL are candidates (recent/active holds
+ *    are left alone);
+ *  - a row is released ONLY when its PendingSignup is not "CONSUMED" — i.e. the
+ *    order never finalized/paid. A paid order (even one whose coupon-consume
+ *    webhook is still in flight) is therefore never released;
+ *  - it reuses releaseCouponRedemption, which acts only on RESERVED rows, so the
+ *    sweep is idempotent and a late capture webhook still converges to CONSUMED.
+ *
+ * Returns the number of reservations released.
+ */
+export async function releaseStaleCouponReservations({ olderThanMs, db = prisma } = {}) {
+  const ttl =
+    Number.isFinite(olderThanMs) && olderThanMs > 0
+      ? olderThanMs
+      : couponReservationTtlMs();
+  const cutoff = new Date(Date.now() - ttl);
+
+  const stale = await db.couponRedemption.findMany({
+    where: { status: "RESERVED", reservedAt: { lt: cutoff } },
+    select: { providerOrderId: true },
+  });
+  if (!stale.length) return 0;
+
+  let released = 0;
+  for (const { providerOrderId } of stale) {
+    // Never release a paid order: if the signup finalized (CONSUMED), skip it
+    // even if the coupon-consume webhook has not landed yet.
+    const pending = await db.pendingSignup
+      .findUnique({
+        where: { providerOrderId },
+        select: { status: true },
+      })
+      .catch(() => null);
+    if (pending && pending.status === "CONSUMED") continue;
+
+    const result = await releaseCouponRedemption({ providerOrderId, db });
+    if (result && result.status === "RELEASED") released += 1;
+  }
+  return released;
+}
+
+/**
  * Idempotently seed the four initial coupons, eligible for the Advanced plan.
  * Never overwrites an existing coupon (preserves Super Admin edits + usedCount).
  */
