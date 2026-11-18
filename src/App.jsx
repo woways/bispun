@@ -4,6 +4,14 @@ import ClientLogin from "./ClientLogin";
 import AdminLogin from "./AdminLogin";
 import { apiRequest, classifyAuthError } from "./lib/api";
 import BackButtonHandler from "./components/BackButtonHandler";
+import BrandSplash from "./components/BrandSplash";
+
+// True inside the Capacitor native app (main.jsx adds `.native` to <html> before
+// render). Used to show the branded splash on native cold-start while the web
+// keeps its existing loading screen.
+const isNativeApp = () =>
+  typeof document !== "undefined" &&
+  document.documentElement.classList.contains("native");
 
 const ClientPortal = lazy(() => import("./ClientPortal"));
 const SuperAdmin = lazy(() => import("./SuperAdmin"));
@@ -454,7 +462,9 @@ function ClientRoute({ children }) {
   );
 
   if (status === "checking") {
-    return <DashboardLoadingScreen />;
+    // Native cold-start stays on the branded splash through the /auth/me check;
+    // the web keeps its dashboard-skeleton loading screen.
+    return isNativeApp() ? <BrandSplash /> : <DashboardLoadingScreen />;
   }
 
   if (status === "maintenance") {

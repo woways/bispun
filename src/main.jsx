@@ -23,3 +23,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
+
+// Dismiss the native-only inline boot splash (index.html) once React has painted
+// its first frame, handing off to the app (BrandSplash / login / dashboard) with
+// no white flash. No-op on web, where the splash was never shown.
+(function dismissBootSplash() {
+  const el = document.getElementById('bispun-splash');
+  if (!el) return;
+  const hide = () => {
+    el.classList.add('bispun-splash-hide');
+    const done = () => el.remove();
+    el.addEventListener('transitionend', done, { once: true });
+    setTimeout(done, 400); // fallback if transitionend doesn't fire
+  };
+  requestAnimationFrame(() => requestAnimationFrame(hide));
+})();
