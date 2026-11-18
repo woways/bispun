@@ -420,9 +420,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px]">
-          <div className="flex items-center justify-center">
-            <div className="relative h-28 w-28 flex-shrink-0 native:h-20 native:w-20">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3">
+          <div className="flex items-center justify-center native:justify-start native:gap-3">
+            <div className="relative h-28 w-28 flex-shrink-0 native:h-[72px] native:w-[72px]">
               <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
                 <circle
                   cx="60"

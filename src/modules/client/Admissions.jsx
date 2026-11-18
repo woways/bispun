@@ -4974,17 +4974,17 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               setFilter(item.filter);
               window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
             }}
-            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 native:p-3 native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1"
+            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 native:flex native:flex-col native:p-2.5 native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1"
           >
-            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400 native:break-words native:text-[11px] native:tracking-normal">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400 native:text-[10px] native:leading-[1.15] native:tracking-normal native:text-slate-500">
               {item.label}
             </div>
 
-            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950 native:text-[20px]">
+            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950 native:mt-1.5 native:text-[19px]">
               {item.value}
             </div>
 
-            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500 native:mt-2 native:pt-2 native:text-[11px] native:leading-4">
+            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500 native:mt-auto native:border-t-0 native:pt-1.5 native:text-[10px] native:leading-[1.25]">
               {item.detail}
             </div>
           </button>
@@ -5009,8 +5009,8 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             Export
           </button>
         </div>
-        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto]">
-          <label className="relative min-w-0">
+        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto] native:relative native:flex native:flex-nowrap native:items-start native:gap-2 native:max-w-full native:overflow-x-auto">
+          <label className="relative min-w-0 native:w-[210px] native:shrink-0">
             <span className="sr-only">Search by student name</span>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -5021,36 +5021,36 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 native:w-[140px] native:shrink-0">
             <input type="date" aria-label="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} min="2000-01-01" max={endDate || new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">From date</span>
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 native:w-[140px] native:shrink-0">
             <input type="date" aria-label="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || "2000-01-01"} max={new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">To date</span>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Stream</span>
             <select aria-label="Stream" value={streamFilter} onChange={(event) => setStreamFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All streams</option>
               {filterOptions.streams.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">College</span>
             <select aria-label="College" value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All colleges</option>
               {filterOptions.colleges.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Branch</span>
             <select aria-label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All branches</option>
               {filterOptions.branches.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900">Clear</button>
+          <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900 native:shrink-0 native:self-center native:whitespace-nowrap">Clear</button>
         </div>
         {showSkeleton ? (
           <>
