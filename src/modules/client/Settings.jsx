@@ -55,6 +55,7 @@ import PermissionTree, {
   normalizeClientPageAccess,
 } from "../../components/client/PermissionTree";
 import AccessTab from "../../components/client/AccessTab";
+import { flagsFromComponents } from "../../components/client/accessModel";
 
 const QUICK_BRAND_COLOR_KEYS = [
   "indigo",
@@ -277,6 +278,28 @@ function A11yDialog({
         {typeof children === "function" ? children(headingId) : children}
       </div>
     </div>
+  );
+}
+
+function PermissionSwitch({ checked, disabled = false, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked ? "bg-indigo-600" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-6" : "translate-x-1"
+        }`}
+      />
+    </button>
   );
 }
 
@@ -916,6 +939,7 @@ export default function SettingsView({
   const [permissionTree, setPermissionTree] = useState(null);
   const [actorPageAccess, setActorPageAccess] = useState(null);
   const [levelAccessSaving, setLevelAccessSaving] = useState(false);
+  const [userPermissionOverrideChanged, setUserPermissionOverrideChanged] = useState(false);
 
   async function saveLevelAccess(levelId, permissions) {
     setLevelAccessSaving(true);
@@ -924,7 +948,10 @@ export default function SettingsView({
         method: "PATCH",
         body: JSON.stringify({ permissions }),
       });
-      if (data?.success) setOrganization((prev) => ({ ...prev, levels: data.levels }));
+      if (data?.success) {
+        setOrganization((prev) => ({ ...prev, levels: data.levels }));
+        await loadUsers();
+      }
     } catch (err) {
       setUsersError(err?.data?.message || "Unable to save level access");
     } finally {
@@ -1563,6 +1590,7 @@ export default function SettingsView({
     setUsersError("");
     setUserModalError("");
     setUserFormErrors({});
+    setUserPermissionOverrideChanged(false);
     setUserModalOpen(true);
     loadPermissionTree();
   }
@@ -1595,6 +1623,7 @@ export default function SettingsView({
     setUsersError("");
     setUserModalError("");
     setUserFormErrors({});
+    setUserPermissionOverrideChanged(false);
     setUserModalOpen(true);
     loadPermissionTree();
   }
@@ -1637,6 +1666,23 @@ export default function SettingsView({
     });
 
     setUserModalError("");
+  }
+
+  function setUserLevel(levelId) {
+    const level = organization.levels.find((item) => item.id === levelId);
+    const inheritedFlags = level
+      ? flagsFromComponents(level.permissions?.components || {})
+      : null;
+    setUserForm((current) => ({
+      ...current,
+      levelId,
+      permissions: inheritedFlags
+        ? { ...current.permissions, ...inheritedFlags }
+        : current.permissions,
+    }));
+    // Selecting a level means "follow this level" until an individual switch
+    // is deliberately changed afterwards.
+    setUserPermissionOverrideChanged(false);
   }
 
   function setUserDepartment(name) {
@@ -1700,11 +1746,13 @@ export default function SettingsView({
         managerId:
           userForm.role === "EMPLOYEE" ? (userForm.managerId || null) : null,
         active: userForm.active,
-        permissions:
-          userForm.permissions,
-        pageAccess:
-          userForm.pageAccess,
       };
+
+      if (userPermissionOverrideChanged || !editingUser) {
+        payload.permissions = userForm.permissions;
+        payload.pageAccess = userForm.pageAccess;
+        payload.permissionOverride = userPermissionOverrideChanged;
+      }
 
       if (!editingUser) {
         payload.password =
@@ -4876,12 +4924,12 @@ export default function SettingsView({
       {userModalOpen && (
         <A11yDialog
           onClose={closeUserModal}
-          backdropClassName="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
-          panelClassName="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl"
+          backdropClassName="fixed inset-0 z-[200] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-start sm:px-4 sm:pb-4 sm:pt-[92px]"
+          panelClassName="flex w-full max-w-2xl max-h-[calc(100dvh-92px)] flex-col overflow-hidden bg-white border border-slate-200 rounded-t-2xl sm:rounded-2xl shadow-2xl"
         >
           {(headingId) => (
             <>
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <div className="shrink-0 px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
               <div>
                 <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingUser
@@ -4904,7 +4952,7 @@ export default function SettingsView({
               </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-5">
               {userModalError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
                   {userModalError}
@@ -4971,7 +5019,7 @@ export default function SettingsView({
 
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Level</label>
-                  <select value={userForm.levelId || ""} onChange={(event) => updateUserField("levelId", event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
+                  <select value={userForm.levelId || ""} onChange={(event) => setUserLevel(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
                     <option value="">— Select level —</option>
                     {organization.levels.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} · Rank {item.rank}</option>)}
                   </select>
@@ -5170,20 +5218,15 @@ export default function SettingsView({
                           {label}
                         </span>
 
-                        <input
-                          type="checkbox"
-                          checked={
-                            userForm.permissions[
-                              key
-                            ]
-                          }
+                        <PermissionSwitch
+                          label={label}
+                          checked={userForm.permissions[key]}
                           disabled={
                             userForm.role ===
                             "CLIENT_ADMIN"
                           }
-                          onChange={(
-                            event
-                          ) =>
+                          onChange={(checked) => {
+                            setUserPermissionOverrideChanged(true);
                             setUserForm(
                               (
                                 current
@@ -5191,13 +5234,11 @@ export default function SettingsView({
                                 ...current,
                                 permissions: {
                                   ...current.permissions,
-                                  [key]:
-                                    event.target
-                                      .checked,
+                                  [key]: checked,
                                 },
                               })
-                            )
-                          }
+                            );
+                          }}
                         />
                       </label>
                     )
@@ -5216,15 +5257,16 @@ export default function SettingsView({
                   <PermissionTree
                     pageAccess={userForm.pageAccess}
                     onPageAccess={(next) =>
-                      setUserForm((current) => ({ ...current, pageAccess: next }))
+                      { setUserPermissionOverrideChanged(true); setUserForm((current) => ({ ...current, pageAccess: next })); }
                     }
                     permissions={userForm.permissions}
-                    onPermissions={(key, value) =>
+                    onPermissions={(key, value) => {
+                      setUserPermissionOverrideChanged(true);
                       setUserForm((current) => ({
                         ...current,
                         permissions: { ...current.permissions, [key]: value },
-                      }))
-                    }
+                      }));
+                    }}
                     tree={permissionTree}
                     actorPageAccess={actorPageAccess}
                     isAdminTarget={userForm.role === "CLIENT_ADMIN"}
