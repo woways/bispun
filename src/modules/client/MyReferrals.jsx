@@ -330,7 +330,7 @@ export default function MyReferrals({ currentUser }) {
 
       {/* SHARE + QR */}
       <div className={CARD}>
-        <h2 className="text-[17px] font-semibold text-slate-950">Share &amp; earn</h2>
+        <h2 className="text-[17px] font-semibold text-slate-950">Share your link</h2>
         <p className="mt-1 text-[13px] text-slate-500">Copy your code or link and share it anywhere.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_auto]">
           <div className="space-y-3">
