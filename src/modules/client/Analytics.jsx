@@ -37,6 +37,16 @@ import {
 import {
   apiRequest,
 } from "../../lib/api";
+import { Capacitor } from "@capacitor/core";
+
+// The horizontal chart scroll affordance exists ONLY in the native app (the
+// `native:overflow-x-auto` wrapper). Tailwind can scope CSS classes to `.native`
+// but NOT plain JSX attributes, so gate the scroll-group semantics
+// (tabIndex/role/aria-label) on the same native runtime — otherwise the WEB gets
+// a focusable group that announces horizontal scrolling it does not have.
+const IS_NATIVE = Capacitor?.isNativePlatform?.() === true;
+const nativeScrollGroup = (label) =>
+  IS_NATIVE ? { tabIndex: 0, role: "group", "aria-label": label } : {};
 
 const COLORS = [
   "#6366f1",
@@ -571,7 +581,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               </div>
 
               <div className="w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
                   <table className="w-full min-w-[600px]">
                     <thead className="bg-slate-50/80">
                       <tr>
@@ -708,6 +718,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   title={`Monthly Leads — ${primaryYear} vs ${comparisonYear}`}
                   subtitle="Month-by-month lead generation comparison."
                 >
+                  <div className="native:-mx-2 native:overflow-x-auto native:px-2" {...nativeScrollGroup(`Monthly Leads chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`)}>
+                  <div className="native:min-w-[460px]">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={comparison.monthly}>
                       <CartesianGrid
@@ -744,12 +756,16 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </ChartCard>
 
                 <ChartCard
                   title={`Monthly Admissions — ${primaryYear} vs ${comparisonYear}`}
                   subtitle="Month-by-month admissions comparison."
                 >
+                  <div className="native:-mx-2 native:overflow-x-auto native:px-2" {...nativeScrollGroup(`Monthly Admissions chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`)}>
+                  <div className="native:min-w-[460px]">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={comparison.monthly}>
                       <CartesianGrid
@@ -787,6 +803,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </ChartCard>
               </div>
 
@@ -794,6 +812,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                 title={`Monthly Received Revenue — ${primaryYear} vs ${comparisonYear}`}
                 subtitle="Compare actual received admission revenue month by month."
               >
+                <div className="native:-mx-2 native:overflow-x-auto native:px-2" {...nativeScrollGroup(`Monthly Received Revenue chart, ${primaryYear} vs ${comparisonYear}; scroll horizontally to view all months`)}>
+                <div className="native:min-w-[460px]">
                 <ResponsiveContainer width="100%" height={290}>
                   <BarChart data={comparison.monthly}>
                     <CartesianGrid
@@ -830,6 +850,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
+                </div>
               </ChartCard>
             </div>
           )}

@@ -32,6 +32,7 @@ import {
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import CallCenterModal from "../../components/lead/CallCenterModal";
+import A11yDialog from "../../components/A11yDialog";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -483,7 +484,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4 native:grid-cols-2 native:gap-2.5">
         <CounsellingMetric
           label="Sessions Today"
           value={summary.sessionsToday}
@@ -522,8 +523,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
         />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-2">
-        <div className="relative flex-1 min-w-0 max-w-lg">
+      <div className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-2 native:flex-row native:flex-nowrap native:items-center native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+        <div className="relative flex-1 min-w-0 max-w-lg native:w-[220px] native:flex-none native:shrink-0">
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -531,12 +532,13 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            aria-label="Search sessions"
             placeholder="Search student, course, counsellor or mode..."
             className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           />
         </div>
 
-        <div className="sm:ml-auto inline-flex items-center gap-2">
+        <div className="sm:ml-auto inline-flex items-center gap-2 native:shrink-0">
           <SlidersHorizontal size={13} className="text-slate-400" />
           <select
             value={statusFilter}
@@ -604,7 +606,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 mt-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 mt-5 native:grid-cols-2">
                       <Info label="When" value={formatDateTime(session.scheduledAt)} />
                       <Info label="Counsellor" value={session.counsellor} />
                       <Info label="Mode" value={prettyMode(session.mode)} />
@@ -707,11 +709,16 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
       />
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+        <A11yDialog
+          onClose={() => setModalOpen(false)}
+          backdropClassName="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4"
+          panelClassName="w-full max-w-3xl max-h-[92vh] bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editing ? "Edit Counselling Session" : "Schedule Counselling Session"}
                 </div>
                 <div className="text-[13px] text-slate-500 mt-1">
@@ -1015,8 +1022,9 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       ) : null}
     </div>
   );

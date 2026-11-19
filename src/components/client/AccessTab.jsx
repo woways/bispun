@@ -218,7 +218,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
               />
             </div>
           </div>
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>

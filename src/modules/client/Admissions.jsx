@@ -2,10 +2,13 @@
 
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+
+import { useModalA11y } from "../../lib/useModalA11y";
 
 import {
   Plus,
@@ -497,14 +500,22 @@ function ModalShell({
   children,
   max = "max-w-md",
 }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4">
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
         className={`flex max-h-[92vh] w-full ${max} flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl`}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
-            <div className="text-[17px] font-bold text-slate-950">
+            <div id={headingId} className="text-[17px] font-bold text-slate-950">
               {title}
             </div>
 
@@ -517,6 +528,7 @@ function ModalShell({
 
           <button
             type="button"
+            aria-label="Close"
             onClick={onClose}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
           >
@@ -1134,6 +1146,8 @@ function BranchModal({
 }
 
 function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
   const [attachments, setAttachments] = useState([]);
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1337,18 +1351,26 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
   // modal is trapped in that box and sits half-behind the expanded sidebar.
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl"
+      >
         <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2">
               <Paperclip size={16} className="text-indigo-600" />
-              <h2 className="text-[17px] font-bold text-slate-950">College Attachments</h2>
+              <h2 id={headingId} className="text-[17px] font-bold text-slate-950">College Attachments</h2>
             </div>
             <p className="mt-1 text-[13px] text-slate-500">
               {partner.name} · organise brochures, fee structures, approvals and other files into folders.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
+          <button type="button" aria-label="Close" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100">
             <X size={17} />
           </button>
         </div>
@@ -1359,6 +1381,7 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
+              aria-label="Search files and folders"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search files and folders…"
@@ -3554,7 +3577,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Total Admissions"
             value={filteredAllSummary.totalAdmissions}
@@ -3589,6 +3612,7 @@ function AdmissionsManager({
               />
 
               <input
+                aria-label="Search students"
                 value={allSearch}
                 onChange={(event) =>
                   setAllSearch(event.target.value)
@@ -3598,7 +3622,7 @@ function AdmissionsManager({
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 native:flex-nowrap native:overflow-x-auto native:pb-1">
               {[
                 ["all", "All"],
                 ["today", "Today"],
@@ -3610,8 +3634,9 @@ function AdmissionsManager({
                 <button
                   key={key}
                   type="button"
+                  aria-pressed={dateFilter === key}
                   onClick={() => setDateFilter(key)}
-                  className={`h-9 rounded-xl px-3 text-[13px] font-bold ${
+                  className={`h-9 rounded-xl px-3 text-[13px] font-bold native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${
                     dateFilter === key
                       ? "bg-slate-950 text-white"
                       : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -4066,7 +4091,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Colleges"
             value={selectedStream.totalColleges || 0}
@@ -4247,7 +4272,7 @@ function AdmissionsManager({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2">
           <Stat
             label="Branches"
             value={selectedPartner.totalBranches || branches.length}
@@ -4471,6 +4496,7 @@ function AdmissionsManager({
           />
 
           <input
+            aria-label="Search admissions"
             value={search}
             onChange={(event) =>
               setSearch(event.target.value)
@@ -4797,6 +4823,11 @@ function AdmissionsOverall({ selectedYear = "all" }) {
 
   const rows = filter === "DOMESTIC" ? data.domestic : filter === "INTERNATIONAL" ? data.international : data.all;
 
+  // Show the loading skeleton only on the initial fetch (loading and no data yet).
+  // Subsequent refetches keep the existing inline spinner, and the empty/error
+  // states below stay distinct from this.
+  const showSkeleton = loading && data.all.length === 0 && !error;
+
   const filterValue = {
     stream: (admission) => admission.partner?.stream?.id || admission.partner?.stream?.name || "",
     college: (admission) => admission.partner?.id || admission.college || admission.partner?.name || "",
@@ -4886,15 +4917,29 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">Overall Admissions</h1>
           <p className="mt-1 text-[15px] text-slate-500">View all admissions across Domestic and International.</p>
         </div>
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm native:max-w-full native:overflow-x-auto">
           {[['ALL','All'],['DOMESTIC','Domestic'],['INTERNATIONAL','International']].map(([value,label]) => (
-            <button key={value} type="button" onClick={() => setFilter(value)} className={`h-9 rounded-lg px-4 text-[13px] font-semibold transition ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label}</button>
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`h-9 rounded-lg px-4 text-[13px] font-semibold transition native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label}</button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {[
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+        {showSkeleton ? (
+          [0, 1, 2].map((index) => (
+            <div
+              key={index}
+              aria-hidden="true"
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] native:p-3"
+            >
+              <div className="h-3 w-28 animate-pulse rounded bg-slate-200" />
+              <div className="mt-2 h-6 w-12 animate-pulse rounded bg-slate-200" />
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <div className="h-3 w-32 animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
+          ))
+        ) : [
           {
             label: "Overall Admissions",
             value: data.all.length,
@@ -4921,17 +4966,17 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               setFilter(item.filter);
               window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
             }}
-            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30"
+            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 native:flex native:flex-col native:p-2.5 native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1"
           >
-            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400 native:text-[10px] native:leading-[1.15] native:tracking-normal native:text-slate-500">
               {item.label}
             </div>
 
-            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950">
+            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950 native:mt-1.5 native:text-[19px]">
               {item.value}
             </div>
 
-            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500">
+            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500 native:mt-auto native:border-t-0 native:pt-1.5 native:text-[10px] native:leading-[1.25]">
               {item.detail}
             </div>
           </button>
@@ -4956,8 +5001,8 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             Export
           </button>
         </div>
-        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto]">
-          <label className="relative min-w-0">
+        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto] native:relative native:flex native:flex-nowrap native:items-start native:gap-2 native:max-w-full native:overflow-x-auto">
+          <label className="relative min-w-0 native:w-[210px] native:shrink-0">
             <span className="sr-only">Search by student name</span>
             <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -4968,38 +5013,55 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 native:w-[140px] native:shrink-0">
             <input type="date" aria-label="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} min="2000-01-01" max={endDate || new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">From date</span>
           </label>
-          <label className="min-w-0">
+          <label className="min-w-0 native:w-[140px] native:shrink-0">
             <input type="date" aria-label="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || "2000-01-01"} max={new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
             <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">To date</span>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Stream</span>
             <select aria-label="Stream" value={streamFilter} onChange={(event) => setStreamFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All streams</option>
               {filterOptions.streams.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">College</span>
             <select aria-label="College" value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All colleges</option>
               {filterOptions.colleges.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <label>
+          <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Branch</span>
             <select aria-label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All branches</option>
               {filterOptions.branches.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900">Clear</button>
+          <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900 native:shrink-0 native:self-center native:whitespace-nowrap">Clear</button>
         </div>
-        {loading ? (
+        {showSkeleton ? (
+          <>
+            <span role="status" className="sr-only">Loading admissions…</span>
+            <div aria-hidden="true" className="divide-y divide-slate-100">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="flex items-center gap-4 px-5 py-4">
+                  <div className="h-6 w-16 animate-pulse rounded-lg bg-slate-100" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3.5 w-40 max-w-full animate-pulse rounded bg-slate-200" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                  </div>
+                  <div className="hidden h-6 w-20 animate-pulse rounded-full bg-slate-100 sm:block" />
+                  <div className="hidden h-3.5 w-24 animate-pulse rounded bg-slate-100 md:block" />
+                </div>
+              ))}
+            </div>
+          </>
+        ) : loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500"><Loader2 size={16} className="animate-spin" />Loading admissions...</div>
         ) : filteredRows.length === 0 ? (
           <div className="py-16 text-center text-sm text-slate-500">No admissions found.</div>

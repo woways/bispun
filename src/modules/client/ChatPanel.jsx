@@ -564,6 +564,9 @@ export default function ChatPanel({
   // Tailwind h-[calc(100vh-104px)] class untouched).
   const rootRef = useRef(null);
   const prevMsgCountRef = useRef(0);
+  // True right after a conversation is opened, so the first message render jumps
+  // straight to the newest message instead of landing on the oldest.
+  const justOpenedRef = useRef(false);
   const [isMobileChat, setIsMobileChat] = useState(false);
   const [mobileChatHeight, setMobileChatHeight] = useState(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -817,6 +820,15 @@ export default function ChatPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
 
+  // A newly opened conversation must land on the latest message. Flag it and
+  // reset the per-conversation message counter so the auto-scroll effect below
+  // force-jumps to the bottom on the first render (independent of socket state).
+  useEffect(() => {
+    justOpenedRef.current = true;
+    prevMsgCountRef.current = 0;
+    setShowJumpToLatest(false);
+  }, [activeId]);
+
   // Auto-scroll to the newest message ONLY when the user is already at/near the
   // bottom or the latest message is their own send. When they are reading older
   // messages, leave the scroll position alone and surface a "jump to latest"
@@ -824,6 +836,19 @@ export default function ChatPanel({
   useEffect(() => {
     const el = threadScrollRef.current;
     const last = messages[messages.length - 1];
+    // On conversation open, jump straight to the newest message (instant, not
+    // smooth) and skip the near-bottom gate — otherwise a thread taller than the
+    // viewport renders scrolled to the OLDEST message with only a pill to reach
+    // the latest.
+    if (justOpenedRef.current && last) {
+      justOpenedRef.current = false;
+      prevMsgCountRef.current = messages.length;
+      window.requestAnimationFrame(() => {
+        threadEndRef.current?.scrollIntoView({ behavior: "auto" });
+      });
+      setShowJumpToLatest(false);
+      return;
+    }
     const grew =
       prevMsgCountRef.current !== 0 && messages.length > prevMsgCountRef.current;
     prevMsgCountRef.current = messages.length;
@@ -836,7 +861,13 @@ export default function ChatPanel({
       ? el.scrollHeight - el.scrollTop - el.clientHeight < 140
       : true;
     if (mineLast || nearBottom) {
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      threadEndRef.current?.scrollIntoView({
+        behavior:
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+      });
       setShowJumpToLatest(false);
     } else {
       setShowJumpToLatest(true);
@@ -2082,7 +2113,14 @@ export default function ChatPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                    threadEndRef.current?.scrollIntoView({
+                      behavior:
+                        window.matchMedia &&
+                        window.matchMedia("(prefers-reduced-motion: reduce)")
+                          .matches
+                          ? "auto"
+                          : "smooth",
+                    });
                     setShowJumpToLatest(false);
                   }}
                   className="absolute bottom-24 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-indigo-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-indigo-700 shadow-[0_6px_20px_rgba(79,70,229,0.18)] hover:bg-indigo-50"

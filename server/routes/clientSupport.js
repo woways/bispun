@@ -485,6 +485,7 @@ router.post("/", async (req, res) => {
     await createSupportTicketCreatedNotification({
       companyId,
       userId,
+      ticketId: ticket.id,
       ticketNumber: ticket.ticketNumber,
       title: ticket.title,
     });

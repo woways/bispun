@@ -384,7 +384,7 @@ export const Table = ({
   empty,
 }) => (
   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
       <table className="w-full text-sm">
         <thead className="bg-slate-50/80 border-b border-slate-200">
           <tr>

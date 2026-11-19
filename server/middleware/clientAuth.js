@@ -12,6 +12,7 @@ import {
   financeSectionAllowed,
   insightsSectionAllowed,
 } from "../lib/pageAccess.js";
+import { isTransientDbError, withDbRetry } from "../lib/dbRetry.js";
 
 const COOKIE_NAME =
   "cb_client_token";
@@ -86,7 +87,7 @@ export async function requireClientUser(
       systemSettings,
       clientSession,
     ] =
-      await Promise.all([
+      await withDbRetry(() => Promise.all([
         prisma.user.findUnique({
           where: {
             id:
@@ -155,7 +156,7 @@ export async function requireClientUser(
               true,
           },
         }),
-      ]);
+      ]));
 
     if (
       systemSettings
@@ -341,6 +342,20 @@ export async function requireClientUser(
       error?.name ||
         "auth_error"
     );
+
+    // A transient DB failure (e.g. Neon cold-start) is NOT an auth failure.
+    // Return 503 so the client retries instead of treating it as a rejected
+    // session and logging the user out. Genuine auth errors (bad/expired JWT,
+    // revoked session) are explicit responses above and still 401 below.
+    if (isTransientDbError(error)) {
+      return res
+        .status(503)
+        .json({
+          success: false,
+          message:
+            "Service temporarily unavailable. Please try again.",
+        });
+    }
 
     return res
       .status(401)

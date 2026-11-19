@@ -159,9 +159,27 @@ export function MobileRecordCard({
   badges = [],
   fields = [],
   actions,
+  index,
 }) {
+  // Optional subtle staggered entrance (animation polish step 5). When `index`
+  // is passed, the card fades/rises in with a capped per-item delay
+  // (min(index,5) * 30ms → max 150ms, so late/off-screen rows are never left
+  // waiting). Opacity-only + `cb-fade-in-up` is neutralised under
+  // prefers-reduced-motion and keeps an opacity:1 baseline if the animation
+  // never runs, so content is never stranded invisible (accessibility-lead #7-9).
+  // The delay is presentation-only: the listitem is in the a11y tree and fully
+  // operable from frame 0 regardless of visual opacity.
+  const animate = Number.isInteger(index);
   return (
-    <div role="listitem" className="px-4 py-4">
+    <div
+      role="listitem"
+      className={`px-4 py-4${animate ? " cb-fade-in-up" : ""}`}
+      style={
+        animate
+          ? { animationDelay: `${Math.min(index, 5) * 30}ms` }
+          : undefined
+      }
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {eyebrow && (
@@ -311,7 +329,7 @@ export function MobileFilterSheet({ activeCount = 0, title = "Filters", children
  */
 export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreOpen }) {
   const cell =
-    "relative flex-1 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 transition-[color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
+    "relative flex-1 min-w-0 min-h-[56px] flex flex-col items-center justify-center gap-0.5 px-1 transition-[color,transform] duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400";
   return (
     <nav
       aria-label="Primary"
@@ -337,7 +355,7 @@ export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreO
                 />
               )}
               <Icon size={20} strokeWidth={active ? 2.4 : 2} aria-hidden="true" />
-              <span className={`text-[11px] leading-tight ${active ? "font-bold" : "font-medium"}`}>
+              <span className={`max-w-full truncate text-[11px] leading-tight ${active ? "font-bold" : "font-medium"}`}>
                 {item.label}
               </span>
             </button>
@@ -351,7 +369,7 @@ export function MobileBottomNav({ items = [], activeKey, onSelect, onMore, moreO
           className={`${cell} text-slate-600`}
         >
           <LayoutGrid size={20} strokeWidth={2} aria-hidden="true" />
-          <span className="text-[11px] leading-tight font-medium">More</span>
+          <span className="max-w-full truncate text-[11px] leading-tight font-medium">More</span>
         </button>
       </div>
     </nav>
