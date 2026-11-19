@@ -272,13 +272,13 @@ export default function MyStore() {
       )}
 
       {/* occasion selector */}
-      <div className="flex flex-wrap gap-2 native:flex-nowrap native:max-w-full native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+      <div className="flex flex-wrap gap-2">
         {occasions.map((o) => (
           <button
             key={o.id}
             type="button"
             onClick={() => pickOccasion(o.id)}
-            className={`rounded-full border px-3.5 py-1.5 text-[12px] font-bold transition native:shrink-0 native:whitespace-nowrap ${
+            className={`rounded-full border px-3.5 py-1.5 text-[12px] font-bold transition ${
               selected === o.id
                 ? "border-brand-600 bg-brand-600 text-white"
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
@@ -354,7 +354,7 @@ export default function MyStore() {
         <div className="mb-3 flex items-center justify-between">
           <div className="text-[16px] font-black text-slate-900">Ready designs</div>
         </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2 native:gap-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {(tpl?.designs || []).map((d, i) => (
             <div
               key={i}
@@ -400,7 +400,7 @@ export default function MyStore() {
               {generated.length} saved
             </span>
           </div>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 native:grid-cols-2 native:gap-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {generated.map((a) => (
               <div
                 key={a.id}
