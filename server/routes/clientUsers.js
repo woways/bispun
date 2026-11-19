@@ -10,7 +10,7 @@ import {
   fullPageAccess,
   clampPageAccessToActor,
 } from "../lib/pageAccess.js";
-import { normalizeLevelPermissions, flagsFromComponents, fullLevelPermissions } from "../lib/levelAccess.js";
+import { normalizeLevelPermissions, flagsFromComponents, fullLevelPermissions, pageAccessFromLevelPermissions } from "../lib/levelAccess.js";
 
 const router = Router();
 
@@ -307,6 +307,10 @@ function formatUser(user) {
     customRoleName: user.customRoleName,
     managerId: user.managerId ?? null,
     managerName: user.manager?.name ?? null,
+    hasPermissionOverride:
+      user.pageAccess &&
+      typeof user.pageAccess === "object" &&
+      user.pageAccess.__override === true,
     permissions: {
       canManageUsers:
         user.role === "CLIENT_ADMIN" ||
@@ -668,7 +672,13 @@ router.patch("/levels/:id/access", async (req, res) => {
       .filter((u) => !(u.pageAccess && typeof u.pageAccess === "object" && u.pageAccess.__override === true))
       .map((u) => u.id);
     if (inheritIds.length) {
-      await prisma.user.updateMany({ where: { id: { in: inheritIds } }, data: levelFlags });
+      await prisma.user.updateMany({
+        where: { id: { in: inheritIds } },
+        data: {
+          ...levelFlags,
+          pageAccess: pageAccessFromLevelPermissions(target.permissions),
+        },
+      });
     }
 
     await writeAuditLog({
@@ -1319,6 +1329,7 @@ router.patch("/:id", async (req, res) => {
       data.jobTitle = designation?.name || (req.body.jobTitle ? String(req.body.jobTitle).trim() : null);
     }
 
+    let assignedLevel = null;
     if (req.body.levelId !== undefined) {
       const levelId = String(req.body.levelId || "").trim();
       const level = levelId
@@ -1327,6 +1338,11 @@ router.patch("/:id", async (req, res) => {
       if (levelId && !level) return res.status(400).json({ success: false, message: "Select a valid active level" });
       data.levelId = level?.id || null;
       data.levelName = level?.name || null;
+      assignedLevel = level;
+      if (level && req.body.permissionOverride !== true && role !== "CLIENT_ADMIN") {
+        Object.assign(data, flagsFromComponents(level.permissions?.components || {}));
+        data.pageAccess = pageAccessFromLevelPermissions(level.permissions);
+      }
     }
 
     if (req.body.department !== undefined) {
@@ -1381,12 +1397,23 @@ router.patch("/:id", async (req, res) => {
           req.body.pageAccess !== undefined
             ? req.body.pageAccess
             : target.pageAccess;
-        data.pageAccess = clampPageAccessToActor(
+        const clampedPageAccess = clampPageAccessToActor(
           requested,
           actorAccessSpec(actor),
           actor.role
         );
+        data.pageAccess = {
+          ...clampedPageAccess,
+          __override: req.body.permissionOverride === true,
+        };
       }
+    }
+
+    // Level inheritance is the final baseline. A deliberate per-user edit is
+    // the only thing allowed to replace it.
+    if (assignedLevel && req.body.permissionOverride !== true && role !== "CLIENT_ADMIN") {
+      Object.assign(data, flagsFromComponents(assignedLevel.permissions?.components || {}));
+      data.pageAccess = pageAccessFromLevelPermissions(assignedLevel.permissions);
     }
 
     const updated =
