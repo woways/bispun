@@ -153,40 +153,40 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
       </span>
 
       {/* SUMMARY TILES */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500">Total earned</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600" aria-hidden="true">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total earned</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
               <Award size={18} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700">{money(earned)}</div>
-          <div className="mt-1 text-[12px] text-slate-500">
+          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700 native:text-[20px]">{money(earned)}</div>
+          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">
             From {successful} successful referral{successful === 1 ? "" : "s"}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500">Awaiting credit</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600" aria-hidden="true">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Awaiting credit</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
               <Clock3 size={18} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900">{money(pendingCredit)}</div>
-          <div className="mt-1 text-[12px] text-slate-500">Expected in {expect.min}–{expect.max} days</div>
+          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(pendingCredit)}</div>
+          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Expected in {expect.min}–{expect.max} days</div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500">Credited to you</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600" aria-hidden="true">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Credited to you</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
               <CheckCircle2 size={18} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900">{money(credited)}</div>
-          <div className="mt-1 text-[12px] text-slate-500">
+          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(credited)}</div>
+          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">
             {creditedHistory.length} payment{creditedHistory.length === 1 ? "" : "s"} received
           </div>
         </div>
