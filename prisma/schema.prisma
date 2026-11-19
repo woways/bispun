@@ -1018,9 +1018,10 @@ model CounsellingSession {
 
   leadId String?
 
-  studentName  String
-  studentPhone String?
-  studentEmail String?
+  studentName     String
+  studentPhone    String?
+  studentAltPhone String?
+  studentEmail    String?
 
   course         String?
   counsellorName String?
