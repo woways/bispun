@@ -3219,8 +3219,6 @@ export default function SettingsView({
                   ["levels", "Levels", organization.levels.length],
                   ["access", "Access", organization.levels.length],
                   ["roles", "Roles", organization.roles.length],
-                  ["permissions", "Permissions", users.length],
-                  ["history", "History", ""],
                 ].map(([key, label, count]) => {
                   const active = usersManagementTab === key;
 
@@ -3644,36 +3642,6 @@ export default function SettingsView({
                 />
               )}
 
-              {usersManagementTab === "permissions" && (
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[14px] font-bold text-slate-900">Permission Management</div>
-                    <div className="mt-0.5 text-[12px] text-slate-500">Admin has protected full access. Edit a manager or employee to configure page, component, action and admissions scope permissions.</div>
-                  </div>
-                  <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <div className="divide-y divide-slate-100">
-                      {filteredUsers.map((user) => (
-                        <div key={user.id} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-[13px] font-semibold text-slate-900">{user.name}</div>
-                            <div className="mt-1 text-[12px] text-slate-500">{user.customRoleName || user.role.replaceAll("_", " ")} · {user.department || "No department"} · {Object.values(user.permissions || {}).filter(Boolean).length} enabled capabilities</div>
-                          </div>
-                          <button type="button" onClick={() => openEditUser(user)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-[12px] font-semibold text-indigo-700 hover:bg-indigo-100"><ShieldCheck size={14}/> Manage permissions</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {usersManagementTab === "history" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
-                  <History size={24} className="mx-auto text-indigo-500" />
-                  <div className="mt-3 text-[14px] font-bold text-slate-900">Permission history is recorded</div>
-                  <div className="mx-auto mt-1 max-w-xl text-[12px] leading-5 text-slate-500">Every user permission update records the actor, target user, previous access, new access and timestamp in the Activity Log.</div>
-                  <button type="button" onClick={() => setTab("activity")} className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-[12px] font-semibold text-white hover:bg-indigo-700"><History size={14}/> Open Activity Log</button>
-                </div>
-              )}
             </div>
           )}
 
