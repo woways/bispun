@@ -1601,7 +1601,7 @@ function LeakageRadarView({ radar }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4 native:grid-cols-2">
           {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
             <button
               key={key}

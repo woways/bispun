@@ -1562,7 +1562,7 @@ export default function SettingsView({
                 </div>
               ) : (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
@@ -1745,7 +1745,7 @@ export default function SettingsView({
                 </div>
               ) : (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
@@ -1967,7 +1967,7 @@ export default function SettingsView({
                 </div>
               ) : (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
                     <table className="w-full text-sm">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>

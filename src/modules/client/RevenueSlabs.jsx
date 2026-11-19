@@ -315,7 +315,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
           Admissions multiplied by the applicable slab rate.
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
@@ -474,7 +474,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto">
+      <div className="mt-4 overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">

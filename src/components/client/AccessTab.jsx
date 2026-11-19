@@ -200,7 +200,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{selectedPage.comps.length} components</span>
           </div>
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
             <table className="min-w-full text-left">
               <thead className="bg-slate-50">
                 <tr>

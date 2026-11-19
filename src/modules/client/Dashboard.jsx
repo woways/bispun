@@ -1534,7 +1534,7 @@ export default function Dashboard({
                   </div>
                 </div>
               
-                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-5">
+                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-5 native:grid-cols-2">
                   {actionCenterItems.map((item) => {
                     const Icon = actionIconByKey[item.key] || Activity;
                     const tone = actionToneByName[item.tone] || actionToneByName.slate;
@@ -2725,7 +2725,7 @@ export default function Dashboard({
                     Loading calendar...
                   </div>
                 ) : (
-                  <div className="overflow-x-auto -mx-1 pb-1">
+                  <div className="overflow-x-auto -mx-1 pb-1 native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
                     <div className="min-w-[700px] grid grid-cols-7 border-t border-l border-slate-200 rounded-xl overflow-hidden">
                       {[
                         "Sun",

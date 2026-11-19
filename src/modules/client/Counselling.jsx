@@ -606,7 +606,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 mt-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 mt-5 native:grid-cols-2">
                       <Info label="When" value={formatDateTime(session.scheduledAt)} />
                       <Info label="Counsellor" value={session.counsellor} />
                       <Info label="Mode" value={prettyMode(session.mode)} />

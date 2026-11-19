@@ -4494,8 +4494,8 @@ export default function SettingsView({
                 </button>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="relative flex-1">
+              <div className="flex flex-col md:flex-row gap-3 native:flex-row native:flex-nowrap native:items-center native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+                <div className="relative flex-1 native:w-[200px] native:flex-none native:shrink-0">
                   <Search
                     size={14}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -4538,7 +4538,7 @@ export default function SettingsView({
                       event.target.value
                     )
                   }
-                  className="h-9 px-3 border border-slate-200 rounded-lg text-[13px] bg-white text-slate-700"
+                  className="h-9 px-3 border border-slate-200 rounded-lg text-[13px] bg-white text-slate-700 native:w-[150px] native:shrink-0"
                 >
                   <option value="">
                     All Activity
@@ -4556,7 +4556,7 @@ export default function SettingsView({
                   onClick={
                     loadAuditLogs
                   }
-                  className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors"
+                  className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors native:shrink-0 native:whitespace-nowrap"
                 >
                   Search
                 </button>
