@@ -70,3 +70,17 @@ test("rejects a token signed with the wrong secret with 401", async () => {
   assert.equal(res.statusCode, 401);
   assert.equal(nextCalled, false);
 });
+
+// Regression: a valid SUPER_ADMIN token passes JWT + role checks and reaches the
+// DB lookup. With no reachable database (dummy DATABASE_URL), the lookup throws a
+// transient connectivity error. This MUST surface as 503 (retryable) — NOT 401 —
+// so a Neon cold-start never logs a legitimately-authenticated user out.
+test("maps a transient DB failure to 503 (not 401) for a valid super-admin token", async () => {
+  const token = jwt.sign({ sub: "admin-1", role: "SUPER_ADMIN" }, process.env.JWT_SECRET, {
+    algorithm: "HS256",
+  });
+  const { res, nextCalled } = await run({ headers: { authorization: `Bearer ${token}` }, cookies: {} });
+  assert.equal(res.statusCode, 503, "transient DB error must be 503, not a spurious 401 logout");
+  assert.equal(nextCalled, false);
+  assert.equal(res.body.success, false);
+});
