@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 
 import prisma from "../lib/prisma.js";
 import { getBearerToken } from "../lib/authToken.js";
+import { isTransientDbError, withDbRetry } from "../lib/dbRetry.js";
 
 const COOKIE_NAME =
   "cb_admin_token";
@@ -70,18 +71,20 @@ export async function requireSuperAdmin(
     }
 
     const admin =
-      await prisma.user.findUnique({
-        where: {
-          id:
-            payload.sub,
-        },
+      await withDbRetry(() =>
+        prisma.user.findUnique({
+          where: {
+            id:
+              payload.sub,
+          },
 
-        select: {
-          id: true,
-          role: true,
-          active: true,
-        },
-      });
+          select: {
+            id: true,
+            role: true,
+            active: true,
+          },
+        })
+      );
 
     if (
       !admin ||
@@ -106,7 +109,20 @@ export async function requireSuperAdmin(
     };
 
     return next();
-  } catch {
+  } catch (error) {
+    // A transient DB failure (e.g. Neon cold-start) is NOT an auth failure —
+    // return 503 so the client retries rather than being logged out. JWT/
+    // validation failures are not transient, so they still return 401 below.
+    if (isTransientDbError(error)) {
+      return res
+        .status(503)
+        .json({
+          success: false,
+          message:
+            "Service temporarily unavailable. Please try again.",
+        });
+    }
+
     return res
       .status(401)
       .json({

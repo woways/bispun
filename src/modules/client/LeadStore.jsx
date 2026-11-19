@@ -1,10 +1,13 @@
 import {
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+
+import { createPortal } from "react-dom";
 
 import {
   Plus,
@@ -55,7 +58,8 @@ import { formatUiDate } from "../../lib/uiPreferences";
 import NurtureCenter from "../../components/lead/NurtureCenter";
 import CallCenterModal from "../../components/lead/CallCenterModal";
 import LeadDetailsView from "../../components/lead/LeadDetailsView";
-import { openWhatsApp, openSMS } from "../../lib/nativeActions";
+import { openWhatsApp, openSMS, telHref } from "../../lib/nativeActions";
+import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
 const TYPES = [
   {
@@ -499,7 +503,7 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
             Copy number
           </button>
           <a
-            href={`tel:${phone}`}
+            href={telHref(phone)}
             onClick={() => setMenu(null)}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >
@@ -1070,7 +1074,10 @@ function IndividualLeadModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay escapes the dashboard content
+  // wrapper's containing block (transform/scale ancestor) — otherwise the modal
+  // is trapped in that box and sits half-behind the expanded sidebar at ~1024px.
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[92vh] overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -1815,7 +1822,8 @@ function IndividualLeadModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2050,7 +2058,9 @@ function UploadDatasetModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay isn't trapped by the content
+  // wrapper's transform containing block (sits behind the sidebar at ~1024px).
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -2511,7 +2521,8 @@ function UploadDatasetModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2601,7 +2612,9 @@ function EditDatasetModal({
     }
   }
 
-  return (
+  // P2: portal to <body> so the fixed overlay isn't trapped by the content
+  // wrapper's transform containing block (sits behind the sidebar at ~1024px).
+  return createPortal(
     <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl overflow-hidden">
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
@@ -2807,7 +2820,8 @@ function EditDatasetModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2968,6 +2982,39 @@ export default function LeadStore({
     useState(false);
 
   const [viewOpen, setViewOpen] = useState(false);
+  const viewBtnRef = useRef(null);
+  const viewPanelRef = useRef(null);
+
+  // Close the View (columns) panel and return focus to its trigger. Routed
+  // through the shared overlay back-stack (below) so the Android hardware back
+  // button and Escape both close THIS popover first — in correct LIFO order
+  // with any other open overlay — instead of navigating the app away. Important
+  // in the native app, where the panel is a bottom-sheet and its trigger can
+  // scroll out of the horizontal toolbar.
+  const closeViewPanel = useCallback(() => {
+    setViewOpen(false);
+    viewBtnRef.current?.focus();
+  }, []);
+
+  // Hardware back + Escape -> close this popover first (centralized back-stack,
+  // same path drawers/sheets/modals use). manageFocus:false keeps it a
+  // lightweight disclosure (no focus-trap, no focus-move-in); closeViewPanel
+  // handles focus-return itself. Equivalent on web (Escape still closes).
+  useOverlayDismiss(viewOpen, closeViewPanel, { manageFocus: false });
+
+  // Outside-tap dismissal (the back-stack does not cover pointer-outside).
+  useEffect(() => {
+    if (!viewOpen) return undefined;
+    const onOutside = (event) => {
+      const t = event.target;
+      if (viewBtnRef.current?.contains(t)) return;
+      if (viewPanelRef.current?.contains(t)) return;
+      closeViewPanel();
+    };
+    document.addEventListener("pointerdown", onOutside);
+    return () => document.removeEventListener("pointerdown", onOutside);
+  }, [viewOpen, closeViewPanel]);
+
   const [leadStoreMetricFilter, setLeadStoreMetricFilter] = useState(null);
   const [metricPanel, setMetricPanel] = useState(null);
 
@@ -5034,8 +5081,8 @@ export default function LeadStore({
 
       <div className="space-y-3">
         <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center">
-            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0">
+          <div className="flex w-full flex-col gap-2 lg:flex-row lg:items-center native:flex-row native:flex-nowrap native:items-center native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+            <label className="relative flex h-9 w-full items-center rounded-lg border border-slate-200 bg-white focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100 lg:w-[270px] lg:flex-shrink-0 native:h-10 native:w-[210px] native:shrink-0">
               <span className="flex-shrink-0 border-r border-slate-100 pl-3 pr-2 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-400">
                 Lead type
               </span>
@@ -5064,7 +5111,7 @@ export default function LeadStore({
               />
             </label>
 
-            <div className="relative min-w-0 flex-1">
+            <div className="relative min-w-0 flex-1 native:w-[220px] native:flex-none native:shrink-0">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -5075,19 +5122,20 @@ export default function LeadStore({
                 onChange={(event) =>
                   setSearch(event.target.value)
                 }
+                aria-label="Search leads"
                 placeholder="Search lead ID, name, phone, email or course..."
-                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 native:h-10"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+            <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap native:flex-nowrap native:shrink-0">
               <button
                 type="button"
                 onClick={() => {
                   setViewOpen(false);
                   setFiltersOpen((current) => !current);
                 }}
-                className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors ${
+                className={`relative h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 transition-colors native:h-10 ${
                   filtersOpen ||
                   activeFilterCount > 0
                     ? "border-indigo-200 bg-indigo-50 text-indigo-700"
@@ -5106,19 +5154,23 @@ export default function LeadStore({
 
               <div className="relative">
                 <button
+                  ref={viewBtnRef}
                   type="button"
+                  aria-expanded={viewOpen}
+                  aria-haspopup="true"
+                  aria-controls="leadstore-columns-panel"
                   onClick={() => {
                     setFiltersOpen(false);
                     setViewOpen((current) => !current);
                   }}
-                  className={`h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 shadow-sm ${viewOpen ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
+                  className={`h-9 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center justify-center gap-2 shadow-sm native:h-10 ${viewOpen ? "border-indigo-200 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}
                 >
                   <Layers3 size={14} />
                   View
                 </button>
 
                 {viewOpen && (
-                  <div className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+                  <div ref={viewPanelRef} id="leadstore-columns-panel" className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl native:fixed native:inset-x-4 native:top-auto native:bottom-24 native:w-auto native:max-h-[55vh] native:overflow-y-auto">
                     <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
                     <div className="mt-2 space-y-1">
                       {INDIVIDUAL_COLUMN_OPTIONS.map((column) => (
@@ -5760,7 +5812,7 @@ export default function LeadStore({
                             <div className="flex items-center justify-end gap-1">
                               {lead.phone ? (
                                 <a
-                                  href={`tel:${lead.phone}`}
+                                  href={telHref(lead.phone)}
                                   title={`Call ${lead.name}`}
                                   aria-label={`Call ${lead.name}`}
                                   className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50"

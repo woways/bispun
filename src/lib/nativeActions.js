@@ -39,6 +39,20 @@ export function openDialer(phone) {
   window.location.href = `tel:${num}`;
 }
 
+// Sanitized value for an <a href="tel:…"> link. Produces a valid RFC-3966
+// tel: URI by stripping spaces/dashes/brackets while PRESERVING the exact
+// digits and a leading "+" if present — i.e. it does NOT inject a country
+// code, so the number actually dialed is unchanged vs a raw tel:${phone}.
+// Returns undefined for an empty/invalid number so the link can be omitted.
+// Centralizes tel: formatting for the inline phone links across the app.
+export function telHref(phone) {
+  const raw = String(phone || "").trim();
+  const plus = raw.startsWith("+") ? "+" : "";
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return undefined;
+  return `tel:${plus}${digits}`;
+}
+
 // 2) WHATSAPP — opens WhatsApp on the correct chat, with an optional message.
 export function openWhatsApp(phone, message = "") {
   const num = toWhatsAppNumber(phone);

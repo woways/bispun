@@ -1601,7 +1601,7 @@ function LeakageRadarView({ radar }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4 native:grid-cols-2">
           {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
             <button
               key={key}
@@ -2414,7 +2414,7 @@ export default function Revenue({
             </section>
           ) : null}
 
-          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 native:grid-cols-2">
             <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
@@ -2581,7 +2581,7 @@ export default function Revenue({
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-wrap gap-1">
+          <div className="bg-white border border-slate-200 rounded-xl p-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] flex flex-wrap gap-1 native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
             {[
               ["overview", "Overview"],
               ["leakage", "At-Risk Revenue"],
@@ -2604,7 +2604,7 @@ export default function Revenue({
                 type="button"
                 aria-pressed={tab === item}
                 onClick={() => setTab(item)}
-                className={`h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors ${
+                className={`h-8 px-3 rounded-lg text-[13px] font-semibold transition-colors native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
                   tab === item
                     ? "bg-indigo-600 text-white shadow-sm"
                     : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
@@ -2693,7 +2693,8 @@ export default function Revenue({
                   </ResponsiveContainer>
                 </div>
 
-                <table className="sr-only">
+                <div className="sr-only">
+                <table>
                   <caption>
                     Monthly revenue: potential versus received
                   </caption>
@@ -2714,6 +2715,7 @@ export default function Revenue({
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -2764,7 +2766,7 @@ export default function Revenue({
           {tab ===
             "expenses" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 native:grid-cols-2">
                 <RevenueMetric
                   label="Total Expenses"
                   value={money(expenseStats.total)}
@@ -2828,8 +2830,8 @@ export default function Revenue({
                   />
                 </div>
 
-                <div className="flex flex-wrap gap-2 xl:ml-auto">
-                  <div className="relative">
+                <div className="flex flex-wrap gap-2 xl:ml-auto native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:pb-1">
+                  <div className="relative native:shrink-0">
                     <Filter
                       size={13}
                       aria-hidden="true"
@@ -2869,7 +2871,7 @@ export default function Revenue({
                         event.target.value
                       )
                     }
-                    className="h-9 px-3 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700"
+                    className="h-9 px-3 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700 native:shrink-0"
                   >
                     <option value="ALL">
                       All Categories

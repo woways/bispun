@@ -40,4 +40,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Required for FCM/local notifications on Android 13+ (API 33+). targetSdk
+         is 36, so the runtime PushNotifications.requestPermissions() prompt is
+         suppressed (auto-denied) unless this is declared. The push plugin's
+         @Permission annotation only maps the runtime request; it does NOT add
+         this manifest entry, and the plugin's own manifest omits it. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

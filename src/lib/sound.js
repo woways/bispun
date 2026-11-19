@@ -1,3 +1,5 @@
+import { getSoundEnabled, getVolume } from "./notificationPrefs";
+
 let audioContext = null;
 let unlocked = false;
 
@@ -10,12 +12,20 @@ function getAudioContext() {
 }
 
 function tone(ctx, frequency, start, duration, gain = 0.12, type = "sine") {
+  // Scale this tone's peak gain by the user's volume preference (0..1). At
+  // volume = 1 the multiplier is 1, so the relative gains/patterns are byte-for-
+  // byte unchanged for existing users. exponentialRampToValueAtTime requires a
+  // strictly-positive target, so when the scaled peak would collapse to ~0
+  // (volume at/near 0) we simply don't emit this tone.
+  const scaledGain = gain * Math.min(1, Math.max(0, getVolume()));
+  if (scaledGain <= 0.0001) return;
+
   const oscillator = ctx.createOscillator();
   const volume = ctx.createGain();
   oscillator.type = type;
   oscillator.frequency.setValueAtTime(frequency, start);
   volume.gain.setValueAtTime(0.0001, start);
-  volume.gain.exponentialRampToValueAtTime(gain, start + 0.01);
+  volume.gain.exponentialRampToValueAtTime(scaledGain, start + 0.01);
   volume.gain.exponentialRampToValueAtTime(0.0001, start + duration);
   oscillator.connect(volume);
   volume.connect(ctx.destination);
@@ -48,6 +58,10 @@ export async function unlockUiSound() {
 }
 
 async function playPattern(kind) {
+  // Muted: the user turned notification sound off. Return before touching the
+  // AudioContext so nothing plays (unlock logic is unaffected — see below).
+  if (!getSoundEnabled()) return false;
+
   const ctx = getAudioContext();
   if (!ctx) return false;
 

@@ -1,5 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 
+import plugin from 'tailwindcss/plugin';
+
 // brand-* and indigo-* both read the runtime CSS variables set by
 // src/lib/brandTheme.js. Changing the Branding colour rewrites those variables
 // and re-themes the whole platform. Semantic colours (accent/amber, success,
@@ -54,5 +56,13 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // `native:` variant — applies ONLY inside the Capacitor native app
+    // (<html class="native">, set in src/main.jsx). Android-only UI uses it so
+    // the web browser never receives the app-only layout. `.native &` outranks
+    // base and responsive utilities, so the app value wins regardless of width.
+    plugin(function ({ addVariant }) {
+      addVariant('native', '.native &');
+    }),
+  ],
 };

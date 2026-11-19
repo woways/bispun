@@ -1224,6 +1224,17 @@ model UserNotificationPreference {
   supportUpdates   Boolean @default(true)
   systemUpdates    Boolean @default(true)
 
+  // Notification SOUND preferences (#11) — DEFERRED, approval-gated.
+  // These columns are added by migration 0011
+  // (prisma/pending-migrations/0011_add_notification_sound_prefs.sql), which is
+  // NOT yet applied to Production. They are intentionally commented out so the
+  // generated Prisma client never SELECTs/writes columns that are absent in the
+  // live DB (see server/lib/notificationPreferences.js SOUND_PERSISTENCE_ENABLED).
+  // RE-ENABLE: apply 0011, uncomment the two fields below, run
+  // `npm run prisma:generate`, and flip SOUND_PERSISTENCE_ENABLED to true.
+  //   soundEnabled Boolean @default(true)
+  //   volume       Float   @default(1)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
