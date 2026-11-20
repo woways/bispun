@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -29,6 +30,7 @@ import {
   apiRequest,
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import DetailModal from "../../components/DetailModal";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -164,7 +166,6 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [metricFilter, setMetricFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -174,6 +175,17 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
   const [streamOptions, setStreamOptions] = useState([]);
   const [counsellorOptions, setCounsellorOptions] = useState([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
+
+  // Drill-down: clicking a KPI card opens a dedicated full page (see DetailPage)
+  // showing ONLY that card's records, instead of an in-page list filter.
+  // `detailTriggerRef` captures the clicked card so focus returns to it on Back.
+  const [detailView, setDetailView] = useState(null);
+  const detailTriggerRef = useRef(null);
+  function openDetail(key) {
+    detailTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setDetailView(key);
+  }
 
   async function loadFormOptions(showError = false) {
     setOptionsLoading(true);
@@ -391,27 +403,134 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
     }
   }
 
-  function chooseMetricFilter(next) {
-    setSearch("");
-    setStatusFilter("");
-    setMetricFilter((current) => (current === next ? "" : next));
-  }
-
-  const visibleWalkIns = walkIns.filter((walkIn) => {
-    if (!metricFilter) return true;
-    const arrived = new Date(walkIn.arrivedAt);
+  // Same scoping the KPI cards used: every card is limited to the current month,
+  // then narrowed per key. Reused by the dedicated drill-down pages below.
+  function metricWalkIns(key) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    if (arrived < monthStart) return false;
-    if (metricFilter === "month") return true;
-    if (metricFilter === "converted") return walkIn.statusKey === "CONVERTED";
-    if (metricFilter === "progress") return ["NEW", "IN_PROGRESS"].includes(walkIn.statusKey);
-    if (metricFilter === "lost") return walkIn.statusKey === "LOST";
-    return true;
-  });
+    return walkIns.filter((walkIn) => {
+      const arrived = new Date(walkIn.arrivedAt);
+      if (arrived < monthStart) return false;
+      if (key === "month") return true;
+      if (key === "converted") return walkIn.statusKey === "CONVERTED";
+      if (key === "progress") return ["NEW", "IN_PROGRESS"].includes(walkIn.statusKey);
+      if (key === "lost") return walkIn.statusKey === "LOST";
+      return true;
+    });
+  }
+
+  const visibleWalkIns = walkIns;
+
+  const detailData = detailView
+    ? (() => {
+    const detailColumns = [
+      "Arrived",
+      "Lead ID",
+      "Visitor / Student",
+      "Phone",
+      "Purpose",
+      "Came With",
+      "Counsellor",
+      "Notes",
+      "Status",
+    ];
+
+    const walkInRow = (walkIn) => (
+      <tr key={walkIn.id} className="hover:bg-slate-50/80 transition-colors">
+        <td className="px-4 py-3 text-[13px] text-slate-500 whitespace-nowrap">
+          {formatDateTime(walkIn.arrivedAt)}
+        </td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+            {walkIn.leadDisplayId || "—"}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="text-[15px] font-semibold text-slate-800">
+            {walkIn.visitorName}
+          </div>
+          {walkIn.studentName ? (
+            <div className="text-[12px] text-slate-500 mt-0.5">
+              Student: {walkIn.studentName}
+            </div>
+          ) : null}
+          {walkIn.course ? (
+            <div className="text-xs text-slate-400 mt-0.5">{walkIn.course}</div>
+          ) : null}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-600 whitespace-nowrap">
+          <div>{walkIn.phone}</div>
+          {walkIn.alternatePhone ? (
+            <div className="mt-0.5 text-xs text-slate-400">
+              Alt: {walkIn.alternatePhone}
+            </div>
+          ) : null}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-700">{walkIn.purpose}</td>
+        <td className="px-4 py-3 text-[15px] text-slate-600">
+          {walkIn.accompaniedBy}
+        </td>
+        <td className="px-4 py-3 text-[15px] font-medium text-slate-700">
+          {walkIn.counsellor}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-600">
+          {walkIn.notes || walkIn.outcome}
+        </td>
+        <td className="px-4 py-3">
+          <Badge tone={statusTone(walkIn.status)}>{walkIn.status}</Badge>
+        </td>
+      </tr>
+    );
+
+    const detail = (() => {
+      if (detailView === "converted") {
+        return {
+          title: "Walk-ins Converted",
+          subtitle: "Visitors converted into CRM leads this month.",
+          empty: "No converted walk-ins this month.",
+          rows: metricWalkIns("converted").map(walkInRow),
+        };
+      }
+      if (detailView === "progress") {
+        return {
+          title: "In Progress",
+          subtitle: "Walk-ins requiring follow-up this month.",
+          empty: "No walk-ins in progress this month.",
+          rows: metricWalkIns("progress").map(walkInRow),
+        };
+      }
+      if (detailView === "lost") {
+        return {
+          title: "Lost",
+          subtitle: "Visitors closed without conversion this month.",
+          empty: "No lost walk-ins this month.",
+          rows: metricWalkIns("lost").map(walkInRow),
+        };
+      }
+      return {
+        title: "Walk-ins",
+        subtitle: "Visitors recorded this month.",
+        empty: "No walk-ins this month.",
+        rows: metricWalkIns("month").map(walkInRow),
+      };
+    })();
+
+    return { ...detail, columns: detailColumns };
+      })()
+    : null;
 
   return (
     <div className="space-y-4">
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        onClose={() => setDetailView(null)}
+      />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
@@ -442,8 +561,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={UserPlus}
           detail="Visitors recorded this month"
           tone="indigo"
-          onClick={() => chooseMetricFilter("month")}
-          active={metricFilter === "month"}
+          onClick={() => openDetail("month")}
+          active={detailView === "month"}
         />
         <WalkinMetric
           label="Walk-ins Converted"
@@ -451,8 +570,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={ArrowUpRight}
           detail="Visitors converted into CRM leads"
           tone="emerald"
-          onClick={() => chooseMetricFilter("converted")}
-          active={metricFilter === "converted"}
+          onClick={() => openDetail("converted")}
+          active={detailView === "converted"}
         />
         <WalkinMetric
           label="In Progress"
@@ -460,8 +579,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={Clock}
           detail="Walk-ins requiring follow-up"
           tone="amber"
-          onClick={() => chooseMetricFilter("progress")}
-          active={metricFilter === "progress"}
+          onClick={() => openDetail("progress")}
+          active={detailView === "progress"}
         />
         <WalkinMetric
           label="Lost"
@@ -469,8 +588,8 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           icon={ArrowDownRight}
           detail="Visitors closed without conversion"
           tone="rose"
-          onClick={() => chooseMetricFilter("lost")}
-          active={metricFilter === "lost"}
+          onClick={() => openDetail("lost")}
+          active={detailView === "lost"}
         />
       </div>
 
@@ -504,13 +623,6 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
           </select>
         </div>
       </div>
-
-      {metricFilter ? (
-        <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-[13px] text-indigo-700">
-          <span>Showing records behind the selected KPI · {visibleWalkIns.length} walk-in{visibleWalkIns.length === 1 ? "" : "s"}</span>
-          <button type="button" onClick={() => setMetricFilter("")} className="font-bold hover:text-indigo-900">Show all</button>
-        </div>
-      ) : null}
 
       {loadError ? (
         <div className="flex items-start gap-2 text-[13px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">

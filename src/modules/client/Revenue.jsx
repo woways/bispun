@@ -54,6 +54,8 @@ import {
   Badge,
 } from "../../components/ui";
 
+import DetailModal from "../../components/DetailModal";
+
 import { apiRequest } from "../../lib/api";
 import { formatUiDate } from "../../lib/uiPreferences";
 import RevenueSlabs from "./RevenueSlabs";
@@ -1310,7 +1312,7 @@ function RevenueMetric({
 }
 
 /* =========================================================
-   KPI drill-down modal (reusable) + column presets
+   Metric detail-page column presets + row helpers
 ========================================================= */
 
 const ADMISSION_COLUMNS = [
@@ -1364,151 +1366,45 @@ const PROFIT_COLUMNS = [
   },
 ];
 
-function DrilldownModal({
-  open,
-  title,
-  subtitle,
-  note,
-  columns = [],
-  records = [],
-  emptyText = "No records found.",
-  onClose,
-}) {
-  const { panelRef, onKeyDown } = useModalA11y(onClose);
-
-  // Center the modal within the content area (right of the sidebar), not the
-  // whole window. Measuring <main> adapts to the collapsed/expanded sidebar
-  // and to mobile (where <main> starts at x=0, so the offset is 0).
-  const [overlayPadLeft, setOverlayPadLeft] = useState(0);
-  useEffect(() => {
-    if (!open) return undefined;
-    const measure = () => {
-      const main =
-        typeof document !== "undefined"
-          ? document.querySelector("main")
-          : null;
-      const left = main ? Math.max(0, main.getBoundingClientRect().left) : 0;
-      setOverlayPadLeft(left);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [open]);
-
-  if (!open) return null;
-
-  const rows = Array.isArray(records) ? records : [];
-
+// Render one record as a <tr> for the shared DetailPage table, reusing a column
+// preset (ADMISSION_COLUMNS, EXPENSE_COLUMNS, …) to decide cells. Status cells
+// render as a Badge; the primary (strong) cell is bolded.
+function renderDetailRow(cols, record, rowKey) {
   return (
-    <div
-      className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
-      style={overlayPadLeft ? { paddingLeft: overlayPadLeft } : undefined}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onKeyDown={onKeyDown}
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-3xl sm:rounded-2xl"
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
-          <div className="min-w-0">
-            <h2 className="text-[16px] font-bold text-slate-900">{title}</h2>
-            {subtitle ? (
-              <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-          >
-            <X size={18} />
-          </button>
-        </div>
+    <tr key={rowKey}>
+      {cols.map((c) => {
+        const cellClass = `px-4 py-3 ${
+          c.align === "right" ? "text-right tabular-nums " : ""
+        }${c.strong ? "font-semibold text-slate-800" : "text-slate-700"}`;
 
-        {note ? (
-          <div className="border-b border-slate-100 bg-slate-50 px-5 py-3 text-[13px] leading-5 text-slate-600">
-            {note}
-          </div>
-        ) : null}
+        if (c.key === "status") {
+          const status = record.status;
+          return (
+            <td key={c.key} className={cellClass}>
+              {status ? (
+                <Badge tone={statusTone(status)}>{status}</Badge>
+              ) : (
+                "—"
+              )}
+            </td>
+          );
+        }
 
-        <div className="min-h-0 flex-1 overflow-auto">
-          {rows.length ? (
-            <table className="w-full border-collapse text-left text-[13px]">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
-                <tr>
-                  {columns.map((c) => (
-                    <th
-                      key={c.key}
-                      className={`px-4 py-2.5 ${
-                        c.align === "right" ? "text-right" : "text-left"
-                      }`}
-                    >
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((r, i) => (
-                  <tr key={r.id || i} className="hover:bg-slate-50/70">
-                    {columns.map((c) => (
-                      <td
-                        key={c.key}
-                        className={`px-4 py-2.5 align-top ${
-                          c.align === "right"
-                            ? "text-right tabular-nums"
-                            : "text-left"
-                        } ${
-                          c.strong
-                            ? "font-semibold text-slate-900"
-                            : "text-slate-600"
-                        }`}
-                      >
-                        {c.render ? c.render(r) : r[c.key] ?? "—"}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="px-5 py-12 text-center text-[13px] text-slate-500">
-              {emptyText}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
-          <span className="text-[12px] font-semibold text-slate-500">
-            {rows.length.toLocaleString("en-IN")} record
-            {rows.length === 1 ? "" : "s"}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-8 rounded-lg bg-slate-900 px-3.5 text-[12px] font-bold text-white hover:bg-slate-800"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
+        return (
+          <td key={c.key} className={cellClass}>
+            {c.render ? c.render(record) : record[c.key] ?? "—"}
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
-
-function LeakageRadarView({ radar }) {
+// Shared config for the four At-Risk Revenue categories, used both to render the
+// cards/lists and to build their dedicated detail pages.
+function buildRadarCategories(radar) {
   const safeRadar = radar || {};
-  const summary = safeRadar.summary || {};
-
-  const categories = [
+  return [
     {
       key: "overdue",
       title: "Overdue Collections",
@@ -1542,6 +1438,13 @@ function LeakageRadarView({ radar }) {
       icon: AlertCircle,
     },
   ];
+}
+
+function LeakageRadarView({ radar, onOpenDetail }) {
+  const safeRadar = radar || {};
+  const summary = safeRadar.summary || {};
+
+  const categories = buildRadarCategories(radar);
 
   const toneClass = {
     rose: "border-rose-100 bg-rose-50/60 text-rose-700",
@@ -1550,30 +1453,10 @@ function LeakageRadarView({ radar }) {
     slate: "border-slate-200 bg-slate-50 text-slate-700",
   };
 
-  const [drill, setDrill] = useState(null);
-
-  const openRisk = (cat) => {
-    const items = Array.isArray(cat.data?.items) ? cat.data.items : [];
-    setDrill({
-      title: cat.title,
-      subtitle: cat.subtitle,
-      columns: cat.key === "leads" ? LEAD_COLUMNS : RISK_COLUMNS,
-      records: items,
-      emptyText: "No cases in this category.",
-    });
-  };
+  const openRisk = (cat) => onOpenDetail?.(`risk-${cat.key}`);
 
   return (
     <div className="space-y-4">
-      <DrilldownModal
-        open={!!drill}
-        title={drill?.title}
-        subtitle={drill?.subtitle}
-        columns={drill?.columns || []}
-        records={drill?.records || []}
-        emptyText={drill?.emptyText}
-        onClose={() => setDrill(null)}
-      />
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1725,17 +1608,24 @@ export default function Revenue({
   selectedYear = "all",
   initialDashboardMetric = null,
   onInitialDashboardMetricApplied = null,
+  initialDetail = null,
+  onInitialDetailApplied = null,
   onOpenLead = null,
 }) {
   const [tab, setTab] =
     useState("overview");
 
-  // Overview KPI card drill-down (click a card → see the records behind it).
-  const [kpiDrill, setKpiDrill] = useState(null);
-
-  const [dashboardMetricData, setDashboardMetricData] = useState(null);
-  const [dashboardMetricLoading, setDashboardMetricLoading] = useState(false);
-  const [dashboardMetricError, setDashboardMetricError] = useState("");
+  // Overview KPI / at-risk card drill-down: clicking a card swaps the card grid
+  // for a dedicated full page (shared DetailPage) showing ONLY that card's
+  // records — no modal. `detailTriggerRef` captures the clicked card so focus
+  // returns to it on Back.
+  const [detailView, setDetailView] = useState(null);
+  const detailTriggerRef = useRef(null);
+  function openDetail(key) {
+    detailTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setDetailView(key);
+  }
 
   const [data, setData] =
     useState({
@@ -1835,40 +1725,27 @@ export default function Revenue({
     loadRevenue();
   }, [selectedYear]);
 
+  // Cross-module entry: the Dashboard's revenue KPI drill lands on the matching
+  // dedicated detail page. Its keys (potential-revenue, received-revenue,
+  // pending-revenue, current-profit) already match the KPI detail keys.
   useEffect(() => {
     const key = String(initialDashboardMetric || "").trim();
     if (!key) return;
-
-    let cancelled = false;
     setTab("overview");
-    setDashboardMetricLoading(true);
-    setDashboardMetricError("");
-    setDashboardMetricData(null);
+    openDetail(key);
+    onInitialDashboardMetricApplied?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDashboardMetric]);
 
-    apiRequest(
-      `/api/client/analytics/dashboard/kpi/${encodeURIComponent(key)}?year=${encodeURIComponent(selectedYear)}`
-    )
-      .then((result) => {
-        if (!cancelled) setDashboardMetricData(result);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setDashboardMetricError(
-            error?.data?.message || "Unable to load Dashboard revenue details"
-          );
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDashboardMetricLoading(false);
-          onInitialDashboardMetricApplied?.();
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialDashboardMetric, selectedYear]);
+  // Cross-module entry: open a specific detail page by key on mount/update.
+  useEffect(() => {
+    const key = String(initialDetail || "").trim();
+    if (!key) return;
+    setTab("overview");
+    openDetail(key);
+    onInitialDetailApplied?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDetail]);
 
   async function expenseStatus(
     id,
@@ -2256,19 +2133,141 @@ export default function Revenue({
     { id: "profit", label: "Current profit", amount: Number(summary.currentProfit || 0) },
   ];
 
-  const openKpi = (config) => setKpiDrill(config);
+  const detailData = detailView
+    ? (() => {
+      const colsOf = (defs) => defs.map((c) => c.label);
+      const rowsOf = (defs, list) =>
+        (Array.isArray(list) ? list : []).map((r, i) =>
+          renderDetailRow(defs, r, r.id || `${detailView}-${i}`)
+        );
+
+      switch (detailView) {
+        case "total-admissions":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Total Admissions",
+            subtitle: "Every admission counted in revenue.",
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No admissions found.",
+            rows: rowsOf(ADMISSION_COLUMNS, admissionsBreakdown),
+          };
+        case "potential-revenue":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Total Potential Revenue",
+            subtitle: `Total potential revenue = sum of every admission's total fee = ${money(
+              summary.potentialRevenue
+            )}`,
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No admissions found.",
+            rows: rowsOf(ADMISSION_COLUMNS, admissionsBreakdown),
+          };
+        case "in-bucket":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "In Bucket Revenue",
+            subtitle: `In-bucket revenue = total fee of admissions with status In Bucket = ${money(
+              summary.inBucketRevenue
+            )}`,
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No in-bucket admissions.",
+            rows: rowsOf(ADMISSION_COLUMNS, inBucketAdmissions),
+          };
+        case "buffer":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Buffer Revenue",
+            subtitle: `Buffer revenue = total fee of admissions with status Buffer = ${money(
+              summary.bufferRevenue
+            )}`,
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No buffer admissions.",
+            rows: rowsOf(ADMISSION_COLUMNS, bufferAdmissions),
+          };
+        case "approved-expenses":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Approved Expenses",
+            subtitle: "Expense records with status Approved.",
+            columns: colsOf(EXPENSE_COLUMNS),
+            empty: "No approved expenses.",
+            rows: rowsOf(EXPENSE_COLUMNS, approvedExpenseRecords),
+          };
+        case "total-incentive":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Total Incentive Amount",
+            subtitle: "Approved and paid employee incentives.",
+            columns: colsOf(INCENTIVE_COLUMNS),
+            empty: "No incentive records.",
+            rows: rowsOf(INCENTIVE_COLUMNS, incentiveRecords),
+          };
+        case "received-revenue":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Received Amount",
+            subtitle:
+              "Admissions that have collected part or all of their fee.",
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No collections received yet.",
+            rows: rowsOf(ADMISSION_COLUMNS, receivedAdmissions),
+          };
+        case "pending-revenue":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Pending Amount",
+            subtitle: "Admissions with an outstanding balance.",
+            columns: colsOf(ADMISSION_COLUMNS),
+            empty: "No pending collections.",
+            rows: rowsOf(ADMISSION_COLUMNS, pendingAdmissions),
+          };
+        case "current-profit":
+          return {
+            eyebrow: "Finance / Revenue",
+            title: "Current Profit",
+            subtitle: `Current Profit = Received amount − Approved expenses − Incentives paid = ${money(
+              summary.currentProfit
+            )}`,
+            columns: colsOf(PROFIT_COLUMNS),
+            empty: "No data.",
+            rows: rowsOf(PROFIT_COLUMNS, profitComponents),
+          };
+        default: {
+          if (detailView.startsWith("risk-")) {
+            const catKey = detailView.slice(5);
+            const cat = buildRadarCategories(data.leakageRadar).find(
+              (c) => c.key === catKey
+            );
+            const defs = catKey === "leads" ? LEAD_COLUMNS : RISK_COLUMNS;
+            const items = Array.isArray(cat?.data?.items)
+              ? cat.data.items
+              : [];
+            return {
+              eyebrow: "Finance / At-Risk Revenue",
+              title: cat?.title || "At-risk records",
+              subtitle: cat?.subtitle,
+              columns: colsOf(defs),
+              empty: "No cases in this category.",
+              rows: rowsOf(defs, items),
+            };
+          }
+          return null;
+        }
+      }
+    })()
+    : null;
 
   return (
     <div className="space-y-4">
-      <DrilldownModal
-        open={!!kpiDrill}
-        title={kpiDrill?.title}
-        subtitle={kpiDrill?.subtitle}
-        note={kpiDrill?.note}
-        columns={kpiDrill?.columns || []}
-        records={kpiDrill?.records || []}
-        emptyText={kpiDrill?.emptyText}
-        onClose={() => setKpiDrill(null)}
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        onClose={() => setDetailView(null)}
       />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -2318,102 +2317,6 @@ export default function Revenue({
         </div>
       ) : (
         <>
-          {(dashboardMetricLoading || dashboardMetricError || dashboardMetricData) ? (
-            <section className="rounded-2xl border border-indigo-100 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5">
-                <div>
-                  <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-indigo-600">Opened from Dashboard</div>
-                  <h2 className="mt-1 text-[16px] font-bold text-slate-950">
-                    {dashboardMetricData?.label || "Revenue details"}
-                  </h2>
-                  <p className="mt-1 text-[12px] text-slate-500">The records contributing to the Dashboard value are shown here in Finance.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDashboardMetricData(null);
-                    setDashboardMetricError("");
-                  }}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  <X size={13} />
-                  Clear view
-                </button>
-              </div>
-
-              <div className="p-4 sm:p-5">
-                {dashboardMetricLoading ? (
-                  <div className="flex min-h-[140px] items-center justify-center gap-2 text-sm text-slate-500">
-                    <Loader2 size={16} className="animate-spin" /> Loading records...
-                  </div>
-                ) : dashboardMetricError ? (
-                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{dashboardMetricError}</div>
-                ) : (
-                  <div className="space-y-3">
-                    {Array.isArray(dashboardMetricData?.breakdown) && dashboardMetricData.breakdown.length ? (
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        {dashboardMetricData.breakdown.map((item) => (
-                          <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                            <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-400">{item.label}</div>
-                            <div className="mt-1 text-[16px] font-extrabold text-slate-900">{item.displayValue}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-
-                    {dashboardMetricData?.displayValue ? (
-                      <div className="text-[13px] font-semibold text-slate-700">
-                        {dashboardMetricData?.valueLabel || "Total"}: <span className="text-indigo-700">{dashboardMetricData.displayValue}</span>
-                      </div>
-                    ) : null}
-
-                    {Array.isArray(dashboardMetricData?.items) && dashboardMetricData.items.length ? (
-                      <div className="max-h-[440px] space-y-2 overflow-y-auto pr-1">
-                        {dashboardMetricData.items.map((record) => (
-                          <div key={`${record.kind || "item"}-${record.id}`} className="flex flex-col gap-3 rounded-xl border border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <div className="font-semibold text-slate-900">{record.primary || "Admission"}</div>
-                                {record.leadDisplayId ? (
-                                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">Lead ID {record.leadDisplayId}</span>
-                                ) : null}
-                              </div>
-                              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-slate-500">
-                                {record.phone ? <span>{record.phone}</span> : null}
-                                {record.email ? <span>{record.email}</span> : null}
-                                {record.owner ? <span>{record.owner}</span> : null}
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-3">
-                              {record.amount !== undefined && record.amount !== null ? (
-                                <div className="text-right">
-                                  <div className="text-[10px] font-bold uppercase tracking-[0.05em] text-slate-400">Amount</div>
-                                  <div className="text-[15px] font-bold text-slate-950">{money(record.amount)}</div>
-                                </div>
-                              ) : null}
-                              {record.leadId && typeof onOpenLead === "function" ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenLead(record.leadId)}
-                                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11px] font-bold text-white hover:bg-indigo-700"
-                                >
-                                  Open Lead
-                                  <ArrowUpRight size={12} />
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center text-sm text-slate-500">No matching records.</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
-          ) : null}
-
           <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <RevenueMetric
               label="Total Admissions"
@@ -2421,15 +2324,7 @@ export default function Revenue({
               icon={UserCheck}
               detail="Admissions included in revenue"
               tone="slate"
-              onClick={() =>
-                openKpi({
-                  title: "Total Admissions",
-                  subtitle: "Every admission counted in revenue",
-                  columns: ADMISSION_COLUMNS,
-                  records: admissionsBreakdown,
-                  emptyText: "No admissions found.",
-                })
-              }
+              onClick={() => openDetail("total-admissions")}
             />
 
             <RevenueMetric
@@ -2438,18 +2333,7 @@ export default function Revenue({
               icon={TrendingUp}
               detail="Total admission revenue value"
               tone="indigo"
-              onClick={() =>
-                openKpi({
-                  title: "Total Potential Revenue",
-                  subtitle: "Admissions contributing to potential revenue",
-                  note: `Total potential revenue = sum of every admission's total fee = ${money(
-                    summary.potentialRevenue
-                  )}`,
-                  columns: ADMISSION_COLUMNS,
-                  records: admissionsBreakdown,
-                  emptyText: "No admissions found.",
-                })
-              }
+              onClick={() => openDetail("potential-revenue")}
             />
 
             <RevenueMetric
@@ -2458,18 +2342,7 @@ export default function Revenue({
               icon={CircleDollarSign}
               detail="Admission value currently in bucket"
               tone="emerald"
-              onClick={() =>
-                openKpi({
-                  title: "In Bucket Revenue",
-                  subtitle: "Admissions currently classified as In Bucket",
-                  note: `In-bucket revenue = total fee of admissions with status In Bucket = ${money(
-                    summary.inBucketRevenue
-                  )}`,
-                  columns: ADMISSION_COLUMNS,
-                  records: inBucketAdmissions,
-                  emptyText: "No in-bucket admissions.",
-                })
-              }
+              onClick={() => openDetail("in-bucket")}
             />
 
             <RevenueMetric
@@ -2478,18 +2351,7 @@ export default function Revenue({
               icon={Clock}
               detail="Admission value currently classified as buffer revenue"
               tone="amber"
-              onClick={() =>
-                openKpi({
-                  title: "Buffer Revenue",
-                  subtitle: "Admissions currently classified as Buffer",
-                  note: `Buffer revenue = total fee of admissions with status Buffer = ${money(
-                    summary.bufferRevenue
-                  )}`,
-                  columns: ADMISSION_COLUMNS,
-                  records: bufferAdmissions,
-                  emptyText: "No buffer admissions.",
-                })
-              }
+              onClick={() => openDetail("buffer")}
             />
 
             <RevenueMetric
@@ -2498,15 +2360,7 @@ export default function Revenue({
               icon={Receipt}
               detail="Approved operating costs"
               tone="rose"
-              onClick={() =>
-                openKpi({
-                  title: "Approved Expenses",
-                  subtitle: "Expense records with status Approved",
-                  columns: EXPENSE_COLUMNS,
-                  records: approvedExpenseRecords,
-                  emptyText: "No approved expenses.",
-                })
-              }
+              onClick={() => openDetail("approved-expenses")}
             />
 
             <RevenueMetric
@@ -2515,15 +2369,7 @@ export default function Revenue({
               icon={Award}
               detail="Approved and paid employee incentives"
               tone="slate"
-              onClick={() =>
-                openKpi({
-                  title: "Total Incentive Amount",
-                  subtitle: "Approved and paid employee incentives",
-                  columns: INCENTIVE_COLUMNS,
-                  records: incentiveRecords,
-                  emptyText: "No incentive records.",
-                })
-              }
+              onClick={() => openDetail("total-incentive")}
             />
 
             <RevenueMetric
@@ -2532,15 +2378,7 @@ export default function Revenue({
               icon={DollarSign}
               detail="Collections received"
               tone="emerald"
-              onClick={() =>
-                openKpi({
-                  title: "Received Amount",
-                  subtitle: "Admissions that have collected part or all of their fee",
-                  columns: ADMISSION_COLUMNS,
-                  records: receivedAdmissions,
-                  emptyText: "No collections received yet.",
-                })
-              }
+              onClick={() => openDetail("received-revenue")}
             />
 
             <RevenueMetric
@@ -2549,15 +2387,7 @@ export default function Revenue({
               icon={Clock}
               detail="Outstanding collections"
               tone="amber"
-              onClick={() =>
-                openKpi({
-                  title: "Pending Amount",
-                  subtitle: "Admissions with an outstanding balance",
-                  columns: ADMISSION_COLUMNS,
-                  records: pendingAdmissions,
-                  emptyText: "No pending collections.",
-                })
-              }
+              onClick={() => openDetail("pending-revenue")}
             />
 
             <RevenueMetric
@@ -2566,18 +2396,7 @@ export default function Revenue({
               icon={ArrowUpRight}
               detail="Received less approved expenses and incentives"
               featured
-              onClick={() =>
-                openKpi({
-                  title: "Current Profit",
-                  subtitle: "How the profit figure is built",
-                  note: `Current Profit = Received amount − Approved expenses − Incentives paid = ${money(
-                    summary.currentProfit
-                  )}`,
-                  columns: PROFIT_COLUMNS,
-                  records: profitComponents,
-                  emptyText: "No data.",
-                })
-              }
+              onClick={() => openDetail("current-profit")}
             />
           </div>
 
@@ -2616,7 +2435,10 @@ export default function Revenue({
           </div>
 
           {tab === "leakage" && (
-            <LeakageRadarView radar={data.leakageRadar} />
+            <LeakageRadarView
+              radar={data.leakageRadar}
+              onOpenDetail={openDetail}
+            />
           )}
 
           {tab ===

@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -32,6 +33,7 @@ import {
 } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import CallCenterModal from "../../components/lead/CallCenterModal";
+import DetailModal from "../../components/DetailModal";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -189,7 +191,6 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [metricFilter, setMetricFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -198,6 +199,17 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
   const [actionId, setActionId] = useState("");
   const [copiedId, setCopiedId] = useState("");
   const [callLead, setCallLead] = useState(null);
+
+  // Drill-down: clicking a KPI card opens a dedicated full page (see DetailPage)
+  // showing ONLY that card's records, instead of an in-page list filter.
+  // `detailTriggerRef` captures the clicked card so focus returns to it on Back.
+  const [detailView, setDetailView] = useState(null);
+  const detailTriggerRef = useRef(null);
+  function openDetail(key) {
+    detailTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setDetailView(key);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -432,31 +444,122 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
     }
   }
 
-  function chooseMetricFilter(next) {
-    setSearch("");
-    setStatusFilter("");
-    setMetricFilter((current) => (current === next ? "" : next));
+  // Same filtering the KPI cards used, reused by the dedicated drill-down pages.
+  function metricSessions(key) {
+    return sessions.filter((session) => {
+      const scheduled = new Date(session.scheduledAt);
+      const now = new Date();
+      const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate() + 1);
+      const weekStart = new Date(dayStart);
+      const day = weekStart.getDay();
+      weekStart.setDate(weekStart.getDate() + (day === 0 ? -6 : 1 - day));
+      const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+      if (key === "today") return scheduled >= dayStart && scheduled < nextDay;
+      if (key === "week") return scheduled >= weekStart && scheduled < weekEnd;
+      if (key === "converted") return session.converted === true;
+      if (key === "followups") return session.statusKey === "FOLLOW_UP" || Boolean(session.followUpAt && !["COMPLETED", "CANCELLED"].includes(session.statusKey));
+      return true;
+    });
   }
 
-  const visibleSessions = sessions.filter((session) => {
-    if (!metricFilter) return true;
-    const scheduled = new Date(session.scheduledAt);
-    const now = new Date();
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const nextDay = new Date(dayStart); nextDay.setDate(nextDay.getDate() + 1);
-    const weekStart = new Date(dayStart);
-    const day = weekStart.getDay();
-    weekStart.setDate(weekStart.getDate() + (day === 0 ? -6 : 1 - day));
-    const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
-    if (metricFilter === "today") return scheduled >= dayStart && scheduled < nextDay;
-    if (metricFilter === "week") return scheduled >= weekStart && scheduled < weekEnd;
-    if (metricFilter === "converted") return session.converted === true;
-    if (metricFilter === "followups") return session.statusKey === "FOLLOW_UP" || Boolean(session.followUpAt && !["COMPLETED", "CANCELLED"].includes(session.statusKey));
-    return true;
-  });
+  const visibleSessions = sessions;
+
+  const detailData = detailView
+    ? (() => {
+    const detailColumns = [
+      "When",
+      "Student",
+      "Course",
+      "Counsellor",
+      "Mode",
+      "Came With",
+      "Status",
+    ];
+
+    const sessionRow = (session) => (
+      <tr key={session.id} className="hover:bg-slate-50/80 transition-colors">
+        <td className="px-4 py-3 text-[13px] text-slate-500 whitespace-nowrap">
+          {formatDateTime(session.scheduledAt)}
+        </td>
+        <td className="px-4 py-3">
+          <div className="text-[15px] font-semibold text-slate-800">
+            {session.student}
+          </div>
+          {session.leadDisplayId ? (
+            <div className="text-[12px] text-slate-500 mt-0.5">
+              {session.leadDisplayId}
+            </div>
+          ) : null}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-600">{session.course}</td>
+        <td className="px-4 py-3 text-[15px] font-medium text-slate-700">
+          {session.counsellor}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-600 whitespace-nowrap">
+          {prettyMode(session.mode)}
+        </td>
+        <td className="px-4 py-3 text-[15px] text-slate-600">
+          {session.accompaniedBy}
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-1.5">
+            <Badge tone={statusTone(session.status)}>{session.status}</Badge>
+            {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
+          </div>
+        </td>
+      </tr>
+    );
+
+    const detail = (() => {
+      if (detailView === "week") {
+        return {
+          title: "This Week",
+          subtitle: "Counselling sessions scheduled in the current week.",
+          empty: "No sessions scheduled this week.",
+          rows: metricSessions("week").map(sessionRow),
+        };
+      }
+      if (detailView === "converted") {
+        return {
+          title: "Converted Sessions",
+          subtitle: "Counselling sessions marked as converted.",
+          empty: "No converted sessions yet.",
+          rows: metricSessions("converted").map(sessionRow),
+        };
+      }
+      if (detailView === "followups") {
+        return {
+          title: "Pending Follow-ups",
+          subtitle: "Sessions requiring another interaction.",
+          empty: "No pending follow-ups.",
+          rows: metricSessions("followups").map(sessionRow),
+        };
+      }
+      return {
+        title: "Sessions Today",
+        subtitle: "Counselling sessions scheduled today.",
+        empty: "No sessions scheduled today.",
+        rows: metricSessions("today").map(sessionRow),
+      };
+    })();
+
+    return { ...detail, columns: detailColumns };
+      })()
+    : null;
 
   return (
     <div className="space-y-4">
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        onClose={() => setDetailView(null)}
+      />
       <style>{`
         .counselling-select { appearance:none; padding-right:2.5rem !important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .75rem center; background-size:16px 16px; }
       `}</style>
@@ -490,8 +593,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Calendar}
           detail="Counselling sessions scheduled today"
           tone="indigo"
-          onClick={() => chooseMetricFilter("today")}
-          active={metricFilter === "today"}
+          onClick={() => openDetail("today")}
+          active={detailView === "today"}
         />
         <CounsellingMetric
           label="This Week"
@@ -499,8 +602,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Video}
           detail="Total sessions in the current week"
           tone="slate"
-          onClick={() => chooseMetricFilter("week")}
-          active={metricFilter === "week"}
+          onClick={() => openDetail("week")}
+          active={detailView === "week"}
         />
         <CounsellingMetric
           label="Conversion Rate"
@@ -508,8 +611,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={TrendingUp}
           detail="Sessions marked as converted"
           tone="emerald"
-          onClick={() => chooseMetricFilter("converted")}
-          active={metricFilter === "converted"}
+          onClick={() => openDetail("converted")}
+          active={detailView === "converted"}
         />
         <CounsellingMetric
           label="Pending Follow-ups"
@@ -517,8 +620,8 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           icon={Clock}
           detail="Sessions requiring another interaction"
           tone="amber"
-          onClick={() => chooseMetricFilter("followups")}
-          active={metricFilter === "followups"}
+          onClick={() => openDetail("followups")}
+          active={detailView === "followups"}
         />
       </div>
 
@@ -550,13 +653,6 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
           </select>
         </div>
       </div>
-
-      {metricFilter ? (
-        <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-[13px] text-indigo-700">
-          <span>Showing records behind the selected KPI · {visibleSessions.length} session{visibleSessions.length === 1 ? "" : "s"}</span>
-          <button type="button" onClick={() => setMetricFilter("")} className="font-bold hover:text-indigo-900">Show all</button>
-        </div>
-      ) : null}
 
       {loadError ? (
         <div className="flex items-start gap-2 text-[13px] text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">

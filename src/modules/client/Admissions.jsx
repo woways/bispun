@@ -3,9 +3,11 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { pushBackInterceptor } from "../../lib/backStack";
 
 import {
   Plus,
@@ -21,7 +23,6 @@ import {
   Pencil,
   Trash2,
   Building2,
-  ArrowLeft,
   Upload,
   Paperclip,
   ExternalLink,
@@ -45,6 +46,7 @@ import {
   Badge,
   statusTone,
 } from "../../components/ui";
+import DetailModal from "../../components/DetailModal";
 
 import {
   apiRequest,
@@ -447,7 +449,10 @@ function Breadcrumbs({
   items,
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-1 text-[13px] font-medium text-slate-500">
+    <nav
+      aria-label="Breadcrumb"
+      className="flex flex-wrap items-center gap-1 text-[13px] font-medium text-slate-500"
+    >
       {items.map(
         (
           item,
@@ -461,6 +466,7 @@ function Breadcrumbs({
               <ChevronRight
                 size={12}
                 className="text-slate-300"
+                aria-hidden="true"
               />
             ) : null}
 
@@ -477,7 +483,10 @@ function Breadcrumbs({
                 }
               </button>
             ) : (
-              <span className="font-semibold text-slate-700">
+              <span
+                className="font-semibold text-slate-700"
+                aria-current="page"
+              >
                 {
                   item.label
                 }
@@ -486,9 +495,12 @@ function Breadcrumbs({
           </div>
         )
       )}
-    </div>
+    </nav>
   );
 }
+
+const MODAL_FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 function ModalShell({
   title,
@@ -497,10 +509,73 @@ function ModalShell({
   children,
   max = "max-w-md",
 }) {
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+  const panelRef = useRef(null);
+  const restoreRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    restoreRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const panel = panelRef.current;
+    const first = panel?.querySelector(MODAL_FOCUSABLE);
+    (first || panel)?.focus?.();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    // Register a back-interceptor so this form (the innermost overlay) closes
+    // first on Android back / Escape — never the drill-down popup behind it.
+    const unregister = pushBackInterceptor(() => onCloseRef.current?.());
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      unregister();
+      restoreRef.current?.focus?.();
+    };
+  }, []);
+
+  const onKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onCloseRef.current?.();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const items = panel.querySelectorAll(MODAL_FOCUSABLE);
+    if (!items.length) {
+      event.preventDefault();
+      return;
+    }
+    const firstEl = items[0];
+    const lastEl = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === firstEl) {
+      event.preventDefault();
+      lastEl.focus();
+    } else if (!event.shiftKey && document.activeElement === lastEl) {
+      event.preventDefault();
+      firstEl.focus();
+    }
+  };
+
+  // Portal to <body> so this form escapes any drill-down modal's DOM subtree —
+  // keeps its Escape/Back/focus independent of the popup it was opened from.
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onCloseRef.current?.();
+      }}
+    >
       <div
-        className={`flex max-h-[92vh] w-full ${max} flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl`}
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className={`flex max-h-[92vh] w-full ${max} flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl outline-none sm:rounded-2xl`}
       >
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
@@ -518,15 +593,17 @@ function ModalShell({
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -2528,6 +2605,8 @@ function AdmissionsManager({
   selectedYear = "all",
   market = "ALL",
   currentUser = null,
+  initialDetail = null,
+  onInitialDetailApplied,
 }) {
   // Admissions Done is always opened in a concrete market from the sidebar.
   // Keeping the market tied directly to the route avoids Domestic/International
@@ -2546,6 +2625,10 @@ function AdmissionsManager({
   const [selectedPartner, setSelectedPartner] = useState(null);
   const [selectedBranch, setSelectedBranch] = useState(null);
   const [showAllAdmissions, setShowAllAdmissions] = useState(false);
+
+  // Holds the card/button that opened the current drill-down so DetailPage can
+  // return focus to it on Back (accessibility: focus is never dropped to body).
+  const detailTriggerRef = useRef(null);
 
   const [summary, setSummary] = useState({
     totalAdmissions: 0,
@@ -2900,6 +2983,16 @@ function AdmissionsManager({
       loadAllAdmissions();
     }
   }, [showAllAdmissions, selectedYear, activeMarket]);
+
+  // Cross-module entry: the Dashboard "Admissions" KPI opens the All Admissions
+  // page directly by passing initialDetail="all".
+  useEffect(() => {
+    if (initialDetail === "all") {
+      setShowAllAdmissions(true);
+      onInitialDetailApplied?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDetail]);
 
   const overall = useMemo(() => {
     return streams.reduce(
@@ -3356,7 +3449,10 @@ function AdmissionsManager({
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
-            onClick={() => setShowAllAdmissions(true)}
+            onClick={() => {
+              detailTriggerRef.current = document.activeElement;
+              setShowAllAdmissions(true);
+            }}
             className="w-full rounded-xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px]"
           >
             <div className="text-[13px] font-semibold text-white/70">
@@ -3384,7 +3480,10 @@ function AdmissionsManager({
               <button
                 type="button"
                 key={stream.id}
-                onClick={() => setSelectedStream(stream)}
+                onClick={() => {
+                  detailTriggerRef.current = document.activeElement;
+                  setSelectedStream(stream);
+                }}
                 className={`w-full rounded-xl px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px] ${gradient.bg}`}
               >
                 <div className="text-[13px] font-semibold text-white/75">
@@ -3515,29 +3614,16 @@ function AdmissionsManager({
 
   function AllAdmissionsView() {
     return (
+      <DetailModal
+        open={showAllAdmissions}
+        title="All Admissions"
+        subtitle="View every admission across streams, colleges and branches."
+        onClose={() => setShowAllAdmissions(false)}
+      >
       <div className="space-y-5">
         {sharedStyle}
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <button
-              type="button"
-              onClick={() => setShowAllAdmissions(false)}
-              className="inline-flex items-center gap-2 text-[15px] font-semibold text-slate-500 hover:text-slate-900"
-            >
-              <ArrowLeft size={15} />
-              Back to Admissions Done
-            </button>
-
-            <h1 className="mt-4 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-              All Admissions
-            </h1>
-
-            <p className="mt-1 text-[15px] text-slate-500">
-              View every admission across streams, colleges and branches.
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
           <button
             type="button"
             onClick={() =>
@@ -3864,15 +3950,11 @@ function AdmissionsManager({
           />
         ) : null}
       </div>
+      </DetailModal>
     );
   }
 
-  if (showAllAdmissions) {
-    return <AllAdmissionsView />;
-  }
-
-  if (!selectedStream) {
-    return (
+  return (
       <div className="space-y-5">
         {sharedStyle}
 
@@ -3894,7 +3976,10 @@ function AdmissionsManager({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setShowAllAdmissions(true)}
+              onClick={() => {
+                detailTriggerRef.current = document.activeElement;
+                setShowAllAdmissions(true);
+              }}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 shadow-sm hover:bg-slate-50"
             >
               <UserCheck size={14} />
@@ -3961,6 +4046,7 @@ function AdmissionsManager({
                   }
                   openLabel={`Open ${stream.name}`}
                   onOpen={() => {
+                    detailTriggerRef.current = document.activeElement;
                     setSelectedStream(stream);
                     setSelectedPartner(null);
                     setSelectedBranch(null);
@@ -4015,12 +4101,17 @@ function AdmissionsManager({
             }}
           />
         ) : null}
-      </div>
-    );
-  }
 
-  if (!selectedPartner) {
-    return (
+        {/* Drill-down popups rendered OVER the overview (mutually exclusive) */}
+        {showAllAdmissions && !selectedStream && !selectedPartner && !selectedBranch && AllAdmissionsView()}
+
+        {!!selectedStream && !selectedPartner && (
+          <DetailModal
+            open={!!selectedStream && !selectedPartner}
+            title={selectedStream.name}
+            subtitle="Choose a college inside this stream."
+            onClose={() => setSelectedStream(null)}
+          >
       <div className="space-y-5">
         {sharedStyle}
 
@@ -4034,26 +4125,7 @@ function AdmissionsManager({
           ]}
         />
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <button
-              type="button"
-              onClick={() => setSelectedStream(null)}
-              className="inline-flex items-center gap-2 text-[15px] font-semibold text-slate-500 hover:text-slate-900"
-            >
-              <ArrowLeft size={15} />
-              Back to Streams
-            </button>
-
-            <h1 className="mt-4 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-              {selectedStream.name}
-            </h1>
-
-            <p className="mt-1 text-[15px] text-slate-500">
-              Choose a college inside this stream.
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
           <button
             type="button"
             onClick={() =>
@@ -4106,6 +4178,7 @@ function AdmissionsManager({
               color={selectedStream.color || "blue"}
               openLabel={`Open ${partner.name}`}
               onOpen={() => {
+                detailTriggerRef.current = document.activeElement;
                 setSelectedPartner(partner);
                 setSelectedBranch(null);
               }}
@@ -4190,11 +4263,16 @@ function AdmissionsManager({
           />
         ) : null}
       </div>
-    );
-  }
+          </DetailModal>
+        )}
 
-  if (!selectedBranch) {
-    return (
+        {!!selectedPartner && !selectedBranch && (
+          <DetailModal
+            open={!!selectedPartner && !selectedBranch}
+            title={selectedPartner.name}
+            subtitle="Select a branch such as MBBS, BDS, Pharmacy, CSE or MBA."
+            onClose={() => setSelectedPartner(null)}
+          >
       <div className="space-y-5">
         {sharedStyle}
 
@@ -4215,26 +4293,7 @@ function AdmissionsManager({
           ]}
         />
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <button
-              type="button"
-              onClick={() => setSelectedPartner(null)}
-              className="inline-flex items-center gap-2 text-[15px] font-semibold text-slate-500 hover:text-slate-900"
-            >
-              <ArrowLeft size={15} />
-              Back to Colleges
-            </button>
-
-            <h1 className="mt-4 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-              {selectedPartner.name}
-            </h1>
-
-            <p className="mt-1 text-[15px] text-slate-500">
-              Select a branch such as MBBS, BDS, Pharmacy, CSE or MBA.
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
           <button
             type="button"
             onClick={() =>
@@ -4289,7 +4348,10 @@ function AdmissionsManager({
               index={index + 2}
               color={recommendedBranchColor(branch.name, index)}
               openLabel={`Open ${branch.name}`}
-              onOpen={() => setSelectedBranch(branch)}
+              onOpen={() => {
+                detailTriggerRef.current = document.activeElement;
+                setSelectedBranch(branch);
+              }}
               onEdit={() =>
                 setBranchModal({
                   mode: "edit",
@@ -4359,10 +4421,16 @@ function AdmissionsManager({
           />
         ) : null}
       </div>
-    );
-  }
+          </DetailModal>
+        )}
 
-  return (
+        {!!selectedBranch && (
+          <DetailModal
+            open={!!selectedBranch}
+            title={selectedBranch.name}
+            subtitle={`${selectedStream.name} → ${selectedPartner.name} → ${selectedBranch.name}`}
+            onClose={() => setSelectedBranch(null)}
+          >
     <div className="space-y-5">
       {sharedStyle}
 
@@ -4391,27 +4459,7 @@ function AdmissionsManager({
         ]}
       />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <button
-            type="button"
-            onClick={() => setSelectedBranch(null)}
-            className="inline-flex items-center gap-2 text-[15px] font-semibold text-slate-500 hover:text-slate-900"
-          >
-            <ArrowLeft size={15} />
-            Back to Branches
-          </button>
-
-          <h1 className="mt-4 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-            {selectedBranch.name} Admissions
-          </h1>
-
-          <p className="mt-1 text-[15px] text-slate-500">
-            {selectedStream.name} → {selectedPartner.name} →{" "}
-            {selectedBranch.name}
-          </p>
-        </div>
-
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -4750,6 +4798,9 @@ function AdmissionsManager({
         />
       ) : null}
     </div>
+          </DetailModal>
+        )}
+      </div>
   );
 }
 
