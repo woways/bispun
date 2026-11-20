@@ -113,6 +113,16 @@ const TABS = [
   },
 ];
 
+// Grouped layout for the Settings side navigation. Each group lists tab keys
+// from TABS; only keys present in visibleTabs render, and empty groups are
+// skipped, so permission filtering still applies.
+const TAB_GROUPS = [
+  { label: "Workspace", keys: ["company", "branding", "integrations"] },
+  { label: "Access", keys: ["users"] },
+  { label: "Leads", keys: ["sources", "fields"] },
+  { label: "System", keys: ["notifications", "activity"] },
+];
+
 
 
 function normalizeBrandColorForPicker(color) {
@@ -2628,63 +2638,55 @@ export default function SettingsView({
 
       {/* SETTINGS LAYOUT */}
 
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_minmax(0,1fr)] lg:items-start">
 
-        {/* HORIZONTAL TAB BAR */}
+        {/* SIDE NAV */}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex flex-wrap gap-1 native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
-            {visibleTabs.map(
-              (
-                item
-              ) => {
-                const Icon =
-                  item.i;
+        <nav className="bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] space-y-4 lg:sticky lg:top-4 native:max-h-[60vh] native:overflow-y-auto">
+          {TAB_GROUPS.map((group) => {
+            const items = group.keys
+              .map((key) => visibleTabs.find((t) => t.k === key))
+              .filter(Boolean);
 
-                const active =
-                  tab ===
-                  item.k;
+            if (!items.length) return null;
 
-                return (
-                  <button
-                    key={
-                      item.k
-                    }
-                    type="button"
-                    aria-current={active ? "true" : undefined}
-                    onClick={() =>
-                      setTab(
-                        item.k
-                      )
-                    }
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-[15px] transition-colors native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
-                      active
-                        ? "bg-indigo-600 text-white font-semibold shadow-sm"
-                        : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
-                    }`}
-                  >
-                    <Icon
-                      size={
-                        15
-                      }
-                      className={
-                        active
-                          ? "text-white"
-                          : "text-slate-400"
-                      }
-                    />
+            return (
+              <div key={group.label}>
+                <div className="px-2 mb-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                  {group.label}
+                </div>
 
-                    <span className="text-left">
-                      {
-                        item.l
-                      }
-                    </span>
-                  </button>
-                );
-              }
-            )}
-          </div>
-        </div>
+                <div className="space-y-0.5">
+                  {items.map((item) => {
+                    const Icon = item.i;
+                    const active = tab === item.k;
+
+                    return (
+                      <button
+                        key={item.k}
+                        type="button"
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => setTab(item.k)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[14px] text-left transition-colors native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
+                          active
+                            ? "bg-indigo-50 text-indigo-700 font-semibold"
+                            : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/60"
+                        }`}
+                      >
+                        <Icon
+                          size={16}
+                          className={active ? "text-indigo-600" : "text-slate-400"}
+                        />
+
+                        <span className="truncate">{item.l}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
 
         {/* CONTENT */}
 
