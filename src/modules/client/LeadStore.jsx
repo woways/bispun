@@ -5003,7 +5003,18 @@ export default function LeadStore({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        loading={loading && (detailData?.rows?.length ?? 0) === 0}
+        onClose={() => setDetailView(null)}
+      />
       <style>{`
         .form-input {
           width: 100%;
