@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { pushBackInterceptor } from "../lib/backStack";
 
 // The single, consistent drill-down popup used by every metric / KPI / dataset
@@ -41,6 +41,7 @@ export default function DetailModal({
   error = "",
   countLabel,
   onClose,
+  displayMode = "modal",
 }) {
   const panelRef = useRef(null);
   const restoreRef = useRef(null);
@@ -54,7 +55,7 @@ export default function DetailModal({
   });
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || displayMode === "page") return undefined;
     // Capture the invoking card so focus returns to it on close.
     restoreRef.current =
       document.activeElement instanceof HTMLElement
@@ -82,7 +83,7 @@ export default function DetailModal({
       unregister();
       restoreRef.current?.focus?.();
     };
-  }, [open]);
+  }, [open, displayMode]);
 
   if (!open) return null;
 
@@ -124,6 +125,43 @@ export default function DetailModal({
       firstEl.focus();
     }
   };
+
+  if (displayMode === "page") {
+    return (
+      <section className="admissions-drilldown-page min-w-0 space-y-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <button
+              type="button"
+              onClick={() => onCloseRef.current?.()}
+              className="inline-flex h-9 items-center gap-2 rounded-lg px-1 text-[13px] font-semibold text-slate-500 transition hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              Back
+            </button>
+            <h1 className="mt-2 text-[26px] font-bold tracking-[-0.035em] text-slate-950">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-1 text-[14px] text-slate-500">{subtitle}</p>
+            ) : null}
+          </div>
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-12 text-center text-[13px] font-medium text-rose-700">
+            {error}
+          </div>
+        ) : loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white px-5 py-12 text-center text-[13px] text-slate-500">
+            Loading…
+          </div>
+        ) : (
+          children
+        )}
+      </section>
+    );
+  }
 
   return (
     <div
