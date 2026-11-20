@@ -6,7 +6,11 @@ import { deleteChatFile, uploadChatFile } from "../lib/chatStorage.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
 import { normalizePageAccess } from "../lib/pageAccess.js";
 import { createMeetEvent } from "../lib/google.js";
-import { postConversationMessage } from "../socket.js";
+import {
+  postConversationMessage,
+  notifyMembersChanged,
+  removeUserFromConversationRoom,
+} from "../socket.js";
 
 const router = Router();
 
@@ -77,6 +81,7 @@ function formatConversation(conversation, currentUserId, unreadCount = 0) {
     id: conversation.id,
     isGroup: conversation.isGroup,
     name: conversation.name,
+    createdByUserId: conversation.createdByUserId || null,
     title,
     nickname: myMembership?.nickname || null,
     avatarUrl: conversation.isGroup ? conversation.avatarUrl || null : others[0]?.avatarUrl || null,
@@ -1105,7 +1110,16 @@ router.post("/upload", async (req, res) => {
       "image/png",
       "image/jpeg",
       "image/webp",
+      "image/gif",
       "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "text/plain",
+      "text/csv",
     ];
 
     if (!fileName || !mimeType || !dataUrl) {
@@ -1114,7 +1128,7 @@ router.post("/upload", async (req, res) => {
     if (!allowedTypes.includes(String(mimeType))) {
       return res.status(400).json({
         success: false,
-        message: "Only PNG, JPG, WEBP and PDF files are allowed",
+        message: "Only images, PDF, Word, Excel, PowerPoint, text and CSV files are allowed",
       });
     }
 
@@ -1391,6 +1405,154 @@ router.patch("/:id/name", async (req, res) => {
   } catch (error) {
     console.error("Rename group failed:", error);
     return res.status(500).json({ success: false, message: "Unable to rename group" });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /:id/members — add members to a group (creator or admin only)   */
+/* ------------------------------------------------------------------ */
+
+router.post("/:id/members", async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    const me = req.clientUser.userId;
+    const companyId = req.clientUser.companyId;
+    const userIds = Array.isArray(req.body?.userIds)
+      ? req.body.userIds.filter((id) => typeof id === "string")
+      : [];
+
+    if (userIds.length === 0) {
+      return res.status(400).json({ success: false, message: "Select at least one member" });
+    }
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { members: { select: { userId: true } } },
+    });
+    if (!conversation || conversation.companyId !== companyId) {
+      return res.status(404).json({ success: false, message: "Conversation not found" });
+    }
+    if (!conversation.isGroup) {
+      return res.status(400).json({ success: false, message: "Only group chats can have members" });
+    }
+
+    const currentMemberIds = conversation.members.map((m) => m.userId);
+    if (!currentMemberIds.includes(me)) {
+      return res.status(403).json({ success: false, message: "Conversation not found" });
+    }
+
+    const canManage =
+      conversation.createdByUserId === me || req.clientUser.role === "CLIENT_ADMIN";
+    if (!canManage) {
+      return res.status(403).json({ success: false, message: "Not allowed to manage members" });
+    }
+
+    // Verify requested users belong to the same company and are active.
+    const validUsers = await prisma.user.findMany({
+      where: { id: { in: userIds }, companyId, active: true },
+      select: { id: true },
+    });
+    const validIds = validUsers.map((u) => u.id);
+
+    // Skip users who are already members.
+    const toAdd = Array.from(
+      new Set(validIds.filter((id) => !currentMemberIds.includes(id)))
+    );
+
+    if (toAdd.length > 0) {
+      await prisma.conversationMember.createMany({
+        data: toAdd.map((uid) => ({ conversationId, userId: uid })),
+        skipDuplicates: true,
+      });
+    }
+
+    const refreshed = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+    const members = (refreshed?.members || []).map((m) => userMini(m.user));
+    const allCurrentMemberIds = (refreshed?.members || []).map((m) => m.userId);
+
+    notifyMembersChanged(conversationId, { memberIds: allCurrentMemberIds });
+
+    return res.json({ success: true, members });
+  } catch (error) {
+    console.error("Add group members failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to add members" });
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* DELETE /:id/members/:userId — remove a member / leave a group        */
+/* ------------------------------------------------------------------ */
+
+router.delete("/:id/members/:userId", async (req, res) => {
+  try {
+    const conversationId = req.params.id;
+    const targetUserId = req.params.userId;
+    const me = req.clientUser.userId;
+    const companyId = req.clientUser.companyId;
+
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { members: { select: { userId: true } } },
+    });
+    if (!conversation || conversation.companyId !== companyId) {
+      return res.status(404).json({ success: false, message: "Conversation not found" });
+    }
+    if (!conversation.isGroup) {
+      return res.status(400).json({ success: false, message: "Only group chats can have members" });
+    }
+
+    const currentMemberIds = conversation.members.map((m) => m.userId);
+    if (!currentMemberIds.includes(me)) {
+      return res.status(403).json({ success: false, message: "Conversation not found" });
+    }
+    if (!currentMemberIds.includes(targetUserId)) {
+      return res.status(404).json({ success: false, message: "Member not found" });
+    }
+
+    const isSelf = targetUserId === me;
+    const canManage =
+      conversation.createdByUserId === me || req.clientUser.role === "CLIENT_ADMIN";
+    if (!isSelf && !canManage) {
+      return res.status(403).json({ success: false, message: "Not allowed to remove members" });
+    }
+
+    await prisma.conversationMember.delete({
+      where: { conversationId_userId: { conversationId, userId: targetUserId } },
+    });
+
+    const refreshed = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        members: {
+          include: {
+            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+    const members = (refreshed?.members || []).map((m) => userMini(m.user));
+    const remainingMemberIds = (refreshed?.members || []).map((m) => m.userId);
+
+    // Force the removed user's sockets out of the room, then notify the
+    // remaining members AND the removed user so every affected list refreshes.
+    removeUserFromConversationRoom(conversationId, targetUserId);
+    notifyMembersChanged(conversationId, {
+      memberIds: [...remainingMemberIds, targetUserId],
+    });
+
+    return res.json({ success: true, members });
+  } catch (error) {
+    console.error("Remove group member failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to remove member" });
   }
 });
 

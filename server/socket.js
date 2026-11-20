@@ -114,6 +114,40 @@ export async function postConversationMessage({ conversationId, senderUserId, bo
   return payload;
 }
 
+/**
+ * Notify affected clients that a conversation's membership changed (members
+ * added or removed). Emits "conversation:membersChanged" to the conversation
+ * room so joined sockets can refetch, and to each supplied member's personal
+ * "user:<id>" room so their conversation list refreshes even when they don't
+ * currently have the conversation open. No-op if the realtime server isn't
+ * attached yet.
+ */
+export function notifyMembersChanged(conversationId, { memberIds = [] } = {}) {
+  const cid = String(conversationId || "");
+  if (!ioRef || !cid) return;
+
+  ioRef.to(`conversation:${cid}`).emit("conversation:membersChanged", { conversationId: cid });
+
+  const seen = new Set();
+  (memberIds || []).forEach((uid) => {
+    const id = String(uid || "");
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    ioRef.to(`user:${id}`).emit("conversation:membersChanged", { conversationId: cid });
+  });
+}
+
+/**
+ * Force a removed user's sockets to leave the conversation room so they stop
+ * receiving realtime messages for a group they're no longer part of.
+ */
+export function removeUserFromConversationRoom(conversationId, userId) {
+  const cid = String(conversationId || "");
+  const uid = String(userId || "");
+  if (!ioRef || !cid || !uid) return;
+  ioRef.in(`user:${uid}`).socketsLeave(`conversation:${cid}`);
+}
+
 export function attachSocketServer(httpServer, config) {
   const io = new SocketIOServer(httpServer, {
     path: "/socket.io",
