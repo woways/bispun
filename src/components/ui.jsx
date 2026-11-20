@@ -382,10 +382,12 @@ export const Table = ({
   columns,
   rows,
   empty,
+  caption,
 }) => (
   <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
     <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
       <table className="w-full text-sm">
+        {caption ? <caption className="sr-only">{caption}</caption> : null}
         <thead className="bg-slate-50/80 border-b border-slate-200">
           <tr>
             {columns.map(
@@ -397,6 +399,7 @@ export const Table = ({
                   key={
                     index
                   }
+                  scope="col"
                   className="text-left px-4 py-3 font-semibold text-slate-500 text-[10px] uppercase tracking-[0.08em] whitespace-nowrap"
                 >
                   {

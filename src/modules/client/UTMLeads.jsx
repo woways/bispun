@@ -35,6 +35,8 @@ import {
   stageTone,
 } from "../../components/ui";
 
+import DetailModal from "../../components/DetailModal";
+
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import { telHref } from "../../lib/nativeActions";
@@ -751,210 +753,6 @@ function MetricCard({
   return <div className={className}>{content}</div>;
 }
 
-function AnalysisDetailPanel({
-  type,
-  links,
-  leads,
-  onClose,
-}) {
-  if (!type) {
-    return null;
-  }
-
-  const titleMap = {
-    links: "UTM Links",
-    registrations: "Registrations",
-    leads: "UTM Leads",
-    admissions: "Admissions",
-    revenue: "Revenue",
-  };
-
-  const linkById = new Map(
-    links.map((link) => [link.id, link])
-  );
-
-  const contributingLinks =
-    type === "registrations"
-      ? links.filter((link) => Number(link.regs || 0) > 0)
-      : type === "admissions"
-      ? links.filter((link) => Number(link.adm || 0) > 0)
-      : type === "revenue"
-      ? links.filter((link) => Number(link.rev || 0) > 0)
-      : links;
-
-  return (
-    <div
-      id="utm-analysis-details"
-      className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.04)]"
-    >
-      <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-indigo-50/40 px-5 py-4">
-        <div>
-          <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-indigo-600">
-            KPI Details
-          </div>
-          <h3 className="mt-1 text-lg font-bold text-slate-950">
-            {titleMap[type]}
-          </h3>
-          <p className="mt-1 text-[13px] text-slate-500">
-            {type === "registrations"
-              ? "Campaign links contributing to the registration total."
-              : type === "leads"
-              ? "Actual leads attributed to saved UTM links."
-              : type === "admissions"
-              ? "Campaign links contributing admissions."
-              : type === "revenue"
-              ? "Campaign links contributing received admission revenue."
-              : "Saved UTM campaign links for the selected year."}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-white hover:text-slate-800"
-          aria-label="Close KPI details"
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      {type === "leads" ? (
-        <div className="overflow-x-auto">
-          <Table
-            columns={[
-              "Lead ID",
-              "Lead",
-              "Campaign",
-              "Influencer",
-              "Source / Medium",
-              "Stage",
-              "Created",
-            ]}
-            empty="No UTM leads found"
-            rows={leads.map((lead) => {
-              const link = linkById.get(lead.utmLinkId);
-
-              return (
-                <tr key={lead.id} className="hover:bg-slate-50/80">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
-                      {lead.leadDisplayId || "—"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="text-[14px] font-semibold text-slate-900">
-                      {lead.name}
-                    </div>
-                    <div className="mt-0.5 text-[12px] text-slate-500">
-                      {lead.phone || lead.email || "—"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-[13px] text-slate-700">
-                    {link?.campaign || lead.campaign || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[13px] text-slate-700">
-                    {link?.influencerName || "—"}
-                  </td>
-                  <td className="px-4 py-3 text-[13px] text-slate-600">
-                    {link
-                      ? `${link.source} / ${link.medium}`
-                      : `${lead.source || "—"} / ${lead.medium || "—"}`}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge tone={stageTone(lead.stageKey || lead.stage)}>
-                      {lead.stage}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-[12px] text-slate-500">
-                    {formatDate(lead.createdAt)}
-                  </td>
-                </tr>
-              );
-            })}
-          />
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table
-            columns={
-              type === "links"
-                ? [
-                    "Campaign",
-                    "Influencer",
-                    "Source / Medium",
-                    "Registrations",
-                    "Leads",
-                    "Created",
-                  ]
-                : type === "registrations"
-                ? [
-                    "Campaign",
-                    "Influencer",
-                    "Source / Medium",
-                    "Registrations",
-                    "Leads",
-                  ]
-                : [
-                    "Campaign",
-                    "Influencer",
-                    "Source / Medium",
-                    "Admissions",
-                    "Revenue",
-                  ]
-            }
-            empty={`No ${titleMap[type].toLowerCase()} found`}
-            rows={contributingLinks.map((link) => (
-              <tr key={link.id} className="hover:bg-slate-50/80">
-                <td className="px-4 py-3 text-[14px] font-semibold text-slate-900">
-                  {link.campaign}
-                </td>
-                <td className="px-4 py-3 text-[13px] text-slate-700">
-                  {link.influencerName || "—"}
-                </td>
-                <td className="px-4 py-3 text-[13px] text-slate-600">
-                  {link.source} / {link.medium}
-                </td>
-
-                {type === "links" ? (
-                  <>
-                    <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
-                      {Number(link.regs || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
-                      {Number(link.leads || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-[12px] text-slate-500">
-                      {formatDate(link.createdAt)}
-                    </td>
-                  </>
-                ) : type === "registrations" ? (
-                  <>
-                    <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
-                      {Number(link.regs || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-[13px] text-slate-700">
-                      {Number(link.leads || 0)}
-                    </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="px-4 py-3 text-[13px] font-bold text-emerald-700">
-                      {Number(link.adm || 0)}
-                    </td>
-                    <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
-                      ₹{Number(link.rev || 0).toLocaleString("en-IN")}
-                    </td>
-                  </>
-                )}
-              </tr>
-            ))}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
 function downloadCsv(rows) {
   const headers = [
     "Campaign",
@@ -1274,7 +1072,17 @@ export default function UTMLeads({
   // Keeps the just-generated link visible in the panel after Generate & Save
   // (the form resets, but the saved link should still be shown + copyable here).
   const [lastSavedLink, setLastSavedLink] = useState(null);
-  const [analysisDetail, setAnalysisDetail] = useState(null);
+
+  // Drill-down: clicking an analytics KPI card opens a dedicated full page (see
+  // DetailPage) showing ONLY that card's records, instead of an inline panel.
+  // `detailTriggerRef` captures the clicked card so focus returns to it on Back.
+  const [detailView, setDetailView] = useState(null);
+  const detailTriggerRef = useRef(null);
+  function openDetail(key) {
+    detailTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setDetailView(key);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -1745,8 +1553,183 @@ export default function UTMLeads({
     );
   }
 
+  const detailData = detailView ? (() => {
+    const linkById = new Map(links.map((link) => [link.id, link]));
+
+    const contributingLinks =
+      detailView === "registrations"
+        ? links.filter((link) => Number(link.regs || 0) > 0)
+        : detailView === "admissions"
+        ? links.filter((link) => Number(link.adm || 0) > 0)
+        : detailView === "revenue"
+        ? links.filter((link) => Number(link.rev || 0) > 0)
+        : links;
+
+    if (detailView === "leads") {
+        return {
+          eyebrow: "UTM Leads / Analytics",
+          title: "UTM Leads",
+          subtitle: "Actual leads attributed to saved UTM links.",
+          columns: [
+            "Lead ID",
+            "Lead",
+            "Campaign",
+            "Influencer",
+            "Source / Medium",
+            "Stage",
+            "Created",
+          ],
+          empty: "No UTM leads found",
+          rows: utmLeads.map((lead) => {
+            const link = linkById.get(lead.utmLinkId);
+
+            return (
+              <tr key={lead.id} className="hover:bg-slate-50/80">
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                    {lead.leadDisplayId || "—"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-[14px] font-semibold text-slate-800">
+                    {lead.name}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-slate-500">
+                    {lead.phone || lead.email || "—"}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-700">
+                  {link?.campaign || lead.campaign || "—"}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-700">
+                  {link?.influencerName || "—"}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600">
+                  {link
+                    ? `${link.source} / ${link.medium}`
+                    : `${lead.source || "—"} / ${lead.medium || "—"}`}
+                </td>
+                <td className="px-4 py-3">
+                  <Badge tone={stageTone(lead.stageKey || lead.stage)}>
+                    {lead.stage}
+                  </Badge>
+                </td>
+                <td className="px-4 py-3 text-[12px] text-slate-500">
+                  {formatDate(lead.createdAt)}
+                </td>
+              </tr>
+            );
+          }),
+        };
+      }
+
+      const titleMap = {
+        links: "UTM Links",
+        registrations: "Registrations",
+        admissions: "Admissions",
+        revenue: "Revenue",
+      };
+
+      const subtitleMap = {
+        links: "Saved UTM campaign links for the selected year.",
+        registrations:
+          "Campaign links contributing to the registration total.",
+        admissions: "Campaign links contributing admissions.",
+        revenue: "Campaign links contributing received admission revenue.",
+      };
+
+      const columns =
+        detailView === "links"
+          ? [
+              "Campaign",
+              "Influencer",
+              "Source / Medium",
+              "Registrations",
+              "Leads",
+              "Created",
+            ]
+          : detailView === "registrations"
+          ? [
+              "Campaign",
+              "Influencer",
+              "Source / Medium",
+              "Registrations",
+              "Leads",
+            ]
+          : [
+              "Campaign",
+              "Influencer",
+              "Source / Medium",
+              "Admissions",
+              "Revenue",
+            ];
+
+      return {
+        eyebrow: "UTM Leads / Analytics",
+        title: titleMap[detailView],
+        subtitle: subtitleMap[detailView],
+        columns,
+        empty: `No ${titleMap[detailView].toLowerCase()} found`,
+        rows: contributingLinks.map((link) => (
+          <tr key={link.id} className="hover:bg-slate-50/80">
+            <td className="px-4 py-3 text-[14px] font-semibold text-slate-800">
+              {link.campaign}
+            </td>
+            <td className="px-4 py-3 text-[13px] text-slate-700">
+              {link.influencerName || "—"}
+            </td>
+            <td className="px-4 py-3 text-[13px] text-slate-600">
+              {link.source} / {link.medium}
+            </td>
+
+            {detailView === "links" ? (
+              <>
+                <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
+                  {Number(link.regs || 0)}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold text-slate-700">
+                  {Number(link.leads || 0)}
+                </td>
+                <td className="px-4 py-3 text-[12px] text-slate-500">
+                  {formatDate(link.createdAt)}
+                </td>
+              </>
+            ) : detailView === "registrations" ? (
+              <>
+                <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
+                  {Number(link.regs || 0)}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-700">
+                  {Number(link.leads || 0)}
+                </td>
+              </>
+            ) : (
+              <>
+                <td className="px-4 py-3 text-[13px] font-bold text-emerald-700">
+                  {Number(link.adm || 0)}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-bold text-slate-900">
+                  ₹{Number(link.rev || 0).toLocaleString("en-IN")}
+                </td>
+              </>
+            )}
+          </tr>
+        )),
+      };
+    })() : null;
+
   return (
     <div className="space-y-6">
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        onClose={() => setDetailView(null)}
+      />
       <div>
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
           Campaign tracking
@@ -2459,8 +2442,8 @@ export default function UTMLeads({
             value={summary.totalUtmLinks ?? links.length}
             icon={Link2}
             detail="Saved campaign links."
-            onClick={() => setAnalysisDetail("links")}
-            active={analysisDetail === "links"}
+            onClick={() => openDetail("links")}
+            active={detailView === "links"}
           />
 
           <MetricCard
@@ -2468,8 +2451,8 @@ export default function UTMLeads({
             value={summary.totalRegistrations ?? 0}
             icon={UserPlus}
             detail="Tracked registrations."
-            onClick={() => setAnalysisDetail("registrations")}
-            active={analysisDetail === "registrations"}
+            onClick={() => openDetail("registrations")}
+            active={detailView === "registrations"}
           />
 
           <MetricCard
@@ -2477,8 +2460,8 @@ export default function UTMLeads({
             value={summary.totalLeads ?? utmLeads.length}
             icon={Users}
             detail="Tracked UTM leads."
-            onClick={() => setAnalysisDetail("leads")}
-            active={analysisDetail === "leads"}
+            onClick={() => openDetail("leads")}
+            active={detailView === "leads"}
           />
 
           <MetricCard
@@ -2486,8 +2469,8 @@ export default function UTMLeads({
             value={summary.totalAdmissions ?? 0}
             icon={UserCheck}
             detail="Admissions from UTM leads."
-            onClick={() => setAnalysisDetail("admissions")}
-            active={analysisDetail === "admissions"}
+            onClick={() => openDetail("admissions")}
+            active={detailView === "admissions"}
           />
 
           <MetricCard
@@ -2497,17 +2480,10 @@ export default function UTMLeads({
             ).toLocaleString("en-IN")}`}
             icon={IndianRupee}
             detail="Received admission revenue."
-            onClick={() => setAnalysisDetail("revenue")}
-            active={analysisDetail === "revenue"}
+            onClick={() => openDetail("revenue")}
+            active={detailView === "revenue"}
           />
         </div>
-
-        <AnalysisDetailPanel
-          type={analysisDetail}
-          links={links}
-          leads={utmLeads}
-          onClose={() => setAnalysisDetail(null)}
-        />
 
         <div className="grid gap-4 xl:grid-cols-3">
           <PerformanceCard

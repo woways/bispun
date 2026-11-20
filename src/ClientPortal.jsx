@@ -48,6 +48,7 @@ import {
   CalendarClock,
   Search,
   Sun,
+  ChevronLeft,
   ChevronRight,
   Plus,
   Rocket,
@@ -82,7 +83,10 @@ import {
 import {
   PlanPill,
   UpgradeGate,
+  Badge,
+  stageTone,
 } from "./components/ui";
+import DetailModal from "./components/DetailModal";
 
 import {
   API_URL,
@@ -193,6 +197,10 @@ import BillingReceiptModal from "./components/BillingReceiptModal";
 import { BottomSheet, MobileBottomNav } from "./components/mobileUi";
 import { pushBackInterceptor } from "./lib/backStack";
 import { setModuleBackHandler } from "./lib/moduleBack";
+import {
+  recordSectionModule,
+  resolveSectionModule,
+} from "./lib/sectionMemory";
 
 
 function SidebarIcon({
@@ -602,6 +610,29 @@ export default function ClientPortal({
   const [leadStoreDashboardFilter, setLeadStoreDashboardFilter] = useState(null);
   const [revenueDashboardMetric, setRevenueDashboardMetric] = useState(null);
 
+  // Shell-level Back affordance (browser-like): shown whenever the user
+  // navigated here from a previous module, so they can return to the page they
+  // came from (e.g. Dashboard) on BOTH desktop and mobile. Driven by state (not
+  // the module-history ref) so the control re-renders when the stack changes.
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [backTargetLabel, setBackTargetLabel] = useState("");
+
+  // Per-sidebar-section memory: the last module visited within each section, so
+  // returning to a section restores your last page instead of its default. Pure
+  // key logic lives in ./lib/sectionMemory. A ref (not state) because reads
+  // happen inside click handlers, never during render.
+  const sectionLastModuleRef = useRef({});
+
+  // Dashboard "Admissions" KPI opens the All Admissions dedicated page.
+  const [admissionsInitialDetail, setAdmissionsInitialDetail] = useState(null);
+
+  // Open a module from a Dashboard Action-Center row.
+  function openModuleFromDashboard(moduleKey) {
+    const key = String(moduleKey || "").trim();
+    if (!key) return;
+    setModule(key);
+  }
+
   function openLeadStoreRecord(leadId) {
     const id = String(leadId || "").trim();
     if (!id) return;
@@ -609,44 +640,124 @@ export default function ClientPortal({
     setModule("lead-store");
   }
 
-  function openDashboardKpi(key, opts = {}) {
+  // Shell-level KPI drill-down popup. Dashboard & Analytics KPI cards open this
+  // modal OVER the current page (no navigation), so Close returns the user to
+  // exactly where they were — matching every other card's popup. Records come
+  // from the unified KPI endpoint, fetched on open (with a loading state).
+  const [kpiModal, setKpiModal] = useState(null);
+
+  const KPI_REVENUE_KEYS = new Set([
+    "potential-revenue",
+    "received-revenue",
+    "pending-revenue",
+    "current-profit",
+  ]);
+
+  const KPI_LABELS = {
+    "total-leads": "Total Leads",
+    "qualified-leads": "Qualified Leads",
+    "new-leads": "New Leads",
+    admissions: "Admissions",
+    "potential-revenue": "Potential Revenue",
+    "received-revenue": "Received Revenue",
+    "pending-revenue": "Pending Revenue",
+    "current-profit": "Current Profit",
+  };
+
+  async function openKpiModal(key, opts = {}) {
     const metric = String(key || "").trim();
     if (!metric) return;
-
-    // Period-scoped drill-down (Analytics §10.3): when a KPI is clicked for a
-    // specific year (e.g. a Year Comparison column), switch the global workspace
-    // year first so the destination module fetches the SAME period the metric
-    // was computed for. Without this the list would not match the number.
     const drillYear = Number(opts.year);
-    if (Number.isInteger(drillYear) && drillYear >= 2000 && drillYear <= 2100) {
-      setSelectedYear(String(drillYear));
-    }
+    const year =
+      Number.isInteger(drillYear) && drillYear >= 2000 && drillYear <= 2100
+        ? String(drillYear)
+        : selectedYear;
 
-    if (["total-leads", "new-leads", "qualified-leads"].includes(metric)) {
-      setLeadStoreDashboardFilter({
+    setKpiModal({
+      key: metric,
+      loading: true,
+      error: "",
+      items: [],
+      label: KPI_LABELS[metric] || "Details",
+    });
+    try {
+      const result = await apiRequest(
+        `/api/client/analytics/dashboard/kpi/${encodeURIComponent(
+          metric
+        )}?year=${encodeURIComponent(year)}`
+      );
+      setKpiModal({
         key: metric,
-        label:
-          metric === "new-leads"
-            ? "New Leads"
-            : metric === "qualified-leads"
-              ? "Qualified Leads"
-              : "Total Leads",
-        status: opts.status || null,
+        loading: false,
+        error: "",
+        label: result?.label || "Details",
+        items: Array.isArray(result?.items) ? result.items : [],
+        valueLabel: result?.valueLabel || null,
+        displayValue: result?.displayValue || null,
       });
-      setModule("lead-store");
-      return;
-    }
-
-    if (metric === "admissions") {
-      setModule("admissions");
-      return;
-    }
-
-    if (["potential-revenue", "received-revenue", "pending-revenue", "current-profit"].includes(metric)) {
-      setRevenueDashboardMetric(metric);
-      setModule("revenue");
+    } catch (error) {
+      setKpiModal({
+        key: metric,
+        loading: false,
+        error: error?.data?.message || "Couldn't load these records.",
+        items: [],
+        label: "Details",
+      });
     }
   }
+
+  function formatKpiDate(value) {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? "—"
+      : parsed.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        });
+  }
+
+  const kpiModalIsRevenue = kpiModal ? KPI_REVENUE_KEYS.has(kpiModal.key) : false;
+
+  const kpiModalColumns = !kpiModal
+    ? []
+    : kpiModalIsRevenue
+      ? ["Lead ID", "Name", "Phone", "Email", "Owner", "Amount", "Source", "Date"]
+      : ["Lead ID", "Name", "Phone", "Email", "Owner", "Status", "Source", "Created"];
+
+  const kpiModalRows =
+    kpiModal && !kpiModal.loading && !kpiModal.error
+      ? (kpiModal.items || []).map((item) => (
+          <tr key={item.id}>
+            <td className="px-4 py-3 text-slate-500">{item.leadDisplayId || "—"}</td>
+            <td className="px-4 py-3 font-semibold text-slate-800">
+              {item.primary || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">{item.phone || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">{item.email || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">{item.owner || "Unassigned"}</td>
+            {kpiModalIsRevenue ? (
+              <td className="px-4 py-3 tabular-nums text-slate-700">
+                ₹{Number(item.amount || 0).toLocaleString("en-IN")}
+              </td>
+            ) : (
+              <td className="px-4 py-3">
+                <Badge tone={stageTone(item.status)}>{item.status || "—"}</Badge>
+              </td>
+            )}
+            <td className="px-4 py-3 text-slate-600">{item.note || "—"}</td>
+            <td className="px-4 py-3 text-slate-500">
+              {formatKpiDate(item.occurredAt)}
+            </td>
+          </tr>
+        ))
+      : [];
+
+  const kpiModalSubtitle =
+    kpiModal && kpiModalIsRevenue && kpiModal.displayValue
+      ? `${kpiModal.valueLabel || "Total"}: ${kpiModal.displayValue}`
+      : undefined;
 
   // Keep-alive bookkeeping (see KEEPALIVE_ELIGIBLE above). `aliveModules` is an
   // LRU list of currently-mounted eligible modules (most-recent first).
@@ -897,25 +1008,56 @@ export default function ClientPortal({
     }
     prevModuleRef.current = module;
     moduleRef.current = module;
+
+    // Per-section memory: remember the last module visited in this section so
+    // returning to the section (sidebar / bottom nav) restores this page.
+    recordSectionModule(sectionLastModuleRef.current, module);
+
+    // Sync the shell Back affordance from the (now-updated) history stack. The
+    // module-back handler also lands on Dashboard from any non-root module when
+    // the stack is empty, so Back is available any time we're not at the root.
+    const hist = moduleHistoryRef.current;
+    const hasHistory = hist.length > 0;
+    const notRoot = module !== "dashboard";
+    setCanGoBack(hasHistory || notRoot);
+    const prevKey = hasHistory
+      ? hist[hist.length - 1]
+      : notRoot
+        ? "dashboard"
+        : null;
+    setBackTargetLabel(prevKey ? PAGE_META[prevKey]?.label || "" : "");
   }, [module]);
+
+  // Shared "go back one module" used by BOTH the Android hardware-back handler
+  // and the visible shell Back button, so they behave identically. Returns true
+  // when it handled the back action, false at the root (Dashboard, empty stack).
+  function goBackModule() {
+    const history = moduleHistoryRef.current;
+    if (history.length > 0) {
+      isPoppingRef.current = true;
+      setModule(history.pop());
+      return true;
+    }
+    if (moduleRef.current !== "dashboard") {
+      isPoppingRef.current = true;
+      setModule("dashboard");
+      return true;
+    }
+    return false; // root (Dashboard, empty history) -> BackButtonHandler exits
+  }
+
+  // Shell Back button handler: go back, then move focus to the destination's
+  // <main> (reusing the existing focus-to-main mechanism) so keyboard/SR users
+  // aren't stranded on the unmounting button. The existing moduleAnnouncement
+  // live region remains the single announcer of the new module (no 2nd region).
+  function handleShellBack() {
+    if (goBackModule()) focusMainContentSoon();
+  }
 
   // One module-back handler for the whole shell (single-slot; returning the
   // unregister keeps exactly one live handler under StrictMode's double-invoke).
   useEffect(() => {
-    return setModuleBackHandler(() => {
-      const history = moduleHistoryRef.current;
-      if (history.length > 0) {
-        isPoppingRef.current = true;
-        setModule(history.pop());
-        return true;
-      }
-      if (moduleRef.current !== "dashboard") {
-        isPoppingRef.current = true;
-        setModule("dashboard");
-        return true;
-      }
-      return false; // root (Dashboard, empty history) -> BackButtonHandler exits
-    });
+    return setModuleBackHandler(() => goBackModule());
   }, []);
 
   const [
@@ -1526,6 +1668,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     keepAliveEpochRef.current = {};
     keepAliveLastShownRef.current = {};
     keepAliveScrollRef.current = {};
+    sectionLastModuleRef.current = {};
+    setAdmissionsInitialDetail(null);
     setAliveModules(
       KEEPALIVE_ELIGIBLE.has(moduleRef.current)
         ? [moduleRef.current]
@@ -4050,8 +4194,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             selectedYear={selectedYear}
             uiPreferences={uiPreferences}
             onOpenLead={openLeadStoreRecord}
-            onOpenKpi={openDashboardKpi}
-            onOpenModule={setModule}
+            onOpenKpi={openKpiModal}
+            onOpenModule={openModuleFromDashboard}
           />
         );
 
@@ -4061,7 +4205,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         );
 
       case "admissions":
-        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly currentUser={user} />;
+        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly currentUser={user} initialDetail={admissionsInitialDetail} onInitialDetailApplied={() => setAdmissionsInitialDetail(null)} />;
 
       case "domestic-walkins":
         return renderAdmissionsMarketWorkspace({
@@ -4173,7 +4317,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       case "analytics":
         return (
-          <Analytics selectedYear={selectedYear} onDrill={openDashboardKpi} />
+          <Analytics selectedYear={selectedYear} onDrill={openKpiModal} />
         );
 
       case "help":
@@ -4601,6 +4745,21 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
         <div className="flex h-14 items-center gap-2">
+          {/* Back — appears whenever the user navigated here from a previous
+              page; returns to it (browser-like). Icon-only (space-constrained)
+              with a destination-naming aria-label and a 44px touch target. */}
+          {canGoBack && (
+            <button
+              type="button"
+              onClick={handleShellBack}
+              aria-label={
+                backTargetLabel ? `Back to ${backTargetLabel}` : "Back"
+              }
+              className="-ml-1 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <ChevronLeft size={22} aria-hidden="true" />
+            </button>
+          )}
           {/* Brand — primary nav is the bottom bar; header stays compact. */}
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-bold text-slate-950 truncate">
@@ -4652,7 +4811,21 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       <MobileBottomNav
         items={bottomNavItems}
         activeKey={bottomNavActiveKey}
-        onSelect={(key) => setModule(key)}
+        onSelect={(key) => {
+          // Section memory: the Admissions tab restores the last admissions
+          // page visited (any market), not the overview default.
+          if (key === "admissions") {
+            setModule(
+              resolveSectionModule(
+                sectionLastModuleRef.current,
+                "admissions",
+                "admissions"
+              )
+            );
+            return;
+          }
+          setModule(key);
+        }}
         onMore={() => setMobileMoreOpen(true)}
         moreOpen={mobileMoreOpen}
       />
@@ -5346,7 +5519,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                         key={section.key}
                                         type="button"
                                         onClick={() => {
-                                          setModule(section.defaultModule);
+                                          // Section memory: restore the last
+                                          // sub-tab visited in this market
+                                          // instead of resetting to its default.
+                                          setModule(
+                                            resolveSectionModule(
+                                              sectionLastModuleRef.current,
+                                              `admissions:${section.key}`,
+                                              section.defaultModule
+                                            )
+                                          );
                                         }}
                                         className={`relative mt-1 w-full min-h-9 rounded-lg px-2.5 py-2 flex items-center gap-2.5 text-left transition-colors ${
                                           sectionActive
@@ -5461,7 +5643,22 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             }`}
           >
             <div className="h-full px-4 sm:px-6 lg:px-7 flex items-center gap-4">
-              
+              {/* Back — shown whenever the user navigated here from a previous
+                  page; returns to it. Visible "Back" text + a destination-naming
+                  aria-label (Label-in-Name safe: visible text prefixes the name). */}
+              {canGoBack && (
+                <button
+                  type="button"
+                  onClick={handleShellBack}
+                  aria-label={
+                    backTargetLabel ? `Back to ${backTargetLabel}` : "Back"
+                  }
+                  className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                >
+                  <ChevronLeft size={18} aria-hidden="true" />
+                  <span className="text-[13px] font-semibold">Back</span>
+                </button>
+              )}
 
               <div className="relative min-w-0 flex-1 max-w-[520px]">
                 <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -6485,6 +6682,21 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         currentUser={user}
         focusEventId={calendarFocusEventId}
         onFocusConsumed={() => setCalendarFocusEventId(null)}
+      />
+
+      {/* Shell-level KPI drill-down popup (Dashboard + Analytics KPIs). Opens
+          over the current page so Close returns the user to where they were. */}
+      <DetailModal
+        open={!!kpiModal}
+        title={kpiModal?.label}
+        subtitle={kpiModalSubtitle}
+        columns={kpiModalColumns}
+        rows={kpiModalRows}
+        empty="No records found."
+        caption={kpiModal?.label}
+        loading={!!kpiModal?.loading}
+        error={kpiModal?.error || ""}
+        onClose={() => setKpiModal(null)}
       />
 
       {addYearOpen && (

@@ -49,7 +49,9 @@ import {
 import {
   Table,
   Badge,
+  stageTone,
 } from "../../components/ui";
+import DetailModal from "../../components/DetailModal";
 
 import {
   apiRequest,
@@ -3018,6 +3020,18 @@ export default function LeadStore({
   const [leadStoreMetricFilter, setLeadStoreMetricFilter] = useState(null);
   const [metricPanel, setMetricPanel] = useState(null);
 
+  // Drill-down: clicking a KPI/dataset card opens a dedicated full page (see
+  // DetailPage) showing ONLY that card's records, instead of an inline panel or
+  // an in-page list filter. `detailTriggerRef` captures the clicked card so
+  // focus returns to it on Back.
+  const [detailView, setDetailView] = useState(null);
+  const detailTriggerRef = useRef(null);
+  function openDetail(key) {
+    detailTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setDetailView(key);
+  }
+
   const [
     filters,
     setFilters,
@@ -3628,22 +3642,11 @@ export default function LeadStore({
   useEffect(() => {
     const key = String(initialDashboardFilter?.key || "").trim();
     if (!key) return;
-
-    setSub("all");
-    setSearch("");
-    setPage(1);
-    setDashboardLeadFilter({
-      key,
-      label: initialDashboardFilter?.label || "Dashboard Leads",
-    });
-    // Period scoping comes from the global workspace year (set by the caller),
-    // which re-fetches this list for that year. An optional status narrows it
-    // further so the drill-down matches a status-specific KPI exactly.
-    const drillStatus = String(initialDashboardFilter?.status || "").trim();
-    setFilters((prev) => ({
-      ...prev,
-      status: drillStatus || "",
-    }));
+    // Dashboard leads KPIs (total-leads / new-leads / qualified-leads) now open a
+    // dedicated leads page instead of filtering the in-page list. The drill came
+    // from navigation (not a card), so there is no card to restore focus to.
+    detailTriggerRef.current = null;
+    setDetailView(key);
     onInitialDashboardFilterApplied?.();
   }, [initialDashboardFilter]);
 
@@ -3832,7 +3835,12 @@ export default function LeadStore({
               dashboardLeadFilter.key === "total-leads" ||
               (dashboardLeadFilter.key === "new-leads" && lead.stage === "NEW") ||
               (dashboardLeadFilter.key === "qualified-leads" &&
-                (lead.stage === "QUALIFIED" || lead.stage === "ADMITTED"));
+                (lead.stage === "QUALIFIED" || lead.stage === "ADMITTED")) ||
+              // Safety net: an unrecognised drill-down key must not silently
+              // filter every lead out (empty list). Fall back to showing all.
+              !["total-leads", "new-leads", "qualified-leads"].includes(
+                dashboardLeadFilter.key
+              );
 
             const metricMatches =
               !leadStoreMetricFilter ||
@@ -4806,8 +4814,206 @@ export default function LeadStore({
     );
   }
 
+  const detailData = detailView
+    ? (() => {
+      if (detailView === "datasets") {
+        return {
+          eyebrow: "Lead Store / Datasets",
+          title: "Import Batches",
+          subtitle:
+            "Every file or batch imported into Lead Store for this period.",
+          columns: ["Batch", "Type", "Imported", "Duplicates", "Uploaded"],
+          empty: "No import batches yet.",
+          rows: datasets.map((d) => (
+            <tr key={d.id}>
+              <td className="px-4 py-3 font-semibold text-slate-800">{d.name}</td>
+              <td className="px-4 py-3 text-slate-600">{d.typeLabel || d.type}</td>
+              <td className="px-4 py-3 text-slate-600">
+                {d.importedCount ?? d.count ?? 0}
+              </td>
+              <td className="px-4 py-3 text-slate-600">{d.duplicateCount || 0}</td>
+              <td className="px-4 py-3 text-slate-500">
+                {formatDate(d.uploadedAt || d.createdAt)}
+              </td>
+            </tr>
+          )),
+        };
+      }
+
+      if (detailView === "duplicates") {
+        const rows = [];
+        datasets
+          .filter((d) => Number(d.duplicateCount || 0) > 0)
+          .forEach((d) => {
+            if (
+              Array.isArray(d.duplicateDetails) &&
+              d.duplicateDetails.length > 0
+            ) {
+              d.duplicateDetails.forEach((item, index) => {
+                rows.push(
+                  <tr key={`${d.id}-${item.rowNumber || index}`}>
+                    <td className="px-4 py-3 font-semibold text-slate-800">
+                      {d.name}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {item.rowNumber || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-700">
+                      {item.name || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {item.phone || item.email || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {item.reason || item.matchedBy || "Duplicate"}
+                    </td>
+                  </tr>
+                );
+              });
+            } else {
+              rows.push(
+                <tr key={d.id}>
+                  <td className="px-4 py-3 font-semibold text-slate-800">
+                    {d.name}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500" colSpan={3}>
+                    Row-level details aren&apos;t stored for this import.
+                  </td>
+                  <td className="px-4 py-3 text-slate-600">
+                    {d.duplicateCount} skipped
+                  </td>
+                </tr>
+              );
+            }
+          });
+        return {
+          eyebrow: "Lead Store / Datasets",
+          title: "Duplicates Skipped",
+          subtitle: "Rows skipped during import and the duplicate match used.",
+          columns: ["Batch", "Row", "Lead", "Contact", "Reason"],
+          empty: "No duplicate rows recorded.",
+          rows,
+        };
+      }
+
+      const leadRows = (list) =>
+        list.map((lead) => (
+          <tr key={lead.id}>
+            <td className="px-4 py-3 font-semibold text-slate-800">
+              {lead.name || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">{lead.phone || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">{lead.email || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.assignedToName || "Unassigned"}
+            </td>
+            <td className="px-4 py-3">
+              <Badge tone={stageTone(lead.stage)}>{lead.stage || "—"}</Badge>
+            </td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.leadStatus || "Fresh"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.temperature || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.sourceName || lead.source || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">{lead.course || "—"}</td>
+            <td className="px-4 py-3 text-slate-500">
+              {formatDate(lead.createdAt)}
+            </td>
+          </tr>
+        ));
+
+      const LEAD_COLUMNS = [
+        "Name",
+        "Phone",
+        "Email",
+        "Owner",
+        "Stage",
+        "Status",
+        "Temperature",
+        "Source",
+        "Course",
+        "Created",
+      ];
+
+      // Dashboard leads KPIs open as dedicated leads pages.
+      if (detailView === "total-leads") {
+        return {
+          eyebrow: "Dashboard / Leads",
+          title: "Total Leads",
+          subtitle: "Every lead in Lead Store for this period.",
+          columns: LEAD_COLUMNS,
+          empty: "No leads yet.",
+          rows: leadRows(individualLeads),
+        };
+      }
+      if (detailView === "new-leads") {
+        return {
+          eyebrow: "Dashboard / Leads",
+          title: "New Leads",
+          subtitle: "Leads still at the New stage.",
+          columns: LEAD_COLUMNS,
+          empty: "No new leads.",
+          rows: leadRows(individualLeads.filter((l) => l.stage === "NEW")),
+        };
+      }
+      if (detailView === "qualified-leads") {
+        return {
+          eyebrow: "Dashboard / Leads",
+          title: "Qualified Leads",
+          subtitle: "Leads that reached Qualified or Admitted.",
+          columns: LEAD_COLUMNS,
+          empty: "No qualified leads.",
+          rows: leadRows(
+            individualLeads.filter(
+              (l) => l.stage === "QUALIFIED" || l.stage === "ADMITTED"
+            )
+          ),
+        };
+      }
+
+      if (detailView === "imported") {
+        return {
+          eyebrow: "Lead Store / Leads",
+          title: "Imported Leads",
+          subtitle: "Leads created from imported datasets.",
+          columns: LEAD_COLUMNS,
+          empty: "No imported leads yet.",
+          rows: leadRows(individualLeads.filter((l) => l.datasetId)),
+        };
+      }
+
+      return {
+        eyebrow: "Lead Store / Leads",
+        title: "Converted Leads",
+        subtitle: "Lead Store leads that reached Admission Done.",
+        columns: LEAD_COLUMNS,
+        empty: "No converted leads yet.",
+        rows: leadRows(
+          individualLeads.filter(
+            (l) => l.stage === "ADMITTED" || l.leadStatus === "Admission Done"
+          )
+        ),
+      };
+    })()
+    : null;
+
   return (
     <div className="space-y-4">
+      <DetailModal
+        open={!!detailData}
+        title={detailData?.title}
+        subtitle={detailData?.subtitle}
+        columns={detailData?.columns}
+        rows={detailData?.rows}
+        empty={detailData?.empty}
+        caption={detailData?.title}
+        loading={loading && (detailData?.rows?.length ?? 0) === 0}
+        onClose={() => setDetailView(null)}
+      />
       <style>{`
         .form-input {
           width: 100%;
@@ -4923,11 +5129,8 @@ export default function LeadStore({
           icon={Database}
           detail="Files / batches imported into Lead Store"
           tone="indigo"
-          active={metricPanel === "datasets"}
-          onClick={() => {
-            setMetricPanel((current) => current === "datasets" ? null : "datasets");
-            setLeadStoreMetricFilter(null);
-          }}
+          active={detailView === "datasets"}
+          onClick={() => openDetail("datasets")}
         />
 
         <StoreMetric
@@ -4936,24 +5139,8 @@ export default function LeadStore({
           icon={Users}
           detail="Leads created from imported datasets"
           tone="slate"
-          active={leadStoreMetricFilter?.key === "imported"}
-          onClick={() => {
-            setMetricPanel(null);
-            setSub("all");
-            setSearch("");
-            setFilters({
-              status: "",
-              temperature: "",
-              assignedToUserId: "",
-              course: "",
-              source: "",
-              dateFrom: "",
-              dateTo: "",
-            });
-            setDashboardLeadFilter(null);
-            setLeadStoreMetricFilter({ key: "imported", label: "Imported Leads" });
-            setPage(1);
-          }}
+          active={detailView === "imported"}
+          onClick={() => openDetail("imported")}
         />
 
         <StoreMetric
@@ -4962,24 +5149,8 @@ export default function LeadStore({
           icon={UserCheck}
           detail="Lead Store leads that reached Admission Done"
           tone="emerald"
-          active={leadStoreMetricFilter?.key === "converted"}
-          onClick={() => {
-            setMetricPanel(null);
-            setSub("all");
-            setSearch("");
-            setFilters({
-              status: "",
-              temperature: "",
-              assignedToUserId: "",
-              course: "",
-              source: "",
-              dateFrom: "",
-              dateTo: "",
-            });
-            setDashboardLeadFilter(null);
-            setLeadStoreMetricFilter({ key: "converted", label: "Converted Leads" });
-            setPage(1);
-          }}
+          active={detailView === "converted"}
+          onClick={() => openDetail("converted")}
         />
 
         <StoreMetric
@@ -4988,86 +5159,10 @@ export default function LeadStore({
           icon={Layers3}
           detail="Duplicate rows skipped during imports"
           tone="amber"
-          active={metricPanel === "duplicates"}
-          onClick={() => {
-            setMetricPanel((current) => current === "duplicates" ? null : "duplicates");
-            setLeadStoreMetricFilter(null);
-          }}
+          active={detailView === "duplicates"}
+          onClick={() => openDetail("duplicates")}
         />
       </div>
-
-      {metricPanel === "datasets" && (
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[13px] font-bold text-slate-900">Import Batches</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">Each file/import batch that contributes to the Data Sets KPI.</div>
-            </div>
-            <button type="button" onClick={() => setMetricPanel(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600">Close</button>
-          </div>
-          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full text-[12px]">
-              <thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2 text-left">Batch</th><th className="px-3 py-2 text-left">Type</th><th className="px-3 py-2 text-left">Imported</th><th className="px-3 py-2 text-left">Duplicates</th><th className="px-3 py-2 text-left">Uploaded</th></tr></thead>
-              <tbody className="divide-y divide-slate-100">
-                {datasets.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-8 text-center text-slate-400">No import batches yet.</td></tr>
-                ) : datasets.map((dataset) => (
-                  <tr key={dataset.id}>
-                    <td className="px-3 py-2.5 font-semibold text-slate-800">{dataset.name}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{dataset.typeLabel || dataset.type}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{dataset.importedCount ?? dataset.count ?? 0}</td>
-                    <td className="px-3 py-2.5 text-slate-600">{dataset.duplicateCount || 0}</td>
-                    <td className="px-3 py-2.5 text-slate-500">{formatDate(dataset.uploadedAt || dataset.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {metricPanel === "duplicates" && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[13px] font-bold text-slate-900">Duplicates Skipped</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">Skipped import rows and the duplicate match used.</div>
-            </div>
-            <button type="button" onClick={() => setMetricPanel(null)} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600">Close</button>
-          </div>
-          <div className="mt-3 space-y-3">
-            {datasets.filter((dataset) => Number(dataset.duplicateCount || 0) > 0).length === 0 ? (
-              <div className="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-[12px] text-slate-400">No duplicate rows recorded.</div>
-            ) : datasets.filter((dataset) => Number(dataset.duplicateCount || 0) > 0).map((dataset) => (
-              <div key={dataset.id} className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-semibold text-slate-800">{dataset.name}</div>
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700">{dataset.duplicateCount} skipped</span>
-                </div>
-                {Array.isArray(dataset.duplicateDetails) && dataset.duplicateDetails.length > 0 ? (
-                  <div className="mt-2 overflow-x-auto">
-                    <table className="min-w-full text-[11px]">
-                      <thead className="text-slate-400"><tr><th className="px-2 py-1.5 text-left">Row</th><th className="px-2 py-1.5 text-left">Lead</th><th className="px-2 py-1.5 text-left">Contact</th><th className="px-2 py-1.5 text-left">Reason</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {dataset.duplicateDetails.map((item, index) => (
-                          <tr key={`${dataset.id}-${item.rowNumber || index}`}>
-                            <td className="px-2 py-2 text-slate-500">{item.rowNumber || "—"}</td>
-                            <td className="px-2 py-2 font-medium text-slate-700">{item.name || "—"}</td>
-                            <td className="px-2 py-2 text-slate-500">{item.phone || item.email || "—"}</td>
-                            <td className="px-2 py-2 text-slate-600">{item.reason || item.matchedBy || "Duplicate"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="mt-2 text-[11px] text-slate-500">This older import stores the duplicate count only. Row-level duplicate details will be available for new imports.</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {leadStoreMetricFilter && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
