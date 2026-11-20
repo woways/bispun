@@ -31,3 +31,6 @@ configure-dev-advanced.mjs
 .claude/
 .windsurf/
 android/.idea/
+
+# Local manual-QA credentials note (never commit)
+.manual-qa-credentials.txt
