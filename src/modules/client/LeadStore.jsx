@@ -195,11 +195,13 @@ const FIXED_LEAD_STATUSES = [
   "Not Answering",
   "Not Reachable",
   "Lead Lost",
+  "Application Done",
   "Admission Done",
 ];
 
 function statusSelectClass(value) {
   if (value === "Admission Done") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (value === "Application Done") return "border-violet-200 bg-violet-50 text-violet-700";
   if (value === "Lead Lost") return "border-rose-200 bg-rose-50 text-rose-700";
   if (value === "Not Answering" || value === "Not Reachable") return "border-amber-200 bg-amber-50 text-amber-700";
   if (value === "Call Initiated") return "border-indigo-200 bg-indigo-50 text-indigo-700";
@@ -561,6 +563,7 @@ function LeadStatusSelect({
   options,
   disabled,
   onChangeStatus,
+  onAdmissionDone,
 }) {
   const [customOpen, setCustomOpen] = useState(false);
   const [customStatus, setCustomStatus] = useState("");
@@ -573,6 +576,11 @@ function LeadStatusSelect({
     if (value === "__OTHER__") {
       setCustomStatus("");
       setCustomOpen(true);
+      return;
+    }
+
+    if (value === "Admission Done") {
+      onAdmissionDone?.(lead);
       return;
     }
 
@@ -652,6 +660,193 @@ function LeadStatusSelect({
       ))}
       <option value="__OTHER__">Other</option>
     </select>
+  );
+}
+
+function AdmissionDoneModal({ lead, onClose, onSaved }) {
+  const dialogRef = useRef(null);
+  const [streams, setStreams] = useState([]);
+  const [colleges, setColleges] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [streamId, setStreamId] = useState("");
+  const [collegeId, setCollegeId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingOptions, setLoadingOptions] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useOverlayDismiss(Boolean(lead), onClose, { containerRef: dialogRef });
+
+  useEffect(() => {
+    let active = true;
+    if (!lead) return undefined;
+
+    setLoading(true);
+    setError("");
+    apiRequest("/api/client/admissions/streams?market=DOMESTIC")
+      .then((data) => {
+        if (active) setStreams(Array.isArray(data?.streams) ? data.streams : []);
+      })
+      .catch((requestError) => {
+        if (active) setError(requestError?.data?.message || "Unable to load streams.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [lead]);
+
+  async function selectStream(value) {
+    setStreamId(value);
+    setCollegeId("");
+    setBranchId("");
+    setColleges([]);
+    setBranches([]);
+    setError("");
+    if (!value) return;
+
+    setLoadingOptions(true);
+    try {
+      const stream = streams.find((item) => item.id === value);
+      const market = stream?.market || "DOMESTIC";
+      const data = await apiRequest(
+        `/api/client/admissions/partners?streamId=${encodeURIComponent(value)}&market=${encodeURIComponent(market)}`
+      );
+      setColleges(Array.isArray(data?.partners) ? data.partners : []);
+    } catch (requestError) {
+      setError(requestError?.data?.message || "Unable to load colleges.");
+    } finally {
+      setLoadingOptions(false);
+    }
+  }
+
+  async function selectCollege(value) {
+    setCollegeId(value);
+    setBranchId("");
+    setBranches([]);
+    setError("");
+    if (!value) return;
+
+    setLoadingOptions(true);
+    try {
+      const stream = streams.find((item) => item.id === streamId);
+      const market = stream?.market || "DOMESTIC";
+      const data = await apiRequest(
+        `/api/client/admissions/branches?partnerId=${encodeURIComponent(value)}&market=${encodeURIComponent(market)}`
+      );
+      setBranches(Array.isArray(data?.branches) ? data.branches : []);
+    } catch (requestError) {
+      setError(requestError?.data?.message || "Unable to load branches.");
+    } finally {
+      setLoadingOptions(false);
+    }
+  }
+
+  async function saveAdmission() {
+    const stream = streams.find((item) => item.id === streamId);
+    const college = colleges.find((item) => item.id === collegeId);
+    const branch = branches.find((item) => item.id === branchId);
+    if (!stream || !college || !branch || saving) return;
+
+    setSaving(true);
+    setError("");
+    try {
+      const data = await apiRequest("/api/client/admissions", {
+        method: "POST",
+        body: JSON.stringify({
+          market: stream.market || "DOMESTIC",
+          partnerId: college.id,
+          branchId: branch.id,
+          leadId: lead.id,
+          studentName: lead.name,
+          studentPhone: lead.phone,
+          studentEmail: lead.email || "",
+          universityName: college.name,
+          college: college.name,
+          course: branch.name,
+          counsellorName: lead.assignedToName || "",
+          totalFee: 0,
+          paidAmount: 0,
+          revenueStatus: "BUFFER_ZONE",
+          status: "ONGOING",
+          admissionDate: new Date().toISOString(),
+          notes: "Created from Lead Store Admission Done status",
+        }),
+      });
+      onSaved?.(data);
+    } catch (requestError) {
+      setError(requestError?.data?.message || "Unable to create admission.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!lead || typeof document === "undefined") return null;
+
+  const canSave = Boolean(streamId && collegeId && branchId) && !saving;
+  return createPortal(
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-[1px]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admission-done-title"
+        tabIndex={-1}
+        className="w-full max-w-lg overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none"
+      >
+        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 id="admission-done-title" className="text-[17px] font-bold text-slate-950">Complete Admission</h2>
+            <p className="mt-1 text-[12px] text-slate-500">Select the destination for {lead.name || "this lead"}.</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close admission form">
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="space-y-4 p-5">
+          {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-700">{error}</div> : null}
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-[13px] text-slate-500"><Loader2 size={16} className="animate-spin" /> Loading admission options...</div>
+          ) : (
+            <>
+              <Field label="Stream" required>
+                <select value={streamId} onChange={(event) => selectStream(event.target.value)} disabled={saving} className="form-input">
+                  <option value="">Select stream</option>
+                  {streams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </Field>
+              <Field label="College" required>
+                <select value={collegeId} onChange={(event) => selectCollege(event.target.value)} disabled={!streamId || loadingOptions || saving} className="form-input">
+                  <option value="">Select college</option>
+                  {colleges.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </Field>
+              <Field label="Branch" required>
+                <select value={branchId} onChange={(event) => setBranchId(event.target.value)} disabled={!collegeId || loadingOptions || saving} className="form-input">
+                  <option value="">Select branch</option>
+                  {branches.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </Field>
+              {loadingOptions ? <div className="flex items-center gap-2 text-[11px] text-slate-400"><Loader2 size={12} className="animate-spin" /> Loading options...</div> : null}
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4">
+          <button type="button" onClick={onClose} disabled={saving} className="h-9 rounded-lg border border-slate-200 bg-white px-4 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={saveAdmission} disabled={!canSave} className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-4 text-[12px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Save Admission
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }
 
@@ -3112,6 +3307,7 @@ export default function LeadStore({
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
   const [leadStatusOptions, setLeadStatusOptions] = useState(FIXED_LEAD_STATUSES);
+  const [admissionLead, setAdmissionLead] = useState(null);
 
   const [messageComposerOpen, setMessageComposerOpen] = useState(false);
   const [messageLeadIds, setMessageLeadIds] = useState([]);
@@ -4675,6 +4871,7 @@ export default function LeadStore({
             options={individualStatusOptions}
             disabled={statusUpdatingId === lead.id}
             onChangeStatus={updateLeadStatus}
+            onAdmissionDone={setAdmissionLead}
           />
         </td>
       );
@@ -5004,6 +5201,24 @@ export default function LeadStore({
 
   return (
     <div className="space-y-3">
+      <AdmissionDoneModal
+        lead={admissionLead}
+        onClose={() => setAdmissionLead(null)}
+        onSaved={() => {
+          const leadId = admissionLead?.id;
+          setIndividualLeads((current) => current.map((lead) =>
+            lead.id === leadId
+              ? { ...lead, leadStatus: "Admission Done", stage: "ADMITTED", isAdmissionsSynced: true }
+              : lead
+          ));
+          setDetailsLead((current) => current?.id === leadId
+            ? { ...current, leadStatus: "Admission Done", stage: "ADMITTED", isAdmissionsSynced: true }
+            : current
+          );
+          setAdmissionLead(null);
+          setSuccessMessage("Admission created successfully.");
+        }}
+      />
       <DetailModal
         open={!!detailData}
         title={detailData?.title}
@@ -5123,7 +5338,7 @@ export default function LeadStore({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StoreMetric
           label="Import Batches"
           value={datasets.length}
