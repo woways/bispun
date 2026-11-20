@@ -287,15 +287,15 @@ export default function MyReferrals({ currentUser }) {
       </div>
 
       {/* SUMMARY TILES */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <span className="text-[12px] font-medium text-slate-500">Total referrals</span>
-              <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700">{stats.total}</div>
-              <div className="mt-1 text-[12px] text-slate-500">{convRate}% reached Admitted</div>
+              <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total referrals</span>
+              <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700 native:text-[20px]">{stats.total}</div>
+              <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">{convRate}% reached Admitted</div>
             </div>
-            <div className="relative h-14 w-14 flex-shrink-0" aria-hidden="true">
+            <div className="relative h-14 w-14 flex-shrink-0 native:hidden" aria-hidden="true">
               <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
                 <circle cx="18" cy="18" r="15.9" fill="none" className="text-slate-200" stroke="currentColor" strokeWidth="4" />
                 <circle cx="18" cy="18" r="15.9" fill="none" className="text-brand-600" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - convRate} />
@@ -305,32 +305,32 @@ export default function MyReferrals({ currentUser }) {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500">In progress</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600" aria-hidden="true">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">In progress</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
               <Clock3 size={18} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900">{stats.inProgress}</div>
-          <div className="mt-1 text-[12px] text-slate-500">Still moving through stages</div>
+          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.inProgress}</div>
+          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Still moving through stages</div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500">Admitted</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600" aria-hidden="true">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Admitted</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
               <CheckCircle2 size={18} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900">{stats.admitted}</div>
-          <div className="mt-1 text-[12px] text-slate-500">Reached the final stage</div>
+          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.admitted}</div>
+          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Reached the final stage</div>
         </div>
       </div>
 
       {/* SHARE + QR */}
       <div className={CARD}>
-        <h2 className="text-[17px] font-semibold text-slate-950">Share &amp; earn</h2>
+        <h2 className="text-[17px] font-semibold text-slate-950">Share your link</h2>
         <p className="mt-1 text-[13px] text-slate-500">Copy your code or link and share it anywhere.</p>
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.6fr_auto]">
           <div className="space-y-3">
@@ -393,10 +393,10 @@ export default function MyReferrals({ currentUser }) {
             </div>
           </div>
 
-          {/* QR */}
-          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-center">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Scan to refer</div>
-            <div className="rounded-xl border border-slate-200 bg-white p-2">
+          {/* QR — centered on web; QR-left / text-right on the native app */}
+          <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-center native:flex-row native:items-center native:justify-start native:gap-3 native:text-left">
+            <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500 native:order-2 native:flex-1">Scan to refer<span className="hidden native:mt-0.5 native:block native:text-[11px] native:font-normal native:normal-case native:tracking-normal native:text-slate-500">Point a phone camera at this code to open your signup link.</span></div>
+            <div className="rounded-xl border border-slate-200 bg-white p-2 native:order-1 native:shrink-0">
               {link ? (
                 <img src={qrUrl(link)} alt="QR code linking to your referral signup page" width="120" height="120" className="rounded" />
               ) : (

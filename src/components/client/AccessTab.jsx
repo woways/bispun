@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Info, ChevronRight, Check, Minus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Info, ChevronRight, Check, Minus, ArrowLeft, LockKeyhole } from "lucide-react";
 import {
   ACTIONS,
   SCOPES,
@@ -29,17 +29,38 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
   const [drafts, setDrafts] = useState(() =>
     Object.fromEntries(levels.map((l) => [l.id, normalizeLevelPermissions(l.permissions)]))
   );
-  const [openPages, setOpenPages] = useState(() => new Set(["dashboard", "lead-store"]));
+  const [routePage, setRoutePage] = useState(() => new URLSearchParams(window.location.search).get("permissionPage") || "");
   const [openStreams, setOpenStreams] = useState(() => new Set());
   const [dirty, setDirty] = useState(false);
 
   const cur = ordered.find((l) => l.id === curId) || ordered[0];
   const perms = cur ? drafts[cur.id] || normalizeLevelPermissions() : null;
+  const selectedPage = useMemo(
+    () => ACCESS_GROUPS.flatMap((group) => group.pages.map((page) => ({ ...page, group }))).find((page) => page.id === routePage) || null,
+    [routePage]
+  );
+  const adminLevel = String(cur?.name || "").trim().toLowerCase() === "admin" || String(cur?.code || "").trim().toUpperCase() === "ADM";
+  const editable = canEdit && !adminLevel;
   const streams = useMemo(() => {
     const out = [];
     (admissionsTree?.markets || []).forEach((m) => (m.streams || []).forEach((s) => out.push(s)));
     return out;
   }, [admissionsTree]);
+
+  useEffect(() => {
+    const onPopState = () => setRoutePage(new URLSearchParams(window.location.search).get("permissionPage") || "");
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  function navigateToPage(pageId = "") {
+    const params = new URLSearchParams(window.location.search);
+    if (pageId) params.set("permissionPage", pageId);
+    else params.delete("permissionPage");
+    const query = params.toString();
+    window.history.pushState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    setRoutePage(pageId);
+  }
 
   if (!cur) {
     return (
@@ -51,7 +72,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
 
   /* ---------- mutators ---------- */
   function mutate(fn) {
-    if (!canEdit) return;
+    if (!editable) return;
     setDrafts((d) => {
       const next = { ...d, [cur.id]: structuredClone(d[cur.id] || normalizeLevelPermissions()) };
       fn(next[cur.id]);
@@ -72,12 +93,22 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
         if (g.locked) return;
         g.pages.forEach((pg) =>
           pg.comps.forEach((c) => {
-            if (!c.acts.includes(act) || act === "View") return;
+            if (!c.acts.includes(act)) return;
             p.components[c.id] = p.components[c.id] || {};
             if (on) p.components[c.id][act] = true;
             else delete p.components[c.id][act];
           })
         );
+      });
+    });
+  const setPageEnabled = (page, enabled) =>
+    mutate((p) => {
+      page.comps.forEach((component) => {
+        if (enabled) {
+          p.components[component.id] = Object.fromEntries(component.acts.map((action) => [action, true]));
+        } else {
+          delete p.components[component.id];
+        }
       });
     });
   const toggleCollege = (streamId, collegeId) =>
@@ -110,12 +141,6 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
     );
     return on === 0 ? "none" : on === tot ? "all" : "some";
   };
-  const togglePage = (id) =>
-    setOpenPages((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
   const toggleStreamOpen = (id) =>
     setOpenStreams((s) => {
       const n = new Set(s);
@@ -131,7 +156,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
       <div>
         <h3 className="text-[20px] font-extrabold text-slate-900">Access</h3>
         <p className="mt-1 max-w-[760px] text-[13px] leading-relaxed text-slate-500">
-          Pick a level, then set three things. Permissions live on the level — every user
+          Pick a level, then set its data scope and module permissions. Permissions live on the level — every user
           inherits from their level. <b className="text-slate-700">Administrators always have full access.</b>{" "}
           Managers fine-tune individuals on the People tab.
         </p>
@@ -141,6 +166,13 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
         <div className="flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-[12.5px] leading-relaxed text-accent-800">
           <Info size={16} className="mt-0.5 shrink-0" />
           Level defaults are set by Administrators — shown read-only. Adjust your own team members on the People tab.
+        </div>
+      )}
+
+      {adminLevel && (
+        <div className="flex gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-[12.5px] leading-relaxed text-indigo-800">
+          <LockKeyhole size={16} className="mt-0.5 shrink-0" />
+          Admin access is protected and always ON. It cannot be reduced or overridden.
         </div>
       )}
 
@@ -165,6 +197,61 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
         </div>
       </div>
 
+      {selectedPage && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+          <button type="button" onClick={() => navigateToPage("")} className="mb-4 inline-flex items-center gap-2 text-[13px] font-bold text-brand-700 hover:text-brand-800">
+            <ArrowLeft size={15} /> Back to all pages
+          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">{selectedPage.group.g}</div>
+              <h3 className="mt-1 text-[20px] font-extrabold text-slate-900">{selectedPage.name} permissions</h3>
+              <p className="mt-1 text-[12.5px] text-slate-500">Configure every component and applicable action for <b>{cur.name}</b>.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{selectedPage.comps.length} components</span>
+              <ToggleSwitch
+                on={adminLevel || pageState(selectedPage) !== "none"}
+                disabled={!editable}
+                label={`${selectedPage.name} access`}
+                onClick={() => setPageEnabled(selectedPage, pageState(selectedPage) === "none")}
+              />
+            </div>
+          </div>
+          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+            <table className="min-w-full text-left">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 text-[12px] font-bold text-slate-600">Component</th>
+                  <th className="px-4 py-3 text-[12px] font-bold text-slate-600">Permissions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {selectedPage.comps.map((component) => (
+                  <tr key={component.id}>
+                    <td className="whitespace-nowrap px-4 py-3 text-[13.5px] font-semibold text-slate-800">{component.name}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        {component.acts.map((action) => (
+                          <ActionPill
+                            key={action}
+                            label={action}
+                            on={adminLevel || !!perms.components[component.id]?.[action]}
+                            disabled={!editable}
+                            onClick={() => toggleComp(component.id, action)}
+                          />
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {!selectedPage && <>
       {/* Q1 scope */}
       <Question n={1} title={`Whose data can ${levelName} see?`} sub="The data scope applied to leads, admissions & tasks.">
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -177,7 +264,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
                 onClick={() => setScope(v)}
                 className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
                   sel ? "border-brand-600 bg-brand-50" : "border-slate-200 bg-white hover:border-slate-300"
-                } ${canEdit ? "" : "cursor-default opacity-80"}`}
+                } ${editable ? "" : "cursor-default opacity-80"}`}
               >
                 <span
                   className={`flex shrink-0 items-center justify-center rounded-full border-2 ${
@@ -201,25 +288,17 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
       <Question
         n={2}
         title={`What can ${levelName} do?`}
-        sub="A quick roll-up across everything they can see — or fine-tune per component below. View is always on. Everyone can still do their own daily work; Settings & Organization stay with Admins."
+        sub="Use these master toggles for an action across all pages, or fine-tune it inside each page. Settings & Organization stay with Admins."
       >
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           {ACTIONS.map((a) => {
-            const locked = a === "View";
-            const on = anyAction[a];
+            const locked = adminLevel;
+            const on = adminLevel || anyAction[a];
             return (
-              <button
-                key={a}
-                type="button"
-                disabled={locked || !canEdit}
-                onClick={() => bulkAction(a, !on)}
-                className={`flex items-center gap-2 text-[14px] ${
-                  locked ? "cursor-not-allowed text-slate-400" : "text-slate-800"
-                }`}
-              >
-                <CheckBox on={on} locked={locked} />
-                {a}
-              </button>
+              <div key={a} className="flex min-w-[118px] items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <span className={`text-[13px] font-semibold ${locked ? "text-slate-400" : "text-slate-700"}`}>{a}</span>
+                <ToggleSwitch on={on} disabled={locked || !editable} label={`${a} all pages`} onClick={() => bulkAction(a, !on)} />
+              </div>
             );
           })}
         </div>
@@ -228,8 +307,8 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
       {/* Q3 pages + components */}
       <Question
         n={3}
-        title={`Which menus & components can ${levelName} open?`}
-        sub="Expand a page to grant or remove each component's actions. The page circle shows all / some / none granted."
+        title={`Which menus can ${levelName} open?`}
+        sub="Click a page name to open its dedicated component and action permission screen."
       >
         {ACCESS_GROUPS.map((grp) => (
           <div key={grp.g}>
@@ -245,60 +324,42 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
               onToggleOpen={toggleStreamOpen}
               onToggleCollege={toggleCollege}
               onToggleStreamAll={toggleStreamAll}
-              canEdit={canEdit}
+              canEdit={editable}
             />}
 
             {grp.pages.map((page) => {
-              const st = grp.locked ? "none" : pageState(page);
-              const open = openPages.has(page.id);
+              const st = adminLevel ? "all" : grp.locked ? "none" : pageState(page);
               return (
-                <div key={page.id} className={`mb-2 overflow-hidden rounded-xl border border-slate-200 ${grp.locked ? "opacity-60" : ""}`}>
+                <div key={page.id} className={`mb-2 flex items-center gap-3 overflow-hidden rounded-xl border border-slate-200 px-3.5 py-3 ${grp.locked ? "opacity-60" : ""}`}>
                   <button
                     type="button"
-                    onClick={() => !grp.locked && togglePage(page.id)}
-                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+                    onClick={() => !grp.locked && navigateToPage(page.id)}
+                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
                   >
                     <PageCircle state={st} />
                     <span className="flex-1 text-[14.5px] font-bold text-slate-800">{page.name}</span>
                     <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
                       {grp.locked ? "Admin only" : `${page.comps.length} components`}
-                      {!grp.locked && <ChevronRight size={13} className={`transition ${open ? "rotate-90" : ""}`} />}
+                      {!grp.locked && <ChevronRight size={13} />}
                     </span>
                   </button>
-
-                  {open && !grp.locked && (
-                    <div className="border-t border-slate-100 px-3.5 py-1">
-                      {page.comps.map((c) => (
-                        <div key={c.id} className="flex items-center gap-3 border-t border-slate-50 py-2.5 first:border-t-0">
-                          <span className="min-w-[120px] flex-1 text-[13.5px] text-slate-700">{c.name}</span>
-                          <div className="flex flex-wrap justify-end gap-1.5">
-                            {ACTIONS.filter((a) => c.acts.includes(a)).map((a) => {
-                              const on = !!perms.components[c.id]?.[a] || (a === "View" && pageCompHasAny(perms, c.id));
-                              const locked = a === "View";
-                              return (
-                                <ActionPill
-                                  key={a}
-                                  label={a}
-                                  on={on}
-                                  disabled={locked || !canEdit}
-                                  onClick={() => toggleComp(c.id, a)}
-                                />
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <ToggleSwitch
+                    on={adminLevel || st !== "none"}
+                    mixed={!adminLevel && st === "some"}
+                    disabled={!editable || grp.locked}
+                    label={`${page.name} access`}
+                    onClick={() => setPageEnabled(page, st === "none")}
+                  />
                 </div>
               );
             })}
           </div>
         ))}
       </Question>
+      </>}
 
       {/* save bar */}
-      {canEdit && (
+      {editable && (
         <div className="sticky bottom-0 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
           <span className="text-[12.5px] text-slate-500">
             {dirty ? "Unsaved changes to " : "No unsaved changes · "}
@@ -339,24 +400,6 @@ function Question({ n, title, sub, children }) {
   );
 }
 
-function CheckBox({ on, locked }) {
-  return (
-    <span
-      className={`flex h-[18px] w-[18px] items-center justify-center rounded-[5px] border-2 ${
-        locked
-          ? on
-            ? "border-slate-400 bg-slate-400"
-            : "border-slate-300 bg-slate-200"
-          : on
-          ? "border-emerald-600 bg-emerald-600"
-          : "border-slate-300 bg-white"
-      }`}
-    >
-      {on && <Check size={12} strokeWidth={3.5} className="text-white" />}
-    </span>
-  );
-}
-
 function PageCircle({ state }) {
   const on = state !== "none";
   return (
@@ -376,20 +419,34 @@ function ActionPill({ label, on, disabled, onClick }) {
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11.5px] transition ${
+      className={`flex min-w-[112px] items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px] transition ${
         on
           ? "border-emerald-200 bg-emerald-50 font-bold text-emerald-700"
           : "border-slate-200 bg-white text-slate-500"
       } ${disabled ? "opacity-40" : "hover:border-slate-300"}`}
     >
-      <span
-        className={`flex h-[13px] w-[13px] items-center justify-center rounded-[3px] border-[1.6px] ${
-          on ? "border-emerald-600 bg-emerald-600" : "border-slate-300"
-        }`}
-      >
-        {on && <Check size={9} strokeWidth={4} className="text-white" />}
-      </span>
       {label}
+      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-600" : "bg-slate-300"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+      </span>
+    </button>
+  );
+}
+
+function ToggleSwitch({ on, mixed = false, disabled = false, label, onClick }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+        on ? (mixed ? "bg-amber-500" : "bg-emerald-600") : "bg-slate-300"
+      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+    >
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
     </button>
   );
 }

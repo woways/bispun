@@ -12,7 +12,7 @@
  * flag roll-up in sync between the two.
  */
 
-export const ACTIONS = ["View", "Create", "Edit", "Delete", "Assign", "Review", "Approve", "Comment", "Export"];
+export const ACTIONS = ["View", "Create", "Edit", "Delete", "Assign", "Review", "Approve", "Comment", "Import", "Message", "Export"];
 export const SCOPE_VALUES = ["self", "team", "dept", "everyone"];
 
 export const ALL_FLAGS = [
@@ -32,7 +32,7 @@ export const COMPONENT_TO_FLAG = {
   "dash.kpi": null, "dash.action": null, "dash.cal": null,
   "chat.convo": null, "chat.delete": null, "chat.meet": null,
   "goals.targets": "canViewTeamTargets",
-  "ls.list": "canManageLeads", "ls.detail": "canManageLeads", "ls.add": "canManageLeads",
+  "ls.list": "canManageLeads", "ls.detail": "canManageLeads", "ls.add": "canManageLeads", "ls.message": "canManageLeads",
   "ls.import": "canManageLeads", "ls.activity": "canManageLeads", "ls.nurture": "canManageLeads", "ls.kpi": "canManageLeads",
   "utm.links": "canManageLeads", "utm.analytics": "canManageLeads",
   "adm.list": "canManageAdmissions", "adm.kpi": "canManageAdmissions",
@@ -83,6 +83,43 @@ export function fullLevelPermissions() {
     components[cid] = Object.fromEntries(ACTIONS.map((a) => [a, true]));
   }
   return { scope: "everyone", components, admissions: { all: true, streamIds: [], collegeIds: [] } };
+}
+
+/** Bridge level/component permissions to the legacy pageAccess shape that the
+ * existing portal and API route guards already enforce. */
+export function pageAccessFromLevelPermissions(raw) {
+  const perms = normalizeLevelPermissions(raw);
+  const allowed = (id) => Object.values(perms.components[id] || {}).some(Boolean);
+  const dashboardMap = [
+    ["business-pulse", "dash.kpi"],
+    ["revenue-trend", "dash.kpi"],
+    ["leads-by-source", "dash.kpi"],
+    ["action-center", "dash.action"],
+    ["recent-admissions", "dash.action"],
+    ["admissions-by-month", "dash.cal"],
+    ["team-performance", "dash.kpi"],
+  ];
+  const dashboardSections = dashboardMap.filter(([, id]) => allowed(id)).map(([section]) => section);
+  const financeSections = [
+    ...(allowed("fin.revenue") || allowed("fin.profit") ? ["overview"] : []),
+    ...(allowed("fin.expenses") ? ["expenses"] : []),
+  ];
+  const insightSections = allowed("an.metrics") || allowed("an.year") ? ["overview", "comparison"] : [];
+  return {
+    __override: false,
+    chat: { deleteChats: allowed("chat.delete") },
+    dashboard: { all: dashboardSections.length === 7, sections: dashboardSections },
+    admissions: {
+      all: perms.admissions.all,
+      markets: [],
+      streamIds: perms.admissions.streamIds,
+      collegeIds: perms.admissions.collegeIds,
+      branchIds: [],
+      attachments: allowed("admd.attach"),
+    },
+    finance: { all: financeSections.length === 2, sections: financeSections },
+    insights: { all: insightSections.length === 2, sections: insightSections },
+  };
 }
 
 /**

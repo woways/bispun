@@ -189,6 +189,10 @@ router.get("/", async (req, res) => {
         id: item.id,
         amount: item.amount,
         status: item.status,
+        // source distinguishes a Super-Admin "Mark credited" (ADMIN_CREDIT) from
+        // a legacy client-initiated request (CLIENT_REQUEST) so the history is
+        // unambiguous about how each entry was created.
+        source: item.source,
         paymentReference: item.paymentReference,
         adminNote: item.adminNote,
         requestedAt: item.requestedAt,

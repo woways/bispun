@@ -208,7 +208,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
   function Dropdown({ id, label, items, selected, onToggle, onClear, render }) {
     const isOpen = open === id;
     return (
-      <div className="relative">
+      <div className="relative native:shrink-0">
         <button
           type="button"
           onClick={() => setOpen(isOpen ? "" : id)}
@@ -278,8 +278,8 @@ export default function GoalsAndTargetsAll({ onBack }) {
       </div>
 
       {/* Filter bar */}
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
-        <div className="relative min-w-[220px] flex-1">
+      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+        <div className="relative min-w-[220px] flex-1 native:min-w-0 native:w-[200px] native:flex-none native:shrink-0">
           <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search}
@@ -309,7 +309,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
           onToggle={(v) => toggle(setMonthFilter, monthFilter, v)} onClear={() => setMonthFilter([])}
           render={{ value: (m) => m, label: (m) => MONTH_NAMES[m-1] }} />
 
-        <span className="ml-auto text-[13px] font-semibold text-slate-400">{filtered.length} employees</span>
+        <span className="ml-auto text-[13px] font-semibold text-slate-400 native:ml-1 native:shrink-0 native:self-center native:whitespace-nowrap">{filtered.length} employees</span>
       </div>
 
       {error && (
@@ -325,7 +325,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
             <table className="border-collapse text-center text-[13px]" style={{ minWidth: "max-content" }}>
               <thead>
                 <tr className="text-slate-500">

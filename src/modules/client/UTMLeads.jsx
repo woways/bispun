@@ -39,6 +39,7 @@ import DetailModal from "../../components/DetailModal";
 
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
+import { telHref } from "../../lib/nativeActions";
 
 const UTM_MEDIUM_OPTIONS = [
   "Social",
@@ -1001,7 +1002,7 @@ function PhoneAction({ phone, name }) {
           </button>
 
           <a
-            href={`tel:${phone}`}
+            href={telHref(phone)}
             onClick={() => setMenu(null)}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
           >
@@ -2065,8 +2066,8 @@ export default function UTMLeads({
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-3">
-          <div className="grid gap-2 xl:grid-cols-[1fr_180px_180px_150px_150px]">
-            <div className="relative">
+          <div className="grid gap-2 xl:grid-cols-[1fr_180px_180px_150px_150px] native:flex native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+            <div className="relative native:w-[230px] native:shrink-0">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -2077,6 +2078,7 @@ export default function UTMLeads({
                 onChange={(event) =>
                   setLinkSearch(event.target.value)
                 }
+                aria-label="Search saved links"
                 placeholder="Search campaign, influencer, source, medium, URL or latest lead..."
                 className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px]"
               />
@@ -2087,7 +2089,7 @@ export default function UTMLeads({
               onChange={(event) =>
                 setSourceFilter(event.target.value)
               }
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 native:w-[150px] native:shrink-0"
             >
               <option value="">All Sources</option>
               {sourceOptions.map((item) => (
@@ -2102,7 +2104,7 @@ export default function UTMLeads({
               onChange={(event) =>
                 setMediumFilter(event.target.value)
               }
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 native:w-[150px] native:shrink-0"
             >
               <option value="">All Mediums</option>
               {mediumOptions.map((item) => (
@@ -2117,7 +2119,7 @@ export default function UTMLeads({
               onChange={(event) =>
                 setDateFilter(event.target.value)
               }
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 native:w-[150px] native:shrink-0"
             >
               <option value="all">All Dates</option>
               <option value="month">This Month</option>
@@ -2129,7 +2131,7 @@ export default function UTMLeads({
               onChange={(event) =>
                 setSort(event.target.value)
               }
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700"
+              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 native:w-[150px] native:shrink-0"
             >
               <option value="newest">Newest</option>
               <option value="oldest">Oldest</option>
@@ -2434,7 +2436,7 @@ export default function UTMLeads({
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 native:grid-cols-2">
           <MetricCard
             label="UTM Links"
             value={summary.totalUtmLinks ?? links.length}

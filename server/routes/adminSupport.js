@@ -541,6 +541,7 @@ router.patch("/:id", async (req, res) => {
       await createSupportTicketUpdatedNotification({
         companyId: existing.companyId,
         userId: targetUserId,
+        ticketId: updated.id,
         ticketNumber: updated.ticketNumber,
         ticketTitle: updated.title,
         statusLabel:

@@ -114,15 +114,20 @@ function Row({ indent = 0, children }) {
 
 function Check({ checked, disabled, onChange, label, muted }) {
   return (
-    <label className={`flex items-center gap-2 text-[13px] ${muted ? "text-slate-400" : "text-slate-700"} ${disabled ? "cursor-default" : "cursor-pointer"}`}>
-      <input
-        type="checkbox"
-        checked={checked}
+    <div className={`flex min-w-0 flex-1 items-center justify-between gap-3 text-[13px] ${muted ? "text-slate-400" : "text-slate-700"}`}>
+      <span className="min-w-0">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
         disabled={disabled}
-        onChange={(e) => !disabled && onChange(e.target.checked)}
-      />
-      <span>{label}</span>
-    </label>
+        onClick={() => !disabled && onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${checked ? "bg-indigo-600" : "bg-slate-300"}`}
+      >
+        <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-[3px]"}`} />
+      </button>
+    </div>
   );
 }
 
@@ -406,15 +411,18 @@ export default function PermissionTree({
                 {page.label}
               </button>
               {page.perm ? (
-                <label className="flex items-center gap-2 text-[12px] text-slate-500">
+                <div className="flex items-center gap-2 text-[12px] text-slate-500">
                   <span>{enabled ? "Enabled" : "No access"}</span>
-                  <input
-                    type="checkbox"
-                    checked={enabled}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={enabled}
+                    aria-label={`${page.label} access`}
                     disabled={isAdminTarget}
-                    onChange={(e) => onPermissions(page.perm, e.target.checked)}
-                  />
-                </label>
+                    onClick={() => !isAdminTarget && onPermissions(page.perm, !enabled)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 ${enabled ? "bg-indigo-600" : "bg-slate-300"}`}
+                  ><span className={`h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform ${enabled ? "translate-x-[18px]" : "translate-x-[3px]"}`} /></button>
+                </div>
               ) : (
                 <span className="text-[12px] font-medium text-slate-500">Widget access</span>
               )}

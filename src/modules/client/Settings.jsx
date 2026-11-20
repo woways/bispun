@@ -1,11 +1,13 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
 
 import AccountDeletionSection from "../../components/client/AccountDeletionSection";
+import { useModalA11y } from "../../lib/useModalA11y";
 
 import {
   Building,
@@ -41,12 +43,19 @@ import {
   apiRequest,
 } from "../../lib/api";
 
+import {
+  getPrefs as getNotifSoundPrefs,
+  setPrefs as setNotifSoundPrefs,
+  subscribe as subscribeNotifSoundPrefs,
+} from "../../lib/notificationPrefs";
+
 import { applyBrandTheme, BRAND_COLORS, BRAND_PALETTE, brandHex } from "../../lib/brandTheme";
 import PermissionTree, {
   emptyPageAccess,
   normalizeClientPageAccess,
 } from "../../components/client/PermissionTree";
 import AccessTab from "../../components/client/AccessTab";
+import { flagsFromComponents } from "../../components/client/accessModel";
 
 const QUICK_BRAND_COLOR_KEYS = [
   "indigo",
@@ -102,6 +111,16 @@ const TABS = [
     l: "Activity Log",
     i: History,
   },
+];
+
+// Grouped layout for the Settings side navigation. Each group lists tab keys
+// from TABS; only keys present in visibleTabs render, and empty groups are
+// skipped, so permission filtering still applies.
+const TAB_GROUPS = [
+  { label: "Workspace", keys: ["company", "branding", "integrations"] },
+  { label: "Access", keys: ["users"] },
+  { label: "Leads", keys: ["sources", "fields"] },
+  { label: "System", keys: ["notifications", "activity"] },
 ];
 
 
@@ -241,6 +260,59 @@ function PlaceholderPanel({
   );
 }
 
+// Accessible dialog shell for the bare inline modals below. Mounts with the
+// modal (rendered inside each `{open && (...)}`) so useModalA11y's focus trap,
+// Escape handling and scroll lock run on open/close. Renders the same two
+// nested divs (backdrop + panel) the modals used before; the panel carries the
+// dialog semantics. Children receive the generated heading id to put on the
+// modal title so aria-labelledby points at it. Visuals are unchanged.
+function A11yDialog({
+  onClose,
+  backdropClassName,
+  panelClassName,
+  children,
+}) {
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const headingId = useId();
+  return (
+    <div className={backdropClassName}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className={panelClassName}
+      >
+        {typeof children === "function" ? children(headingId) : children}
+      </div>
+    </div>
+  );
+}
+
+function PermissionSwitch({ checked, disabled = false, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+        checked ? "bg-indigo-600" : "bg-slate-300"
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-6" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
 export default function SettingsView({
   tenant,
   primaryColor,
@@ -255,6 +327,7 @@ export default function SettingsView({
     currentUser?.permissions?.canManageSettings === true;
 
   const visibleTabs = TABS.filter((item) => {
+    if (item.k === "integrations") return true;
     if (item.k === "users") return canManageUsers;
     if (item.k === "activity") return canManageUsers || canManageSettings;
     return canManageSettings;
@@ -264,7 +337,7 @@ export default function SettingsView({
     tab,
     setTab,
   ] = useState(
-    canManageSettings ? "company" : "users"
+    canManageSettings ? "company" : canManageUsers ? "users" : "integrations"
   );
 
   useEffect(() => {
@@ -723,6 +796,18 @@ export default function SettingsView({
     setNotificationPreferencesMessage,
   ] = useState("");
 
+  // Notification SOUND preference (personal, client-side via notificationPrefs).
+  // This is separate from the server-backed notification delivery preferences
+  // above: it works immediately with no backend and the store handles any sync.
+  const [soundPrefs, setSoundPrefs] = useState(() => getNotifSoundPrefs());
+
+  useEffect(() => {
+    // Re-sync from the store on mount (e.g. after hydrateFromServer ran), then
+    // stay subscribed so the control reflects changes from anywhere.
+    setSoundPrefs(getNotifSoundPrefs());
+    return subscribeNotifSoundPrefs(setSoundPrefs);
+  }, []);
+
   const [
     form,
     setForm,
@@ -864,6 +949,7 @@ export default function SettingsView({
   const [permissionTree, setPermissionTree] = useState(null);
   const [actorPageAccess, setActorPageAccess] = useState(null);
   const [levelAccessSaving, setLevelAccessSaving] = useState(false);
+  const [userPermissionOverrideChanged, setUserPermissionOverrideChanged] = useState(false);
 
   async function saveLevelAccess(levelId, permissions) {
     setLevelAccessSaving(true);
@@ -872,7 +958,10 @@ export default function SettingsView({
         method: "PATCH",
         body: JSON.stringify({ permissions }),
       });
-      if (data?.success) setOrganization((prev) => ({ ...prev, levels: data.levels }));
+      if (data?.success) {
+        setOrganization((prev) => ({ ...prev, levels: data.levels }));
+        await loadUsers();
+      }
     } catch (err) {
       setUsersError(err?.data?.message || "Unable to save level access");
     } finally {
@@ -1389,6 +1478,25 @@ export default function SettingsView({
     }
   }
 
+  async function moveLevel(levelId, direction) {
+    const ordered = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+    const index = ordered.findIndex((level) => level.id === levelId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= ordered.length) return;
+    [ordered[index], ordered[nextIndex]] = [ordered[nextIndex], ordered[index]];
+    setUsersError("");
+    try {
+      const data = await apiRequest("/api/client/users/levels/reorder", {
+        method: "PATCH",
+        body: JSON.stringify({ orderedIds: ordered.map((level) => level.id) }),
+      });
+      setOrganization({ departments: data.departments || [], designations: data.designations || [], levels: data.levels || [], roles: data.roles || [] });
+      showSettingsSuccess("Level order updated");
+    } catch (error) {
+      setUsersError(error?.data?.message || "Unable to reorder levels");
+    }
+  }
+
   async function loadUsers() {
     setUsersLoading(true);
     setUsersError("");
@@ -1492,6 +1600,7 @@ export default function SettingsView({
     setUsersError("");
     setUserModalError("");
     setUserFormErrors({});
+    setUserPermissionOverrideChanged(false);
     setUserModalOpen(true);
     loadPermissionTree();
   }
@@ -1524,6 +1633,7 @@ export default function SettingsView({
     setUsersError("");
     setUserModalError("");
     setUserFormErrors({});
+    setUserPermissionOverrideChanged(false);
     setUserModalOpen(true);
     loadPermissionTree();
   }
@@ -1566,6 +1676,23 @@ export default function SettingsView({
     });
 
     setUserModalError("");
+  }
+
+  function setUserLevel(levelId) {
+    const level = organization.levels.find((item) => item.id === levelId);
+    const inheritedFlags = level
+      ? flagsFromComponents(level.permissions?.components || {})
+      : null;
+    setUserForm((current) => ({
+      ...current,
+      levelId,
+      permissions: inheritedFlags
+        ? { ...current.permissions, ...inheritedFlags }
+        : current.permissions,
+    }));
+    // Selecting a level means "follow this level" until an individual switch
+    // is deliberately changed afterwards.
+    setUserPermissionOverrideChanged(false);
   }
 
   function setUserDepartment(name) {
@@ -1629,11 +1756,13 @@ export default function SettingsView({
         managerId:
           userForm.role === "EMPLOYEE" ? (userForm.managerId || null) : null,
         active: userForm.active,
-        permissions:
-          userForm.permissions,
-        pageAccess:
-          userForm.pageAccess,
       };
+
+      if (userPermissionOverrideChanged || !editingUser) {
+        payload.permissions = userForm.permissions;
+        payload.pageAccess = userForm.pageAccess;
+        payload.permissionOverride = userPermissionOverrideChanged;
+      }
 
       if (!editingUser) {
         payload.password =
@@ -2509,62 +2638,55 @@ export default function SettingsView({
 
       {/* SETTINGS LAYOUT */}
 
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_minmax(0,1fr)] lg:items-start">
 
-        {/* HORIZONTAL TAB BAR */}
+        {/* SIDE NAV */}
 
-        <div className="bg-white border border-slate-200 rounded-xl p-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="flex flex-wrap gap-1">
-            {visibleTabs.map(
-              (
-                item
-              ) => {
-                const Icon =
-                  item.i;
+        <nav className="bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] space-y-4 lg:sticky lg:top-4 native:max-h-[60vh] native:overflow-y-auto">
+          {TAB_GROUPS.map((group) => {
+            const items = group.keys
+              .map((key) => visibleTabs.find((t) => t.k === key))
+              .filter(Boolean);
 
-                const active =
-                  tab ===
-                  item.k;
+            if (!items.length) return null;
 
-                return (
-                  <button
-                    key={
-                      item.k
-                    }
-                    type="button"
-                    onClick={() =>
-                      setTab(
-                        item.k
-                      )
-                    }
-                    className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-[15px] transition-colors ${
-                      active
-                        ? "bg-indigo-600 text-white font-semibold shadow-sm"
-                        : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
-                    }`}
-                  >
-                    <Icon
-                      size={
-                        15
-                      }
-                      className={
-                        active
-                          ? "text-white"
-                          : "text-slate-400"
-                      }
-                    />
+            return (
+              <div key={group.label}>
+                <div className="px-2 mb-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">
+                  {group.label}
+                </div>
 
-                    <span className="text-left">
-                      {
-                        item.l
-                      }
-                    </span>
-                  </button>
-                );
-              }
-            )}
-          </div>
-        </div>
+                <div className="space-y-0.5">
+                  {items.map((item) => {
+                    const Icon = item.i;
+                    const active = tab === item.k;
+
+                    return (
+                      <button
+                        key={item.k}
+                        type="button"
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => setTab(item.k)}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[14px] text-left transition-colors native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
+                          active
+                            ? "bg-indigo-50 text-indigo-700 font-semibold"
+                            : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/60"
+                        }`}
+                      >
+                        <Icon
+                          size={16}
+                          className={active ? "text-indigo-600" : "text-slate-400"}
+                        />
+
+                        <span className="truncate">{item.l}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </nav>
 
         {/* CONTENT */}
 
@@ -2899,7 +3021,7 @@ export default function SettingsView({
                             </div>
 
                             <div className="max-h-[calc(100vh-180px)] overflow-y-auto overscroll-contain p-4">
-                              <div className="grid grid-cols-10 gap-2">
+                              <div className="grid grid-cols-10 gap-2 native:grid-cols-6">
                                 {BRAND_PALETTE.map((hex) => {
                                   const selected =
                                     brandHex(selectedColor) === hex.toLowerCase();
@@ -3144,12 +3266,9 @@ export default function SettingsView({
                 {[
                   ["users", "Users", users.length],
                   ["departments", "Departments", organization.departments.length],
-                  ["designations", "Designations", organization.designations.length],
                   ["levels", "Levels", organization.levels.length],
                   ["access", "Access", organization.levels.length],
                   ["roles", "Roles", organization.roles.length],
-                  ["permissions", "Permissions", users.length],
-                  ["history", "History", ""],
                 ].map(([key, label, count]) => {
                   const active = usersManagementTab === key;
 
@@ -3183,8 +3302,22 @@ export default function SettingsView({
                 !userModalOpen &&
                 !organizationModal &&
                 !resetPasswordUser && (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
-                    {usersError}
+                  <div
+                    role="alert"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700"
+                  >
+                    <span>{usersError}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        loadUsers();
+                        loadOrganization();
+                      }}
+                      disabled={usersLoading}
+                      className="shrink-0 rounded-md border border-rose-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                    >
+                      {usersLoading ? "Retrying…" : "Try again"}
+                    </button>
                   </div>
                 )}
 
@@ -3259,11 +3392,7 @@ export default function SettingsView({
                                   <div className="mt-0.5 text-[13px] text-slate-500">
                                     {user.email}
                                   </div>
-                                  {user.jobTitle && (
-                                    <div className="mt-1 text-[13px] text-slate-400">
-                                      {user.jobTitle}{user.levelName ? ` · ${user.levelName}` : ""}
-                                    </div>
-                                  )}
+                                  {user.levelName && <div className="mt-1 text-[13px] text-slate-400">{user.levelName}</div>}
                                 </td>
 
                                 <td className="px-4 py-3">
@@ -3499,36 +3628,36 @@ export default function SettingsView({
                 </div>
               )}
 
-              {(usersManagementTab === "designations" || usersManagementTab === "levels") && (() => {
-                const isLevel = usersManagementTab === "levels";
-                const items = isLevel ? organization.levels : organization.designations;
-                const type = isLevel ? "level" : "designation";
+              {usersManagementTab === "levels" && (() => {
+                const items = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+                const type = "level";
                 return (
                   <div className="space-y-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
-                        <div className="text-[14px] font-bold text-slate-900">{isLevel ? "Levels" : "Designations"}</div>
+                        <div className="text-[14px] font-bold text-slate-900">Levels</div>
                         <div className="mt-0.5 text-[12px] text-slate-500">
-                          {isLevel ? "Define organizational seniority independently from functional roles." : "Maintain consistent employee job titles."}
+                          Define organizational access levels, create custom levels and control their order.
                         </div>
                       </div>
                       {currentUser?.role === "CLIENT_ADMIN" && (
                         <button type="button" onClick={() => openOrganizationModal(type)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700">
-                          <Plus size={14} /> Add {isLevel ? "Level" : "Designation"}
+                          <Plus size={14} /> Add Level
                         </button>
                       )}
                     </div>
                     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                       <div className="divide-y divide-slate-100">
                         {items.map((item) => {
-                          const memberCount = users.filter((user) => isLevel ? user.levelId === item.id : (user.designationId === item.id || user.jobTitle === item.name)).length;
+                          const memberCount = users.filter((user) => user.levelId === item.id).length;
                           return (
                             <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-slate-50/70">
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-[13px] font-semibold text-slate-800">{item.name}</span>
                                   <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{item.code}</span>
-                                  {isLevel && <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Rank {item.rank}</span>}
+                                  <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Rank {item.rank}</span>
+                                  {item.system && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Default</span>}
                                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{item.active !== false ? "Active" : "Inactive"}</span>
                                 </div>
                                 {item.description && <div className="mt-1 text-[12px] text-slate-500">{item.description}</div>}
@@ -3536,14 +3665,16 @@ export default function SettingsView({
                               </div>
                               {currentUser?.role === "CLIENT_ADMIN" && (
                                 <div className="flex items-center gap-1">
+                                  <button type="button" onClick={() => moveLevel(item.id, -1)} disabled={item.rank <= 1} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level up">↑</button>
+                                  <button type="button" onClick={() => moveLevel(item.id, 1)} disabled={item.rank >= items.length} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level down">↓</button>
                                   <button type="button" onClick={() => openEditOrganizationModal(type, item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title={`Edit ${type}`}><Pencil size={13}/></button>
-                                  <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${type}`}><Trash2 size={13}/></button>
+                                  {!item.system && <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${type}`}><Trash2 size={13}/></button>}
                                 </div>
                               )}
                             </div>
                           );
                         })}
-                        {!items.length && <div className="px-4 py-12 text-center text-[13px] text-slate-400">No {isLevel ? "levels" : "designations"} yet.</div>}
+                        {!items.length && <div className="px-4 py-12 text-center text-[13px] text-slate-400">No levels yet.</div>}
                       </div>
                     </div>
                   </div>
@@ -3561,36 +3692,6 @@ export default function SettingsView({
                 />
               )}
 
-              {usersManagementTab === "permissions" && (
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[14px] font-bold text-slate-900">Permission Management</div>
-                    <div className="mt-0.5 text-[12px] text-slate-500">Admin has protected full access. Edit a manager or employee to configure page, component, action and admissions scope permissions.</div>
-                  </div>
-                  <div className="overflow-hidden rounded-xl border border-slate-200">
-                    <div className="divide-y divide-slate-100">
-                      {filteredUsers.map((user) => (
-                        <div key={user.id} className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
-                            <div className="text-[13px] font-semibold text-slate-900">{user.name}</div>
-                            <div className="mt-1 text-[12px] text-slate-500">{user.customRoleName || user.role.replaceAll("_", " ")} · {user.department || "No department"} · {Object.values(user.permissions || {}).filter(Boolean).length} enabled capabilities</div>
-                          </div>
-                          <button type="button" onClick={() => openEditUser(user)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-[12px] font-semibold text-indigo-700 hover:bg-indigo-100"><ShieldCheck size={14}/> Manage permissions</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {usersManagementTab === "history" && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-5 py-8 text-center">
-                  <History size={24} className="mx-auto text-indigo-500" />
-                  <div className="mt-3 text-[14px] font-bold text-slate-900">Permission history is recorded</div>
-                  <div className="mx-auto mt-1 max-w-xl text-[12px] leading-5 text-slate-500">Every user permission update records the actor, target user, previous access, new access and timestamp in the Activity Log.</div>
-                  <button type="button" onClick={() => setTab("activity")} className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-[12px] font-semibold text-white hover:bg-indigo-700"><History size={14}/> Open Activity Log</button>
-                </div>
-              )}
             </div>
           )}
 
@@ -4086,6 +4187,93 @@ export default function SettingsView({
                 </div>
               )}
 
+              {/* NOTIFICATION SOUND — personal, per-device preference. Rendered
+                  outside the server-prefs loading state because it is handled
+                  entirely client-side by the notificationPrefs store and must be
+                  usable immediately (it syncs to the server when that endpoint
+                  exists). Not tied to any admin permission. */}
+              <div className="border border-slate-200 rounded-xl p-4 space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                      <Bell size={16} />
+                    </div>
+
+                    <div>
+                      <div
+                        id="notif-sound-label"
+                        className="text-[15px] font-semibold text-slate-900"
+                      >
+                        Notification sound
+                      </div>
+
+                      <div className="text-[13px] text-slate-500 mt-1">
+                        Play a sound for new chat messages and workspace alerts on
+                        this device.
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={soundPrefs.soundEnabled}
+                    aria-labelledby="notif-sound-label"
+                    onClick={() =>
+                      setNotifSoundPrefs({
+                        soundEnabled: !soundPrefs.soundEnabled,
+                      })
+                    }
+                    className={`relative w-10 h-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
+                      soundPrefs.soundEnabled
+                        ? "bg-indigo-600"
+                        : "bg-slate-200"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                        soundPrefs.soundEnabled ? "left-5" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <label
+                    htmlFor="notif-sound-volume"
+                    className="text-[13px] font-semibold text-slate-600 w-16"
+                  >
+                    Volume
+                  </label>
+
+                  <input
+                    id="notif-sound-volume"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={soundPrefs.volume}
+                    disabled={!soundPrefs.soundEnabled}
+                    aria-valuetext={`${Math.round(
+                      soundPrefs.volume * 100
+                    )} percent`}
+                    onChange={(event) =>
+                      setNotifSoundPrefs({
+                        volume: Number(event.target.value),
+                      })
+                    }
+                    className="flex-1 accent-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+
+                  <span
+                    className="text-[13px] tabular-nums text-slate-500 w-10 text-right"
+                    aria-hidden="true"
+                  >
+                    {Math.round(soundPrefs.volume * 100)}%
+                  </span>
+                </div>
+              </div>
+
               {notificationPreferencesLoading ? (
                 <div className="py-16 flex items-center justify-center gap-2 text-[15px] text-slate-500">
                   <Loader2
@@ -4324,8 +4512,8 @@ export default function SettingsView({
                 </button>
               </div>
 
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="relative flex-1">
+              <div className="flex flex-col md:flex-row gap-3 native:flex-row native:flex-nowrap native:items-center native:max-w-full native:relative native:overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+                <div className="relative flex-1 native:w-[200px] native:flex-none native:shrink-0">
                   <Search
                     size={14}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -4368,7 +4556,7 @@ export default function SettingsView({
                       event.target.value
                     )
                   }
-                  className="h-9 px-3 border border-slate-200 rounded-lg text-[13px] bg-white text-slate-700"
+                  className="h-9 px-3 border border-slate-200 rounded-lg text-[13px] bg-white text-slate-700 native:w-[150px] native:shrink-0"
                 >
                   <option value="">
                     All Activity
@@ -4386,7 +4574,7 @@ export default function SettingsView({
                   onClick={
                     loadAuditLogs
                   }
-                  className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors"
+                  className="h-9 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold shadow-sm transition-colors native:shrink-0 native:whitespace-nowrap"
                 >
                   Search
                 </button>
@@ -4703,11 +4891,16 @@ export default function SettingsView({
       </div>
 
       {organizationModal && (
-        <div className="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <A11yDialog
+          onClose={() => setOrganizationModal(null)}
+          backdropClassName="fixed inset-0 z-[105] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div><div className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
-              <button type="button" onClick={() => setOrganizationModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><X size={16}/></button>
+              <div><div id={headingId} className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
+              <button type="button" aria-label="Close" onClick={() => setOrganizationModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><X size={16}/></button>
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -4725,16 +4918,22 @@ export default function SettingsView({
               </div></div>}
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-4"><button type="button" onClick={()=>{setOrganizationModal(null);setEditingOrganizationItem(null);}} className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-[12px] font-semibold">Cancel</button><button type="button" disabled={organizationSaving || !organizationForm.name.trim() || !organizationForm.code.trim()} onClick={saveOrganizationItem} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12px] font-semibold disabled:opacity-50">{organizationSaving ? "Saving..." : editingOrganizationItem ? "Save Changes" : "Create"}</button></div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
       {userModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <A11yDialog
+          onClose={closeUserModal}
+          backdropClassName="fixed inset-0 z-[200] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-start sm:px-4 sm:pb-4 sm:pt-[92px]"
+          panelClassName="flex w-full max-w-2xl max-h-[calc(100dvh-92px)] flex-col overflow-hidden bg-white border border-slate-200 rounded-t-2xl sm:rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
+            <div className="shrink-0 px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingUser
                     ? "Edit User"
                     : "Add User"}
@@ -4747,6 +4946,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={closeUserModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
@@ -4754,7 +4954,7 @@ export default function SettingsView({
               </button>
             </div>
 
-            <div className="p-5 space-y-5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-5 space-y-5">
               {userModalError && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-[13px] text-rose-700">
                   {userModalError}
@@ -4820,19 +5020,8 @@ export default function SettingsView({
                 </div>
 
                 <div>
-                  <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Designation</label>
-                  <select value={userForm.designationId || ""} onChange={(event) => {
-                    const designation = organization.designations.find((item) => item.id === event.target.value);
-                    setUserForm((current) => ({ ...current, designationId: event.target.value, jobTitle: designation?.name || "" }));
-                  }} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
-                    <option value="">— Select designation —</option>
-                    {organization.designations.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} ({item.code})</option>)}
-                  </select>
-                </div>
-
-                <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Level</label>
-                  <select value={userForm.levelId || ""} onChange={(event) => updateUserField("levelId", event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
+                  <select value={userForm.levelId || ""} onChange={(event) => setUserLevel(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
                     <option value="">— Select level —</option>
                     {organization.levels.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} · Rank {item.rank}</option>)}
                   </select>
@@ -5031,20 +5220,15 @@ export default function SettingsView({
                           {label}
                         </span>
 
-                        <input
-                          type="checkbox"
-                          checked={
-                            userForm.permissions[
-                              key
-                            ]
-                          }
+                        <PermissionSwitch
+                          label={label}
+                          checked={userForm.permissions[key]}
                           disabled={
                             userForm.role ===
                             "CLIENT_ADMIN"
                           }
-                          onChange={(
-                            event
-                          ) =>
+                          onChange={(checked) => {
+                            setUserPermissionOverrideChanged(true);
                             setUserForm(
                               (
                                 current
@@ -5052,13 +5236,11 @@ export default function SettingsView({
                                 ...current,
                                 permissions: {
                                   ...current.permissions,
-                                  [key]:
-                                    event.target
-                                      .checked,
+                                  [key]: checked,
                                 },
                               })
-                            )
-                          }
+                            );
+                          }}
                         />
                       </label>
                     )
@@ -5077,15 +5259,16 @@ export default function SettingsView({
                   <PermissionTree
                     pageAccess={userForm.pageAccess}
                     onPageAccess={(next) =>
-                      setUserForm((current) => ({ ...current, pageAccess: next }))
+                      { setUserPermissionOverrideChanged(true); setUserForm((current) => ({ ...current, pageAccess: next })); }
                     }
                     permissions={userForm.permissions}
-                    onPermissions={(key, value) =>
+                    onPermissions={(key, value) => {
+                      setUserPermissionOverrideChanged(true);
                       setUserForm((current) => ({
                         ...current,
                         permissions: { ...current.permissions, [key]: value },
-                      }))
-                    }
+                      }));
+                    }}
                     tree={permissionTree}
                     actorPageAccess={actorPageAccess}
                     isAdminTarget={userForm.role === "CLIENT_ADMIN"}
@@ -5150,16 +5333,22 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
       {resetPasswordUser && (
-        <div className="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl">
+        <A11yDialog
+          onClose={() => setResetPasswordUser(null)}
+          backdropClassName="fixed inset-0 z-[110] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   Reset Password
                 </div>
 
@@ -5170,6 +5359,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() =>
                   setResetPasswordUser(null)
                 }
@@ -5237,17 +5427,23 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
       {sourceModalOpen && (
-        <div className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden">
+        <A11yDialog
+          onClose={closeSourceModal}
+          backdropClassName="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-lg bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingSource
                     ? "Edit Lead Source"
                     : "Add Lead Source"}
@@ -5260,6 +5456,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={closeSourceModal}
                 className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
               >
@@ -5475,17 +5672,23 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
       {customFieldModalOpen && (
-        <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl">
+        <A11yDialog
+          onClose={() => setCustomFieldModalOpen(false)}
+          backdropClassName="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          panelClassName="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white border border-slate-200 rounded-2xl shadow-2xl"
+        >
+          {(headingId) => (
+            <>
             <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-[17px] font-bold text-slate-950">
+                <div id={headingId} className="text-[17px] font-bold text-slate-950">
                   {editingCustomField
                     ? "Edit Custom Field"
                     : "Add Custom Field"}
@@ -5498,6 +5701,7 @@ export default function SettingsView({
 
               <button
                 type="button"
+                aria-label="Close"
                 onClick={() =>
                   setCustomFieldModalOpen(false)
                 }
@@ -5821,8 +6025,9 @@ export default function SettingsView({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
+            </>
+          )}
+        </A11yDialog>
       )}
 
 
