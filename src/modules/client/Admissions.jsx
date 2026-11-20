@@ -597,7 +597,6 @@ function ModalShell({
 
           <button
             type="button"
-            aria-label="Close"
             onClick={onClose}
             aria-label="Close"
             className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
@@ -3974,7 +3973,12 @@ function AdmissionsManager({
   }
 
   return (
-      <div className="space-y-5">
+      <div className={`space-y-5 ${selectedStream ? "admissions-drilldown-active" : ""}`}>
+        <style>{`
+          .admissions-drilldown-active > :not(.admissions-drilldown-page) {
+            display: none !important;
+          }
+        `}</style>
         {sharedStyle}
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -4130,6 +4134,7 @@ function AdmissionsManager({
             title={selectedStream.name}
             subtitle="Choose a college inside this stream."
             onClose={() => setSelectedStream(null)}
+            displayMode="page"
           >
       <div className="space-y-5">
         {sharedStyle}
@@ -4291,6 +4296,7 @@ function AdmissionsManager({
             title={selectedPartner.name}
             subtitle="Select a branch such as MBBS, BDS, Pharmacy, CSE or MBA."
             onClose={() => setSelectedPartner(null)}
+            displayMode="page"
           >
       <div className="space-y-5">
         {sharedStyle}
@@ -4449,6 +4455,7 @@ function AdmissionsManager({
             title={selectedBranch.name}
             subtitle={`${selectedStream.name} → ${selectedPartner.name} → ${selectedBranch.name}`}
             onClose={() => setSelectedBranch(null)}
+            displayMode="page"
           >
     <div className="space-y-5">
       {sharedStyle}
