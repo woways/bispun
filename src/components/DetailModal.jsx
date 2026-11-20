@@ -182,25 +182,32 @@ export default function DetailModal({
             </div>
           ) : hasTable ? (
             bodyRows.length ? (
-              <table className="w-full text-sm">
-                {caption || title ? (
-                  <caption className="sr-only">{caption || title}</caption>
-                ) : null}
-                <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 backdrop-blur">
-                  <tr>
-                    {columns.map((column, index) => (
-                      <th
-                        key={index}
-                        scope="col"
-                        className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
-                      >
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">{bodyRows}</tbody>
-              </table>
+              <div
+                className="overflow-x-auto"
+                tabIndex={0}
+                role="group"
+                aria-label={`${title || "Records"} table — scroll sideways to see all columns`}
+              >
+                <table className="min-w-full text-sm [&_td]:whitespace-nowrap">
+                  {caption || title ? (
+                    <caption className="sr-only">{caption || title}</caption>
+                  ) : null}
+                  <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 backdrop-blur">
+                    <tr>
+                      {columns.map((column, index) => (
+                        <th
+                          key={index}
+                          scope="col"
+                          className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                        >
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">{bodyRows}</tbody>
+                </table>
+              </div>
             ) : (
               <div className="px-5 py-12 text-center text-[13px] text-slate-500">
                 {empty}

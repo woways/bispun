@@ -723,19 +723,19 @@ export default function ClientPortal({
   const kpiModalColumns = !kpiModal
     ? []
     : kpiModalIsRevenue
-      ? ["Name", "Contact", "Owner", "Amount", "Date"]
-      : ["Name", "Contact", "Owner", "Status", "Date"];
+      ? ["Lead ID", "Name", "Phone", "Email", "Owner", "Amount", "Source", "Date"]
+      : ["Lead ID", "Name", "Phone", "Email", "Owner", "Status", "Source", "Created"];
 
   const kpiModalRows =
     kpiModal && !kpiModal.loading && !kpiModal.error
       ? (kpiModal.items || []).map((item) => (
           <tr key={item.id}>
+            <td className="px-4 py-3 text-slate-500">{item.leadDisplayId || "—"}</td>
             <td className="px-4 py-3 font-semibold text-slate-800">
               {item.primary || "—"}
             </td>
-            <td className="px-4 py-3 text-slate-600">
-              {item.phone || item.email || "—"}
-            </td>
+            <td className="px-4 py-3 text-slate-600">{item.phone || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">{item.email || "—"}</td>
             <td className="px-4 py-3 text-slate-600">{item.owner || "Unassigned"}</td>
             {kpiModalIsRevenue ? (
               <td className="px-4 py-3 tabular-nums text-slate-700">
@@ -746,6 +746,7 @@ export default function ClientPortal({
                 <Badge tone={stageTone(item.status)}>{item.status || "—"}</Badge>
               </td>
             )}
+            <td className="px-4 py-3 text-slate-600">{item.note || "—"}</td>
             <td className="px-4 py-3 text-slate-500">
               {formatKpiDate(item.occurredAt)}
             </td>

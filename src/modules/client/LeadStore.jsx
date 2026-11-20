@@ -4902,9 +4902,8 @@ export default function LeadStore({
             <td className="px-4 py-3 font-semibold text-slate-800">
               {lead.name || "—"}
             </td>
-            <td className="px-4 py-3 text-slate-600">
-              {lead.phone || lead.email || "—"}
-            </td>
+            <td className="px-4 py-3 text-slate-600">{lead.phone || "—"}</td>
+            <td className="px-4 py-3 text-slate-600">{lead.email || "—"}</td>
             <td className="px-4 py-3 text-slate-600">
               {lead.assignedToName || "Unassigned"}
             </td>
@@ -4914,6 +4913,13 @@ export default function LeadStore({
             <td className="px-4 py-3 text-slate-600">
               {lead.leadStatus || "Fresh"}
             </td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.temperature || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">
+              {lead.sourceName || lead.source || "—"}
+            </td>
+            <td className="px-4 py-3 text-slate-600">{lead.course || "—"}</td>
             <td className="px-4 py-3 text-slate-500">
               {formatDate(lead.createdAt)}
             </td>
@@ -4922,10 +4928,14 @@ export default function LeadStore({
 
       const LEAD_COLUMNS = [
         "Name",
-        "Contact",
+        "Phone",
+        "Email",
         "Owner",
         "Stage",
         "Status",
+        "Temperature",
+        "Source",
+        "Course",
         "Created",
       ];
 
@@ -4980,7 +4990,7 @@ export default function LeadStore({
         eyebrow: "Lead Store / Leads",
         title: "Converted Leads",
         subtitle: "Lead Store leads that reached Admission Done.",
-        columns: ["Name", "Contact", "Owner", "Stage", "Status", "Created"],
+        columns: LEAD_COLUMNS,
         empty: "No converted leads yet.",
         rows: leadRows(
           individualLeads.filter(
