@@ -2886,25 +2886,15 @@ function StoreMetric({
     <Component
       type={onClick ? "button" : undefined}
       onClick={onClick || undefined}
-      className={`w-full text-left bg-white border rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
+      className={`w-full text-left bg-white border rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
         active
           ? "border-indigo-300 ring-2 ring-indigo-100"
           : "border-slate-200 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
       } ${onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200" : ""}`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
-            {label}
-          </div>
-
-          <div className="mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 break-words tabular-nums">
-            {value}
-          </div>
-        </div>
-
+      <div className="flex items-center gap-3">
         <div
-          className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
+          className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${
             tones[
               tone
             ] ||
@@ -2915,10 +2905,21 @@ function StoreMetric({
             size={17}
           />
         </div>
-      </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
-        {detail}
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 tabular-nums">
+              {value}
+            </span>
+            <span className="truncate text-[12px] sm:text-[13px] font-semibold text-slate-700">
+              {label}
+            </span>
+          </div>
+
+          <div className="mt-1 truncate text-[11px] leading-4 text-slate-400">
+            {detail}
+          </div>
+        </div>
       </div>
     </Component>
   );
@@ -4047,8 +4048,8 @@ export default function LeadStore({
 
   const individualCellPadding =
     individualDensity === "compact"
-      ? "py-2"
-      : "py-3";
+      ? "py-1.5"
+      : "py-2.5";
 
   const totalPages =
     Math.max(
@@ -4494,18 +4495,18 @@ export default function LeadStore({
 
   function renderColumnHeader(columnKey) {
     const widthClass = {
-      leadId: "min-w-[88px] text-center",
-      name: "min-w-[200px] max-w-[200px]",
-      phone: "min-w-[145px]",
-      alternatePhone: "min-w-[155px]",
-      email: "min-w-[210px]",
-      course: "min-w-[145px]",
-      assignedTo: "min-w-[170px]",
-      temperature: "min-w-[125px]",
-      status: "min-w-[170px]",
-      intelligence: "min-w-[150px]",
-      created: "min-w-[150px]",
-    }[columnKey] || "min-w-[140px]";
+      leadId: "min-w-[78px] text-center",
+      name: "min-w-[160px] max-w-[160px]",
+      phone: "min-w-[120px]",
+      alternatePhone: "min-w-[130px]",
+      email: "min-w-[175px]",
+      course: "min-w-[120px]",
+      assignedTo: "min-w-[140px]",
+      temperature: "min-w-[110px]",
+      status: "min-w-[145px]",
+      intelligence: "min-w-[135px]",
+      created: "min-w-[125px]",
+    }[columnKey] || "min-w-[120px]";
 
     return (
       <th
@@ -4529,7 +4530,7 @@ export default function LeadStore({
         }}
         onDragEnd={() => setDraggedColumn("")}
         title={canReorderColumns ? `Drag ${INDIVIDUAL_COLUMN_LABELS[columnKey]} to rearrange` : undefined}
-        className={`${widthClass} px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${
+        className={`${widthClass} px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${
           draggedColumn === columnKey
             ? "bg-indigo-100 text-indigo-700 opacity-70"
             : "text-slate-500"
@@ -4548,7 +4549,7 @@ export default function LeadStore({
   function renderLeadColumnCell(lead, columnKey, customFields, customFieldsOpen) {
     if (columnKey === "leadId") {
       return (
-        <td key={columnKey} className={`min-w-[88px] px-3 text-center ${individualCellPadding}`}>
+        <td key={columnKey} className={`min-w-[78px] px-2.5 text-center ${individualCellPadding}`}>
           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-slate-100 px-2 text-[12px] font-bold tabular-nums text-slate-600">
             {displayLeadId(lead.leadNumber)}
           </span>
@@ -4558,7 +4559,7 @@ export default function LeadStore({
 
     if (columnKey === "name") {
       return (
-        <td key={columnKey} className={`min-w-[200px] max-w-[200px] px-4 ${individualCellPadding}`}>
+        <td key={columnKey} className={`min-w-[160px] max-w-[160px] px-3 ${individualCellPadding}`}>
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
@@ -4566,7 +4567,7 @@ export default function LeadStore({
               title={`View ${lead.name || "lead"} details`}
               className="min-w-0 flex-1 cursor-pointer text-left"
             >
-              <span className="block truncate whitespace-nowrap text-[14px] font-semibold text-slate-900 hover:text-indigo-700 hover:underline">
+              <span className="block truncate whitespace-nowrap text-[13px] font-semibold text-slate-900 hover:text-indigo-700 hover:underline">
                 {lead.name}
               </span>
             </button>
@@ -4591,7 +4592,7 @@ export default function LeadStore({
     if (columnKey === "phone" || columnKey === "alternatePhone") {
       const phone = columnKey === "phone" ? lead.phone : lead.alternatePhone;
       return (
-        <td key={columnKey} className={`${columnKey === "phone" ? "min-w-[145px]" : "min-w-[155px]"} px-4 ${individualCellPadding} whitespace-nowrap text-[14px] text-slate-600`}>
+        <td key={columnKey} className={`${columnKey === "phone" ? "min-w-[120px]" : "min-w-[130px]"} px-3 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-600`}>
           <PhoneAction
             phone={phone}
             name={lead.name}
@@ -4611,13 +4612,13 @@ export default function LeadStore({
             : lead.assignedToName || "Unassigned";
       const width =
         columnKey === "email"
-          ? "min-w-[210px] max-w-[240px]"
+          ? "min-w-[175px] max-w-[200px]"
           : columnKey === "course"
-            ? "min-w-[145px] max-w-[170px]"
-            : "min-w-[170px] max-w-[190px]";
+            ? "min-w-[120px] max-w-[145px]"
+            : "min-w-[140px] max-w-[160px]";
       return (
-        <td key={columnKey} className={`${width} px-4 ${individualCellPadding}`}>
-          <div title={value || ""} className="truncate whitespace-nowrap text-[14px] text-slate-600">
+        <td key={columnKey} className={`${width} px-3 ${individualCellPadding}`}>
+          <div title={value || ""} className="truncate whitespace-nowrap text-[13px] text-slate-600">
             {value || "—"}
           </div>
         </td>
@@ -4626,7 +4627,7 @@ export default function LeadStore({
 
     if (columnKey === "preferredColleges") {
       return (
-        <td key={columnKey} className={`min-w-[190px] max-w-[220px] px-4 ${individualCellPadding}`}>
+        <td key={columnKey} className={`min-w-[170px] max-w-[190px] px-3 ${individualCellPadding}`}>
           <input
             type="text"
             defaultValue={lead.preferredColleges || ""}
@@ -4650,7 +4651,7 @@ export default function LeadStore({
 
     if (columnKey === "temperature") {
       return (
-        <td key={columnKey} className={`min-w-[125px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+        <td key={columnKey} className={`min-w-[110px] px-3 ${individualCellPadding} whitespace-nowrap`}>
           <select
             value={lead.temperature || "WARM"}
             disabled={temperatureUpdatingId === lead.id}
@@ -4668,7 +4669,7 @@ export default function LeadStore({
 
     if (columnKey === "status") {
       return (
-        <td key={columnKey} className={`min-w-[170px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+        <td key={columnKey} className={`min-w-[145px] px-3 ${individualCellPadding} whitespace-nowrap`}>
           <LeadStatusSelect
             lead={lead}
             options={individualStatusOptions}
@@ -4681,7 +4682,7 @@ export default function LeadStore({
 
     if (columnKey === "intelligence") {
       return (
-        <td key={columnKey} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap`}>
+        <td key={columnKey} className={`min-w-[135px] px-3 ${individualCellPadding} whitespace-nowrap`}>
           {lead.intelligence ? (
             <button
               type="button"
@@ -4705,7 +4706,7 @@ export default function LeadStore({
     }
 
     return (
-      <td key={columnKey} title={formatDate(lead.createdAt)} className={`min-w-[150px] px-4 ${individualCellPadding} whitespace-nowrap text-[13px] text-slate-500`}>
+      <td key={columnKey} title={formatDate(lead.createdAt)} className={`min-w-[125px] px-3 ${individualCellPadding} whitespace-nowrap text-[12px] text-slate-500`}>
         {formatDate(lead.createdAt)}
       </td>
     );
@@ -5002,7 +5003,7 @@ export default function LeadStore({
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <DetailModal
         open={!!detailData}
         title={detailData?.title}
@@ -5043,13 +5044,13 @@ export default function LeadStore({
         }
       `}</style>
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
             Data / Lead inventory
           </div>
 
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
+          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
             Lead Store
           </h1>
 
@@ -5122,7 +5123,7 @@ export default function LeadStore({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
         <StoreMetric
           label="Import Batches"
           value={datasets.length}
@@ -5827,10 +5828,10 @@ export default function LeadStore({
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <div className="relative overflow-x-auto">
-            <table className="w-max min-w-full text-sm">
+            <table className="w-max min-w-full text-[13px]">
               <thead className="border-b border-slate-200 bg-slate-50/95">
                 <tr>
-                  <th className="sticky left-0 z-30 w-11 min-w-11 border-r border-slate-200 bg-slate-50/95 px-3 py-3 text-center">
+                  <th className="sticky left-0 z-30 w-10 min-w-10 border-r border-slate-200 bg-slate-50/95 px-2.5 py-2.5 text-center">
                     <input
                       type="checkbox"
                       checked={allPageSelected}
@@ -5842,7 +5843,7 @@ export default function LeadStore({
 
                   {visibleOrderedColumnKeys.map(renderColumnHeader)}
 
-                  <th className="lg:sticky lg:right-0 z-20 min-w-[96px] border-l border-slate-200 bg-slate-50/95 px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <th className="lg:sticky lg:right-0 z-20 min-w-[92px] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Actions
                   </th>
                 </tr>
@@ -5880,7 +5881,7 @@ export default function LeadStore({
                     return (
                       <Fragment key={lead.id}>
                         <tr className={`group transition-colors ${selected ? "bg-indigo-50/50" : "hover:bg-slate-50/80"}`}>
-                          <td className={`sticky left-0 z-20 w-11 min-w-11 border-r border-slate-100 px-3 text-center ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                          <td className={`sticky left-0 z-20 w-10 min-w-10 border-r border-slate-100 px-2.5 text-center ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <input
                               type="checkbox"
                               checked={selected}
@@ -5903,7 +5904,7 @@ export default function LeadStore({
                             )
                           )}
 
-                          <td className={`lg:sticky lg:right-0 z-10 min-w-[96px] border-l border-slate-100 px-3 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
+                          <td className={`lg:sticky lg:right-0 z-10 min-w-[92px] border-l border-slate-100 px-2 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">
                               {lead.phone ? (
                                 <a
