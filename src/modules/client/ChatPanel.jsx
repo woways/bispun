@@ -323,6 +323,25 @@ export default function ChatPanel({
   const [selectedConversationIds, setSelectedConversationIds] = useState([]);
   const [deleting, setDeleting] = useState(false);
 
+  // Composer attachments: files picked (and uploaded) but not yet sent.
+  // Each item: { localId, fileName, mimeType, size, previewUrl?, uploading,
+  //   error?, url?, publicId?, resourceType? }
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
+  const attachBtnRef = useRef(null);
+  // Group members panel + management.
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addMemberIds, setAddMemberIds] = useState([]);
+  const [memberBusy, setMemberBusy] = useState(false);
+  const membersRef = useRef(null);
+  const addMemberRef = useRef(null);
+  // Image lightbox (full-size attachment preview).
+  const [lightbox, setLightbox] = useState(null); // { url, fileName }
+  const lightboxRef = useRef(null);
+  // Single polite live region for chat actions (uploads, member changes).
+  const [chatAnnounce, setChatAnnounce] = useState("");
+
   const [myAvatar, setMyAvatar] = useState(currentUser?.avatarUrl || null);
   const avatarInputRef = useRef(null);
   const groupAvatarInputRef = useRef(null);
@@ -598,6 +617,18 @@ export default function ChatPanel({
     },
     { containerRef: forwardRef }
   );
+  useOverlayDismiss(
+    membersOpen,
+    () => {
+      setMembersOpen(false);
+      setAddMemberOpen(false);
+      setAddMemberIds([]);
+    },
+    { containerRef: membersRef }
+  );
+  useOverlayDismiss(lightbox !== null, () => setLightbox(null), {
+    containerRef: lightboxRef,
+  });
   useOverlayDismiss(emojiOpen, () => setEmojiOpen(false), {
     manageFocus: false,
   });
@@ -724,6 +755,12 @@ export default function ChatPanel({
       );
     });
 
+    socket.on("conversation:membersChanged", () => {
+      // A member was added/removed somewhere — refresh the conversation list so
+      // member counts/names (and new/removed group visibility) stay accurate.
+      loadConversations();
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -763,6 +800,163 @@ export default function ChatPanel({
       setUsers(Array.isArray(data.users) ? data.users : []);
     } catch (err) {
       console.error("Unable to load users:", err);
+    }
+  }
+
+  // ---- Composer attachments --------------------------------------------
+  function announceChat(text) {
+    setChatAnnounce("");
+    requestAnimationFrame(() => setChatAnnounce(text));
+  }
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error || new Error("read failed"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function uploadAttachment(file, localId) {
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      const data = await apiRequest("/api/client/chat/upload", {
+        method: "POST",
+        body: JSON.stringify({
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileSize: file.size,
+          dataUrl,
+        }),
+      });
+      setAttachments((cur) =>
+        cur.map((a) =>
+          a.localId === localId
+            ? {
+                ...a,
+                uploading: false,
+                url: data.url,
+                publicId: data.publicId,
+                resourceType: data.resourceType,
+                fileName: data.fileName || a.fileName,
+                mimeType: data.mimeType || a.mimeType,
+                size: data.size ?? a.size,
+              }
+            : a
+        )
+      );
+    } catch (err) {
+      setAttachments((cur) =>
+        cur.map((a) =>
+          a.localId === localId
+            ? {
+                ...a,
+                uploading: false,
+                error: err?.data?.message || "Upload failed",
+              }
+            : a
+        )
+      );
+      announceChat(`${file.name} failed to upload`);
+    }
+  }
+
+  function handlePickFiles(event) {
+    const picked = Array.from(event.target.files || []);
+    event.target.value = ""; // allow re-picking the same file
+    if (!picked.length) return;
+    const room = Math.max(0, 10 - attachments.length);
+    const next = [];
+    for (const file of picked.slice(0, room)) {
+      if (file.size > 10 * 1024 * 1024) {
+        announceChat(`${file.name} is larger than 10 MB and was skipped`);
+        continue;
+      }
+      const localId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const isImage = (file.type || "").startsWith("image/");
+      next.push({
+        localId,
+        file,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        previewUrl: isImage ? URL.createObjectURL(file) : null,
+        uploading: true,
+      });
+    }
+    if (!next.length) return;
+    setAttachments((cur) => [...cur, ...next]);
+    announceChat(`Uploading ${next.length} file${next.length === 1 ? "" : "s"}`);
+    next.forEach((a) => uploadAttachment(a.file, a.localId));
+  }
+
+  function removeAttachment(localId) {
+    setAttachments((cur) => {
+      const target = cur.find((a) => a.localId === localId);
+      if (target?.previewUrl) {
+        try {
+          URL.revokeObjectURL(target.previewUrl);
+        } catch {
+          /* noop */
+        }
+      }
+      return cur.filter((a) => a.localId !== localId);
+    });
+    // Keep focus in the composer (never drop to <body>).
+    requestAnimationFrame(() => attachBtnRef.current?.focus?.());
+  }
+
+  // ---- Group member management -----------------------------------------
+  function openMembersPanel() {
+    setHeaderMenuOpen(false);
+    setMembersOpen(true);
+    if (!users.length) loadUsers();
+  }
+
+  async function confirmAddMembers() {
+    if (!activeId || !addMemberIds.length || memberBusy) return;
+    setMemberBusy(true);
+    try {
+      await apiRequest(`/api/client/chat/${activeId}/members`, {
+        method: "POST",
+        body: JSON.stringify({ userIds: addMemberIds }),
+      });
+      announceChat(
+        `${addMemberIds.length} member${addMemberIds.length === 1 ? "" : "s"} added`
+      );
+      setAddMemberIds([]);
+      setAddMemberOpen(false);
+      await loadConversations();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to add members");
+    } finally {
+      setMemberBusy(false);
+    }
+  }
+
+  async function removeMember(userId, name) {
+    if (!activeId || memberBusy) return;
+    const isSelf = userId === currentUser?.id;
+    const confirmMsg = isSelf
+      ? "Leave this group? You will no longer see its messages."
+      : `Remove ${name} from the group?`;
+    if (!window.confirm(confirmMsg)) return;
+    setMemberBusy(true);
+    try {
+      await apiRequest(`/api/client/chat/${activeId}/members/${userId}`, {
+        method: "DELETE",
+      });
+      announceChat(isSelf ? "You left the group" : `${name} removed`);
+      if (isSelf) {
+        setMembersOpen(false);
+        setActiveId(null);
+      }
+      await loadConversations();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to remove member");
+    } finally {
+      setMemberBusy(false);
     }
   }
 
@@ -1330,20 +1524,47 @@ export default function ChatPanel({
 
   function sendMessage() {
     const body = draft.trim();
-    if (!body || !activeId || sending) return;
+    const ready = attachments.filter((a) => a.url && a.publicId && !a.error);
+    const stillUploading = attachments.some((a) => a.uploading);
+    if (stillUploading) return; // wait for uploads to finish
+    if ((!body && ready.length === 0) || !activeId || sending) return;
     const socket = socketRef.current;
     if (!socket) return;
 
     setSending(true);
     socket.emit(
       "message:send",
-      { conversationId: activeId, body, replyToId: replyTo?.id || null },
+      {
+        conversationId: activeId,
+        body,
+        replyToId: replyTo?.id || null,
+        attachments: ready.map((a) => ({
+          url: a.url,
+          publicId: a.publicId,
+          resourceType: a.resourceType,
+          fileName: a.fileName,
+          mimeType: a.mimeType,
+          size: a.size,
+        })),
+      },
       (resp) => {
         setSending(false);
         if (resp?.ok) {
           setDraft("");
           setMention(null);
           setReplyTo(null);
+          setAttachments((cur) => {
+            cur.forEach((a) => {
+              if (a.previewUrl) {
+                try {
+                  URL.revokeObjectURL(a.previewUrl);
+                } catch {
+                  /* noop */
+                }
+              }
+            });
+            return [];
+          });
           setMessages((current) => {
             if (current.some((m) => m.id === resp.message.id)) return current;
             return [...current, resp.message];
@@ -1713,6 +1934,9 @@ export default function ChatPanel({
                         <button type="button" onClick={setChatNickname} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil size={14} />Rename (only you)</button>
                       )}
                       {activeConversation.isGroup && (
+                        <button type="button" onClick={openMembersPanel} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Users size={14} />View members</button>
+                      )}
+                      {activeConversation.isGroup && (
                         <button type="button" onClick={() => { setHeaderMenuOpen(false); groupAvatarInputRef.current?.click(); }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Camera size={14} />Change group photo</button>
                       )}
                       {canDeleteChats && (
@@ -1808,7 +2032,7 @@ export default function ChatPanel({
                                     Join
                                   </button>
                                 </div>
-                              ) : (
+                              ) : m.body ? (
                                 <div className="whitespace-pre-wrap break-words">
                                   {renderBodyWithMentions(
                                     m.body,
@@ -1817,7 +2041,71 @@ export default function ChatPanel({
                                     )
                                   )}
                                 </div>
-                              )}
+                              ) : null}
+
+                              {!m.deletedForEveryone &&
+                              Array.isArray(m.attachments) &&
+                              m.attachments.length > 0 ? (
+                                <div className="mt-1.5 flex flex-col gap-1.5">
+                                  {m.attachments.map((att) => {
+                                    const isImage = String(
+                                      att.mimeType || ""
+                                    ).startsWith("image/");
+                                    if (isImage) {
+                                      return (
+                                        <button
+                                          key={att.id}
+                                          type="button"
+                                          onClick={() =>
+                                            setLightbox({
+                                              url: att.url,
+                                              fileName: att.fileName,
+                                            })
+                                          }
+                                          aria-label={`Open image ${att.fileName}`}
+                                          className="block overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                        >
+                                          <img
+                                            src={att.url}
+                                            alt={att.fileName}
+                                            className="max-h-60 max-w-[240px] rounded-lg object-cover"
+                                          />
+                                        </button>
+                                      );
+                                    }
+                                    return (
+                                      <a
+                                        key={att.id}
+                                        href={att.url}
+                                        download={att.fileName}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        aria-label={`Download ${att.fileName}, ${formatFileSize(
+                                          att.size
+                                        )}`}
+                                        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white/90 px-3 py-2 text-slate-700 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                      >
+                                        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-slate-100 text-slate-500">
+                                          <FileText size={16} aria-hidden="true" />
+                                        </span>
+                                        <span className="min-w-0">
+                                          <span className="block max-w-[180px] truncate text-[13px] font-semibold">
+                                            {att.fileName}
+                                          </span>
+                                          <span className="block text-[11px] text-slate-400">
+                                            {formatFileSize(att.size)}
+                                          </span>
+                                        </span>
+                                        <Download
+                                          size={14}
+                                          className="ml-1 flex-shrink-0 text-slate-400"
+                                          aria-hidden="true"
+                                        />
+                                      </a>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
 
                               <div className="mt-1.5 flex items-center justify-end gap-1 text-right text-[11px] text-neutral-400">
                                 {m.starred && (
@@ -2150,6 +2438,52 @@ export default function ChatPanel({
                   </div>
                 )}
 
+                {attachments.length > 0 && (
+                  <ul className="mb-2 flex flex-wrap gap-2" aria-label="Attachments to send">
+                    {attachments.map((a) => (
+                      <li
+                        key={a.localId}
+                        className="relative flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-1 pl-1 pr-7 text-[12px]"
+                      >
+                        {a.previewUrl ? (
+                          <img
+                            src={a.previewUrl}
+                            alt=""
+                            aria-hidden="true"
+                            className="h-8 w-8 flex-shrink-0 rounded object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-white text-slate-500">
+                            <FileText size={15} aria-hidden="true" />
+                          </span>
+                        )}
+                        <span className="max-w-[150px] truncate font-medium text-slate-700">
+                          {a.fileName}
+                        </span>
+                        {a.uploading ? (
+                          <Loader2
+                            size={12}
+                            className="animate-spin text-slate-400 motion-reduce:animate-none"
+                            aria-hidden="true"
+                          />
+                        ) : a.error ? (
+                          <span className="text-[11px] font-semibold text-rose-600">
+                            Failed
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => removeAttachment(a.localId)}
+                          aria-label={`Remove ${a.fileName}`}
+                          className="absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-200 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                        >
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 <div className="flex min-h-[46px] items-end gap-1 rounded-[9px] border border-neutral-400 bg-white p-1.5 transition focus-within:border-indigo-400">
                   <div className="relative">
                     <button type="button" onClick={() => setEmojiOpen((o) => !o)} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 lg:h-9 lg:w-9" aria-label="Emoji" aria-haspopup="true" aria-expanded={emojiOpen}><Smile size={17} /></button>
@@ -2210,6 +2544,26 @@ export default function ChatPanel({
                   >
                     <Video size={16} />
                   </button>
+                  <button
+                    ref={attachBtnRef}
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 lg:h-9 lg:w-9"
+                    aria-label="Attach a file"
+                    title="Attach a file"
+                  >
+                    <Paperclip size={16} aria-hidden="true" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                    tabIndex={-1}
+                    aria-hidden="true"
+                    className="sr-only"
+                    onChange={handlePickFiles}
+                  />
                   <div className="mx-1 h-6 w-px self-center bg-slate-200" />
 
                   <div className="relative flex-1">
@@ -2273,7 +2627,7 @@ export default function ChatPanel({
                       className="max-h-28 min-h-[40px] w-full resize-none bg-transparent px-2 py-2 text-[16px] font-medium text-slate-800 outline-none placeholder:text-slate-500 lg:min-h-[36px] lg:text-[14px] lg:placeholder:text-slate-400"
                     />
                   </div>
-                  <button type="button" onClick={sendMessage} disabled={sending || !draft.trim()} className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40 lg:h-9 lg:w-9" aria-label="Send">
+                  <button type="button" onClick={sendMessage} disabled={sending || attachments.some((a) => a.uploading) || (!draft.trim() && !attachments.some((a) => a.url && !a.error))} className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40 lg:h-9 lg:w-9" aria-label="Send">
                     {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   </button>
                 </div>
@@ -2324,6 +2678,96 @@ export default function ChatPanel({
           </div>
         </div>
       )}
+
+      {membersOpen && activeConversation && (() => {
+        const activeMembers = activeConversation.members || [];
+        const canManage =
+          activeConversation.isGroup &&
+          (currentUser?.role === "CLIENT_ADMIN" ||
+            activeConversation.createdByUserId === currentUser?.id);
+        const memberIdSet = new Set(activeMembers.map((mem) => mem.id));
+        const addableUsers = users.filter((u) => !memberIdSet.has(u.id));
+        return (
+          <div className="fixed inset-0 z-[150] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+            <div ref={membersRef} role="dialog" aria-modal="true" aria-labelledby="members-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+                <h2 id="members-title" className="text-[14px] font-semibold text-slate-950">Members ({activeMembers.length})</h2>
+                <button type="button" onClick={() => { setMembersOpen(false); setAddMemberOpen(false); setAddMemberIds([]); }} aria-label="Close members" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
+              </div>
+
+              <ul className="min-h-0 flex-1 overflow-y-auto p-2">
+                {activeMembers.map((mem) => {
+                  const isSelf = mem.id === currentUser?.id;
+                  const isCreator = activeConversation.createdByUserId === mem.id;
+                  const showRemove = (canManage || isSelf) && activeMembers.length > 1;
+                  return (
+                    <li key={mem.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-50">
+                      <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-[12px] font-black text-white ${avatarGradient(mem.name)}`}>
+                        {mem.avatarUrl ? <img src={mem.avatarUrl} alt="" aria-hidden="true" className="h-full w-full object-cover" /> : initialsOf(mem.name)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-semibold text-slate-900">{mem.name}{isSelf ? " (You)" : ""}{isCreator ? " · Admin" : ""}</span>
+                        <span className="block truncate text-[13px] text-slate-500">{mem.email}</span>
+                      </span>
+                      {showRemove ? (
+                        <button type="button" onClick={() => removeMember(mem.id, mem.name)} disabled={memberBusy} aria-label={isSelf ? "Leave group" : `Remove ${mem.name} from group`} className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40">
+                          {isSelf ? <LogOut size={15} aria-hidden="true" /> : <X size={15} aria-hidden="true" />}
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {canManage ? (
+                addMemberOpen ? (
+                  <div className="border-t border-slate-100 p-2">
+                    <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Add members</div>
+                    <fieldset className="max-h-48 overflow-y-auto" aria-label="Add members">
+                      {addableUsers.length === 0 ? (
+                        <div className="px-3 py-6 text-center text-xs text-slate-500">Everyone is already in this group.</div>
+                      ) : addableUsers.map((u) => {
+                        const checked = addMemberIds.includes(u.id);
+                        return (
+                          <label key={u.id} htmlFor={`addmem-${u.id}`} className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left ${checked ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                            <input id={`addmem-${u.id}`} type="checkbox" checked={checked} onChange={() => setAddMemberIds((cur) => checked ? cur.filter((x) => x !== u.id) : [...cur, u.id])} className="h-4 w-4 flex-shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+                            <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-semibold text-slate-900">{u.name}</span><span className="block truncate text-[12px] text-slate-500">{u.email}</span></span>
+                          </label>
+                        );
+                      })}
+                    </fieldset>
+                    <div className="flex items-center justify-end gap-2 px-2 pt-2">
+                      <button type="button" onClick={() => { setAddMemberOpen(false); setAddMemberIds([]); }} className="h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                      <button type="button" onClick={confirmAddMembers} disabled={!addMemberIds.length || memberBusy} className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{memberBusy && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}Add{addMemberIds.length ? ` ${addMemberIds.length}` : ""}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-t border-slate-100 p-3">
+                    <button ref={addMemberRef} type="button" onClick={() => { setAddMemberOpen(true); if (!users.length) loadUsers(); }} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 text-[13px] font-bold text-indigo-700 hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><UserPlus size={15} aria-hidden="true" />Add member</button>
+                  </div>
+                )
+              ) : null}
+            </div>
+          </div>
+        );
+      })()}
+
+      {lightbox && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/80 p-4">
+          <div ref={lightboxRef} role="dialog" aria-modal="true" aria-label={`Image: ${lightbox.fileName}`} className="relative max-h-[92vh] max-w-[92vw]">
+            <img src={lightbox.url} alt={lightbox.fileName} className="max-h-[86vh] max-w-full rounded-lg object-contain" />
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-white/90">{lightbox.fileName}</span>
+              <div className="flex flex-shrink-0 items-center gap-2">
+                <a href={lightbox.url} download={lightbox.fileName} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/15 px-3 text-xs font-semibold text-white hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><Download size={14} aria-hidden="true" />Download</a>
+                <button type="button" onClick={() => setLightbox(null)} aria-label="Close image" className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white/15 px-3 text-xs font-semibold text-white hover:bg-white/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"><X size={14} aria-hidden="true" />Close</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{chatAnnounce}</p>
 
       {messageInfoOpen && (
         <div className="fixed inset-0 z-[10040] flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
