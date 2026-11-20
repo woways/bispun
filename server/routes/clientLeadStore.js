@@ -387,6 +387,7 @@ const FIXED_LEAD_STATUSES = [
   "Not Answering",
   "Not Reachable",
   "Lead Lost",
+  "Application Done",
   "Admission Done",
 ];
 

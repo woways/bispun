@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Check,
   FileText,
+  GraduationCap,
   Loader2,
   Mail,
   MessageSquare,
@@ -384,6 +385,7 @@ export default function LeadDetailsView({
               ["activity", "Activity History", Activity],
               ["details", "Lead Details", FileText],
               ["remarks", "Remarks", MessageSquare],
+              ["interested-college", "Interested College", GraduationCap],
             ].map(([key, label, Icon]) => (
               <button
                 key={key}
@@ -563,6 +565,30 @@ export default function LeadDetailsView({
                       No remarks yet.
                     </div>
                   )}
+                </div>
+              </div>
+            ) : null}
+
+            {tab === "interested-college" ? (
+              <div>
+                <h2 className="text-[15px] font-bold text-slate-900">Interested College</h2>
+                <p className="mt-1 text-[12px] text-slate-500">
+                  College preference recorded for this lead.
+                </p>
+                <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-indigo-100">
+                      <GraduationCap size={17} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-indigo-400">
+                        Interested College
+                      </div>
+                      <div className="mt-1 break-words text-[14px] font-semibold text-slate-800">
+                        {lead?.preferredColleges || "No interested college recorded."}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : null}
