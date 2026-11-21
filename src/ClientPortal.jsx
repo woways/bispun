@@ -4649,6 +4649,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const sidebarCompact = sidebarCollapsed;
 
+  useEffect(() => {
+    document.documentElement.style.setProperty("--sidebar-w", sidebarCompact ? "72px" : "252px");
+  }, [sidebarCompact]);
+
   const currentPage =
     PAGE_META[module] || {
       label:

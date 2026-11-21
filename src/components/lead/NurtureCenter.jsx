@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 import {
   AlertCircle,
@@ -262,8 +263,8 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
+  return createPortal(
+    <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[140] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="nurture-title" className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
@@ -465,6 +466,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -18,6 +18,8 @@ const SuperAdmin = lazy(() => import("./SuperAdmin"));
 const PayPage = lazy(() => import("./PayPage"));
 const SignupPage = lazy(() => import("./SignupPage"));
 const DataDeletion = lazy(() => import("./DataDeletion"));
+const ResetPassword = lazy(() => import("./ResetPassword"));
+const ForgotPassword = lazy(() => import("./ForgotPassword"));
 
 function SkeletonBlock({ className = "" }) {
   return (
@@ -633,6 +635,16 @@ export default function App() {
         <Route
           path="/signup/:plan"
           element={<SignupPage />}
+        />
+
+        <Route
+          path="/forgot"
+          element={<ForgotPassword />}
+        />
+
+        <Route
+          path="/reset-password"
+          element={<ResetPassword />}
         />
 
         <Route

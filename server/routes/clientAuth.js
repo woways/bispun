@@ -1,6 +1,7 @@
 import {
   Router,
 } from "express";
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
@@ -17,6 +18,7 @@ import {
   createRateLimiter,
 } from "../middleware/rateLimit.js";
 import { getBearerToken } from "../lib/authToken.js";
+import { sendMail, getAppLoginUrl } from "../lib/mailer.js";
 
 // Serverless Postgres (Neon) autosuspends its compute; the first query after an
 // idle period has to wake it, which can be slow or occasionally time out. These
@@ -1797,5 +1799,124 @@ router.post(
     });
   }
 );
+
+// ---------------------------------------------------------------------------
+// Forgot-password / reset-password (self-service, unauthenticated)
+// ---------------------------------------------------------------------------
+
+const forgotLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  keyPrefix: "forgot-password",
+  message: "Too many reset requests. Please try again later.",
+});
+
+const RESET_TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+
+router.post("/forgot-password", forgotLimiter, async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!email) {
+    return res.status(400).json({ success: false, message: "Email is required." });
+  }
+
+  // Always return success to prevent email enumeration.
+  const ok = { success: true, message: "If that email exists, a password reset link has been sent." };
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.active || user.role === "SUPER_ADMIN") return res.json(ok);
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiry = new Date(Date.now() + RESET_TOKEN_EXPIRY_MS);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetToken: hashedToken, passwordResetExpiry: expiry },
+    });
+
+    const baseUrl = getAppLoginUrl().replace(/\/login\/?$/, "");
+    const resetLink = `${baseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+
+    await sendMail({
+      to: email,
+      subject: "Reset your Bispun password",
+      html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
+        <div style="font-size:22px;font-weight:700;color:#4f46e5;margin-bottom:8px">Bispun</div>
+        <h2 style="font-size:18px;margin:16px 0 4px">Password Reset</h2>
+        <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 16px">
+          We received a request to reset the password for <strong>${email}</strong>.
+          Click the button below to set a new password. This link expires in 1 hour.
+        </p>
+        <a href="${resetLink}"
+           style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;
+                  font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;margin:4px 0 20px">
+          Reset Password
+        </a>
+        <p style="font-size:12px;color:#94a3b8;line-height:1.6;margin:18px 0 0">
+          If you didn't request this, you can safely ignore this email.<br>
+          If the button doesn't work, copy this link into your browser:<br>
+          <span style="color:#4f46e5">${resetLink}</span>
+        </p>
+        <p style="font-size:12px;color:#94a3b8;margin:14px 0 0">— Team Bispun</p>
+      </div>`,
+      text: `Password Reset\n\nWe received a request to reset the password for ${email}.\n\nReset your password: ${resetLink}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n— Team Bispun`,
+    });
+
+    return res.json(ok);
+  } catch (error) {
+    console.error("Forgot-password failed:", error);
+    return res.json(ok);
+  }
+});
+
+router.post("/reset-password", forgotLimiter, async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const token = String(req.body?.token || "").trim();
+  const newPassword = String(req.body?.newPassword || "");
+
+  if (!email || !token || !newPassword) {
+    return res.status(400).json({ success: false, message: "Email, token and new password are required." });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, message: "Password must be at least 8 characters." });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.active || user.role === "SUPER_ADMIN") {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset link." });
+    }
+
+    if (!user.passwordResetToken || !user.passwordResetExpiry) {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset link." });
+    }
+
+    const hashedInput = crypto.createHash("sha256").update(token).digest("hex");
+    const tokensMatch =
+      user.passwordResetToken.length === hashedInput.length &&
+      crypto.timingSafeEqual(Buffer.from(user.passwordResetToken), Buffer.from(hashedInput));
+
+    if (!tokensMatch || new Date() > new Date(user.passwordResetExpiry)) {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset link." });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        passwordResetToken: null,
+        passwordResetExpiry: null,
+      },
+    });
+
+    return res.json({ success: true, message: "Password has been reset. You can now sign in." });
+  } catch (error) {
+    console.error("Reset-password failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to reset password." });
+  }
+});
 
 export default router;

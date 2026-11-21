@@ -308,6 +308,10 @@ model User {
   manager   User?    @relation("TeamManager", fields: [managerId], references: [id], onDelete: SetNull)
   reports   User[]   @relation("TeamManager")
 
+  // Self-service password reset (forgot-password flow).
+  passwordResetToken  String?
+  passwordResetExpiry DateTime?
+
   // Google Calendar / Meet integration (per-user OAuth).
   googleRefreshToken String?
   googleEmail        String?

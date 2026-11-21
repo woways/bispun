@@ -808,13 +808,13 @@ export default function SuperAdmin() {
 
             <div ref={profileMenuRef} className="relative">
               <button type="button" onClick={()=>setProfileMenuOpen((current)=>!current)} className="flex items-center gap-2.5 rounded-xl px-2 py-1.5 hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-colors">
-                <div className="hidden sm:block text-right"><div className="text-xs font-semibold text-slate-800">{adminUser?.name || "Bispun Admin"}</div><div className="text-[10px] text-slate-500">Super Admin</div></div>
+                <div className="hidden sm:block text-right"><div className="text-xs font-semibold text-slate-800">{adminUser?.name || "Bispun Admin"}</div></div>
                 <div className="w-9 h-9 rounded-full bg-slate-950 text-white text-xs font-semibold flex items-center justify-center">{adminInitials()}</div>
                 <ChevronDown size={14} className={`text-slate-400 transition-transform ${profileMenuOpen ? "rotate-180" : ""}`} />
               </button>
               {profileMenuOpen && (
                 <div className="absolute right-0 top-[calc(100%+8px)] w-64 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden z-50">
-                  <div className="px-4 py-3 border-b border-slate-100"><div className="text-sm font-semibold text-slate-900">{adminUser?.name || "Super Admin"}</div><div className="text-xs text-slate-500 mt-0.5 truncate">{adminUser?.email || "—"}</div></div>
+                  <div className="px-4 py-3 border-b border-slate-100"><div className="text-sm font-semibold text-slate-900">{adminUser?.name || "Bispun Admin"}</div><div className="text-xs text-slate-500 mt-0.5 truncate">{adminUser?.email || "—"}</div></div>
                   <div className="p-1.5">
                     <button type="button" onClick={()=>{setProfileMenuOpen(false);setAccountError("");setAccountMessage("");setProfileOpen(true);}} className="w-full px-3 py-2.5 rounded-lg text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"><UserRound size={14}/>Account Profile</button>
                     <button type="button" onClick={()=>{setProfileMenuOpen(false);setAccountError("");setAccountMessage("");setPasswordForm({currentPassword:"",newPassword:"",confirmPassword:""});setPasswordOpen(true);}} className="w-full px-3 py-2.5 rounded-lg text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"><KeyRound size={14}/>Change Password</button>

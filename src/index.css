@@ -55,6 +55,13 @@ body {
 }
 
 
+/* Hide browser-native password reveal toggle (Edge / Chrome) so it
+   doesn't duplicate the custom Eye / EyeOff button. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 button,
 input,
 select,

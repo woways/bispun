@@ -122,9 +122,6 @@ export default function ClientLogin() {
     }
   }
 
-  function handleForgotPassword() {
-  setSupportOpen(true);
-}
 
   if (checking) {
     return (
@@ -429,13 +426,12 @@ export default function ClientLogin() {
                   </span>
                 </label>
 
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
+                <Link
+                  to="/forgot"
                   className="text-[13px] font-medium text-blue-600 hover:text-blue-700"
                 >
                   Forgot password?
-                </button>
+                </Link>
               </div>
 
               {/* ERROR */}

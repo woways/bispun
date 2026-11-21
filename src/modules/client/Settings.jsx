@@ -37,6 +37,8 @@ import {
   Settings,
   History,
   RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import {
@@ -905,6 +907,11 @@ export default function SettingsView({
     resetPassword,
     setResetPassword,
   ] = useState("");
+
+  const [
+    showTempPassword,
+    setShowTempPassword,
+  ] = useState(false);
 
   const [
     resetSaving,
@@ -2638,54 +2645,38 @@ export default function SettingsView({
 
       {/* SETTINGS LAYOUT */}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[232px_minmax(0,1fr)] lg:items-start">
+      <div className="space-y-5">
 
-        {/* SIDE NAV */}
+        {/* HORIZONTAL TAB NAV */}
 
-        <nav className="bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] space-y-4 lg:sticky lg:top-4 native:max-h-[60vh] native:overflow-y-auto">
-          {TAB_GROUPS.map((group) => {
-            const items = group.keys
-              .map((key) => visibleTabs.find((t) => t.k === key))
-              .filter(Boolean);
+        <nav aria-label="Settings sections" className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+          <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+            {visibleTabs.map((item) => {
+              const Icon = item.i;
+              const active = tab === item.k;
 
-            if (!items.length) return null;
+              return (
+                <button
+                  key={item.k}
+                  type="button"
+                  aria-current={active ? "true" : undefined}
+                  onClick={() => setTab(item.k)}
+                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-[13px] font-medium transition-all shrink-0 ${
+                    active
+                      ? "bg-white text-indigo-700 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/60"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
+                  }`}
+                >
+                  <Icon
+                    size={14}
+                    className={active ? "text-indigo-600" : "text-slate-400"}
+                  />
 
-            return (
-              <div key={group.label}>
-                <div className="px-2 mb-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-400">
-                  {group.label}
-                </div>
-
-                <div className="space-y-0.5">
-                  {items.map((item) => {
-                    const Icon = item.i;
-                    const active = tab === item.k;
-
-                    return (
-                      <button
-                        key={item.k}
-                        type="button"
-                        aria-current={active ? "true" : undefined}
-                        onClick={() => setTab(item.k)}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[14px] text-left transition-colors native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-inset native:focus-visible:ring-indigo-500 ${
-                          active
-                            ? "bg-indigo-50 text-indigo-700 font-semibold"
-                            : "text-slate-600 hover:text-indigo-700 hover:bg-indigo-50/60"
-                        }`}
-                      >
-                        <Icon
-                          size={16}
-                          className={active ? "text-indigo-600" : "text-slate-400"}
-                        />
-
-                        <span className="truncate">{item.l}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+                  <span>{item.l}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {/* CONTENT */}
@@ -5087,28 +5078,38 @@ export default function SettingsView({
                       <span className="text-rose-500 ml-0.5">*</span>
                     </label>
 
-                    <input
-                      type="password"
-                      required
-                      minLength={8}
-                      aria-invalid={Boolean(userFormErrors.password)}
-                      value={
-                        userForm.password
-                      }
-                      onChange={(
-                        event
-                      ) =>
-                        updateUserField(
-                          "password",
-                          event.target.value
-                        )
-                      }
-                      className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
-                        userFormErrors.password
-                          ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
-                          : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
-                      }`}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showTempPassword ? "text" : "password"}
+                        required
+                        minLength={8}
+                        aria-invalid={Boolean(userFormErrors.password)}
+                        value={
+                          userForm.password
+                        }
+                        onChange={(
+                          event
+                        ) =>
+                          updateUserField(
+                            "password",
+                            event.target.value
+                          )
+                        }
+                        className={`w-full h-10 px-3 pr-10 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                          userFormErrors.password
+                            ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
+                            : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTempPassword((v) => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-7 w-7 rounded text-slate-400 hover:text-slate-700 transition-colors"
+                        aria-label={showTempPassword ? "Hide password" : "Show password"}
+                      >
+                        {showTempPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
 
                     {userFormErrors.password && (
                       <p className="mt-1 text-[12px] text-rose-600">
