@@ -39,7 +39,6 @@ import {
 } from "lucide-react";
 
 import {
-  Badge,
 } from "./components/ui";
 
 import {
@@ -654,12 +653,6 @@ export default function SuperAdmin() {
             />
 
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <Badge tone="rose">
-                  Super Admin
-                </Badge>
-              </div>
-
               <div className="text-[11px] text-slate-500 mt-0.5 truncate">
                 Internal control center
               </div>
