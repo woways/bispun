@@ -39,6 +39,11 @@ import {
   ListChecks,
   Square,
   CheckSquare,
+  Paperclip,
+  UserPlus,
+  LogOut,
+  Download,
+  FileText,
 } from "lucide-react";
 
 import { apiRequest, API_URL } from "../../lib/api";
