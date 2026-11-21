@@ -1533,6 +1533,7 @@ model ChatMessage {
   sender         User         @relation("ChatSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   body                 String
+  isSystem             Boolean   @default(false)
   createdAt            DateTime  @default(now())
   pinned               Boolean   @default(false)
   deletedForEveryoneAt DateTime?

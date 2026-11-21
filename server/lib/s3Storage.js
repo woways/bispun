@@ -1,5 +1,9 @@
+
 import crypto from "crypto";
 import { randomUUID } from "crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   S3Client,
   PutObjectCommand,
@@ -10,11 +14,9 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /* ------------------------------------------------------------------ */
-/*  Bispun S3 file storage                                            */
-/*  One Bispun-owned private bucket (ap-south-1 / Mumbai).            */
-/*  Files are namespaced per company via the object-key prefix.       */
-/*  The bucket blocks all public access, so files are served through  */
-/*  short-lived presigned GET URLs behind our own /api/files proxy.   */
+/* Bispun S3 file storage                                              */
+/* One Bispun-owned private bucket (ap-south-1 / Mumbai).              */
+/* Files are namespaced per company via the object-key prefix.         */
 /* ------------------------------------------------------------------ */
 
 function s3Config() {
@@ -26,21 +28,102 @@ function s3Config() {
   if (!bucket || !accessKeyId || !secretAccessKey) {
     throw new Error("S3 file storage is not configured");
   }
+
   return { region, bucket, accessKeyId, secretAccessKey };
 }
 
+/* ------------------------------------------------------------------ */
+/* Local filesystem fallback — development only                        */
+/* ------------------------------------------------------------------ */
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOCAL_UPLOAD_ROOT = path.resolve(__dirname, "..", "_local-uploads");
+
+export function isS3Configured() {
+  return Boolean(
+    String(process.env.S3_BUCKET || "").trim() &&
+      String(process.env.AWS_ACCESS_KEY_ID || "").trim() &&
+      String(process.env.AWS_SECRET_ACCESS_KEY || "").trim()
+  );
+}
+
+/**
+ * SECURITY:
+ * Local file storage is allowed only in explicitly configured
+ * non-production environments.
+ */
+function canUseLocalStorage() {
+  return (
+    process.env.NODE_ENV !== "production" &&
+    process.env.ALLOW_LOCAL_FILE_STORAGE === "true"
+  );
+}
+
+function localPathForKey(key) {
+  const rel = String(key || "").replace(/\\/g, "/");
+  const full = path.resolve(LOCAL_UPLOAD_ROOT, rel);
+
+  if (
+    full !== LOCAL_UPLOAD_ROOT &&
+    !full.startsWith(LOCAL_UPLOAD_ROOT + path.sep)
+  ) {
+    throw new Error("Invalid object key");
+  }
+
+  return full;
+}
+
+export async function readLocalObject(key) {
+  if (!canUseLocalStorage()) {
+    throw new Error("Local file storage is disabled");
+  }
+
+  const full = localPathForKey(key);
+  const buffer = await fs.promises.readFile(full);
+
+  let contentType = "application/octet-stream";
+
+  try {
+    const ct = await fs.promises.readFile(
+      full + ".contenttype",
+      "utf8"
+    );
+
+    if (ct.trim()) {
+      contentType = ct.trim();
+    }
+  } catch {
+    /* No sidecar — use default content type */
+  }
+
+  return { buffer, contentType };
+}
+
+/* ------------------------------------------------------------------ */
+/* S3 client                                                            */
+/* ------------------------------------------------------------------ */
+
 let cachedClient = null;
+
 function getClient() {
   if (cachedClient) return cachedClient;
+
   const { region, accessKeyId, secretAccessKey } = s3Config();
+
   cachedClient = new S3Client({
     region,
-    credentials: { accessKeyId, secretAccessKey },
+    credentials: {
+      accessKeyId,
+      secretAccessKey,
+    },
   });
+
   return cachedClient;
 }
 
-/* --- object-key helpers ------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Object key helpers                                                   */
+/* ------------------------------------------------------------------ */
 
 function safeName(name) {
   return String(name || "file")
@@ -48,22 +131,32 @@ function safeName(name) {
     .slice(0, 120);
 }
 
-/** Build a unique, prefix-scoped object key, e.g.
- *  admissions/<companyId>/<partnerId>/<uuid>-report.pdf  */
 export function buildObjectKey(prefixParts, originalName) {
-  const parts = (Array.isArray(prefixParts) ? prefixParts : [prefixParts])
-    .map((p) => String(p || "").replace(/[^a-zA-Z0-9._-]/g, "_"))
+  const parts = (
+    Array.isArray(prefixParts) ? prefixParts : [prefixParts]
+  )
+    .map((p) =>
+      String(p || "").replace(/[^a-zA-Z0-9._-]/g, "_")
+    )
     .filter(Boolean);
+
   return `${parts.join("/")}/${randomUUID()}-${safeName(originalName)}`;
 }
 
-/* --- signed proxy token ------------------------------------------- */
-/*  We store a stable, unguessable proxy URL in the DB. The proxy     */
-/*  route verifies the HMAC and then mints a short presigned GET.     */
+/* ------------------------------------------------------------------ */
+/* Signed file proxy token                                              */
+/* ------------------------------------------------------------------ */
 
 function signingSecret() {
-  const secret = process.env.FILE_SIGNING_SECRET || process.env.JWT_SECRET;
-  if (!secret) throw new Error("FILE_SIGNING_SECRET/JWT_SECRET is not configured");
+  const secret =
+    process.env.FILE_SIGNING_SECRET || process.env.JWT_SECRET;
+
+  if (!secret) {
+    throw new Error(
+      "FILE_SIGNING_SECRET/JWT_SECRET is not configured"
+    );
+  }
+
   return secret;
 }
 
@@ -74,8 +167,13 @@ function b64url(input) {
     .replace(/\//g, "_")
     .replace(/=+$/, "");
 }
+
 function b64urlDecode(input) {
-  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
+  const pad =
+    input.length % 4 === 0
+      ? ""
+      : "=".repeat(4 - (input.length % 4));
+
   return Buffer.from(
     input.replace(/-/g, "+").replace(/_/g, "/") + pad,
     "base64"
@@ -84,26 +182,37 @@ function b64urlDecode(input) {
 
 export function buildFileToken(key) {
   const payload = b64url(key);
+
   const mac = crypto
     .createHmac("sha256", signingSecret())
     .update(payload)
     .digest("hex")
     .slice(0, 32);
+
   return `${payload}.${mac}`;
 }
 
 export function verifyFileToken(token) {
   const [payload, mac] = String(token || "").split(".");
+
   if (!payload || !mac) return null;
+
   const expected = crypto
     .createHmac("sha256", signingSecret())
     .update(payload)
     .digest("hex")
     .slice(0, 32);
-  // constant-time compare
+
   const a = Buffer.from(mac);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+
+  if (
+    a.length !== b.length ||
+    !crypto.timingSafeEqual(a, b)
+  ) {
+    return null;
+  }
+
   try {
     return b64urlDecode(payload);
   } catch {
@@ -111,67 +220,133 @@ export function verifyFileToken(token) {
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* File proxy URLs                                                      */
+/* ------------------------------------------------------------------ */
+
 function apiBase() {
-  // Absolute base of the API so file links work cross-origin (Vercel → Render).
-  return String(process.env.PUBLIC_API_URL || "").replace(/\/+$/, "");
+  return String(process.env.PUBLIC_API_URL || "")
+    .replace(/\/+$/, "");
 }
 
-/** Stable proxy URL stored in the DB `url` column. */
 export function fileProxyUrl(key) {
   const token = buildFileToken(key);
   const base = apiBase();
+
   return `${base}/api/files/${token}`;
 }
 
-/* --- core operations ---------------------------------------------- */
+/* ------------------------------------------------------------------ */
+/* Core file operations                                                 */
+/* ------------------------------------------------------------------ */
 
 export async function putObject({ buffer, key, contentType }) {
+  if (!isS3Configured()) {
+    if (!canUseLocalStorage()) {
+      throw new Error("S3 file storage is not configured");
+    }
+
+    const full = localPathForKey(key);
+
+    await fs.promises.mkdir(path.dirname(full), {
+      recursive: true,
+    });
+
+    await fs.promises.writeFile(full, buffer);
+
+    await fs.promises.writeFile(
+      full + ".contenttype",
+      String(contentType || "application/octet-stream")
+    );
+
+    return key;
+  }
+
   const { bucket } = s3Config();
+
   await getClient().send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       Body: buffer,
-      ContentType: contentType || "application/octet-stream",
+      ContentType:
+        contentType || "application/octet-stream",
     })
   );
+
   return key;
 }
 
 export async function deleteObjectByKey(key) {
   if (!key) return;
+
+  if (!isS3Configured()) {
+    if (!canUseLocalStorage()) {
+      throw new Error("S3 file storage is not configured");
+    }
+
+    const full = localPathForKey(key);
+
+    await fs.promises.rm(full, { force: true });
+
+    await fs.promises.rm(
+      full + ".contenttype",
+      { force: true }
+    );
+
+    return;
+  }
+
   const { bucket } = s3Config();
+
   await getClient().send(
-    new DeleteObjectCommand({ Bucket: bucket, Key: key })
+    new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    })
   );
 }
 
-/** Short-lived presigned GET URL (default 5 min). */
-export async function presignGet(key, expiresInSeconds = 300) {
+/* ------------------------------------------------------------------ */
+/* Presigned download                                                   */
+/* ------------------------------------------------------------------ */
+
+export async function presignGet(
+  key,
+  expiresInSeconds = 300
+) {
   const { bucket } = s3Config();
+
   return getSignedUrl(
     getClient(),
-    new GetObjectCommand({ Bucket: bucket, Key: key }),
-    { expiresIn: expiresInSeconds }
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+    {
+      expiresIn: expiresInSeconds,
+    }
   );
 }
 
-/**
- * Scan the whole bucket and aggregate storage usage grouped by the first
- * path segment of each object key (= companyId).
- *
- * Optional date window filters by each object's upload time (LastModified):
- *   { from?: Date, to?: Date }  — only objects uploaded in [from, to] are counted.
- *
- * Returns:
- *   { totalBytes, totalObjects, byCompany: { [companyId]: { bytes, objects } } }
- */
-export async function aggregateUsageByCompany({ from, to } = {}) {
+/* ------------------------------------------------------------------ */
+/* Storage usage aggregation                                            */
+/* ------------------------------------------------------------------ */
+
+export async function aggregateUsageByCompany({
+  from,
+  to,
+} = {}) {
   const { bucket } = s3Config();
   const client = getClient();
 
-  const fromMs = from ? new Date(from).getTime() : null;
-  const toMs = to ? new Date(to).getTime() : null;
+  const fromMs = from
+    ? new Date(from).getTime()
+    : null;
+
+  const toMs = to
+    ? new Date(to).getTime()
+    : null;
 
   const byCompany = {};
   let totalBytes = 0;
@@ -188,24 +363,43 @@ export async function aggregateUsageByCompany({ from, to } = {}) {
     );
 
     for (const obj of out.Contents || []) {
-      // Date-window filter on upload time.
       if (fromMs || toMs) {
-        const t = obj.LastModified ? new Date(obj.LastModified).getTime() : 0;
+        const t = obj.LastModified
+          ? new Date(obj.LastModified).getTime()
+          : 0;
+
         if (fromMs && t < fromMs) continue;
         if (toMs && t > toMs) continue;
       }
 
       const size = Number(obj.Size || 0);
-      const companyId = String(obj.Key || "").split("/")[0] || "unknown";
-      if (!byCompany[companyId]) byCompany[companyId] = { bytes: 0, objects: 0 };
+
+      const companyId =
+        String(obj.Key || "").split("/")[0] ||
+        "unknown";
+
+      if (!byCompany[companyId]) {
+        byCompany[companyId] = {
+          bytes: 0,
+          objects: 0,
+        };
+      }
+
       byCompany[companyId].bytes += size;
       byCompany[companyId].objects += 1;
+
       totalBytes += size;
       totalObjects += 1;
     }
 
-    ContinuationToken = out.IsTruncated ? out.NextContinuationToken : undefined;
+    ContinuationToken = out.IsTruncated
+      ? out.NextContinuationToken
+      : undefined;
   } while (ContinuationToken);
 
-  return { totalBytes, totalObjects, byCompany };
+  return {
+    totalBytes,
+    totalObjects,
+    byCompany,
+  };
 }

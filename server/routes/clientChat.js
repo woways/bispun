@@ -452,6 +452,7 @@ router.get("/:id/messages", async (req, res) => {
       id: m.id,
       conversationId: m.conversationId,
       body: m.body,
+      isSystem: Boolean(m.isSystem),
       deletedForEveryone: Boolean(m.deletedForEveryoneAt),
       pinned: m.pinned,
       starred: Boolean(m.stars?.length),
@@ -1125,6 +1126,9 @@ router.post("/upload", async (req, res) => {
     if (!fileName || !mimeType || !dataUrl) {
       return res.status(400).json({ success: false, message: "File is required" });
     }
+    if (Number(fileSize) > 10 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: "File must be 10 MB or smaller" });
+    }
     if (!allowedTypes.includes(String(mimeType))) {
       return res.status(400).json({
         success: false,
@@ -1481,6 +1485,23 @@ router.post("/:id/members", async (req, res) => {
 
     notifyMembersChanged(conversationId, { memberIds: allCurrentMemberIds });
 
+    if (toAdd.length > 0) {
+      const addedUsers = await prisma.user.findMany({
+        where: { id: { in: toAdd } },
+        select: { name: true },
+      });
+      const names = addedUsers.map((u) => u.name || "Someone");
+      const sysBody = names.length === 1
+        ? `${names[0]} was added`
+        : `${names.join(", ")} were added`;
+      postConversationMessage({
+        conversationId,
+        senderUserId: me,
+        body: sysBody,
+        isSystem: true,
+      }).catch((err) => console.error("System message (add) failed:", err));
+    }
+
     return res.json({ success: true, members });
   } catch (error) {
     console.error("Add group members failed:", error);
@@ -1525,6 +1546,12 @@ router.delete("/:id/members/:userId", async (req, res) => {
       return res.status(403).json({ success: false, message: "Not allowed to remove members" });
     }
 
+    const targetUser = await prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, name: true },
+    });
+    const targetName = targetUser?.name || "Someone";
+
     await prisma.conversationMember.delete({
       where: { conversationId_userId: { conversationId, userId: targetUserId } },
     });
@@ -1548,6 +1575,16 @@ router.delete("/:id/members/:userId", async (req, res) => {
     notifyMembersChanged(conversationId, {
       memberIds: [...remainingMemberIds, targetUserId],
     });
+
+    const sysBody = isSelf
+      ? `${targetName} left`
+      : `${targetName} was removed`;
+    postConversationMessage({
+      conversationId,
+      senderUserId: me,
+      body: sysBody,
+      isSystem: true,
+    }).catch((err) => console.error("System message (remove) failed:", err));
 
     return res.json({ success: true, members });
   } catch (error) {

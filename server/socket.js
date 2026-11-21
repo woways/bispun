@@ -61,13 +61,13 @@ const attachmentShape = (a) => ({
  * the initiating user's websocket is momentarily disconnected. Returns the
  * broadcast payload, or null if the realtime server isn't attached yet.
  */
-export async function postConversationMessage({ conversationId, senderUserId, body }) {
+export async function postConversationMessage({ conversationId, senderUserId, body, isSystem = false }) {
   const cid = String(conversationId || "");
   const text = String(body || "").trim();
   if (!ioRef || !cid || !senderUserId || !text) return null;
 
   const message = await prisma.chatMessage.create({
-    data: { conversationId: cid, senderId: senderUserId, body: text },
+    data: { conversationId: cid, senderId: senderUserId, body: text, isSystem: Boolean(isSystem) },
     include: {
       sender: { select: { id: true, name: true, email: true } },
       replyTo: { include: { sender: { select: { id: true, name: true, email: true } } } },
@@ -86,6 +86,7 @@ export async function postConversationMessage({ conversationId, senderUserId, bo
     id: message.id,
     conversationId: cid,
     body: message.body,
+    isSystem: Boolean(message.isSystem),
     pinned: message.pinned,
     deletedForEveryone: false,
     createdAt: message.createdAt,
@@ -277,6 +278,7 @@ export function attachSocketServer(httpServer, config) {
           id: message.id,
           conversationId,
           body: message.body,
+          isSystem: Boolean(message.isSystem),
           pinned: message.pinned,
           deletedForEveryone: false,
           createdAt: message.createdAt,

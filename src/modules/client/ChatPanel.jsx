@@ -53,6 +53,14 @@ import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return "0 B";
+  const k = 1024;
+  const units = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), units.length - 1);
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
+}
+
 function initialsOf(name) {
   return String(name || "?")
     .split(" ")
@@ -824,6 +832,9 @@ export default function ChatPanel({
   }
 
   async function uploadAttachment(file, localId) {
+    setAttachments((cur) => cur.map((a) =>
+      a.localId === localId ? { ...a, uploading: true, error: null } : a
+    ));
     try {
       const dataUrl = await readFileAsDataUrl(file);
       const data = await apiRequest("/api/client/chat/upload", {
@@ -858,7 +869,7 @@ export default function ChatPanel({
             ? {
                 ...a,
                 uploading: false,
-                error: err?.data?.message || "Upload failed",
+                error: err?.data?.message || err?.message || "Upload failed",
               }
             : a
         )
@@ -1653,7 +1664,7 @@ export default function ChatPanel({
     if (!mention || !activeConversation?.isGroup) return [];
     const q = mention.query.trim().toLowerCase();
     const members = (activeConversation.members || []).filter(
-      (member) => member.id !== myId
+      (member) => member && member.id !== myId
     );
     const filtered = q
       ? members.filter(
@@ -1860,7 +1871,7 @@ export default function ChatPanel({
                         {c.isMuted && <BellOff size={11} className="flex-shrink-0 text-slate-400" />}
                       </div>
                       <div className="mt-1 truncate text-[13px] leading-5 font-medium text-slate-500">
-                        {c.lastMessage ? c.lastMessage.body : c.isGroup ? `${c.members.length} members` : "No messages yet"}
+                        {c.lastMessage ? c.lastMessage.body : c.isGroup ? `${(c.members || []).length} members` : "No messages yet"}
                       </div>
                     </div>
                     <div className="flex flex-shrink-0 flex-col items-end gap-1">
@@ -1892,12 +1903,22 @@ export default function ChatPanel({
                 <span className={`flex h-10 w-10 items-center justify-center overflow-hidden rounded-full text-sm font-bold text-white shadow-sm ${activeConversation.isGroup ? "bg-gradient-to-br from-violet-500 to-purple-600" : `bg-gradient-to-br ${avatarGradient(activeConversation.title)}`}`}>
                   {activeConversation.isGroup ? (activeConversation.avatarUrl ? <img src={activeConversation.avatarUrl} alt="" className="h-full w-full object-cover" /> : <Users size={16} />) : activeConversation.avatarUrl ? <img src={activeConversation.avatarUrl} alt="" className="h-full w-full object-cover" /> : initialsOf(activeConversation.title)}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</div>
-                  <div className="truncate text-[13px] text-slate-500">
-                    {activeConversation.isGroup ? `${activeConversation.members.length} members` : activeConversation.otherMembers[0]?.email || "Team member"}
+                {activeConversation.isGroup ? (
+                  <button
+                    type="button"
+                    onClick={openMembersPanel}
+                    aria-label={`View ${(activeConversation.members || []).filter(Boolean).length} members of ${activeConversation.title}`}
+                    className="min-w-0 flex-1 rounded-lg py-1 text-left hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    <span className="block truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</span>
+                    <span className="block truncate text-[13px] text-slate-500">{(() => { const ms = (activeConversation.members || []).filter(Boolean); const names = ms.map(m => m.id === currentUser?.id ? "You" : (m.name || "Unknown")); if (names.length === 0) return "No members"; if (names.length <= 4) return names.join(", "); return `${names.slice(0, 3).join(", ")} +${names.length - 3} more`; })()}</span>
+                  </button>
+                ) : (
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</div>
+                    <div className="truncate text-[13px] text-slate-500">{activeConversation.otherMembers?.[0]?.email || "Team member"}</div>
                   </div>
-                </div>
+                )}
                 <button
                   type="button"
                   onClick={startMeeting}
@@ -1995,6 +2016,17 @@ export default function ChatPanel({
                         );
                       }
                       const m = item.message;
+
+                      if (m.isSystem) {
+                        return (
+                          <div key={item.key} role="note" className="my-2 flex items-center justify-center">
+                            <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-center text-[12px] text-slate-600 shadow-sm">
+                              {m.body}
+                            </span>
+                          </div>
+                        );
+                      }
+
                       const mine = m.sender?.id === myId;
                       const room = meetingRoomFromBody(m.body);
                       const reactionGroups = groupMessageReactions(m.reactions, myId);
@@ -2041,7 +2073,7 @@ export default function ChatPanel({
                                 <div className="whitespace-pre-wrap break-words">
                                   {renderBodyWithMentions(
                                     m.body,
-                                    (activeConversation.members || []).map(
+                                    (activeConversation.members || []).filter(Boolean).map(
                                       (mem) => mem.name
                                     )
                                   )}
@@ -2472,9 +2504,15 @@ export default function ChatPanel({
                             aria-hidden="true"
                           />
                         ) : a.error ? (
-                          <span className="text-[11px] font-semibold text-rose-600">
-                            Failed
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => uploadAttachment(a.file, a.localId)}
+                            title={a.error}
+                            aria-label={`Retry uploading ${a.fileName}: ${a.error}`}
+                            className="rounded px-1 text-[11px] font-semibold text-rose-600 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                          >
+                            Retry
+                          </button>
                         ) : null}
                         <button
                           type="button"
@@ -2685,7 +2723,7 @@ export default function ChatPanel({
       )}
 
       {membersOpen && activeConversation && (() => {
-        const activeMembers = activeConversation.members || [];
+        const activeMembers = (activeConversation.members || []).filter(Boolean);
         const canManage =
           activeConversation.isGroup &&
           (currentUser?.role === "CLIENT_ADMIN" ||

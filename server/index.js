@@ -129,6 +129,10 @@ app.post(
   razorpayWebhook
 );
 
+// Chat uploads carry base64 JSON: a 10 MiB file requires ~13.34 MiB plus
+// JSON metadata. Keep the larger parser scoped to this upload endpoint;
+// other API routes retain their existing 12 MiB limit.
+app.use("/api/client/chat/upload", express.json({ limit: "15mb" }));
 app.use(express.json({ limit: "12mb" }));
 app.use(
   express.urlencoded({
