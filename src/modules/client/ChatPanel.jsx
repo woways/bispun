@@ -934,7 +934,7 @@ export default function ChatPanel({
     if (!activeId || !addMemberIds.length || memberBusy) return;
     setMemberBusy(true);
     try {
-      await apiRequest(`/api/client/chat/${activeId}/members`, {
+      const res = await apiRequest(`/api/client/chat/${activeId}/members`, {
         method: "POST",
         body: JSON.stringify({ userIds: addMemberIds }),
       });
@@ -943,7 +943,12 @@ export default function ChatPanel({
       );
       setAddMemberIds([]);
       setAddMemberOpen(false);
-      await loadConversations();
+      if (res.members) {
+        setConversations((prev) =>
+          prev.map((c) => c.id === activeId ? { ...c, members: res.members } : c)
+        );
+      }
+      loadConversations().catch(() => {});
     } catch (err) {
       setError(err?.data?.message || "Unable to add members");
     } finally {
@@ -960,7 +965,7 @@ export default function ChatPanel({
     if (!window.confirm(confirmMsg)) return;
     setMemberBusy(true);
     try {
-      await apiRequest(`/api/client/chat/${activeId}/members/${userId}`, {
+      const res = await apiRequest(`/api/client/chat/${activeId}/members/${userId}`, {
         method: "DELETE",
       });
       announceChat(isSelf ? "You left the group" : `${name} removed`);
@@ -968,7 +973,12 @@ export default function ChatPanel({
         setMembersOpen(false);
         setActiveId(null);
       }
-      await loadConversations();
+      if (res.members) {
+        setConversations((prev) =>
+          prev.map((c) => c.id === activeId ? { ...c, members: res.members } : c)
+        );
+      }
+      loadConversations().catch(() => {});
     } catch (err) {
       setError(err?.data?.message || "Unable to remove member");
     } finally {
@@ -2020,7 +2030,7 @@ export default function ChatPanel({
                       if (m.isSystem) {
                         return (
                           <div key={item.key} role="note" className="my-2 flex items-center justify-center">
-                            <span className="rounded-lg bg-amber-50 px-3 py-1.5 text-center text-[12px] text-slate-600 shadow-sm">
+                            <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-center text-[12px] text-indigo-600 shadow-sm">
                               {m.body}
                             </span>
                           </div>

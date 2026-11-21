@@ -1751,6 +1751,37 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     );
   }
 
+  // Redirect an employee away from a landing page their role cannot view.
+  // Navigation and backend permissions remain unchanged. The URL is synced
+  // by the existing module -> pathname effect elsewhere in this component.
+  // useLayoutEffect avoids briefly painting the restricted module on login.
+  useLayoutEffect(() => {
+    if (!user?.id) return;
+    if (hasModulePermission(module) && !isModuleHiddenUntilEnabled(module)) {
+      return;
+    }
+
+    const firstAllowed = NAV_GROUPS
+      .flatMap((group) => group.items)
+      .find(
+        (key) =>
+          hasModulePermission(key) &&
+          !isModuleHiddenUntilEnabled(key)
+      );
+
+    if (firstAllowed && firstAllowed !== module) {
+      setModule(firstAllowed);
+    }
+  }, [
+    module,
+    user?.id,
+    user?.role,
+    user?.permissions,
+    user?.pageAccess,
+    company?.id,
+    company?.modules,
+  ]);
+
   // Portal search results with hidden-until-enabled modules removed (My Store).
   const visibleMobileSearchResults = mobileSearchResults.filter(
     (item) => !isModuleHiddenUntilEnabled(item.key)

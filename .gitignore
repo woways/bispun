@@ -34,3 +34,6 @@ android/.idea/
 
 # Local manual-QA credentials note (never commit)
 .manual-qa-credentials.txt
+
+# Local-filesystem upload fallback (dev only; never committed)
+server/_local-uploads/
