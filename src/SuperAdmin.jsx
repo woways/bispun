@@ -38,8 +38,6 @@ import {
   HardDrive,
 } from "lucide-react";
 
-import {
-} from "./components/ui";
 
 import {
   apiRequest,
