@@ -5304,7 +5304,7 @@ export default function LeadStore({
             className="h-9 min-h-[44px] lg:min-h-0 px-3.5 border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
           >
             <Sparkles size={14} />
-            Smart Nurture
+            <span className="leading-none text-center">Smart Nurture</span>
           </button>
 
           <button

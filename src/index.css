@@ -72,6 +72,11 @@ textarea {
 button {
   letter-spacing: -0.01em;
   -webkit-tap-highlight-color: transparent;
+  /* Tighten wrapped multi-word button labels (e.g. "Smart Nurture" stacking to
+     two lines on narrow/mobile toolbars). Without this they inherit the body's
+     1.5 line-height and the stacked words sit too far apart. Component-level
+     leading-* utilities still override this (they have higher specificity). */
+  line-height: 1.1;
 }
 
 button,
