@@ -75,16 +75,16 @@ function AnalyticsMetric({
 }) {
   const tones = {
     indigo:
-      "bg-indigo-500 text-white",
+      "bg-indigo-50 text-indigo-600 border-indigo-100",
 
     emerald:
-      "bg-emerald-500 text-white",
+      "bg-emerald-50 text-emerald-600 border-emerald-100",
 
     amber:
-      "bg-amber-500 text-white",
+      "bg-amber-50 text-amber-600 border-amber-100",
 
     slate:
-      "bg-slate-500 text-white",
+      "bg-slate-50 text-slate-600 border-slate-200",
   };
 
   // When onClick is provided the whole card becomes an interactive button that
@@ -106,35 +106,15 @@ function AnalyticsMetric({
             },
           }
         : {})}
-      className={`bg-white border border-slate-200 rounded-xl px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
+      className={`bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
         clickable
           ? "cursor-pointer hover:border-indigo-300 hover:shadow-[0_8px_24px_rgba(79,70,229,0.12)] focus:outline-none focus:ring-2 focus:ring-indigo-400"
           : "hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
       }`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
-            {label}
-          </div>
-
-          <div className="mt-1.5 text-[20px] sm:text-[24px] leading-tight font-bold tracking-tight text-slate-950 break-words tabular-nums">
-            {value}
-          </div>
-
-          <div className="mt-2 text-[13px] leading-5 text-slate-500">
-            {clickable ? (
-              <span className="inline-flex items-center gap-1 text-indigo-600 font-medium">
-                {detail} <span aria-hidden>&rarr;</span>
-              </span>
-            ) : (
-              detail
-            )}
-          </div>
-        </div>
-
+      <div className="flex items-center gap-3">
         <div
-          className={`w-10 h-10 rounded-xl flex flex-shrink-0 items-center justify-center ${
+          className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${
             tones[
               tone
             ] ||
@@ -143,7 +123,29 @@ function AnalyticsMetric({
         >
           <Icon
             size={17}
+            aria-hidden="true"
           />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 tabular-nums">
+              {value}
+            </span>
+            <span className="truncate text-[12px] sm:text-[13px] font-semibold text-slate-700">
+              {label}
+            </span>
+          </div>
+
+          <div className="mt-1 truncate text-[11px] leading-4 text-slate-400">
+            {clickable ? (
+              <span className="inline-flex items-center gap-1 text-indigo-600 font-medium">
+                {detail} <span aria-hidden>&rarr;</span>
+              </span>
+            ) : (
+              detail
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -462,7 +464,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
             <>
           {/* KPI CARDS */}
 
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <AnalyticsMetric
               label="Total Leads"
               value={

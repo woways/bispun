@@ -1958,9 +1958,8 @@ model AdmissionRevenueSlab {
   @@index([companyId, partnerId])
 }
 
-// Employee incentive slab. Per staff member (matched by counsellorName, the
-// Bispun equivalent of Student Mentor's admissionDoneBy). Bonus = that
-// employee's admission count * the rate of the band they fall into.
+// Employee incentive slab. Per staff member (matched by counsellorName).
+// Bonus = that employee's admission count * the rate of the band they fall into.
 model EmployeeIncentiveSlab {
   id String @id @default(cuid())
 

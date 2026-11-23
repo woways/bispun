@@ -31,6 +31,12 @@ const ENDPOINT = "/api/client/notifications/preferences";
 const DEFAULTS = Object.freeze({
   soundEnabled: true,
   volume: 1,
+  // Which synthesized notification sound plays for workspace alerts. "classic"
+  // is the historical pattern, so existing users hear no change. The catalogue
+  // of valid keys lives in src/lib/sound.js; an unknown key falls back to the
+  // default at playback time (we deliberately do NOT import sound.js here to
+  // avoid a circular dependency — sound.js imports this module).
+  soundChoice: "classic",
 });
 
 // Guarded access to localStorage — returns null when unavailable (SSR, native,
@@ -65,6 +71,10 @@ function normalize(raw) {
       source.volume === undefined || source.volume === null
         ? DEFAULTS.volume
         : clampVolume(source.volume),
+    soundChoice:
+      typeof source.soundChoice === "string" && source.soundChoice.trim()
+        ? source.soundChoice.trim().slice(0, 32)
+        : DEFAULTS.soundChoice,
   };
 }
 
@@ -117,6 +127,12 @@ export function getSoundEnabled() {
 
 export function getVolume() {
   return clampVolume(state.volume);
+}
+
+export function getSoundChoice() {
+  return typeof state.soundChoice === "string" && state.soundChoice
+    ? state.soundChoice
+    : DEFAULTS.soundChoice;
 }
 
 // Update memory + localStorage, notify subscribers, then fire a best-effort

@@ -1783,7 +1783,7 @@ export default function UTMLeads({
                 onChange={(value) =>
                   updateGenerate("url", value)
                 }
-                placeholder="https://studentmentor.co.in/"
+                placeholder="https://example.com/"
               />
               {generateForm.url.trim() &&
                 !isValidHttpUrl(generateForm.url) && (

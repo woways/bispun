@@ -395,6 +395,10 @@ export default function CalendarModal({
 
   const [now, setNow] = useState(() => new Date());
 
+  // Scroll container for the day/week time grid, so we can open it at the
+  // current time (like Google Calendar) instead of at midnight.
+  const timeGridRef = useRef(null);
+
   // Deep-link focus: when a notification targets an event that is missing or no
   // longer visible to this user, show an assertive, focusable notice (mirrors
   // LeadStore's focusNotice pattern) instead of silently doing nothing.
@@ -467,6 +471,38 @@ export default function CalendarModal({
     [rangeStart, dayCount]
 
   );
+
+
+
+  // Open the day/week grid scrolled to the CURRENT time (Google-Calendar style)
+  // rather than at 1 AM/midnight. Runs when the calendar opens or the view/week
+  // changes and the visible range includes today. `now` is intentionally NOT a
+  // dependency — otherwise the grid would re-scroll every minute and fight the
+  // user's own scrolling. The target hour is read fresh from new Date() so it is
+  // always accurate (e.g. 9:50 AM → the 9 AM row sits near the top).
+  useEffect(() => {
+    if (!open) return;
+    const container = timeGridRef.current;
+    if (!container) return;
+
+    const today = new Date();
+    const includesToday = weekDays.some((day) => sameDay(day, today));
+    if (!includesToday) return;
+
+    const HOUR_ROW_PX = 64; // must match the h-[64px] FragmentRow rows
+    const target = Math.max(0, today.getHours() * HOUR_ROW_PX - 16);
+
+    // Wait one frame so the grid has laid out before we scroll it.
+    const raf = requestAnimationFrame(() => {
+      try {
+        container.scrollTo({ top: target, behavior: "auto" });
+      } catch {
+        container.scrollTop = target;
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, viewMode, rangeStart, dayCount, weekDays]);
 
 
 
@@ -1749,7 +1785,7 @@ export default function CalendarModal({
 
             {/* Time grid */}
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            <div ref={timeGridRef} className="min-h-0 flex-1 overflow-y-auto">
 
               <div
 
@@ -1801,9 +1837,11 @@ export default function CalendarModal({
 
       {editorOpen && editingEvent && (
 
-        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+        <div className="fixed inset-0 z-[140] flex justify-end bg-slate-950/50">
 
-          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="event-editor-title" className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl lg:block lg:max-h-none">
+          <div ref={editorRef} role="dialog" aria-modal="true" aria-labelledby="event-editor-title" className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[evtSlideIn_0.25s_ease-out] motion-reduce:animate-none">
+
+            <style>{"@keyframes evtSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
 
             <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 px-5 py-3.5">
 
@@ -1839,7 +1877,7 @@ export default function CalendarModal({
 
 
 
-            <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto p-5 lg:max-h-[70vh] lg:flex-none">
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
 
               {/* Title */}
 
@@ -1865,7 +1903,7 @@ export default function CalendarModal({
 
                   autoFocus
 
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-900 outline-none focus:border-brand-400"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
 
                 />
 
@@ -1895,7 +1933,7 @@ export default function CalendarModal({
 
                     }
 
-                    className="h-10 w-full rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
 
                   >
 
@@ -1933,7 +1971,7 @@ export default function CalendarModal({
 
                     }
 
-                    className="h-10 w-full rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
 
                   >
 
@@ -1955,182 +1993,117 @@ export default function CalendarModal({
 
 
 
-              {/* Date */}
+              {/* Toggles: all day + video meeting. Kept above the date/time row
+                  so the controls sit before the fields they affect, and the
+                  all-day checkbox stays mounted when it toggles the time inputs
+                  below (focus is never lost). */}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editingEvent.allDay}
+                    onChange={(e) =>
+                      setEditingEvent((c) => ({ ...c, allDay: e.target.checked }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 accent-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                  />
+                  All day
+                </label>
 
-              <label className="block">
+                <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={editingEvent.hasMeeting}
+                    onChange={(e) =>
+                      setEditingEvent((c) => ({
+                        ...c,
+                        hasMeeting: e.target.checked,
+                      }))
+                    }
+                    className="h-4 w-4 rounded border-slate-300 accent-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                  />
+                  <Video size={14} className="text-emerald-600" aria-hidden="true" />
+                  Add video meeting
+                </label>
+              </div>
 
-                <span className="mb-1 block text-[13px] font-bold text-slate-600">
-
-                  Date
-
-                </span>
-
-                <input
-
-                  type="date"
-
-                  min={`${MIN_EVENT_YEAR}-01-01`}
-                max={`${MAX_EVENT_YEAR}-12-31`}
-                value={editingEvent.dateStr}
-
-                  onClick={(e) => {
-
-                    // Open the native date picker when the user clicks anywhere
-
-                    // inside the date field, not only the calendar icon.
-
-                    e.currentTarget.showPicker?.();
-
-                  }}
-
-                  onChange={(e) =>
-
-                    setEditingEvent((c) => ({ ...c, dateStr: e.target.value }))
-
-                  }
-
-                  className="h-10 w-full cursor-pointer rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
-
-                />
-
-              </label>
-
-
-
-              {/* All-day toggle */}
-
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-
-                <input
-
-                  type="checkbox"
-
-                  checked={editingEvent.allDay}
-
-                  onChange={(e) =>
-
-                    setEditingEvent((c) => ({ ...c, allDay: e.target.checked }))
-
-                  }
-
-                  className="h-4 w-4 rounded border-slate-300"
-
-                />
-
-                All day
-
-              </label>
-
-
-
-              {/* Video meeting toggle */}
-
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-
-                <input
-
-                  type="checkbox"
-
-                  checked={editingEvent.hasMeeting}
-
-                  onChange={(e) =>
-
-                    setEditingEvent((c) => ({
-
-                      ...c,
-
-                      hasMeeting: e.target.checked,
-
-                    }))
-
-                  }
-
-                  className="h-4 w-4 rounded border-slate-300"
-
-                />
-
-                <Video size={13} className="text-emerald-600" />
-
-                Add video meeting
-
-              </label>
-
-
-
-              {/* Start / end times */}
-
-              {!editingEvent.allDay && (
-
-                <div className="grid grid-cols-2 gap-3">
+              {/* Date + time range. When All day is on, Date spans the full
+                  width (no empty time cells); otherwise Date / Start / End share
+                  one clean row. DOM order follows the visual row for a11y. */}
+              {editingEvent.allDay ? (
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] font-semibold text-slate-600">
+                    Date
+                  </span>
+                  <input
+                    type="date"
+                    min={`${MIN_EVENT_YEAR}-01-01`}
+                    max={`${MAX_EVENT_YEAR}-12-31`}
+                    value={editingEvent.dateStr}
+                    onClick={(e) => {
+                      e.currentTarget.showPicker?.();
+                    }}
+                    onChange={(e) =>
+                      setEditingEvent((c) => ({ ...c, dateStr: e.target.value }))
+                    }
+                    className="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+                  />
+                </label>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] font-semibold text-slate-600">
+                      Date
+                    </span>
+                    <input
+                      type="date"
+                      min={`${MIN_EVENT_YEAR}-01-01`}
+                      max={`${MAX_EVENT_YEAR}-12-31`}
+                      value={editingEvent.dateStr}
+                      onClick={(e) => {
+                        e.currentTarget.showPicker?.();
+                      }}
+                      onChange={(e) =>
+                        setEditingEvent((c) => ({ ...c, dateStr: e.target.value }))
+                      }
+                      className="h-11 w-full cursor-pointer rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+                    />
+                  </label>
 
                   <label className="block">
-
-                    <span className="mb-1 block text-[13px] font-bold text-slate-600">
-
+                    <span className="mb-1.5 block text-[13px] font-semibold text-slate-600">
                       Start
-
                     </span>
-
                     <input
-
                       type="time"
-
                       value={editingEvent.startTime}
-
                       onChange={(e) =>
-
                         setEditingEvent((c) => ({
-
                           ...c,
-
                           startTime: e.target.value,
-
                         }))
-
                       }
-
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
-
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
                     />
-
                   </label>
-
-
 
                   <label className="block">
-
-                    <span className="mb-1 block text-[13px] font-bold text-slate-600">
-
+                    <span className="mb-1.5 block text-[13px] font-semibold text-slate-600">
                       End
-
                     </span>
-
                     <input
-
                       type="time"
-
                       value={editingEvent.endTime}
-
                       onChange={(e) =>
-
                         setEditingEvent((c) => ({
-
                           ...c,
-
                           endTime: e.target.value,
-
                         }))
-
                       }
-
-                      className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
-
+                      className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
                     />
-
                   </label>
-
                 </div>
-
               )}
 
 
@@ -2141,7 +2114,7 @@ export default function CalendarModal({
 
                 <span className="mb-1 block text-[13px] font-bold text-slate-600">
 
-                  <UserRound size={11} className="mr-1 inline" />
+                  <UserRound size={11} className="mr-1 inline" aria-hidden="true" />
 
                   Assign to
 
@@ -2191,7 +2164,7 @@ export default function CalendarModal({
 
                 <span className="mb-1 block text-[13px] font-bold text-slate-600">
 
-                  <MapPin size={11} className="mr-1 inline" />
+                  <MapPin size={11} className="mr-1 inline" aria-hidden="true" />
 
                   Location
 
@@ -2209,7 +2182,7 @@ export default function CalendarModal({
 
                   placeholder="Optional"
 
-                  className="h-10 w-full rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
 
                 />
 
@@ -2247,7 +2220,7 @@ export default function CalendarModal({
 
                   placeholder="Optional notes"
 
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 outline-none focus:border-brand-400"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
 
                 />
 
@@ -2271,7 +2244,7 @@ export default function CalendarModal({
 
                   disabled={deleting || saving}
 
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3.5 text-sm font-bold text-rose-700 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-1 disabled:opacity-50"
 
                 >
 
@@ -2313,7 +2286,7 @@ export default function CalendarModal({
 
                   disabled={saving || deleting}
 
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 disabled:opacity-50"
 
                 >
 
@@ -2329,7 +2302,7 @@ export default function CalendarModal({
 
                   disabled={saving || deleting}
 
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-4 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
 
                 >
 
@@ -2517,7 +2490,7 @@ function FragmentRow({
 
           >
 
-            {isCurrentHour && (
+            {isCurrentHour && isTodayCell && (
 
               <div
 

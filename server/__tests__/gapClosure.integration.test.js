@@ -47,7 +47,7 @@ before(async () => {
   assert.ok(!/neon|ep-weathered|ep-blue-mouse|pond|blue-mouse/i.test(process.env.DATABASE_URL), "REFUSE: forbidden host");
 
   F.coA = await prisma.company.findUnique({ where: { slug: "qa-test-co" } });
-  F.coB = await prisma.company.findUnique({ where: { slug: "student-mentor" } });
+  F.coB = await prisma.company.findUnique({ where: { slug: "horizon-academy" } });
   assert.ok(F.coA && F.coB, "tenants missing — seed+provision first");
 
   const full = { canManageUsers: true, canManageSettings: true, canManageBilling: true, canViewAnalytics: true, canManageAdmissions: true, canManageRevenue: true, canManageLeads: true, canManageSupport: true, canViewTeamTargets: true };

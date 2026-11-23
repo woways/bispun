@@ -12,14 +12,14 @@ import {
 } from "lucide-react";
 
 export const TENANTS = {
-  "student-mentor": {
-    id: "student-mentor",
-    name: "Student Mentor",
-    short: "SM",
+  "horizon-academy": {
+    id: "horizon-academy",
+    name: "Horizon Academy",
+    short: "HA",
     accent: "bg-indigo-600",
     plan: "pro",
-    brandName: "Student Mentor CRM",
-    subdomain: "studentmentor.consulbuzz.com",
+    brandName: "Horizon Academy CRM",
+    subdomain: "horizon.consulbuzz.com",
     users: 12,
     leads: 8420,
     admissions: 286,

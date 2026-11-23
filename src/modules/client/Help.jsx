@@ -24,7 +24,6 @@ import {
   Eye,
   MessageSquareText,
   PhoneCall,
-  ArrowUpRight,
 } from "lucide-react";
 
 import {
@@ -325,25 +324,15 @@ function SupportMetric({
       type={clickable ? "button" : undefined}
       onClick={clickable ? onClick : undefined}
       aria-label={clickable ? `${label} — view tickets` : undefined}
-      className={`group block w-full text-left bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all ${
+      className={`group block w-full text-left bg-white border border-slate-200 rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-all ${
         clickable
           ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2"
           : ""
       }`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
-        <div className="min-w-0">
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-500 lg:text-slate-400">
-            {label}
-          </div>
-
-          <div className="mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 break-words tabular-nums">
-            {value}
-          </div>
-        </div>
-
+      <div className="flex items-center gap-3">
         <div
-          className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
+          className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${
             tones[
               tone
             ] ||
@@ -352,21 +341,24 @@ function SupportMetric({
         >
           <Icon
             size={17}
+            aria-hidden="true"
           />
         </div>
-      </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500 flex items-center justify-between gap-2">
-        <span className="min-w-0">{detail}</span>
-        {clickable ? (
-          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-indigo-600">
-            View
-            <ArrowUpRight
-              size={12}
-              className="transition-transform group-hover:translate-x-0.5"
-            />
-          </span>
-        ) : null}
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="shrink-0 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 tabular-nums">
+              {value}
+            </span>
+            <span className="truncate text-[12px] sm:text-[13px] font-semibold text-slate-700">
+              {label}
+            </span>
+          </div>
+
+          <div className="mt-1 truncate text-[11px] leading-4 text-slate-400">
+            {detail}
+          </div>
+        </div>
       </div>
     </Wrapper>
   );
@@ -1724,7 +1716,7 @@ export default function Help({
         onClose={() => setTicketDrill(null)}
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SupportMetric
           label="Total Tickets"
           value={

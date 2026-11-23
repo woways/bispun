@@ -39,6 +39,7 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  Play,
 } from "lucide-react";
 
 import {
@@ -50,6 +51,14 @@ import {
   setPrefs as setNotifSoundPrefs,
   subscribe as subscribeNotifSoundPrefs,
 } from "../../lib/notificationPrefs";
+
+import {
+  getNotificationSounds,
+  previewNotificationSound,
+} from "../../lib/sound";
+
+// Selectable notification sounds (synthesized in sound.js — no audio files).
+const NOTIF_SOUND_OPTIONS = getNotificationSounds();
 
 import { applyBrandTheme, BRAND_COLORS, BRAND_PALETTE, brandHex } from "../../lib/brandTheme";
 import PermissionTree, {
@@ -4263,6 +4272,78 @@ export default function SettingsView({
                     {Math.round(soundPrefs.volume * 100)}%
                   </span>
                 </div>
+
+                <fieldset
+                  className="border-t border-slate-100 pt-4"
+                  disabled={!soundPrefs.soundEnabled}
+                >
+                  <legend className="text-[13px] font-semibold text-slate-600">
+                    Notification tone
+                  </legend>
+
+                  <p className="mt-0.5 mb-3 text-[12px] text-slate-400">
+                    Choose the sound for workspace alerts, then preview each one.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {NOTIF_SOUND_OPTIONS.map((option) => {
+                      const selected =
+                        soundPrefs.soundChoice === option.key;
+
+                      return (
+                        <div
+                          key={option.key}
+                          className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 transition-colors ${
+                            selected
+                              ? "border-indigo-300 bg-indigo-50/60"
+                              : "border-slate-200 bg-white"
+                          } ${soundPrefs.soundEnabled ? "" : "opacity-50"}`}
+                        >
+                          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                            <input
+                              type="radio"
+                              name="notif-sound-choice"
+                              value={option.key}
+                              checked={selected}
+                              disabled={!soundPrefs.soundEnabled}
+                              onChange={() => {
+                                setNotifSoundPrefs({
+                                  soundChoice: option.key,
+                                });
+                                previewNotificationSound(option.key);
+                              }}
+                              className="h-4 w-4 shrink-0 accent-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                            />
+
+                            <span className="truncate text-[13px] font-semibold text-slate-700">
+                              {option.label}
+                            </span>
+
+                            {selected ? (
+                              <Check
+                                size={14}
+                                className="shrink-0 text-indigo-600"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                          </label>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              previewNotificationSound(option.key)
+                            }
+                            disabled={!soundPrefs.soundEnabled}
+                            aria-label={`Preview ${option.label} sound`}
+                            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors hover:border-indigo-300 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Play size={13} aria-hidden="true" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </fieldset>
               </div>
 
               {notificationPreferencesLoading ? (

@@ -9,7 +9,7 @@
 //   2. .env points DATABASE_URL/DIRECT_URL at localhost/bispun_qa
 //   3. `npm run prisma:push`  (schema)
 //   4. apply pending-migrations/0005P (lead-number trigger)
-//   5. `node prisma/seed.js`  (modules/plans/super-admin/student-mentor tenant)
+//   5. `node prisma/seed.js`  (modules/plans/super-admin/horizon-academy tenant)
 //   6. `node scripts/provisionQaTestCompany.js --execute`  (qa-test-co tenant)
 //
 // Run:  node --test server/__tests__/api.integration.test.js
@@ -119,9 +119,9 @@ before(async () => {
 
   // --- Locate tenants (seed + provision must have run) ---
   F.companyA = await prisma.company.findUnique({ where: { slug: "qa-test-co" } });
-  F.companyB = await prisma.company.findUnique({ where: { slug: "student-mentor" } });
+  F.companyB = await prisma.company.findUnique({ where: { slug: "horizon-academy" } });
   assert.ok(F.companyA, "qa-test-co tenant missing — run provision script first");
-  assert.ok(F.companyB, "student-mentor tenant missing — run seed first");
+  assert.ok(F.companyB, "horizon-academy tenant missing — run seed first");
 
   // --- Users (idempotent upserts with a known fixture password) ---
   const fullPerms = {

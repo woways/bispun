@@ -57,11 +57,11 @@ export const MOCK_LEAD_STORE = [
 ];
 
 export const MOCK_TICKETS = [
-  { id: 'T-2041', tenant: 'Student Mentor', title: 'Add "Counsellor Category" field', priority: 'Medium', status: 'Under Review', type: 'Customization Request', created: '2d ago' },
+  { id: 'T-2041', tenant: 'Horizon Academy', title: 'Add "Counsellor Category" field', priority: 'Medium', status: 'Under Review', type: 'Customization Request', created: '2d ago' },
   { id: 'T-2040', tenant: 'ABC Consultancy', title: 'WhatsApp Business API integration', priority: 'High', status: 'Approved', type: 'Integration Request', created: '3d ago' },
   { id: 'T-2039', tenant: 'XYZ Admissions', title: 'Bulk lead import failing on rows > 5000', priority: 'High', status: 'Development', type: 'Technical Issue', created: '4d ago' },
   { id: 'T-2038', tenant: 'Nexus Edu', title: 'Custom report — country-wise conversion', priority: 'Low', status: 'New', type: 'Feature Request', created: '5d ago' },
-  { id: 'T-2037', tenant: 'Student Mentor', title: 'Invoice for August not received', priority: 'Medium', status: 'Completed', type: 'Billing Support', created: '6d ago' },
+  { id: 'T-2037', tenant: 'Horizon Academy', title: 'Invoice for August not received', priority: 'Medium', status: 'Completed', type: 'Billing Support', created: '6d ago' },
 ];
 
 export const REVENUE_CHART = [

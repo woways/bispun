@@ -202,7 +202,7 @@ export default function CallCenterModal({ open, onClose, lead }) {
             </div>
             <button type="button" onClick={startCall} disabled={calling || !phone} className="inline-flex min-h-[86px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
               {calling ? <RefreshCw size={16} className="animate-spin" /> : <PhoneCall size={17} />}
-              {status?.cloudDialEnabled ? "Call from CRM" : "Dial & Track"}
+              {status?.cloudDialEnabled ? "Call from CRM" : "Dial & Record"}
             </button>
           </div>
 

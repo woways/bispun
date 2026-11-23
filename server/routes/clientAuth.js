@@ -1838,7 +1838,7 @@ router.post("/forgot-password", forgotLimiter, async (req, res) => {
     const baseUrl = getAppLoginUrl().replace(/\/login\/?$/, "");
     const resetLink = `${baseUrl}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
 
-    await sendMail({
+    const mailResult = await sendMail({
       to: email,
       subject: "Reset your Bispun password",
       html: `
@@ -1863,6 +1863,23 @@ router.post("/forgot-password", forgotLimiter, async (req, res) => {
       </div>`,
       text: `Password Reset\n\nWe received a request to reset the password for ${email}.\n\nReset your password: ${resetLink}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.\n\n— Team Bispun`,
     });
+
+    // The reset email could not be delivered. The most common cause is that no
+    // platform Google account is connected (Super Admin → System Settings →
+    // connect Google with the Gmail "send" scope). We still return the generic
+    // success response above to prevent account enumeration, but we must not
+    // fail silently for operators: log a clear warning, and outside production
+    // also log the reset link so the flow can be exercised locally without a
+    // connected email sender.
+    if (mailResult && mailResult.sent === false) {
+      console.warn(
+        "[forgot-password] Reset email NOT delivered (no platform email sender connected). " +
+          "Connect Google (gmail.send) in Super Admin → System Settings."
+      );
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[forgot-password][dev] Reset link for ${email}: ${resetLink}`);
+      }
+    }
 
     return res.json(ok);
   } catch (error) {

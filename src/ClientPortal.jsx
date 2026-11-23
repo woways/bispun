@@ -37,8 +37,6 @@ import {
   ChevronDown,
   GraduationCap,
   Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
   Eye,
   EyeOff,
   X,
@@ -5218,12 +5216,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             }}
             title={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
             aria-label={sidebarCollapsed ? "Expand menu" : "Collapse menu"}
-            className="hidden lg:flex absolute top-1/2 right-[-14px] z-[80] h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-[0_5px_16px_rgba(15,23,42,0.18)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:border-indigo-300 hover:text-indigo-600 hover:shadow-[0_7px_20px_rgba(15,23,42,0.22)]"
+            className="hidden lg:flex absolute top-1/2 right-[-14px] z-[80] h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-[0_5px_16px_rgba(15,23,42,0.18)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:border-indigo-300 hover:text-indigo-600 hover:shadow-[0_7px_20px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
           >
             {sidebarCollapsed ? (
-              <ChevronRight size={15} strokeWidth={2.2} />
+              <ChevronLeft size={15} strokeWidth={2.2} aria-hidden="true" />
             ) : (
-              <PanelLeftClose size={15} strokeWidth={2.2} />
+              <ChevronRight size={15} strokeWidth={2.2} aria-hidden="true" />
             )}
           </button>
 

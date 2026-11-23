@@ -522,11 +522,11 @@ function PhoneAction({ phone, name, onCopied, onDial }) {
                 triggerRef.current?.focus();
                 onDial();
               }}
-              aria-label={`Dial and track call with ${name}`}
+              aria-label={`Dial and record call with ${name}`}
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
             >
               <PhoneCall size={14} />
-              {"Dial & track"}
+              {"Dial & record"}
             </button>
           ) : null}
           <button
@@ -3098,6 +3098,7 @@ function StoreMetric({
         >
           <Icon
             size={17}
+            aria-hidden="true"
           />
         </div>
 
@@ -5270,7 +5271,7 @@ export default function LeadStore({
           </h1>
 
           <p className="mt-1 text-[15px] text-slate-500">
-            Import, validate, assign and track external lead datasets as real CRM leads.
+            Import, validate, assign and track external lead datasets in one place.
           </p>
         </div>
 

@@ -35,12 +35,18 @@ const SUPER_ADMIN_EMAIL =
 const SUPER_ADMIN_PASSWORD =
   requiredEnv("SEED_SUPER_ADMIN_PASSWORD");
 
-const STUDENT_MENTOR_ADMIN_EMAIL =
+// Demo client-admin credentials. New env keys are preferred; the old
+// SEED_STUDENT_MENTOR_* keys are still honored so existing .env files keep
+// working without edits.
+const CLIENT_ADMIN_EMAIL =
+  process.env.SEED_CLIENT_ADMIN_EMAIL?.trim().toLowerCase() ||
   process.env.SEED_STUDENT_MENTOR_ADMIN_EMAIL?.trim().toLowerCase() ||
-  "admin@studentmentor.co.in";
+  "admin@horizonacademy.co.in";
 
-const STUDENT_MENTOR_ADMIN_PASSWORD =
-  requiredEnv("SEED_STUDENT_MENTOR_ADMIN_PASSWORD");
+const CLIENT_ADMIN_PASSWORD =
+  process.env.SEED_CLIENT_ADMIN_PASSWORD ||
+  process.env.SEED_STUDENT_MENTOR_ADMIN_PASSWORD ||
+  requiredEnv("SEED_CLIENT_ADMIN_PASSWORD");
 
 const REMOVED_MODULE_KEYS = [
   "quotation",
@@ -415,44 +421,44 @@ async function seedSuperAdmin() {
   );
 }
 
-async function seedStudentMentor() {
+async function seedDemoClient() {
   console.log(
-    "Seeding Student Mentor..."
+    "Seeding Horizon Academy..."
   );
 
   const company =
     await prisma.company.upsert({
       where: {
-        slug: "student-mentor",
+        slug: "horizon-academy",
       },
 
       update: {
-        name: "Student Mentor",
+        name: "Horizon Academy",
         brandName:
-          "Student Mentor CRM",
-        shortName: "SM",
+          "Horizon Academy CRM",
+        shortName: "HA",
         business:
           "Education Consultancy",
         ownerName: "Rakesh N.",
         city: "Hyderabad",
         subdomain:
-          "studentmentor.consulbuzz.com",
+          "horizon.consulbuzz.com",
         primaryColor: "indigo",
         status: "ACTIVE",
       },
 
       create: {
-        name: "Student Mentor",
-        slug: "student-mentor",
+        name: "Horizon Academy",
+        slug: "horizon-academy",
         brandName:
-          "Student Mentor CRM",
-        shortName: "SM",
+          "Horizon Academy CRM",
+        shortName: "HA",
         business:
           "Education Consultancy",
         ownerName: "Rakesh N.",
         city: "Hyderabad",
         subdomain:
-          "studentmentor.consulbuzz.com",
+          "horizon.consulbuzz.com",
         primaryColor: "indigo",
         status: "ACTIVE",
       },
@@ -465,7 +471,7 @@ async function seedStudentMentor() {
 
     update: {
       portalName:
-        "Student Mentor CRM",
+        "Horizon Academy CRM",
       primaryColor: "indigo",
       timezone:
         "Asia/Kolkata",
@@ -479,7 +485,7 @@ async function seedStudentMentor() {
     create: {
       companyId: company.id,
       portalName:
-        "Student Mentor CRM",
+        "Horizon Academy CRM",
       primaryColor: "indigo",
       timezone:
         "Asia/Kolkata",
@@ -606,20 +612,20 @@ async function seedStudentMentor() {
 
   const clientAdminPasswordHash =
     await bcrypt.hash(
-      STUDENT_MENTOR_ADMIN_PASSWORD,
+      CLIENT_ADMIN_PASSWORD,
       12
     );
 
   await prisma.user.upsert({
     where: {
       email:
-        STUDENT_MENTOR_ADMIN_EMAIL,
+        CLIENT_ADMIN_EMAIL,
     },
 
     // Do NOT reset an existing user's password on re-seed (RISK-001).
     update: {
       name:
-        "Student Mentor Admin",
+        "Horizon Academy Admin",
       role: "CLIENT_ADMIN",
       active: true,
       companyId: company.id,
@@ -627,9 +633,9 @@ async function seedStudentMentor() {
 
     create: {
       name:
-        "Student Mentor Admin",
+        "Horizon Academy Admin",
       email:
-        STUDENT_MENTOR_ADMIN_EMAIL,
+        CLIENT_ADMIN_EMAIL,
       passwordHash:
         clientAdminPasswordHash,
       role: "CLIENT_ADMIN",
@@ -639,7 +645,7 @@ async function seedStudentMentor() {
   });
 
   console.log(
-    "Student Mentor seeded."
+    "Horizon Academy seeded."
   );
 }
 
@@ -654,7 +660,7 @@ async function main() {
   await seedModules();
   await seedPlans();
   await seedSuperAdmin();
-  await seedStudentMentor();
+  await seedDemoClient();
 
   console.log("");
   console.log(
