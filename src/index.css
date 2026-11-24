@@ -135,6 +135,36 @@ textarea {
 }
 
 
+/* Rich-text notes editor + read-only renderer. Tailwind's preflight strips
+   list styling, so restore it for the contentEditable editor and the
+   sanitised read-only view. Placeholder is a CSS hint only (non-essential;
+   the region carries its own accessible name). */
+.rte-editable:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.rte-editable ul,
+.rte-content ul {
+  list-style: disc;
+  padding-inline-start: 1.4em;
+  margin: 0.25em 0;
+}
+
+.rte-editable ol,
+.rte-content ol {
+  list-style: decimal;
+  padding-inline-start: 1.4em;
+  margin: 0.25em 0;
+}
+
+.rte-editable li,
+.rte-content li {
+  margin: 0.1em 0;
+}
+
+
 /* 19.3 — Dropdown standard: one consistent chevron across the portal for
    single-select controls, with breathing room so the arrow never sits flush
    against the box edge. Scoped to single <select> so multiple / sized

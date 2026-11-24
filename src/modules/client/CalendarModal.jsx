@@ -52,6 +52,8 @@ import { apiRequest } from "../../lib/api";
 
 import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
+import RichTextEditor, { RichTextView } from "../../components/RichTextEditor";
+
 
 
 /* ------------------------------------------------------------------ */
@@ -1689,6 +1691,46 @@ export default function CalendarModal({
 
             </div>
 
+            {/* STATUS LEGEND */}
+
+            <div className="border-t border-slate-200 px-4 py-3.5">
+
+              <div className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-600">
+
+                Status
+
+              </div>
+
+              <ul className="space-y-1.5">
+
+                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
+
+                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-brand-500 bg-brand-100" />
+
+                  Scheduled
+
+                </li>
+
+                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
+
+                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-100" />
+
+                  Completed
+
+                </li>
+
+                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
+
+                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-rose-500 bg-rose-100" />
+
+                  Cancelled
+
+                </li>
+
+              </ul>
+
+            </div>
+
           </div>
 
 
@@ -2445,39 +2487,37 @@ export default function CalendarModal({
 
               {/* Description */}
 
-              <label className="block">
+              <div className="block">
 
-                <span className="mb-1 block text-[13px] font-bold text-slate-600">
+                <span id="cal-desc-label" className="mb-1 block text-[13px] font-bold text-slate-600">
 
                   Description
 
                 </span>
 
-                <textarea
+                <RichTextEditor
 
                   value={editingEvent.description}
 
-                  onChange={(e) =>
+                  onChange={(html) =>
 
                     setEditingEvent((c) => ({
 
                       ...c,
 
-                      description: e.target.value,
+                      description: html,
 
                     }))
 
                   }
 
-                  rows={3}
+                  ariaLabelledby="cal-desc-label"
 
                   placeholder="Optional notes"
 
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
-
                 />
 
-              </label>
+              </div>
 
             </div>
 
@@ -2756,9 +2796,10 @@ export default function CalendarModal({
                   Notes
                 </h3>
                 {detailEvent.description ? (
-                  <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-slate-700">
-                    {detailEvent.description}
-                  </p>
+                  <RichTextView
+                    html={detailEvent.description}
+                    className="text-[13px] font-medium leading-relaxed text-slate-700"
+                  />
                 ) : (
                   <p className="text-[13px] font-medium text-slate-500">
                     No notes.
@@ -2907,18 +2948,11 @@ function FragmentRow({
 
     <>
 
-      {/* Hour label */}
+      {/* Hour label — sits just BELOW the hour's top border line. */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white pr-2 text-right text-[11px] font-semibold text-slate-500">
+      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white px-2 pt-1 text-right text-[11px] font-semibold text-slate-500">
 
-        {/* Half-hour gridline (decorative) — matches the day cells so the
-            horizontal lines run continuously across the gutter too. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-200"
-        />
-
-        <span className="relative -top-2 bg-white px-1">
+        <span>
 
           {hour === 0
 
@@ -2963,12 +2997,6 @@ function FragmentRow({
             className="relative h-[64px] cursor-pointer border-b border-r border-slate-300 bg-white px-1.5 py-1 transition hover:bg-slate-50"
 
           >
-
-            {/* Half-hour gridline (decorative) */}
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-200"
-            />
 
             {isCurrentHour && isTodayCell && (
 
