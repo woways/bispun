@@ -158,6 +158,16 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const WEEKDAYS_MINI = ["M", "T", "W", "T", "F", "S", "S"];
 
+const FULL_WEEKDAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 
@@ -357,7 +367,7 @@ export default function CalendarModal({
 
   const [anchorDate, setAnchorDate] = useState(() => new Date());
 
-  const [viewMode, setViewMode] = useState("week"); // "day" | "workweek" | "week"
+  const [viewMode, setViewMode] = useState("week"); // "day" | "week" | "month"
 
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
 
@@ -454,13 +464,19 @@ export default function CalendarModal({
 
     if (viewMode === "day") return startOfDay(anchorDate);
 
-    return startOfWeek(anchorDate); // week + workweek both start Monday
+    if (viewMode === "month") {
+      // Month grid starts on the Monday of the week containing the 1st.
+      const first = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+      return startOfWeek(first);
+    }
+
+    return startOfWeek(anchorDate); // week starts Monday
 
   }, [anchorDate, viewMode]);
 
 
 
-  const dayCount = viewMode === "day" ? 1 : viewMode === "workweek" ? 5 : 7;
+  const dayCount = viewMode === "day" ? 1 : viewMode === "month" ? 42 : 7;
 
 
 
@@ -1163,9 +1179,12 @@ export default function CalendarModal({
       <div ref={calendarRef} role="dialog" aria-modal="true" aria-labelledby="calendar-title" className="flex h-full w-full max-w-[1500px] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none pt-[env(safe-area-inset-top)] sm:pt-0">
         <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
 
-        {/* Polite announcement of the visible month for assistive tech. */}
+        {/* Polite announcement of the visible view + month for assistive tech.
+            Re-announces on both month navigation and view switches. */}
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {formatMonthYear(anchorDate)}
+          {`${
+            viewMode === "month" ? "Month" : viewMode === "day" ? "Day" : "Week"
+          } view, ${formatMonthYear(anchorDate)}`}
         </div>
 
         {/* Deep-link fallback: assertive, focusable notice shown when a
@@ -1596,30 +1615,25 @@ export default function CalendarModal({
 
               <div className="text-[16px] font-extrabold tracking-[-0.015em] text-slate-900">
 
-                {weekDays[0].toLocaleDateString("en-IN", {
-
-                  day: "numeric",
-
-                  month: "short",
-
-                })}
-
-                {dayCount > 1 && (
-
+                {viewMode === "month" ? (
+                  formatMonthYear(anchorDate)
+                ) : (
                   <>
-
-                    {" "}–{" "}
-
-                    {weekDays[weekDays.length - 1].toLocaleDateString("en-IN", {
-
+                    {weekDays[0].toLocaleDateString("en-IN", {
                       day: "numeric",
-
                       month: "short",
-
                     })}
 
+                    {dayCount > 1 && (
+                      <>
+                        {" "}–{" "}
+                        {weekDays[weekDays.length - 1].toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </>
+                    )}
                   </>
-
                 )}
 
               </div>
@@ -1638,11 +1652,17 @@ export default function CalendarModal({
 
                   type="button"
 
-                  onClick={() => setAnchorDate((d) => addDays(d, -dayCount))}
+                  onClick={() =>
+                    setAnchorDate((d) =>
+                      viewMode === "month"
+                        ? addMonths(d, -1)
+                        : addDays(d, -dayCount)
+                    )
+                  }
 
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
 
-                  aria-label="Previous"
+                  aria-label={viewMode === "month" ? "Previous month" : "Previous"}
 
                 >
 
@@ -1654,11 +1674,17 @@ export default function CalendarModal({
 
                   type="button"
 
-                  onClick={() => setAnchorDate((d) => addDays(d, dayCount))}
+                  onClick={() =>
+                    setAnchorDate((d) =>
+                      viewMode === "month"
+                        ? addMonths(d, 1)
+                        : addDays(d, dayCount)
+                    )
+                  }
 
-                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
 
-                  aria-label="Next"
+                  aria-label={viewMode === "month" ? "Next month" : "Next"}
 
                 >
 
@@ -1668,15 +1694,19 @@ export default function CalendarModal({
 
 
 
-                <div className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1">
+                <div
+                  role="group"
+                  aria-label="Calendar view"
+                  className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
+                >
 
                   {[
 
                     ["day", "Day"],
 
-                    ["workweek", "Work week"],
-
                     ["week", "Week"],
+
+                    ["month", "Month"],
 
                   ].map(([value, label]) => (
 
@@ -1716,6 +1746,126 @@ export default function CalendarModal({
 
 
 
+            {viewMode === "month" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <table className="h-full w-full table-fixed border-collapse">
+                <caption className="sr-only">
+                  {formatMonthYear(anchorDate)}
+                </caption>
+                <thead>
+                  <tr>
+                    {WEEKDAYS.map((wd, i) => (
+                      <th
+                        key={`${wd}-${i}`}
+                        scope="col"
+                        className="border-b border-r border-slate-200 bg-slate-50 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 last:border-r-0"
+                      >
+                        <abbr title={FULL_WEEKDAYS[i]} className="no-underline">
+                          {wd}
+                        </abbr>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 6 }, (_, w) => (
+                    <tr key={w}>
+                      {Array.from({ length: 7 }, (_, d) => {
+                        const cellDate = addDays(rangeStart, w * 7 + d);
+                        const inMonth =
+                          cellDate.getMonth() === anchorDate.getMonth();
+                        const isToday = sameDay(cellDate, today);
+                        const isSelected = sameDay(cellDate, selectedDate);
+                        const dayEvents = eventsForDay(cellDate);
+                        const shown = dayEvents.slice(0, 3);
+                        const extra = dayEvents.length - shown.length;
+                        const fullLabel = cellDate.toLocaleDateString("en-IN", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        });
+                        const openDay = () => {
+                          setSelectedDate(startOfDay(cellDate));
+                          setAnchorDate(startOfDay(cellDate));
+                          setViewMode("day");
+                        };
+                        return (
+                          <td
+                            key={d}
+                            className={`h-[16.66%] w-[14.28%] align-top border-b border-r border-slate-200 p-1 last:border-r-0 ${
+                              isSelected ? "bg-brand-50/60" : ""
+                            } ${!inMonth ? "bg-slate-50/40" : ""}`}
+                          >
+                            <div className="flex h-full flex-col gap-1 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={openDay}
+                                aria-label={`${fullLabel}${
+                                  isToday ? ", today" : ""
+                                }${
+                                  dayEvents.length
+                                    ? `, ${dayEvents.length} event${
+                                        dayEvents.length === 1 ? "" : "s"
+                                      }`
+                                    : ""
+                                }`}
+                                aria-current={isToday ? "date" : undefined}
+                                aria-pressed={isSelected}
+                                className={`inline-flex h-7 w-7 shrink-0 items-center justify-center self-start rounded-full text-[12px] font-bold focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${
+                                  isToday
+                                    ? "bg-brand-600 text-white ring-2 ring-brand-200"
+                                    : isSelected
+                                      ? "border border-brand-400 text-brand-700"
+                                      : inMonth
+                                        ? "text-slate-800 hover:bg-slate-100"
+                                        : "text-slate-500 hover:bg-slate-100"
+                                }`}
+                              >
+                                {cellDate.getDate()}
+                              </button>
+
+                              <div className="flex min-h-0 flex-col gap-0.5 overflow-hidden">
+                                {shown.map((event) => (
+                                  <button
+                                    key={event.id}
+                                    type="button"
+                                    onClick={() => openEdit(event)}
+                                    className="flex items-center rounded-md bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                  >
+                                    <span className="truncate">
+                                      {event.allDay
+                                        ? "All day"
+                                        : formatTimeLabel(event.startAt)}{" "}
+                                      · {event.title || "Untitled"}
+                                    </span>
+                                  </button>
+                                ))}
+
+                                {extra > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={openDay}
+                                    aria-label={`Show ${extra} more event${
+                                      extra === 1 ? "" : "s"
+                                    } on ${fullLabel}`}
+                                    className="self-start rounded px-1 text-[11px] font-bold text-slate-500 hover:text-indigo-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                                  >
+                                    +{extra} more
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            ) : (
+            <>
             {/* Day headers */}
 
             <div
@@ -1827,6 +1977,8 @@ export default function CalendarModal({
               </div>
 
             </div>
+            </>
+            )}
 
           </div>
 
@@ -2445,7 +2597,7 @@ function FragmentRow({
 
       {/* Hour label */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-100 pr-2 text-right text-[11px] font-semibold text-slate-400">
+      <div className="relative h-[64px] border-b border-r border-slate-200 pr-2 text-right text-[11px] font-semibold text-slate-400">
 
         <span className="relative -top-1.5">
 
@@ -2489,7 +2641,7 @@ function FragmentRow({
 
             onClick={() => onSlotClick(day, hour)}
 
-            className="relative h-[64px] cursor-pointer border-b border-r border-slate-100 px-1.5 py-1 transition hover:bg-slate-50/70"
+            className="relative h-[64px] cursor-pointer border-b border-r border-slate-200 px-1.5 py-1 transition hover:bg-slate-50/70"
 
           >
 
