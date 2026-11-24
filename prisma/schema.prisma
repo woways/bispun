@@ -332,6 +332,7 @@ model User {
   leadRemarks            LeadRemark[]
   calendarEventsCreated  CalendarEvent[]             @relation("CalendarEventCreator")
   calendarEventsAssigned CalendarEvent[]             @relation("CalendarEventAssignee")
+  calendarGuestOf        CalendarEventGuest[]        @relation("CalendarGuestUser")
   clientSessions         ClientSession[]
   chatMemberships        ConversationMember[]        @relation("ChatMember")
   chatMessages           ChatMessage[]               @relation("ChatSender")
@@ -1481,6 +1482,8 @@ model CalendarEvent {
   assignedToUserId String?
   assignedToUser   User?   @relation("CalendarEventAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
 
+  guests CalendarEventGuest[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1489,6 +1492,27 @@ model CalendarEvent {
   @@index([companyId, type])
   @@index([assignedToUserId, startAt])
   @@index([createdByUserId])
+}
+
+// Meeting guests / attendees. A guest may be a company user (userId set) or a
+// free-text entry (name/email). Loaded only via explicit include so the rest
+// of the calendar keeps working before this table's migration is applied.
+model CalendarEventGuest {
+  id String @id @default(cuid())
+
+  eventId String
+  event   CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation("CalendarGuestUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  name  String?
+  email String?
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+  @@index([userId])
 }
 
 model Conversation {

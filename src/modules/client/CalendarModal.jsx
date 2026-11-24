@@ -62,6 +62,8 @@ import { useOverlayDismiss } from "../../lib/useOverlayDismiss";
 
 import RichTextEditor, { RichTextView } from "../../components/RichTextEditor";
 
+import GuestPicker from "../../components/GuestPicker";
+
 
 
 /* ------------------------------------------------------------------ */
@@ -893,6 +895,8 @@ export default function CalendarModal({
 
       assignedToUserId: "",
 
+      guests: [],
+
       hasMeeting: false,
 
       meetingRoom: "",
@@ -954,6 +958,14 @@ export default function CalendarModal({
       endTime: toTimeInput(end),
 
       assignedToUserId: event.assignedToUserId || "",
+
+      guests: Array.isArray(event.guests)
+        ? event.guests.map((g) => ({
+            userId: g.userId || null,
+            name: g.name,
+            email: g.email,
+          }))
+        : [],
 
       hasMeeting: Boolean(event.meetingRoom),
 
@@ -1128,6 +1140,8 @@ export default function CalendarModal({
 
       assignedToUserId: editingEvent.assignedToUserId || null,
 
+      guests: editingEvent.guests || [],
+
       meetingRoom: editingEvent.hasMeeting ? meetingRoomValue || null : null,
 
     };
@@ -1264,6 +1278,7 @@ export default function CalendarModal({
           startAt: src.startAt,
           endAt: src.endAt || null,
           assignedToUserId: src.assignedToUserId || null,
+          guests: Array.isArray(src.guests) ? src.guests : [],
           meetingRoom: src.meetingRoom || null,
         }),
       });
@@ -1569,6 +1584,25 @@ export default function CalendarModal({
                   </div>
                 )}
               </dl>
+
+              {Array.isArray(selected.guests) && selected.guests.length > 0 && (
+                <div>
+                  <h4 className="mb-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                    Guests
+                  </h4>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {selected.guests.map((g) => (
+                      <li
+                        key={g.id || g.userId || g.email}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-semibold text-slate-700"
+                      >
+                        <UserRound size={12} className="text-slate-400" aria-hidden="true" />
+                        {g.name || g.email || "Guest"}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {selected.meetingRoom && (
                 <a
@@ -2183,8 +2217,17 @@ export default function CalendarModal({
 
               <div className="text-[16px] font-extrabold tracking-[-0.015em] text-slate-900">
 
-                {viewMode === "month" ? (
+                {viewMode === "list" ? (
+                  "All meetings"
+                ) : viewMode === "month" ? (
                   formatMonthYear(anchorDate)
+                ) : viewMode === "day" ? (
+                  anchorDate.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })
                 ) : (
                   <>
                     {weekDays[0].toLocaleDateString("en-IN", {
@@ -2215,6 +2258,18 @@ export default function CalendarModal({
                   <Loader2 size={14} className="mr-1 animate-spin text-slate-400" />
 
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const n = new Date();
+                    setAnchorDate(n);
+                    setSelectedDate(startOfDay(n));
+                  }}
+                  className="mr-0.5 h-7 rounded-lg border border-slate-300 bg-white px-2.5 text-[12px] font-bold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                >
+                  Today
+                </button>
 
                 <button
 
@@ -2844,53 +2899,35 @@ export default function CalendarModal({
 
 
 
-              {/* Assignee */}
+              {/* Guests */}
 
-              <label className="block">
+              <div className="block">
 
-                <span className="mb-1 block text-[13px] font-bold text-slate-600">
+                <span id="cal-guests-label" className="mb-1 block text-[13px] font-bold text-slate-600">
 
                   <UserRound size={11} className="mr-1 inline" aria-hidden="true" />
 
-                  Assign to
+                  Add guest
 
                 </span>
 
-                <select
+                <GuestPicker
 
-                  value={editingEvent.assignedToUserId}
+                  value={editingEvent.guests || []}
 
-                  onChange={(e) =>
+                  onChange={(guests) =>
 
-                    setEditingEvent((c) => ({
-
-                      ...c,
-
-                      assignedToUserId: e.target.value,
-
-                    }))
+                    setEditingEvent((c) => ({ ...c, guests }))
 
                   }
 
-                  className="h-10 w-full rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-700 outline-none focus:border-brand-400"
+                  users={users}
 
-                >
+                  ariaLabelledby="cal-guests-label"
 
-                  <option value="">Unassigned</option>
+                />
 
-                  {users.map((u) => (
-
-                    <option key={u.id} value={u.id}>
-
-                      {u.name}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-              </label>
+              </div>
 
 
 
@@ -3230,6 +3267,26 @@ export default function CalendarModal({
                   </p>
                 )}
               </section>
+
+              {/* Guests */}
+              {Array.isArray(detailEvent.guests) && detailEvent.guests.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                    Guests
+                  </h3>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {detailEvent.guests.map((g) => (
+                      <li
+                        key={g.id || g.userId || g.email}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-semibold text-slate-700"
+                      >
+                        <UserRound size={12} className="text-slate-400" aria-hidden="true" />
+                        {g.name || g.email || "Guest"}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
 
               {/* Notes */}
               <section>

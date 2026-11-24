@@ -3,6 +3,7 @@ import { X, Loader2, Plus, CheckCircle2 } from "lucide-react";
 import { apiRequest } from "../lib/api";
 import { useOverlayDismiss } from "../lib/useOverlayDismiss";
 import RichTextEditor from "./RichTextEditor";
+import GuestPicker from "./GuestPicker";
 
 /* Quick-create drawer launched from the header "+" button. Two panels
    (Task / Meeting) switched with aria-pressed buttons — NOT tab roles, so
@@ -44,7 +45,7 @@ const emptyMeeting = () => ({
   date: todayStr(),
   startTime: "09:00",
   endTime: "10:00",
-  assignedToUserId: "",
+  guests: [],
   location: "",
 });
 
@@ -168,7 +169,8 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
           allDay: false,
           startAt,
           endAt,
-          assignedToUserId: meeting.assignedToUserId || null,
+          assignedToUserId: null,
+          guests: meeting.guests,
         }),
       });
       finish("Meeting created.");
@@ -437,22 +439,15 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
                 </div>
 
                 <div>
-                  <label htmlFor={`${uid}-mtg-assignee`} className={labelCls}>
-                    Assigned to
-                  </label>
-                  <select
-                    id={`${uid}-mtg-assignee`}
-                    value={meeting.assignedToUserId}
-                    onChange={(e) => setMeeting((c) => ({ ...c, assignedToUserId: e.target.value }))}
-                    className={`${field} border-slate-300`}
-                  >
-                    <option value="">Unassigned</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name || u.email || "User"}
-                      </option>
-                    ))}
-                  </select>
+                  <span id={`${uid}-mtg-guests-label`} className={labelCls}>
+                    Add guest
+                  </span>
+                  <GuestPicker
+                    value={meeting.guests}
+                    onChange={(guests) => setMeeting((c) => ({ ...c, guests }))}
+                    users={users}
+                    ariaLabelledby={`${uid}-mtg-guests-label`}
+                  />
                 </div>
 
                 <div>

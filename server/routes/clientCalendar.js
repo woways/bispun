@@ -296,6 +296,26 @@ function formatEvent(
 
 
 
+    guests:
+
+      Array.isArray(event.guests)
+
+        ? event.guests.map((g) => ({
+
+            id: g.id,
+
+            userId: g.userId,
+
+            name: g.user?.name || g.name || null,
+
+            email: g.user?.email || g.email || null,
+
+          }))
+
+        : [],
+
+
+
     createdAt:
 
       event.createdAt,
@@ -424,6 +444,83 @@ async function validateAssignee(
 
 }
 
+
+
+// --- Meeting guests -------------------------------------------------------
+// The CalendarEventGuest table may not be migrated on every environment yet.
+// Probe once and cache, so the calendar API degrades to "no guests" instead of
+// returning 500s before the 0012 migration is applied.
+let _guestsTableReady = null;
+
+async function guestsEnabled() {
+  if (_guestsTableReady !== null) return _guestsTableReady;
+  try {
+    const rows = await prisma.$queryRaw`SELECT to_regclass('"CalendarEventGuest"') AS t`;
+    _guestsTableReady = Boolean(rows && rows[0] && rows[0].t);
+  } catch {
+    _guestsTableReady = false;
+  }
+  return _guestsTableReady;
+}
+
+const guestInclude = {
+  guests: {
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  },
+};
+
+async function buildInclude() {
+  return (await guestsEnabled())
+    ? { ...includeUsers, ...guestInclude }
+    : includeUsers;
+}
+
+// Normalise a guests payload (array of { userId?/id?, name?, email? }) to rows,
+// de-duplicated. Only company users are linked by userId (validated below).
+function normalizeGuests(input) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const g of input) {
+    if (!g) continue;
+    const userId = g.userId || g.id || null;
+    const name = (g.name || "").toString().trim() || null;
+    const email = (g.email || "").toString().trim() || null;
+    if (!userId && !name && !email) continue;
+    const key = userId || `${name}|${email}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ userId, name, email });
+  }
+  return out;
+}
+
+// Replace an event's guests (delete-all + recreate). No-op if table missing or
+// the payload is undefined (so callers that don't send guests leave them alone).
+async function syncGuests(companyId, eventId, input) {
+  if (input === undefined) return;
+  if (!(await guestsEnabled())) return;
+  let rows = normalizeGuests(input);
+  // Only keep userId links that belong to this company.
+  const ids = rows.map((r) => r.userId).filter(Boolean);
+  if (ids.length) {
+    const valid = await prisma.user.findMany({
+      where: { id: { in: ids }, companyId },
+      select: { id: true },
+    });
+    const ok = new Set(valid.map((u) => u.id));
+    rows = rows.map((r) => (r.userId && !ok.has(r.userId) ? { ...r, userId: null } : r));
+  }
+  await prisma.calendarEventGuest.deleteMany({ where: { eventId } });
+  if (rows.length) {
+    await prisma.calendarEventGuest.createMany({
+      data: rows.map((r) => ({ ...r, eventId })),
+    });
+  }
+}
 
 
 /* GET USERS FOR ASSIGNMENT */
@@ -730,7 +827,7 @@ router.get(
 
           include:
 
-            includeUsers,
+            await buildInclude(),
 
 
 
@@ -820,7 +917,7 @@ router.get("/:id", async (req, res) => {
 
     const event = await prisma.calendarEvent.findFirst({
       where: { id, companyId },
-      include: includeUsers,
+      include: await buildInclude(),
     });
 
     if (!event) {
@@ -1260,7 +1357,7 @@ router.post(
 
           include:
 
-            includeUsers,
+            await buildInclude(),
 
         });
 
@@ -1310,6 +1407,13 @@ router.post(
 
 
 
+      await syncGuests(companyId, event.id, req.body?.guests);
+
+      const createdEvent = await prisma.calendarEvent.findUnique({
+        where: { id: event.id },
+        include: await buildInclude(),
+      });
+
       return res
 
         .status(201)
@@ -1332,7 +1436,7 @@ router.post(
 
             formatEvent(
 
-              event
+              createdEvent || event
 
             ),
 
@@ -2018,7 +2122,7 @@ router.patch(
 
           include:
 
-            includeUsers,
+            await buildInclude(),
 
         });
 
@@ -2072,6 +2176,13 @@ router.patch(
 
 
 
+      await syncGuests(companyId, existing.id, req.body?.guests);
+
+      const updatedEvent = await prisma.calendarEvent.findUnique({
+        where: { id: existing.id },
+        include: await buildInclude(),
+      });
+
       return res.json({
 
         success:
@@ -2090,7 +2201,7 @@ router.patch(
 
           formatEvent(
 
-            event
+            updatedEvent || event
 
           ),
 
