@@ -168,18 +168,18 @@ function eventStyle(event) {
 
 
 
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const WEEKDAYS_MINI = ["M", "T", "W", "T", "F", "S", "S"];
+const WEEKDAYS_MINI = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 const FULL_WEEKDAYS = [
+  "Sunday",
   "Monday",
   "Tuesday",
   "Wednesday",
   "Thursday",
   "Friday",
   "Saturday",
-  "Sunday",
 ];
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -243,7 +243,7 @@ function startOfWeek(date) {
 
   const d = startOfDay(date);
 
-  const day = (d.getDay() + 6) % 7; // Monday = 0
+  const day = d.getDay(); // Sunday = 0
 
   d.setDate(d.getDate() - day);
 
@@ -1424,7 +1424,7 @@ export default function CalendarModal({
 
                     key={i}
 
-                    className="py-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400"
+                    className="border-b border-slate-200 pb-2 text-[12px] font-extrabold uppercase tracking-[0.06em] text-slate-500 lg:text-slate-400"
 
                   >
 
@@ -1962,7 +1962,7 @@ export default function CalendarModal({
 
                     <span className={`text-[11px] font-bold uppercase tracking-[0.06em] ${isToday ? "text-brand-600" : "text-slate-400"}`}>
 
-                      {WEEKDAYS[(day.getDay() + 6) % 7]}
+                      {WEEKDAYS[day.getDay()]}
 
                     </span>
 
@@ -2916,6 +2916,12 @@ function FragmentRow({
             className="relative h-[64px] cursor-pointer border-b border-r border-slate-200 bg-white px-1.5 py-1 transition hover:bg-slate-50"
 
           >
+
+            {/* Half-hour gridline (decorative) */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-100"
+            />
 
             {isCurrentHour && isTodayCell && (
 
