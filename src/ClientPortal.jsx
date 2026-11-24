@@ -1512,6 +1512,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  // Bumped whenever a task/meeting is created from the header "+", so the
+  // dashboard re-fetches its calendar and shows the new item.
+  const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
 
   // Global CRM year workspace shared by all operational modules.
   const currentYear = new Date().getFullYear();
@@ -4228,6 +4231,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             user={user}
             selectedYear={selectedYear}
             uiPreferences={uiPreferences}
+            calendarRefreshToken={calendarRefreshToken}
             onOpenLead={openLeadStoreRecord}
             onOpenKpi={openKpiModal}
             onOpenModule={openModuleFromDashboard}
@@ -6736,6 +6740,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       <QuickCreateDrawer
         open={quickCreateOpen}
         onClose={() => setQuickCreateOpen(false)}
+        onCreated={() => setCalendarRefreshToken((n) => n + 1)}
       />
 
       {/* Shell-level KPI drill-down popup (Dashboard + Analytics KPIs). Opens

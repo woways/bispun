@@ -267,6 +267,7 @@ export default function Dashboard({
   user,
   selectedYear = "all",
   uiPreferences,
+  calendarRefreshToken = 0,
   onOpenLead,
   onOpenKpi,
   onOpenModule,
@@ -611,7 +612,7 @@ export default function Dashboard({
 
   useEffect(() => {
     loadCalendar();
-  }, [calendarMonth]);
+  }, [calendarMonth, calendarRefreshToken]);
 
   function openCreateEvent(
     date = new Date()

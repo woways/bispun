@@ -1225,18 +1225,22 @@ export default function CalendarModal({
   async function patchDetailStatus(nextStatus, ev = detailEvent) {
     const id = ev?.id;
     if (!id) return;
-    setDetailBusy(true);
     setError("");
+    setDetailActionsOpen(false);
+    // Optimistic: reflect the new status instantly in the list + detail.
+    setEvents((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, status: nextStatus } : e))
+    );
+    setDetailEvent((c) => (c && c.id === id ? { ...c, status: nextStatus } : c));
+    setDetailBusy(true);
     try {
       await apiRequest(`/api/client/calendar/${id}`, {
         method: "PATCH",
         body: JSON.stringify({ status: nextStatus }),
       });
-      setDetailEvent((c) => (c && c.id === id ? { ...c, status: nextStatus } : c));
-      setDetailActionsOpen(false);
-      await loadEvents();
     } catch (err) {
       setError(err?.data?.message || "Unable to update status");
+      await loadEvents(); // revert to server truth on failure
     } finally {
       setDetailBusy(false);
     }
@@ -1276,19 +1280,22 @@ export default function CalendarModal({
   async function deleteDetailEvent(ev = detailEvent) {
     const id = ev?.id;
     if (!id) return;
-    setDetailBusy(true);
     setError("");
+    setDetailActionsOpen(false);
+    setDetailConfirmDelete(false);
+    setListConfirmDelete(false);
+    // Optimistic: remove it from the list immediately.
+    setEvents((prev) => prev.filter((e) => e.id !== id));
+    if (detailEvent?.id === id) setDetailEvent(null);
+    if (listSelectedId === id) setListSelectedId(null);
+    setDetailBusy(true);
     try {
       await apiRequest(`/api/client/calendar/${id}`, {
         method: "DELETE",
       });
-      setDetailActionsOpen(false);
-      setDetailConfirmDelete(false);
-      if (detailEvent?.id === id) setDetailEvent(null);
-      if (listSelectedId === id) setListSelectedId(null);
-      await loadEvents();
     } catch (err) {
       setError(err?.data?.message || "Unable to delete meeting");
+      await loadEvents(); // restore on failure
     } finally {
       setDetailBusy(false);
     }
@@ -1334,6 +1341,17 @@ export default function CalendarModal({
       setDetailConfirmDelete(false);
     }
   }, [detailEvent]);
+
+  // Auto-select the first meeting when entering List view so the detail pane
+  // isn't empty.
+  useEffect(() => {
+    if (viewMode === "list" && !listSelectedId && events.length) {
+      const first = [...events].sort(
+        (a, b) => new Date(a.startAt) - new Date(b.startAt)
+      )[0];
+      if (first) setListSelectedId(first.id);
+    }
+  }, [viewMode, events, listSelectedId]);
 
 
 
@@ -1415,53 +1433,77 @@ export default function CalendarModal({
     return (
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* MASTER list */}
-        <div className="flex w-full max-w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-slate-200 [scrollbar-width:thin]">
-          {sorted.length === 0 ? (
-            <p className="p-5 text-[13px] font-medium text-slate-500">
-              No meetings in this range.
-            </p>
-          ) : (
-            <ul>
-              {sorted.map((ev) => {
-                const isSel = ev.id === listSelectedId;
-                return (
-                  <li key={ev.id}>
-                    <button
-                      type="button"
-                      onClick={() => selectListRow(ev.id)}
-                      aria-current={isSel ? "true" : undefined}
-                      className={`block w-full border-b border-l-[3px] border-slate-100 px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
-                        isSel
-                          ? "border-l-brand-600 bg-brand-50"
-                          : "border-l-transparent hover:bg-slate-50"
-                      }`}
-                    >
-                      <div
-                        className={`truncate text-[13px] ${
+        <div className="flex w-full max-w-[380px] flex-shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-slate-50/50">
+          <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+            <h3 className="text-[13px] font-extrabold uppercase tracking-[0.06em] text-slate-700">
+              Meetings
+            </h3>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+              {sorted.length}
+            </span>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+            {sorted.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+                <CalendarDays size={28} className="text-slate-300" aria-hidden="true" />
+                <p className="text-[13px] font-semibold text-slate-500">
+                  No meetings in this range.
+                </p>
+              </div>
+            ) : (
+              <ul className="p-2">
+                {sorted.map((ev) => {
+                  const isSel = ev.id === listSelectedId;
+                  return (
+                    <li key={ev.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectListRow(ev.id)}
+                        aria-current={isSel ? "true" : undefined}
+                        className={`mb-1.5 block w-full rounded-xl border px-3.5 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                           isSel
-                            ? "font-extrabold text-slate-900"
-                            : "font-bold text-slate-800"
+                            ? "border-brand-600 bg-white shadow-sm ring-1 ring-brand-200"
+                            : "border-transparent bg-white/70 hover:border-slate-200 hover:bg-white hover:shadow-sm"
                         }`}
                       >
-                        {ev.title || "Untitled"}
-                      </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-slate-500">
-                        <Clock size={11} aria-hidden="true" />
-                        {formatListWhen(ev)}
-                      </div>
-                      <span
-                        className={`mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          LIST_STATUS_PILL[ev.status] || LIST_STATUS_PILL.SCHEDULED
-                        }`}
-                      >
-                        {statusLabel(ev.status)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+                        <div className="flex items-start justify-between gap-2">
+                          <div
+                            className={`min-w-0 flex-1 truncate text-[14px] leading-snug ${
+                              isSel
+                                ? "font-extrabold text-slate-900"
+                                : "font-bold text-slate-800"
+                            }`}
+                          >
+                            {ev.title || "Untitled"}
+                          </div>
+                          <span
+                            className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              LIST_STATUS_PILL[ev.status] || LIST_STATUS_PILL.SCHEDULED
+                            }`}
+                          >
+                            {statusLabel(ev.status)}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-slate-500">
+                          <Clock size={12} aria-hidden="true" />
+                          {formatListWhen(ev)}
+                        </div>
+                        {(ev.assignedToUser?.name || ev.createdByUser?.name) && (
+                          <div className="mt-1 flex items-center gap-1.5 text-[12px] font-medium text-slate-500">
+                            <UserRound size={12} aria-hidden="true" />
+                            <span className="truncate">
+                              {ev.assignedToUser?.name || ev.createdByUser?.name}
+                            </span>
+                          </div>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
         </div>
 
         {/* DETAIL pane (announced on change) */}
@@ -1768,9 +1810,9 @@ export default function CalendarModal({
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-slate-50/70 p-3 lg:flex-row">
 
-          {/* LEFT PANEL */}
+          {/* LEFT PANEL — hidden on desktop in List view so the list goes full-width. */}
 
-          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white lg:w-[300px] lg:flex-none lg:flex-shrink-0">
+          <div className={`flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white ${viewMode === "list" ? "lg:hidden" : "lg:w-[300px] lg:flex-none lg:flex-shrink-0"}`}>
 
             {/* Mini-month */}
 
@@ -1975,9 +2017,10 @@ export default function CalendarModal({
 
 
 
-            {/* AGENDA FOR SELECTED DAY */}
+            {/* AGENDA FOR SELECTED DAY — mobile only. On desktop meetings live
+                in the right grid / List view, never the left box. */}
 
-            <div className="border-t border-slate-200 px-4 py-3.5">
+            <div className="border-t border-slate-200 px-4 py-3.5 lg:hidden">
 
               <div className="mb-3 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400">
 
