@@ -227,6 +227,15 @@ select:not([multiple]):not([size]):focus-visible {
   to   { opacity: 1; }
 }
 
+/* Right-side drawer entrance, used by module form drawers (Revenue, Walk-ins,
+   UTM, etc.). Declared globally so drawers don't each inject a <style>. Usage
+   sites pair it with `motion-reduce:animate-none` so reduced-motion users get
+   no slide. */
+@keyframes drawerSlideIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
 /* Shimmer for skeleton/loading placeholders (e.g. ChartSkeleton). Defined
    globally so it works wherever a skeleton mounts, not only on the auth screen. */
 @keyframes skeletonShimmer {

@@ -411,7 +411,7 @@ function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-[9999] bg-slate-950/55 backdrop-blur-[3px] flex justify-end">
       <div
         ref={panelRef}
         role="dialog"
@@ -419,9 +419,9 @@ function ExpenseModal({
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="bg-white rounded-t-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[94vh] overflow-hidden flex flex-col focus:outline-none sm:rounded-2xl sm:max-h-[92vh]"
+        className="bg-white shadow-2xl border-l border-slate-200 w-full max-w-3xl h-full overflow-hidden flex flex-col focus:outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
       >
-        <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-slate-200 flex flex-shrink-0 items-center justify-between">
           <div>
             <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-indigo-500">
               Finance / Expense Claim
@@ -450,9 +450,9 @@ function ExpenseModal({
 
         <form
           onSubmit={submit}
-          className="min-h-0 flex flex-col"
+          className="flex-1 min-h-0 flex flex-col"
         >
-          <div className="p-6 overflow-y-auto space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
             {error && (
               <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-3 py-2 text-[15px]">
                 {error}
@@ -727,7 +727,7 @@ function ExpenseModal({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex flex-shrink-0 justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -1033,7 +1033,7 @@ function IncentiveModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
       <div
         ref={panelRef}
         role="dialog"
@@ -1041,9 +1041,9 @@ function IncentiveModal({
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-lg overflow-hidden focus:outline-none"
+        className="bg-white shadow-2xl border-l border-slate-200 w-full max-w-lg h-full overflow-hidden flex flex-col focus:outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
       >
-        <div className="px-6 py-5 border-b border-slate-200 flex justify-between">
+        <div className="px-6 py-5 border-b border-slate-200 flex flex-shrink-0 justify-between">
           <div>
             <h2 id={headingId} className="font-semibold">
               {incentive ? "Edit Incentive" : "Add Incentive"}
@@ -1066,8 +1066,8 @@ function IncentiveModal({
           </button>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="p-6 space-y-4">
+        <form onSubmit={submit} className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
             {error && (
               <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded p-2 text-[15px]">
                 {error}
@@ -1191,7 +1191,7 @@ function IncentiveModal({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex flex-shrink-0 justify-end gap-2">
             <button
               type="button"
               onClick={onClose}
