@@ -197,7 +197,9 @@ export default function CallCenterModal({ open, onClose, lead }) {
               <div className="mt-1 text-[11px] leading-5 text-slate-500">
                 {status?.cloudDialEnabled
                   ? "Calls are initiated through the configured telephony provider. Provider callbacks can add duration, recording and missed-call history automatically."
-                  : "The Call button opens the device dialer and Bispun stores the call history/outcome. Connect a telephony provider later for automatic duration, recordings and inbound/missed calls."}
+                  : status?.setupPending
+                    ? "Your cloud calling choice is saved but provider activation is still pending. The Call button uses the device dialer meanwhile and Bispun keeps the outcome history."
+                    : "The Call button opens the device dialer and Bispun stores the call history/outcome. Connect a telephony provider later for automatic duration, recordings and inbound/missed calls."}
               </div>
             </div>
             <button type="button" onClick={startCall} disabled={calling || !phone} className="inline-flex min-h-[86px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40">
