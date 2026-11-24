@@ -50,6 +50,8 @@ import {
 
   Ban,
 
+  List as ListIcon,
+
 } from "lucide-react";
 
 
@@ -1512,6 +1514,24 @@ export default function CalendarModal({
                             </span>
                           </div>
                         )}
+                        {Array.isArray(ev.guests) && ev.guests.length > 0 && (
+                          <span className="mt-1.5 flex flex-wrap gap-1">
+                            {ev.guests.slice(0, 3).map((g) => (
+                              <span
+                                key={g.id || g.userId || g.email}
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-700"
+                              >
+                                <UserRound size={10} className="text-slate-400" aria-hidden="true" />
+                                {g.name || g.email || "Guest"}
+                              </span>
+                            ))}
+                            {ev.guests.length > 3 && (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                +{ev.guests.length - 3}
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </button>
                     </li>
                   );
@@ -1526,10 +1546,12 @@ export default function CalendarModal({
           role="region"
           aria-label="Meeting details"
           aria-live="polite"
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-5"
+          className="flex min-h-0 min-w-0 flex-1 flex-col"
         >
           {selected ? (
-            <div className="space-y-4">
+            <>
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3
@@ -1631,9 +1653,11 @@ export default function CalendarModal({
                   <p className="text-[13px] font-medium text-slate-500">No notes.</p>
                 )}
               </div>
+                </div>
+              </div>
 
-              {/* Actions */}
-              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+              {/* Actions — pinned at the bottom of the detail pane */}
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-2 border-t border-slate-200 bg-slate-50/70 px-5 py-3">
                 <button
                   type="button"
                   onClick={() => openEdit(selected)}
@@ -1700,7 +1724,7 @@ export default function CalendarModal({
                   </span>
                 )}
               </div>
-            </div>
+            </>
           ) : (
             <div className="flex h-full items-center justify-center text-center text-[13px] font-medium text-slate-500">
               Select a meeting to see its details.
@@ -2162,52 +2186,13 @@ export default function CalendarModal({
 
             </div>
 
-            {/* STATUS LEGEND */}
-
-            <div className="border-t border-slate-200 px-4 py-3.5">
-
-              <div className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-600">
-
-                Status
-
-              </div>
-
-              <ul className="space-y-1.5">
-
-                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
-
-                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-brand-500 bg-brand-100" />
-
-                  Scheduled
-
-                </li>
-
-                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
-
-                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-emerald-500 bg-emerald-100" />
-
-                  Completed
-
-                </li>
-
-                <li className="flex items-center gap-2 text-[12px] font-semibold text-slate-600">
-
-                  <span aria-hidden="true" className="h-3 w-3 flex-shrink-0 rounded-full border-2 border-rose-500 bg-rose-100" />
-
-                  Cancelled
-
-                </li>
-
-              </ul>
-
-            </div>
-
           </div>
 
 
 
           {/* RIGHT: WEEK GRID (desktop only — mobile uses the month picker +
-              selected-day agenda in the left panel above). */}
+              selected-day agenda in the left panel above). The status legend
+              now lives as a strip below the grid. */}
 
           <div className="hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex">
 
@@ -2317,10 +2302,13 @@ export default function CalendarModal({
 
 
 
+                {/* View switch — calendar modes (Day/Week/Month) grouped, then
+                    a divider, then List, so the Calendar ↔ List choice reads
+                    clearly. */}
                 <div
                   role="group"
                   aria-label="Calendar view"
-                  className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
+                  className="ml-1.5 flex items-center gap-1 rounded-[11px] bg-slate-100 p-1"
                 >
 
                   {[
@@ -2330,8 +2318,6 @@ export default function CalendarModal({
                     ["week", "Week"],
 
                     ["month", "Month"],
-
-                    ["list", "List"],
 
                   ].map(([value, label]) => (
 
@@ -2363,6 +2349,22 @@ export default function CalendarModal({
 
                   ))}
 
+                  <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-slate-300" />
+
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    aria-pressed={viewMode === "list"}
+                    className={`flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-100 ${
+                      viewMode === "list"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                    }`}
+                  >
+                    <ListIcon size={13} aria-hidden="true" />
+                    List
+                  </button>
+
                 </div>
 
               </div>
@@ -2385,7 +2387,7 @@ export default function CalendarModal({
                       <th
                         key={`${wd}-${i}`}
                         scope="col"
-                        className="border-b border-r border-slate-200 bg-slate-50 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 last:border-r-0"
+                        className="border-b border-r border-slate-100 bg-slate-50 py-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500 last:border-r-0"
                       >
                         <abbr title={FULL_WEEKDAYS[i]} className="no-underline">
                           {wd}
@@ -2420,7 +2422,7 @@ export default function CalendarModal({
                         return (
                           <td
                             key={d}
-                            className={`h-[16.66%] w-[14.28%] align-top border-b border-r border-slate-200 p-1 last:border-r-0 ${
+                            className={`h-[16.66%] w-[14.28%] align-top border-b border-r border-slate-100 p-1 last:border-r-0 ${
                               isSelected ? "bg-brand-50/60" : ""
                             } ${!inMonth ? "bg-slate-50/40" : ""}`}
                           >
@@ -2501,13 +2503,13 @@ export default function CalendarModal({
 
             <div
 
-              className="sticky top-0 z-20 grid border-b border-l border-slate-300 bg-white"
+              className="sticky top-0 z-20 grid border-b border-slate-200 bg-white"
 
-              style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
+              style={{ gridTemplateColumns: `60px repeat(${dayCount}, 1fr)` }}
 
             >
 
-              <div className="border-r border-slate-300" />
+              <div />
 
               {weekDays.map((day) => {
 
@@ -2536,7 +2538,7 @@ export default function CalendarModal({
                       year: "numeric",
                     })}
 
-                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-300 py-1.5 text-center transition-colors last:border-r-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
+                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-100 py-1.5 text-center transition-colors last:border-r-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
 
                       isSelected ? "bg-brand-50" : "hover:bg-slate-50"
 
@@ -2578,9 +2580,9 @@ export default function CalendarModal({
 
               <div
 
-                className="grid border-l border-slate-300"
+                className="grid"
 
-                style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
+                style={{ gridTemplateColumns: `60px repeat(${dayCount}, 1fr)` }}
 
               >
 
@@ -2614,6 +2616,27 @@ export default function CalendarModal({
 
             </div>
             </>
+            )}
+
+            {/* Status legend — a clean strip below the grid lines. */}
+            {viewMode !== "list" && (
+              <div className="flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-200 bg-white px-4 py-2.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
+                  Status
+                </span>
+                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-600">
+                  <span aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-brand-500 bg-brand-100" />
+                  Scheduled
+                </span>
+                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-600">
+                  <span aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-emerald-500 bg-emerald-100" />
+                  Completed
+                </span>
+                <span className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-600">
+                  <span aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-rose-500 bg-rose-100" />
+                  Cancelled
+                </span>
+              </div>
             )}
 
           </div>
@@ -3532,9 +3555,9 @@ function FragmentRow({
 
     <>
 
-      {/* Hour label — sits just BELOW the hour's top border line. */}
+      {/* Hour label — no lines through the time column; single line. */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white px-2 pt-1 text-right text-[11px] font-semibold text-slate-500">
+      <div className="relative h-[64px] whitespace-nowrap bg-white px-2 pt-1 text-right text-[11px] font-semibold text-slate-500">
 
         <span>
 
@@ -3578,7 +3601,7 @@ function FragmentRow({
 
             onClick={() => onSlotClick(day, hour)}
 
-            className="relative h-[64px] cursor-pointer border-b border-r border-slate-300 bg-white px-1.5 py-1 transition hover:bg-slate-50"
+            className="relative h-[64px] cursor-pointer border-b border-r border-slate-100 bg-white px-1.5 py-1 transition hover:bg-slate-50"
 
           >
 
