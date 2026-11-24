@@ -6562,7 +6562,11 @@ export default function LeadStore({
           </div>
 
           <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-[12px] text-slate-500">
+            <div
+              className="text-[12px] text-slate-500"
+              role="status"
+              aria-live="polite"
+            >
               {filteredIndividualLeads.length > 0 ? (
                 <>
                   Showing{" "}
@@ -6611,45 +6615,83 @@ export default function LeadStore({
                 </select>
               </label>
 
-              <span className="text-[12px] font-semibold text-slate-500">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setPage(
-                    (current) =>
-                      Math.max(
-                        1,
-                        current - 1
-                      )
-                  )
-                }
-                disabled={currentPage <= 1}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              <nav
+                aria-label="Lead table pagination"
+                className="flex items-center gap-1"
               >
-                Previous
-              </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPage((current) => Math.max(1, current - 1))
+                  }
+                  disabled={currentPage <= 1}
+                  className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-40"
+                >
+                  Previous
+                </button>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setPage(
-                    (current) =>
-                      Math.min(
-                        totalPages,
-                        current + 1
+                <ul className="flex items-center gap-1">
+                  {(() => {
+                    const items = [];
+                    if (totalPages <= 7) {
+                      for (let p = 1; p <= totalPages; p += 1) {
+                        items.push(p);
+                      }
+                    } else {
+                      const left = Math.max(2, currentPage - 1);
+                      const right = Math.min(totalPages - 1, currentPage + 1);
+                      items.push(1);
+                      if (left > 2) items.push("ellipsis-left");
+                      for (let p = left; p <= right; p += 1) {
+                        items.push(p);
+                      }
+                      if (right < totalPages - 1) items.push("ellipsis-right");
+                      items.push(totalPages);
+                    }
+                    return items.map((item) =>
+                      typeof item === "string" ? (
+                        <li key={item} className="px-1">
+                          <span
+                            aria-hidden="true"
+                            className="text-[12px] text-slate-400"
+                          >
+                            …
+                          </span>
+                        </li>
+                      ) : (
+                        <li key={item}>
+                          <button
+                            type="button"
+                            onClick={() => setPage(item)}
+                            aria-label={`Page ${item}`}
+                            aria-current={
+                              item === currentPage ? "page" : undefined
+                            }
+                            className={
+                              item === currentPage
+                                ? "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-indigo-600 bg-indigo-600 px-2 text-[12px] font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                                : "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                            }
+                          >
+                            {item}
+                          </button>
+                        </li>
                       )
-                  )
-                }
-                disabled={
-                  currentPage >= totalPages
-                }
-                className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-              >
-                Next
-              </button>
+                    );
+                  })()}
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setPage((current) => Math.min(totalPages, current + 1))
+                  }
+                  disabled={currentPage >= totalPages}
+                  className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </nav>
             </div>
           </div>
 
