@@ -1378,7 +1378,7 @@ export default function CalendarModal({
 
             {/* Mini-month */}
 
-            <div className="p-4">
+            <div className="p-3">
 
               <div className="mb-3 flex items-center justify-between gap-1">
 
@@ -1455,7 +1455,7 @@ export default function CalendarModal({
 
                     key={i}
 
-                    className="border-b border-slate-200 pb-2 text-[12px] font-extrabold uppercase tracking-[0.06em] text-slate-500 lg:text-slate-400"
+                    className="border-b border-slate-200 pb-1.5 text-[11px] font-semibold tracking-[0.02em] text-slate-400"
 
                   >
 
@@ -1515,7 +1515,7 @@ export default function CalendarModal({
 
                       aria-pressed={isSelected}
 
-                      className={`relative flex h-11 items-center justify-center rounded-xl text-[12px] font-bold transition-colors lg:h-10 ${
+                      className={`relative flex h-9 items-center justify-center rounded-lg text-[12px] font-semibold transition-colors lg:h-8 ${
 
                         isSelected
 
@@ -2910,6 +2910,13 @@ function FragmentRow({
       {/* Hour label */}
 
       <div className="relative h-[64px] border-b border-r border-slate-300 bg-white pr-2 text-right text-[11px] font-semibold text-slate-400">
+
+        {/* Half-hour gridline (decorative) — matches the day cells so the
+            horizontal lines run continuously across the gutter too. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-200"
+        />
 
         <span className="relative -top-1.5">
 
