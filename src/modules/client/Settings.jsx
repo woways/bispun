@@ -40,6 +40,7 @@ import {
   Eye,
   EyeOff,
   Play,
+  PhoneCall,
 } from "lucide-react";
 
 import {
@@ -657,6 +658,40 @@ export default function SettingsView({
     }
   }
 
+  // ---- Voice calling (company-wide) ----
+  const [callingConfig, setCallingConfig] = useState({ enabled: false, mode: "DEVICE_DIAL", callerId: "", hasAuthKey: false, authKeyMasked: "", consentConfirmed: false });
+  const [callingAuthKey, setCallingAuthKey] = useState("");
+  const [callingCanManage, setCallingCanManage] = useState(false);
+  const [callingBusy, setCallingBusy] = useState(false);
+  const [callingNotice, setCallingNotice] = useState("");
+
+  async function loadCallingConfig() {
+    try {
+      const data = await apiRequest("/api/client/telephony/config");
+      setCallingConfig((current) => ({ ...current, ...(data?.config || {}) }));
+      setCallingCanManage(Boolean(data?.canManage));
+    } catch (error) {
+      console.error("Unable to load calling config:", error);
+    }
+  }
+
+  async function saveCallingConfig() {
+    setCallingBusy(true);
+    setCallingNotice("");
+    try {
+      const payload = { enabled: callingConfig.enabled, mode: callingConfig.mode, callerId: callingConfig.callerId, consentConfirmed: callingConfig.consentConfirmed };
+      if (callingAuthKey.trim()) payload.authKey = callingAuthKey.trim();
+      const data = await apiRequest("/api/client/telephony/config", { method: "PUT", body: JSON.stringify(payload) });
+      setCallingConfig((current) => ({ ...current, ...(data?.config || {}) }));
+      setCallingAuthKey("");
+      setCallingNotice(data?.message || "Calling integration saved.");
+    } catch (error) {
+      setCallingNotice(error?.data?.message || "Unable to save calling integration.");
+    } finally {
+      setCallingBusy(false);
+    }
+  }
+
   // Load status when opening the Integrations tab, and show the result of a
   // just-completed OAuth redirect (?google=connected|error|norefresh).
   useEffect(() => {
@@ -664,6 +699,7 @@ export default function SettingsView({
     loadGoogleStatus();
     loadWhatsAppStatus();
     loadSmsConfig();
+    loadCallingConfig();
     try {
       const params = new URLSearchParams(window.location.search);
       const g = params.get("google");
@@ -4951,6 +4987,38 @@ export default function SettingsView({
                     </div>
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200"><PhoneCall size={20} /></span>
+                    <div><div className="text-[15px] font-bold text-slate-900">Voice Calling & Recording</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Choose who provides the MSG91 number. After setup, users call directly from Lead Store; call history and provider recordings stay linked to the lead.</p></div>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${callingConfig.enabled ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>{callingConfig.enabled ? "Enabled" : "Device dial"}</span>
+                </div>
+                {!callingCanManage ? (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can change the company calling connection.</div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {[["BISPUN_MANAGED", "Continue with Bispun", "Fast managed setup. Bispun assigns the approved caller ID after MSG91 activation."], ["OWN_MSG91", "Connect My MSG91 Account", "Use your company caller ID, MSG91 wallet and billing."]].map(([mode, title, description]) => (
+                        <button key={mode} type="button" onClick={() => setCallingConfig((c) => ({ ...c, mode, enabled: true }))} className={`rounded-xl border p-4 text-left transition ${callingConfig.mode === mode ? "border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200 bg-white hover:border-indigo-200"}`}><div className="text-[13px] font-bold text-slate-900">{title}</div><div className="mt-1 text-[12px] leading-5 text-slate-500">{description}</div></button>
+                      ))}
+                    </div>
+                    {callingConfig.mode === "OWN_MSG91" && (
+                      <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+                        <label><span className="mb-1.5 block text-[12px] font-semibold text-slate-600">MSG91 Caller ID / DID</span><input value={callingConfig.callerId || ""} onChange={(e) => setCallingConfig((c) => ({ ...c, callerId: e.target.value }))} placeholder="Approved caller ID" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px]" /></label>
+                        <label><span className="mb-1.5 block text-[12px] font-semibold text-slate-600">MSG91 Auth Key</span><input type="password" value={callingAuthKey} onChange={(e) => setCallingAuthKey(e.target.value)} placeholder={callingConfig.hasAuthKey ? callingConfig.authKeyMasked || "••••••••" : "Paste Auth Key"} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px]" /></label>
+                      </div>
+                    )}
+                    {callingConfig.mode === "BISPUN_MANAGED" && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-800">Selection saved now; cloud calling activates after Bispun receives MSG91 approval and assigns your company caller ID. Until then, Lead Store safely falls back to device dial.</div>}
+                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3"><input type="checkbox" className="mt-1" checked={callingConfig.consentConfirmed} onChange={(e) => setCallingConfig((c) => ({ ...c, consentConfirmed: e.target.checked }))} /><span className="text-[12px] leading-5 text-slate-600">We will call only consented leads and comply with applicable DND/TCC, recording disclosure and telecom rules.</span></label>
+                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"><span className="text-[13px] font-semibold text-slate-700">Enable calling for this company</span><PermissionSwitch checked={callingConfig.enabled} onChange={(enabled) => setCallingConfig((c) => ({ ...c, enabled }))} label="Enable company calling" /></label>
+                    {callingNotice && <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-800">{callingNotice}</div>}
+                    <div className="flex justify-end"><button type="button" onClick={saveCallingConfig} disabled={callingBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{callingBusy ? "Saving…" : "Save calling integration"}</button></div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">

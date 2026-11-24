@@ -8,6 +8,7 @@ import {
   leadVisibilityWhere,
   callHistoryWhere,
 } from "../lib/leadVisibility.js";
+import { canManageTelephony, readTelephonyConfig, resolveTelephonyRuntime, saveTelephonyConfig } from "../lib/telephonyConfig.js";
 
 const router = Router();
 
@@ -86,26 +87,30 @@ async function syncCallCommunication(call) {
   }
 }
 
-function telephonyStatus() {
-  const provider = String(process.env.TELEPHONY_PROVIDER || "").trim();
-  const outboundUrl = String(process.env.TELEPHONY_OUTBOUND_URL || "").trim();
+async function telephonyStatus(companyId) {
+  const config = await readTelephonyConfig(companyId, { includeSecret: true });
+  const runtime = resolveTelephonyRuntime(config);
   return {
-    provider: provider || "CRM Dial",
-    cloudDialEnabled: Boolean(provider && outboundUrl),
-    providerConfigured: Boolean(provider),
+    provider: runtime.provider,
+    cloudDialEnabled: runtime.ready,
+    providerConfigured: runtime.mode !== "DEVICE_DIAL",
     crmDialEnabled: true,
-    recordingSupported: Boolean(provider),
-    mode: provider && outboundUrl ? "CLOUD" : "DEVICE_DIAL",
+    recordingSupported: runtime.ready,
+    mode: runtime.ready ? "CLOUD" : "DEVICE_DIAL",
+    selectedMode: config.mode,
+    setupPending: config.enabled && config.mode !== "DEVICE_DIAL" && !runtime.ready,
   };
 }
 
-async function triggerProviderCall({ call, lead, user }) {
-  const url = String(process.env.TELEPHONY_OUTBOUND_URL || "").trim();
+async function triggerProviderCall({ call, lead, user, runtime }) {
+  const url = runtime.outboundUrl;
   if (!url) return null;
 
   const headers = { "Content-Type": "application/json" };
-  const apiKey = String(process.env.TELEPHONY_API_KEY || "").trim();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  if (runtime.apiKey) {
+    headers.authkey = runtime.apiKey;
+    headers.Authorization = `Bearer ${runtime.apiKey}`;
+  }
 
   const response = await fetch(url, {
     method: "POST",
@@ -116,9 +121,10 @@ async function triggerProviderCall({ call, lead, user }) {
       leadId: call.leadId,
       leadName: call.leadName,
       to: call.phone,
+      callerId: runtime.callerId,
       requestedByUserId: user.userId,
       requestedByName: user.name || null,
-      provider: process.env.TELEPHONY_PROVIDER || null,
+      provider: runtime.provider,
       lead: lead
         ? { id: lead.id, name: lead.name, phone: lead.phone, email: lead.email }
         : null,
@@ -131,8 +137,29 @@ async function triggerProviderCall({ call, lead, user }) {
   return data;
 }
 
-router.get("/status", (_req, res) => {
-  return res.json({ success: true, ...telephonyStatus() });
+router.get("/config", async (req, res) => {
+  try {
+    const config = await readTelephonyConfig(req.clientUser.companyId);
+    return res.json({ success: true, config, canManage: canManageTelephony(req.clientUser) });
+  } catch (error) {
+    console.error("Read telephony config failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to load calling integration" });
+  }
+});
+
+router.put("/config", async (req, res) => {
+  try {
+    if (!canManageTelephony(req.clientUser)) return res.status(403).json({ success: false, message: "Only a Client Admin can configure calling." });
+    const config = await saveTelephonyConfig(req.clientUser.companyId, req.body || {});
+    return res.json({ success: true, config, message: "Calling integration saved." });
+  } catch (error) {
+    console.error("Save telephony config failed:", error);
+    return res.status(500).json({ success: false, message: "Unable to save calling integration" });
+  }
+});
+
+router.get("/status", async (req, res) => {
+  return res.json({ success: true, ...(await telephonyStatus(req.clientUser.companyId)) });
 });
 
 router.get("/history", async (req, res) => {
@@ -213,7 +240,9 @@ router.post("/calls", async (req, res) => {
       return res.status(400).json({ success: false, message: "A valid phone number is required." });
     }
 
-    const status = telephonyStatus();
+    const config = await readTelephonyConfig(companyId, { includeSecret: true });
+    const runtime = resolveTelephonyRuntime(config);
+    const status = await telephonyStatus(companyId);
     const call = await prisma.callRecord.create({
       data: {
         companyId,
@@ -240,7 +269,7 @@ router.post("/calls", async (req, res) => {
     }
 
     try {
-      const result = await triggerProviderCall({ call, lead, user: req.clientUser });
+      const result = await triggerProviderCall({ call, lead, user: req.clientUser, runtime });
       const providerCallId = String(result?.callId || result?.id || result?.providerCallId || "").trim() || null;
       const updated = await prisma.callRecord.update({
         where: { id: call.id },
