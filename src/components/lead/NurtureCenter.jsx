@@ -264,8 +264,9 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[140] flex items-end justify-center bg-slate-950/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-3">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="nurture-title" className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+    <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[140] flex justify-end bg-slate-950/60 backdrop-blur-[2px]">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="nurture-title" className="flex h-full w-full max-w-5xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none">
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">
@@ -281,7 +282,7 @@ export default function NurtureCenter({ open, onClose, selectedLeadIds = [] }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <div className="mb-4 flex flex-col gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-[12px] font-bold text-indigo-900">Selected audience</div>

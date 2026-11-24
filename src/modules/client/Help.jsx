@@ -684,7 +684,7 @@ function NewTicketModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
       <div
         ref={panelRef}
         role="dialog"
@@ -692,8 +692,9 @@ function NewTicketModal({
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl max-h-[92vh] overflow-hidden flex flex-col"
+        className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
       >
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
 
         {/* HEADER */}
 
@@ -735,7 +736,7 @@ function NewTicketModal({
           }
           className="min-h-0 flex flex-1 flex-col"
         >
-          <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="min-h-0 flex-1 p-6 space-y-4 overflow-y-auto">
 
             {error && (
               <div className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[15px]">
@@ -1826,7 +1827,7 @@ export default function Help({
                     type.key
                   )
                 }
-                className={`relative bg-white border rounded-xl p-5 text-left transition-all shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${
+                className={`relative bg-white border rounded-xl p-4 text-left transition-all shadow-[0_1px_2px_rgba(15,23,42,0.03)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                   locked
                     ? "border-slate-200 cursor-not-allowed"
                     : "border-slate-200 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
@@ -1836,6 +1837,7 @@ export default function Help({
                   <div className="absolute right-4 top-4 inline-flex items-center gap-1 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
                     <Lock
                       size={10}
+                      aria-hidden="true"
                     />
 
                     Advanced
@@ -1843,20 +1845,24 @@ export default function Help({
                 )}
 
                 <div
-                  className={`w-10 h-10 rounded-lg border flex items-center justify-center mb-4 ${type.color}`}
+                  className={`w-9 h-9 rounded-lg border flex items-center justify-center mb-3 ${type.color}`}
                 >
                   <Icon
-                    size={16}
+                    size={15}
+                    aria-hidden="true"
                   />
                 </div>
 
-                <div className="text-[15px] font-bold text-slate-900">
+                <div className="text-sm font-bold text-slate-900">
                   {
                     type.label
                   }
                 </div>
 
-                <div className="text-[13px] text-slate-500 mt-1.5 leading-relaxed pr-3">
+                <div
+                  className="text-[12px] text-slate-500 mt-1 leading-snug pr-3 line-clamp-2"
+                  title={type.description}
+                >
                   {
                     type.description
                   }
@@ -1867,6 +1873,7 @@ export default function Help({
                     <div className="inline-flex items-center gap-1.5 mt-3 text-[13px] text-amber-700 font-semibold">
                       <Crown
                         size={10}
+                        aria-hidden="true"
                       />
 
                       Advanced capability

@@ -1,5 +1,6 @@
 import {
   Fragment,
+  cloneElement,
   useCallback,
   useEffect,
   useMemo,
@@ -44,6 +45,11 @@ import {
   FileText,
   Sparkles,
   GripVertical,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  WrapText,
+  Pin,
 } from "lucide-react";
 
 import {
@@ -1271,16 +1277,27 @@ function IndividualLeadModal({
     }
   }
 
+  const addLeadPanelRef = useRef(null);
+  useOverlayDismiss(true, onClose, { containerRef: addLeadPanelRef });
+
   // P2: portal to <body> so the fixed overlay escapes the dashboard content
   // wrapper's containing block (transform/scale ancestor) — otherwise the modal
   // is trapped in that box and sits half-behind the expanded sidebar at ~1024px.
   return createPortal(
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-2xl max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
+      <div
+        ref={addLeadPanelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="individual-lead-title"
+        tabIndex={-1}
+        className="flex h-full w-full max-w-2xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+      >
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-[17px] font-semibold">
+              <h2 id="individual-lead-title" className="text-[17px] font-semibold">
                 {lead ? "Edit Lead" : "Add Lead"}
               </h2>
               {lead && (
@@ -1305,10 +1322,12 @@ function IndividualLeadModal({
             disabled={
               saving
             }
+            aria-label="Close"
             className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
           >
             <X
               size={17}
+              aria-hidden="true"
             />
           </button>
         </div>
@@ -1317,9 +1336,9 @@ function IndividualLeadModal({
           onSubmit={
             submit
           }
-          className="overflow-y-auto max-h-[calc(92vh-78px)]"
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="p-6 grid md:grid-cols-2 gap-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 grid md:grid-cols-2 gap-4">
             {error && (
               <div className="md:col-span-2 px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-[15px] text-rose-700 flex items-start gap-2">
                 <AlertCircle
@@ -1980,7 +1999,7 @@ function IndividualLeadModal({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex shrink-0 justify-end gap-2">
             <button
               type="button"
               onClick={
@@ -2258,11 +2277,19 @@ function UploadDatasetModal({
   // P2: portal to <body> so the fixed overlay isn't trapped by the content
   // wrapper's transform containing block (sits behind the sidebar at ~1024px).
   return createPortal(
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-3xl max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-dataset-title"
+        tabIndex={-1}
+        className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+      >
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-semibold">
+            <h2 id="import-dataset-title" className="text-[17px] font-semibold">
               Import Lead Dataset
             </h2>
 
@@ -2279,10 +2306,12 @@ function UploadDatasetModal({
             disabled={
               saving
             }
+            aria-label="Close"
             className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
           >
             <X
               size={17}
+              aria-hidden="true"
             />
           </button>
         </div>
@@ -2291,9 +2320,9 @@ function UploadDatasetModal({
           onSubmit={
             submit
           }
-          className="overflow-y-auto max-h-[calc(92vh-80px)]"
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="p-6 space-y-5">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-5">
             {error && (
               <div className="px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-[15px] text-rose-700 flex items-start gap-2">
                 <AlertCircle
@@ -2677,7 +2706,7 @@ function UploadDatasetModal({
             </div>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex shrink-0 justify-end gap-2">
             <button
               type="button"
               onClick={
@@ -2809,14 +2838,25 @@ function EditDatasetModal({
     }
   }
 
+  const editDatasetPanelRef = useRef(null);
+  useOverlayDismiss(true, onClose, { containerRef: editDatasetPanelRef });
+
   // P2: portal to <body> so the fixed overlay isn't trapped by the content
   // wrapper's transform containing block (sits behind the sidebar at ~1024px).
   return createPortal(
-    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-white/70 w-full max-w-xl overflow-hidden">
+    <div className="fixed inset-0 z-[90] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
+      <div
+        ref={editDatasetPanelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="edit-dataset-title"
+        tabIndex={-1}
+        className="flex h-full w-full max-w-xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+      >
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-[17px] font-semibold">
+            <h2 id="edit-dataset-title" className="text-[17px] font-semibold">
               Edit Dataset
             </h2>
 
@@ -2833,10 +2873,12 @@ function EditDatasetModal({
             disabled={
               saving
             }
+            aria-label="Close"
             className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-slate-100"
           >
             <X
               size={17}
+              aria-hidden="true"
             />
           </button>
         </div>
@@ -2845,8 +2887,9 @@ function EditDatasetModal({
           onSubmit={
             submit
           }
+          className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="p-6 grid md:grid-cols-2 gap-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 grid md:grid-cols-2 gap-4">
             {error && (
               <div className="md:col-span-2 px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-[15px] text-rose-700">
                 {error}
@@ -2987,7 +3030,7 @@ function EditDatasetModal({
             </Field>
           </div>
 
-          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex justify-end gap-2">
+          <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/70 flex shrink-0 justify-end gap-2">
             <button
               type="button"
               onClick={
@@ -4267,8 +4310,118 @@ export default function LeadStore({
     (currentPage - 1) *
     pageSize;
 
+  const [sortKey, setSortKey] = useState("");
+  const [sortDir, setSortDir] = useState("asc");
+  const [wrapText, setWrapText] = useState(false);
+  // Per-column header dropdown (disclosure): { key, x, y, trigger } or null.
+  const [columnMenu, setColumnMenu] = useState(null);
+
+  useEffect(() => {
+    if (!columnMenu) return undefined;
+    const onDown = (event) => {
+      if (
+        event.target.closest("[data-col-menu]") ||
+        event.target.closest("[data-col-menu-trigger]")
+      )
+        return;
+      setColumnMenu(null);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        columnMenu.trigger?.focus();
+        setColumnMenu(null);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [columnMenu]);
+
+  function closeColumnMenu(refocus) {
+    if (refocus) columnMenu?.trigger?.focus();
+    setColumnMenu(null);
+  }
+
+  // Frozen (pinned-left) columns, kept in their visible order for offsets.
+  const [frozenColumns, setFrozenColumns] = useState([]);
+
+  const FREEZE_WIDTHS = {
+    leadId: 78,
+    name: 160,
+    phone: 120,
+    alternatePhone: 130,
+    email: 175,
+    course: 120,
+    assignedTo: 140,
+    temperature: 110,
+    status: 145,
+    intelligence: 135,
+    created: 125,
+    preferredColleges: 170,
+  };
+  const freezeWidthOf = (key) => FREEZE_WIDTHS[key] || 120;
+
+  // Returns {left,width} for a frozen column (left offset = 40px sticky
+  // checkbox + widths of frozen columns before it), or null when not frozen.
+  function freezeMeta(columnKey) {
+    if (!frozenColumns.includes(columnKey)) return null;
+    const orderedFrozen = visibleOrderedColumnKeys.filter((k) =>
+      frozenColumns.includes(k)
+    );
+    const pos = orderedFrozen.indexOf(columnKey);
+    let left = 40;
+    for (let i = 0; i < pos; i += 1) left += freezeWidthOf(orderedFrozen[i]);
+    return { left, width: freezeWidthOf(columnKey) };
+  }
+
+  // Cycle a column through ascending -> descending -> unsorted.
+  function toggleSort(key) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir("asc");
+    } else if (sortDir === "asc") {
+      setSortDir("desc");
+    } else {
+      setSortKey("");
+      setSortDir("asc");
+    }
+  }
+
+  // Sort the FULL filtered set before pagination so sort spans all pages.
+  const sortedIndividualLeads = useMemo(() => {
+    if (!sortKey) return filteredIndividualLeads;
+    const getVal = (lead) => {
+      switch (sortKey) {
+        case "leadId":
+          return Number(lead.leadNumber) || 0;
+        case "created":
+          return new Date(lead.createdAt || 0).getTime();
+        case "intelligence":
+          return Number(lead?.intelligence?.score) || 0;
+        case "status":
+          return String(lead.stage || lead.leadStatus || "").toLowerCase();
+        case "assignedTo":
+          return String(lead.assignedToName || "").toLowerCase();
+        default:
+          return String(lead[sortKey] ?? "").toLowerCase();
+      }
+    };
+    const dir = sortDir === "desc" ? -1 : 1;
+    return [...filteredIndividualLeads].sort((a, b) => {
+      const av = getVal(a);
+      const bv = getVal(b);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }, [filteredIndividualLeads, sortKey, sortDir]);
+
   const paginatedIndividualLeads =
-    filteredIndividualLeads.slice(
+    sortedIndividualLeads.slice(
       pageStart,
       pageStart + pageSize
     );
@@ -4708,13 +4861,7 @@ export default function LeadStore({
     return (
       <th
         key={columnKey}
-        draggable={canReorderColumns && !columnOrderSaving}
-        onDragStart={(event) => {
-          if (!canReorderColumns) return;
-          setDraggedColumn(columnKey);
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", columnKey);
-        }}
+        aria-sort={sortKey === columnKey ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
         onDragOver={(event) => {
           if (canReorderColumns) {
             event.preventDefault();
@@ -4725,19 +4872,79 @@ export default function LeadStore({
           event.preventDefault();
           moveDraggedColumn(columnKey);
         }}
-        onDragEnd={() => setDraggedColumn("")}
-        title={canReorderColumns ? `Drag ${INDIVIDUAL_COLUMN_LABELS[columnKey]} to rearrange` : undefined}
         className={`${widthClass} px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap transition-colors ${
           draggedColumn === columnKey
             ? "bg-indigo-100 text-indigo-700 opacity-70"
             : "text-slate-500"
-        } ${canReorderColumns ? "cursor-grab active:cursor-grabbing select-none" : ""}`}
+        }`}
       >
         <span className={`inline-flex items-center gap-1.5 ${columnKey === "leadId" ? "justify-center" : ""}`}>
           {canReorderColumns && (
-            <GripVertical size={12} className="text-slate-400" aria-hidden="true" />
+            <span
+              draggable
+              onDragStart={(event) => {
+                setDraggedColumn(columnKey);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", columnKey);
+              }}
+              onDragEnd={() => setDraggedColumn("")}
+              title={`Drag to rearrange ${INDIVIDUAL_COLUMN_LABELS[columnKey]}`}
+              aria-hidden="true"
+              className="shrink-0 cursor-grab text-slate-400 active:cursor-grabbing"
+            >
+              <GripVertical size={12} />
+            </span>
           )}
           {INDIVIDUAL_COLUMN_LABELS[columnKey]}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleSort(columnKey);
+            }}
+            aria-label={`Sort by ${INDIVIDUAL_COLUMN_LABELS[columnKey]}${
+              sortKey === columnKey
+                ? sortDir === "asc"
+                  ? " (ascending)"
+                  : " (descending)"
+                : ""
+            }`}
+            className="inline-flex h-5 w-5 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+          >
+            {sortKey === columnKey ? (
+              sortDir === "asc" ? (
+                <ArrowUp size={13} strokeWidth={2.6} className="text-indigo-600" aria-hidden="true" />
+              ) : (
+                <ArrowDown size={13} strokeWidth={2.6} className="text-indigo-600" aria-hidden="true" />
+              )
+            ) : (
+              <ArrowUpDown size={12} className="text-slate-400" aria-hidden="true" />
+            )}
+          </button>
+          <button
+            type="button"
+            data-col-menu-trigger
+            aria-haspopup="true"
+            aria-expanded={columnMenu?.key === columnKey}
+            aria-label={`Column options: ${INDIVIDUAL_COLUMN_LABELS[columnKey]}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              const rect = event.currentTarget.getBoundingClientRect();
+              setColumnMenu((prev) =>
+                prev?.key === columnKey
+                  ? null
+                  : {
+                      key: columnKey,
+                      x: rect.right,
+                      y: rect.bottom + 4,
+                      trigger: event.currentTarget,
+                    }
+              );
+            }}
+            className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-500 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+          >
+            <ChevronDown size={13} aria-hidden="true" />
+          </button>
         </span>
       </th>
     );
@@ -5481,8 +5688,23 @@ export default function LeadStore({
                   View
                 </button>
 
-                {viewOpen && (
-                  <div ref={viewPanelRef} id="leadstore-columns-panel" className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl native:fixed native:inset-x-4 native:top-auto native:bottom-24 native:w-auto native:max-h-[55vh] native:overflow-y-auto">
+                {viewOpen &&
+                  createPortal(
+                    <div
+                      className="fixed inset-0 z-[120] flex justify-end bg-slate-950/40 backdrop-blur-[1px]"
+                      onClick={(event) => {
+                        if (event.target === event.currentTarget) closeViewPanel();
+                      }}
+                    >
+                    <div ref={viewPanelRef} id="leadstore-columns-panel" role="dialog" aria-modal="true" aria-labelledby="leadstore-columns-title" tabIndex={-1} className="flex h-full w-full max-w-sm flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none">
+                    <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
+                    <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                      <h2 id="leadstore-columns-title" className="text-[16px] font-bold text-slate-900">Choose your columns</h2>
+                      <button type="button" onClick={closeViewPanel} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500">
+                        <X size={17} aria-hidden="true" />
+                      </button>
+                    </div>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-5">
                     <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Visible columns</div>
                     <div className="mt-2 space-y-1">
                       {INDIVIDUAL_COLUMN_OPTIONS.map((column) => (
@@ -5519,8 +5741,11 @@ export default function LeadStore({
                         ? "Drag table column names to rearrange them. Your order is saved to your account."
                         : "Column order follows the company default. Custom fields open from the lead name."}
                     </p>
-                  </div>
-                )}
+                    </div>
+                    </div>
+                    </div>,
+                    document.body
+                  )}
               </div>
 
               <button
@@ -5566,9 +5791,24 @@ export default function LeadStore({
           </div>
         ) : null}
 
-        {filtersOpen && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.05)]">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {filtersOpen &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex justify-end bg-slate-950/40 backdrop-blur-[1px]"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) setFiltersOpen(false);
+              }}
+            >
+            <div role="dialog" aria-modal="true" aria-labelledby="leadstore-filters-title" tabIndex={-1} className="flex h-full w-full max-w-sm flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none">
+            <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <h2 id="leadstore-filters-title" className="text-[16px] font-bold text-slate-900">Filters</h2>
+              <button type="button" onClick={() => setFiltersOpen(false)} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500">
+                <X size={17} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            <div className="grid grid-cols-1 gap-3">
               <label className="block">
                   <span className="mb-1.5 block text-[12px] font-semibold text-slate-500">
                     Status
@@ -5875,8 +6115,9 @@ export default function LeadStore({
                 />
               </label>
             </div>
+            </div>
 
-            <div className="mt-4 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-[12px] text-slate-500">
                 Showing{" "}
                 <span className="font-bold text-slate-800">
@@ -5911,6 +6152,8 @@ export default function LeadStore({
               </button>
             </div>
           </div>
+          </div>,
+          document.body
         )}
       </div>
 
@@ -6044,7 +6287,56 @@ export default function LeadStore({
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <div className="relative overflow-x-auto">
-            <table className="w-max min-w-full text-[13px]">
+            <style>{'table[data-wrap="true"] .truncate{white-space:normal;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;}'}</style>
+            {columnMenu &&
+              createPortal(
+                <div
+                  data-col-menu
+                  role="group"
+                  aria-label={`Options for ${INDIVIDUAL_COLUMN_LABELS[columnMenu.key]}`}
+                  style={{
+                    position: "fixed",
+                    top: columnMenu.y,
+                    left: Math.max(8, columnMenu.x - 192),
+                    width: 192,
+                    zIndex: 130,
+                  }}
+                  className="rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={wrapText}
+                    onClick={() => {
+                      setWrapText((current) => !current);
+                      closeColumnMenu(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                  >
+                    <WrapText size={13} className="text-slate-400" aria-hidden="true" />
+                    {wrapText ? "Clip text" : "Wrap text"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const key = columnMenu.key;
+                      setFrozenColumns((cur) =>
+                        cur.includes(key)
+                          ? cur.filter((k) => k !== key)
+                          : [...cur, key]
+                      );
+                      closeColumnMenu(true);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                  >
+                    <Pin size={13} className="text-slate-400" aria-hidden="true" />
+                    {frozenColumns.includes(columnMenu.key)
+                      ? "Unfreeze column"
+                      : "Freeze column"}
+                  </button>
+                </div>,
+                document.body
+              )}
+            <table data-wrap={wrapText ? "true" : undefined} className="w-max min-w-full text-[13px]">
               <thead className="border-b border-slate-200 bg-slate-50/95">
                 <tr>
                   <th className="sticky left-0 z-30 w-10 min-w-10 border-r border-slate-200 bg-slate-50/95 px-2.5 py-2.5 text-center">
@@ -6057,7 +6349,21 @@ export default function LeadStore({
                     />
                   </th>
 
-                  {visibleOrderedColumnKeys.map(renderColumnHeader)}
+                  {visibleOrderedColumnKeys.map((columnKey) => {
+                    const th = renderColumnHeader(columnKey);
+                    const fz = freezeMeta(columnKey);
+                    if (!fz) return th;
+                    return cloneElement(th, {
+                      className: `${th.props.className} sticky z-[25] bg-slate-50`,
+                      style: {
+                        ...th.props.style,
+                        left: fz.left,
+                        width: fz.width,
+                        minWidth: fz.width,
+                        maxWidth: fz.width,
+                      },
+                    });
+                  })}
 
                   <th className="lg:sticky lg:right-0 z-20 min-w-[92px] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Actions
@@ -6111,14 +6417,30 @@ export default function LeadStore({
                             />
                           </td>
 
-                          {visibleOrderedColumnKeys.map((columnKey) =>
-                            renderLeadColumnCell(
+                          {visibleOrderedColumnKeys.map((columnKey) => {
+                            const cell = renderLeadColumnCell(
                               lead,
                               columnKey,
                               customFields,
                               customFieldsOpen
-                            )
-                          )}
+                            );
+                            const fz = freezeMeta(columnKey);
+                            if (!fz) return cell;
+                            return cloneElement(cell, {
+                              className: `${cell.props.className} sticky z-[15] ${
+                                selected
+                                  ? "bg-indigo-50"
+                                  : "bg-white group-hover:bg-slate-50"
+                              }`,
+                              style: {
+                                ...cell.props.style,
+                                left: fz.left,
+                                width: fz.width,
+                                minWidth: fz.width,
+                                maxWidth: fz.width,
+                              },
+                            });
+                          })}
 
                           <td className={`lg:sticky lg:right-0 z-10 min-w-[92px] border-l border-slate-100 px-2 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>
                             <div className="flex items-center justify-end gap-1">

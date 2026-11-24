@@ -4192,7 +4192,7 @@ export default function SettingsView({
                   entirely client-side by the notificationPrefs store and must be
                   usable immediately (it syncs to the server when that endpoint
                   exists). Not tied to any admin permission. */}
-              <div className="border border-slate-200 rounded-xl p-4 space-y-4">
+              <div className="rounded-2xl border border-slate-200 p-5 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
@@ -4356,12 +4356,18 @@ export default function SettingsView({
                 </div>
               ) : (
                 <>
-                  <div>
-                    <div className="text-[13px] font-bold text-slate-800 mb-3">
-                      Delivery Channels
+                  <div className="rounded-2xl border border-slate-200 p-5">
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                        <Send size={15} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[14px] font-bold text-slate-900">Delivery Channels</div>
+                        <div className="text-[12px] text-slate-500">Where this user receives alerts.</div>
+                      </div>
                     </div>
 
-                    <div className="border border-slate-200 rounded-xl divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                       {[
                         {
                           key: "inAppEnabled",
@@ -4437,16 +4443,19 @@ export default function SettingsView({
 
                               <button
                                 type="button"
+                                role="switch"
+                                aria-checked={enabled}
+                                aria-label={item.label}
                                 onClick={() =>
                                   updateNotificationPreference(
                                     item.key,
                                     !enabled
                                   )
                                 }
-                                className={`relative w-10 h-6 rounded-full transition-colors ${
+                                className={`relative w-10 h-6 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                                   enabled
-                                    ? "bg-indigo-600"
-                                    : "bg-slate-200"
+                                    ? "bg-indigo-600 border-indigo-600"
+                                    : "bg-slate-200 border-slate-300"
                                 }`}
                               >
                                 <span
@@ -4464,9 +4473,15 @@ export default function SettingsView({
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-[13px] font-bold text-slate-800 mb-3">
-                      Notification Categories
+                  <div className="rounded-2xl border border-slate-200 p-5">
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                        <Bell size={15} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[14px] font-bold text-slate-900">Notification Categories</div>
+                        <div className="text-[12px] text-slate-500">Choose which updates you want to receive.</div>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -4504,7 +4519,11 @@ export default function SettingsView({
                         ]) => (
                           <label
                             key={key}
-                            className="border border-slate-200 rounded-xl p-4 flex items-start gap-3 cursor-pointer hover:bg-slate-50/70"
+                            className={`rounded-xl border p-4 flex items-start gap-3 cursor-pointer transition-colors ${
+                              notificationPreferences[key]
+                                ? "border-indigo-200 bg-indigo-50/50"
+                                : "border-slate-200 hover:bg-slate-50/70"
+                            }`}
                           >
                             <input
                               type="checkbox"
@@ -4521,7 +4540,7 @@ export default function SettingsView({
                                   event.target.checked
                                 )
                               }
-                              className="mt-0.5"
+                              className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                             />
 
                             <div>

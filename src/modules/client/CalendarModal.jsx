@@ -1687,13 +1687,15 @@ export default function CalendarModal({
 
                       onClick={() => setViewMode(value)}
 
-                      className={`rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition ${
+                      aria-pressed={viewMode === value}
+
+                      className={`rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-100 ${
 
                         viewMode === value
 
-                          ? "bg-white text-slate-950 shadow-sm"
+                          ? "bg-indigo-600 text-white shadow-sm"
 
-                          : "text-slate-500 hover:text-slate-800"
+                          : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
 
                       }`}
 
@@ -1749,7 +1751,7 @@ export default function CalendarModal({
 
                   >
 
-                    <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                    <span className={`text-[11px] font-bold uppercase tracking-[0.06em] ${isToday ? "text-brand-600" : "text-slate-400"}`}>
 
                       {WEEKDAYS[(day.getDay() + 6) % 7]}
 
