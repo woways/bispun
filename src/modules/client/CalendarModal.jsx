@@ -2909,7 +2909,7 @@ function FragmentRow({
 
       {/* Hour label */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white pr-2 text-right text-[11px] font-semibold text-slate-400">
+      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white pr-2 text-right text-[11px] font-semibold text-slate-500">
 
         {/* Half-hour gridline (decorative) — matches the day cells so the
             horizontal lines run continuously across the gutter too. */}
@@ -2918,7 +2918,7 @@ function FragmentRow({
           className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-200"
         />
 
-        <span className="relative -top-1.5">
+        <span className="relative -top-2 bg-white px-1">
 
           {hour === 0
 

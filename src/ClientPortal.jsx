@@ -4800,8 +4800,30 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             </div>
           </div>
 
-          {/* Right controls: Notifications + Profile (Search/Calendar/Period live in More). */}
+          {/* Right controls: Search + Calendar (quick actions) + Notifications + Profile. */}
           <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setMobileSearchOpen(true)}
+              aria-label="Search"
+              aria-haspopup="dialog"
+              aria-expanded={mobileSearchOpen}
+              className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Search size={18} aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCalendarOpen(true)}
+              aria-label="Open calendar"
+              aria-haspopup="dialog"
+              aria-expanded={calendarOpen}
+              className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <CalendarDays size={18} aria-hidden="true" />
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -4837,6 +4859,38 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               {initials}
             </button>
           </div>
+        </div>
+
+        {/* Period / Year — sits on its own line directly below the app-bar row. */}
+        <div className="flex items-center gap-2 pb-2">
+          <label
+            htmlFor="appbar-period-year"
+            className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400"
+          >
+            Period
+          </label>
+          <select
+            id="appbar-period-year"
+            value={selectedYear}
+            onChange={(event) => {
+              if (event.target.value === "__add_year__") {
+                setYearError("");
+                setNewWorkspaceYear("");
+                setAddYearOpen(true);
+                return;
+              }
+              setSelectedYear(event.target.value);
+            }}
+            className="h-8 flex-1 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          >
+            {availableYears.map((year) => (
+              <option key={year} value={String(year)}>
+                {year}
+              </option>
+            ))}
+            <option value="all">All Time</option>
+            <option value="__add_year__">+ Add Year</option>
+          </select>
         </div>
       </div>
 
@@ -5061,74 +5115,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               </div>
             </section>
           ))}
-
-          <section role="group" aria-labelledby="more-h-quick">
-            <h3
-              id="more-h-quick"
-              className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-2"
-            >
-              Quick actions
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMoreOpen(false);
-                  setMobileSearchOpen(true);
-                }}
-                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:gap-2 native:p-3"
-              >
-                <span className="native:flex native:h-10 native:w-10 native:items-center native:justify-center native:rounded-xl native:bg-slate-100 native:text-slate-600">
-                  <Search size={20} aria-hidden="true" />
-                </span>
-                <span className="text-[12px] font-medium leading-tight">Search</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMoreOpen(false);
-                  setCalendarOpen(true);
-                }}
-                className="min-h-[76px] flex flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white p-2 text-center text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:gap-2 native:p-3"
-              >
-                <span className="native:flex native:h-10 native:w-10 native:items-center native:justify-center native:rounded-xl native:bg-slate-100 native:text-slate-600">
-                  <CalendarDays size={20} aria-hidden="true" />
-                </span>
-                <span className="text-[12px] font-medium leading-tight">Calendar</span>
-              </button>
-            </div>
-            <div className="mt-3">
-              <label
-                htmlFor="more-period-year"
-                className="block text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 mb-1.5"
-              >
-                Period / Year
-              </label>
-              <select
-                id="more-period-year"
-                value={selectedYear}
-                onChange={(event) => {
-                  if (event.target.value === "__add_year__") {
-                    setYearError("");
-                    setNewWorkspaceYear("");
-                    setMobileMoreOpen(false);
-                    setAddYearOpen(true);
-                    return;
-                  }
-                  setSelectedYear(event.target.value);
-                }}
-                className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] font-semibold text-slate-700 outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-              >
-                {availableYears.map((year) => (
-                  <option key={year} value={String(year)}>
-                    {year}
-                  </option>
-                ))}
-                <option value="all">All Time</option>
-                <option value="__add_year__">+ Add Year</option>
-              </select>
-            </div>
-          </section>
 
           {/* Account: Settings/Help are permission-gated, but Log out must ALWAYS
               be reachable on mobile (the desktop logout lives in the lg-only
@@ -5871,7 +5857,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </header>
 
           {/* MAIN CONTENT */}
-          <main className="min-h-[100dvh] bg-[#f6f7fa] px-3 pt-[calc(56px+env(safe-area-inset-top)+12px)] pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-[calc(56px+env(safe-area-inset-top)+16px)] lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
+          <main className="min-h-[100dvh] bg-[#f6f7fa] px-3 pt-[calc(96px+env(safe-area-inset-top)+12px)] pb-[calc(68px+env(safe-area-inset-bottom))] sm:px-5 sm:pt-[calc(96px+env(safe-area-inset-top)+16px)] lg:mt-[64px] lg:min-h-[calc(100vh-64px)] lg:px-6 lg:pt-4 lg:pb-6">
             <div className="max-w-[1560px] mx-auto">
               {subscriptionPastDue && (
                 <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center sm:justify-between">
