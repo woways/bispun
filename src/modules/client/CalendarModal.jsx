@@ -1158,9 +1158,10 @@ export default function CalendarModal({
 
   return (
 
-    <div className="fixed inset-0 z-[130] flex items-stretch justify-center bg-slate-950/35 p-0 backdrop-blur-[1px] sm:items-center sm:p-3">
+    <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[130] flex justify-end bg-slate-950/35 backdrop-blur-[1px]">
 
-      <div ref={calendarRef} role="dialog" aria-modal="true" aria-labelledby="calendar-title" className="flex h-[100dvh] w-full max-w-[1500px] flex-col overflow-hidden border border-slate-200 bg-white shadow-[0_28px_80px_rgba(15,23,42,.22)] pt-[env(safe-area-inset-top)] sm:h-[94vh] sm:rounded-[22px] sm:pt-0">
+      <div ref={calendarRef} role="dialog" aria-modal="true" aria-labelledby="calendar-title" className="flex h-full w-full max-w-[1500px] flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none pt-[env(safe-area-inset-top)] sm:pt-0">
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
 
         {/* Polite announcement of the visible month for assistive tech. */}
         <div className="sr-only" aria-live="polite" aria-atomic="true">

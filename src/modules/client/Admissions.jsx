@@ -568,7 +568,7 @@ function ModalShell({
   // keeps its Escape/Back/focus independent of the popup it was opened from.
   return createPortal(
     <div
-      className="fixed inset-0 z-[10000] flex items-end justify-center bg-slate-950/45 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[10000] flex justify-end bg-slate-950/45 backdrop-blur-sm"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCloseRef.current?.();
       }}
@@ -580,8 +580,9 @@ function ModalShell({
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`flex max-h-[92vh] w-full ${max} flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl outline-none sm:rounded-2xl`}
+        className={`flex h-full w-full ${max} flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none`}
       >
+        <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <div>
             <div id={headingId} className="text-[17px] font-bold text-slate-950">

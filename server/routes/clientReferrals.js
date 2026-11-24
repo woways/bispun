@@ -20,13 +20,17 @@ function stageIndex(stage) {
   return i === -1 ? 0 : i;
 }
 
-function makeCode(name) {
-  const base = String(name || "USER")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 8) || "USER";
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${base}${suffix}`;
+function makeCode() {
+  // Brand-neutral random referral code — NOT derived from the user's name, so
+  // the code never leaks the account name (and avoids any tenant branding).
+  // Uses an unambiguous alphabet (no 0/O/1/I/L) for easy sharing. Uniqueness
+  // collisions are retried by ensureCode().
+  const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i += 1) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return code;
 }
 
 async function ensureCode(userId) {
