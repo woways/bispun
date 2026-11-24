@@ -1928,7 +1928,7 @@ export default function CalendarModal({
 
             <div
 
-              className="grid flex-shrink-0 border-b border-l border-slate-200 bg-white"
+              className="grid flex-shrink-0 border-b border-l border-slate-300 bg-white"
 
               style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
 
@@ -1952,7 +1952,7 @@ export default function CalendarModal({
 
                     onClick={() => setSelectedDate(startOfDay(day))}
 
-                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-200 py-1.5 text-center transition-colors last:border-r-0 ${
+                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-300 py-1.5 text-center transition-colors last:border-r-0 ${
 
                       isSelected ? "bg-brand-50" : "hover:bg-slate-50"
 
@@ -2000,7 +2000,7 @@ export default function CalendarModal({
 
               <div
 
-                className="grid border-l border-slate-200"
+                className="grid border-l border-slate-300"
 
                 style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
 
@@ -2869,7 +2869,7 @@ function FragmentRow({
 
       {/* Hour label */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-200 bg-white pr-2 text-right text-[11px] font-semibold text-slate-400">
+      <div className="relative h-[64px] border-b border-r border-slate-300 bg-white pr-2 text-right text-[11px] font-semibold text-slate-400">
 
         <span className="relative -top-1.5">
 
@@ -2913,14 +2913,14 @@ function FragmentRow({
 
             onClick={() => onSlotClick(day, hour)}
 
-            className="relative h-[64px] cursor-pointer border-b border-r border-slate-200 bg-white px-1.5 py-1 transition hover:bg-slate-50"
+            className="relative h-[64px] cursor-pointer border-b border-r border-slate-300 bg-blue-50/50 px-1.5 py-1 transition hover:bg-blue-100/60"
 
           >
 
             {/* Half-hour gridline (decorative) */}
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-100"
+              className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-slate-200"
             />
 
             {isCurrentHour && isTodayCell && (
