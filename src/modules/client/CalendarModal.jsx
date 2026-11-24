@@ -1380,18 +1380,18 @@ export default function CalendarModal({
 
             <div className="p-3">
 
-              <div className="mb-3 flex items-center justify-between gap-1">
+              <div className="mb-3 flex items-center gap-1">
 
                 <button
                   type="button"
                   onClick={() => setAnchorDate((d) => addMonths(d, -1))}
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   aria-label="Previous month"
                 >
                   <ChevronLeft size={15} />
                 </button>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-1">
                   <select
                     aria-label="Month"
                     value={anchorDate.getMonth()}
@@ -1401,7 +1401,7 @@ export default function CalendarModal({
                           new Date(d.getFullYear(), Number(e.target.value), 1)
                       )
                     }
-                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-7 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-1.5 text-[12px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     {MONTHS.map((m, i) => (
                       <option key={m} value={i}>
@@ -1418,7 +1418,7 @@ export default function CalendarModal({
                         (d) => new Date(Number(e.target.value), d.getMonth(), 1)
                       )
                     }
-                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    className="h-7 w-[68px] flex-shrink-0 rounded-lg border border-slate-200 bg-white px-1.5 text-[12px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     {Array.from({ length: 12 }, (_, i) => {
                       const y = new Date().getFullYear() - 5 + i;
@@ -1434,7 +1434,7 @@ export default function CalendarModal({
                 <button
                   type="button"
                   onClick={() => setAnchorDate((d) => addMonths(d, 1))}
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   aria-label="Next month"
                 >
                   <ChevronRight size={15} />
