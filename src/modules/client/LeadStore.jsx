@@ -2108,6 +2108,10 @@ function UploadDatasetModal({
   const [courseOther, setCourseOther] = useState(false);
   const [sourceOther, setSourceOther] = useState(false);
 
+  // Drawer panel ref (referenced by ref={panelRef} on the dialog). Was missing,
+  // which crashed the Import Leads modal with "panelRef is not defined".
+  const panelRef = useRef(null);
+
   function update(
     field,
     value
