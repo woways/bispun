@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -37,9 +38,46 @@ import {
 
 import DetailModal from "../../components/DetailModal";
 
+import { createPortal } from "react-dom";
+
 import { apiRequest } from "../../lib/api";
 import { formatUiDateTime } from "../../lib/uiPreferences";
 import { telHref } from "../../lib/nativeActions";
+import { useModalA11y } from "../../lib/useModalA11y";
+
+// Drawers are portaled to <body>, so the client-portal shell becomes a sibling
+// that sits BEFORE the dialog in DOM/reading order. aria-modal + the focus trap
+// only constrain keyboard focus, not a screen reader's virtual cursor, so we make
+// the shell `inert` while any drawer is open. Reference-counted so stacked drawers
+// don't un-inert the background early. (accessibility-lead requirement.)
+let shellInertCount = 0;
+
+function setShellInert(on) {
+  if (typeof document === "undefined") return;
+  const shell = document.querySelector(".cb-client-portal");
+  if (!shell) return;
+
+  if (on) {
+    shellInertCount += 1;
+    shell.inert = true;
+    shell.setAttribute("aria-hidden", "true");
+  } else {
+    shellInertCount = Math.max(0, shellInertCount - 1);
+    if (shellInertCount === 0) {
+      shell.inert = false;
+      shell.removeAttribute("aria-hidden");
+    }
+  }
+}
+
+// Must be declared BEFORE useModalA11y in each drawer so its cleanup (clear
+// inert) runs before useModalA11y restores focus to the opener inside the shell.
+function useInertShell() {
+  useEffect(() => {
+    setShellInert(true);
+    return () => setShellInert(false);
+  }, []);
+}
 
 const UTM_MEDIUM_OPTIONS = [
   "Social",
@@ -241,6 +279,10 @@ function LinkModal({
         editing?.cost ?? "",
     }));
 
+  useInertShell();
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = useId();
+
   const effectiveMedium =
     resolveUtmMedium(form);
 
@@ -316,12 +358,25 @@ function LinkModal({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-[90] bg-slate-950/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex justify-end">
+      <div
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm cb-backdrop-in"
+        onClick={saving ? undefined : onClose}
+      />
+
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="relative ml-auto flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+      >
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-200">
           <div>
-            <h2 className="text-[17px] font-bold text-slate-950">
+            <h2 id={titleId} className="text-[17px] font-bold text-slate-950">
               {editing
                 ? "Edit UTM Link"
                 : "Create UTM Link"}
@@ -336,34 +391,44 @@ function LinkModal({
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="w-8 h-8 rounded-lg hover:bg-slate-100 inline-flex items-center justify-center text-slate-500"
+            aria-label="Close"
+            className="w-8 h-8 shrink-0 rounded-lg hover:bg-slate-100 inline-flex items-center justify-center text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           >
-            <X size={16} />
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
-        <form onSubmit={submit}>
-          <div className="p-5 space-y-4">
+        <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
             {error ? (
-              <div className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[15px]">
+              <div
+                role="alert"
+                className="px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[15px]"
+              >
                 {error}
               </div>
             ) : null}
 
             {!editing ? (
-              <div className="inline-flex p-1 bg-slate-100 rounded-xl">
+              <div
+                role="radiogroup"
+                aria-label="Link mode"
+                className="inline-flex p-1 bg-slate-100 rounded-xl"
+              >
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={mode === "generate"}
                   onClick={() =>
                     setMode(
                       "generate"
                     )
                   }
-                  className={`h-8 px-3 rounded-lg text-[13px] font-semibold ${
+                  className={`h-8 px-3 rounded-lg text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
                     mode ===
                     "generate"
                       ? "bg-white text-slate-950 shadow-sm"
-                      : "text-slate-500"
+                      : "text-slate-600"
                   }`}
                 >
                   Generate UTM
@@ -371,16 +436,18 @@ function LinkModal({
 
                 <button
                   type="button"
+                  role="radio"
+                  aria-checked={mode === "manual"}
                   onClick={() =>
                     setMode(
                       "manual"
                     )
                   }
-                  className={`h-8 px-3 rounded-lg text-[13px] font-semibold ${
+                  className={`h-8 px-3 rounded-lg text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
                     mode ===
                     "manual"
                       ? "bg-white text-slate-950 shadow-sm"
-                      : "text-slate-500"
+                      : "text-slate-600"
                   }`}
                 >
                   Manual UTM
@@ -479,7 +546,7 @@ function LinkModal({
               "generate" &&
             generatedUrl ? (
               <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-                <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-indigo-500">
+                <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-indigo-600">
                   Generated URL
                 </div>
 
@@ -495,7 +562,7 @@ function LinkModal({
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="h-9 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+              className="h-9 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
             >
               Cancel
             </button>
@@ -512,17 +579,18 @@ function LinkModal({
                   "generate" &&
                   !generatedUrl)
               }
-              className="h-9 px-4 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2"
+              className="h-9 px-4 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
             >
               {saving ? (
                 <Loader2
                   size={13}
                   className="animate-spin"
+                  aria-hidden="true"
                 />
               ) : editing ? (
-                <Check size={13} />
+                <Check size={13} aria-hidden="true" />
               ) : (
-                <Link2 size={13} />
+                <Link2 size={13} aria-hidden="true" />
               )}
 
               {editing
@@ -535,7 +603,8 @@ function LinkModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -546,21 +615,34 @@ function Field({
   onChange,
   type = "text",
   placeholder,
+  error,
+  min,
 }) {
+  const id = useId();
+  const errId = `${id}-err`;
+
   return (
     <div>
-      <label className="block text-[13px] font-medium text-slate-600 mb-1">
+      <label
+        htmlFor={id}
+        className="block text-[13px] font-medium text-slate-600 mb-1"
+      >
         {label}
 
         {required && (
-          <span className="text-rose-500 ml-0.5">
-            *
-          </span>
+          <>
+            <span className="text-rose-500 ml-0.5" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </>
         )}
       </label>
 
       <input
+        id={id}
         type={type}
+        min={min}
         required={required}
         value={value}
         onChange={(event) =>
@@ -569,8 +651,19 @@ function Field({
           )
         }
         placeholder={placeholder}
-        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? errId : undefined}
+        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
       />
+
+      {error ? (
+        <p
+          id={errId}
+          className="mt-1 text-[12px] font-semibold text-rose-600"
+        >
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -581,6 +674,7 @@ function PlatformSelect({
   value,
   onChange,
 }) {
+  const id = useId();
   const options = [
     "Instagram",
     "YouTube",
@@ -596,19 +690,23 @@ function PlatformSelect({
 
   return (
     <div>
-      <label className="mb-1 block text-[13px] font-medium text-slate-600">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-[13px] font-medium text-slate-600"
+      >
         {label}
       </label>
 
       <div className="relative">
         <select
+          id={id}
           value={value}
           onChange={(event) =>
             onChange(
               event.target.value
             )
           }
-          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-600"
         >
           <option value="">
             Select platform
@@ -626,6 +724,7 @@ function PlatformSelect({
 
         <ChevronDown
           size={16}
+          aria-hidden="true"
           className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
         />
       </div>
@@ -640,23 +739,33 @@ function MediumSelect({
   onOtherChange,
   required = true,
 }) {
+  const id = useId();
+  const otherId = useId();
+
   return (
     <div>
-      <label className="mb-1 block text-[13px] font-medium text-slate-600">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-[13px] font-medium text-slate-600"
+      >
         Medium
         {required ? (
-          <span className="ml-0.5 text-rose-500">*</span>
+          <>
+            <span className="ml-0.5 text-rose-500" aria-hidden="true">*</span>
+            <span className="sr-only"> (required)</span>
+          </>
         ) : null}
       </label>
 
       <div className="relative">
         <select
+          id={id}
           value={value}
           onChange={(event) =>
             onChange(event.target.value)
           }
           required={required}
-          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+          className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-600"
         >
           <option value="">
             Select medium
@@ -670,21 +779,28 @@ function MediumSelect({
 
         <ChevronDown
           size={16}
+          aria-hidden="true"
           className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
         />
       </div>
 
       {value === "Other" ? (
-        <input
-          type="text"
-          required={required}
-          value={otherValue}
-          onChange={(event) =>
-            onOtherChange(event.target.value)
-          }
-          placeholder="Enter custom medium"
-          className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[15px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-        />
+        <>
+          <label htmlFor={otherId} className="sr-only">
+            Custom medium (required)
+          </label>
+          <input
+            id={otherId}
+            type="text"
+            required={required}
+            value={otherValue}
+            onChange={(event) =>
+              onOtherChange(event.target.value)
+            }
+            placeholder="Enter custom medium"
+            className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[15px] focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-600"
+          />
+        </>
       ) : null}
     </div>
   );
@@ -722,7 +838,7 @@ function MetricCard({
         </div>
 
         <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
-          <Icon size={16} />
+          <Icon size={16} aria-hidden="true" />
         </div>
       </div>
 
@@ -742,8 +858,8 @@ function MetricCard({
       <button
         type="button"
         onClick={onClick}
-        className={className}
-        aria-pressed={active}
+        className={`${className} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2`}
+        aria-haspopup="dialog"
       >
         {content}
       </button>
@@ -751,6 +867,110 @@ function MetricCard({
   }
 
   return <div className={className}>{content}</div>;
+}
+
+// Compact single-row KPI card. Opens a drill-down DetailModal, so it is a
+// button with aria-haspopup="dialog" (not a toggle). `active` only reflects the
+// current visual highlight when its detail view is open.
+function KpiStat({
+  label,
+  value,
+  icon: Icon,
+  active = false,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-haspopup="dialog"
+      className={`flex flex-col gap-2 rounded-xl border bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+        active
+          ? "border-indigo-300 ring-2 ring-indigo-50"
+          : "border-slate-200"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
+          {label}
+        </span>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+          <Icon size={14} aria-hidden="true" />
+        </span>
+      </div>
+
+      <div className="text-[22px] font-bold leading-none tracking-[-0.03em] text-slate-950">
+        {value}
+      </div>
+
+      <span className="text-[11px] font-semibold text-indigo-600">
+        View details
+      </span>
+    </button>
+  );
+}
+
+// Reusable right-side drawer. Mounted only while open so useModalA11y's
+// on-mount focus/scroll-lock/restore and Tab-trap fire correctly. Honours
+// prefers-reduced-motion by gating the slide-in to motion-safe only.
+function Drawer({
+  titleText,
+  subtitle,
+  onClose,
+  children,
+  footer,
+}) {
+  useInertShell();
+  const { panelRef, onKeyDown } = useModalA11y(onClose);
+  const titleId = useId();
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex justify-end">
+      <div
+        className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm cb-backdrop-in"
+        onClick={onClose}
+      />
+
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+        className="relative ml-auto flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div>
+            <h2 id={titleId} className="text-[17px] font-bold text-slate-950">
+              {titleText}
+            </h2>
+            {subtitle ? (
+              <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>
+            ) : null}
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-5">
+          {children}
+        </div>
+
+        {footer ? (
+          <div className="border-t border-slate-200 px-5 py-4">{footer}</div>
+        ) : null}
+      </div>
+    </div>,
+    document.body
+  );
 }
 
 function downloadCsv(rows) {
@@ -890,10 +1110,11 @@ function downloadUtmLeadDetails(rows) {
 }
 
 
-function PhoneAction({ phone, name }) {
+function PhoneAction({ phone, name, onCopied }) {
   const [menu, setMenu] = useState(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
+  const firstItemRef = useRef(null);
 
   useEffect(() => {
     if (!menu) return undefined;
@@ -922,6 +1143,9 @@ function PhoneAction({ phone, name }) {
     window.addEventListener("scroll", closeOnViewportChange, true);
     window.addEventListener("resize", closeOnViewportChange);
 
+    // Move focus into the popover so keyboard users land on the first action.
+    firstItemRef.current?.focus?.();
+
     return () => {
       document.removeEventListener("pointerdown", closeOnOutsideClick);
       window.removeEventListener("keydown", closeOnEscape);
@@ -934,9 +1158,15 @@ function PhoneAction({ phone, name }) {
     return <span className="text-slate-400">—</span>;
   }
 
+  function closeMenu() {
+    setMenu(null);
+    // Restore focus to the trigger on close.
+    triggerRef.current?.focus?.();
+  }
+
   function openMenu(event) {
     if (menu) {
-      setMenu(null);
+      closeMenu();
       return;
     }
 
@@ -968,7 +1198,8 @@ function PhoneAction({ phone, name }) {
       input.remove();
     }
 
-    setMenu(null);
+    onCopied?.();
+    closeMenu();
   }
 
   return (
@@ -977,7 +1208,9 @@ function PhoneAction({ phone, name }) {
         ref={triggerRef}
         type="button"
         onClick={openMenu}
-        className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+        aria-haspopup="menu"
+        aria-expanded={!!menu}
+        className="font-semibold text-indigo-600 hover:text-indigo-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 rounded"
         title={`Copy or dial ${name || "lead"} number`}
       >
         {phone}
@@ -986,6 +1219,8 @@ function PhoneAction({ phone, name }) {
       {menu ? (
         <div
           ref={menuRef}
+          role="menu"
+          aria-label={`Actions for ${name || "lead"} number`}
           className="fixed z-[130] w-[178px] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl"
           style={{
             top: menu.top,
@@ -993,20 +1228,23 @@ function PhoneAction({ phone, name }) {
           }}
         >
           <button
+            ref={firstItemRef}
             type="button"
+            role="menuitem"
             onClick={copyNumber}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           >
-            <Copy size={14} />
+            <Copy size={14} aria-hidden="true" />
             Copy number
           </button>
 
           <a
             href={telHref(phone)}
-            onClick={() => setMenu(null)}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50"
+            role="menuitem"
+            onClick={closeMenu}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-semibold text-indigo-700 hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           >
-            <PhoneCall size={14} />
+            <PhoneCall size={14} aria-hidden="true" />
             Dial number
           </a>
         </div>
@@ -1040,6 +1278,15 @@ export default function UTMLeads({
 
   const [editingLink, setEditingLink] = useState(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
+
+  // UI reshape: tabbed workspace + create-in-drawer. Behaviour unchanged.
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showCreateDrawer, setShowCreateDrawer] = useState(false);
+  const [createMode, setCreateMode] = useState("generate");
+
+  // Polite SR announcements for copy / temperature actions that otherwise
+  // change the UI silently (accessibility-lead items #9 and #13).
+  const [statusMessage, setStatusMessage] = useState("");
 
   const [temperatureUpdatingId, setTemperatureUpdatingId] =
     useState("");
@@ -1154,6 +1401,7 @@ export default function UTMLeads({
             : lead
         )
       );
+      setStatusMessage("Lead temperature updated");
     } catch (error) {
       setError(error?.data?.message || "Unable to update lead temperature");
     } finally {
@@ -1319,6 +1567,7 @@ export default function UTMLeads({
     try {
       await navigator.clipboard.writeText(linkToCopy);
       setCopiedGenerated(true);
+      setStatusMessage("Link copied to clipboard");
       window.setTimeout(
         () => setCopiedGenerated(false),
         1500
@@ -1331,6 +1580,7 @@ export default function UTMLeads({
   async function copyLink(url) {
     try {
       await navigator.clipboard.writeText(url);
+      setStatusMessage("Link copied to clipboard");
     } catch {
       // Clipboard can be unavailable.
     }
@@ -1730,314 +1980,215 @@ export default function UTMLeads({
         caption={detailData?.title}
         onClose={() => setDetailView(null)}
       />
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-          Campaign tracking
+      {/* Polite live region for copy / temperature feedback (SR only) */}
+      <div aria-live="polite" role="status" className="sr-only">
+        {statusMessage}
+      </div>
+
+      {/* Header toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Campaign tracking
+          </div>
+
+          <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
+            UTM Leads
+          </h1>
+
+          <p className="mt-1 text-[15px] text-slate-500">
+            Generate links, save influencer links, review UTM leads and analyse performance.
+          </p>
         </div>
 
-        <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-          UTM Leads
-        </h1>
-
-        <p className="mt-1 text-[15px] text-slate-500">
-          Generate links, save influencer links, review UTM leads and analyse performance.
-        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setCreateMode("generate");
+            setShowCreateDrawer(true);
+          }}
+          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[14px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+        >
+          <Plus size={16} aria-hidden="true" />
+          New UTM Link
+        </button>
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[15px] text-rose-700">
-          <AlertCircle size={15} />
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[15px] text-rose-700"
+        >
+          <AlertCircle size={15} aria-hidden="true" />
           {error}
         </div>
       ) : null}
 
-      {/* 1. Generate UTM Link */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
-        <div className="border-b border-slate-100 bg-gradient-to-r from-indigo-50 via-white to-white px-5 py-4">
-          <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-indigo-600">
-            UTM Generator
-          </div>
+      {/* KPI strip: five drill-down stats in one row */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        <KpiStat
+          label="UTM Links"
+          value={summary.totalUtmLinks ?? links.length}
+          icon={Link2}
+          onClick={() => openDetail("links")}
+          active={detailView === "links"}
+        />
 
-          <h2 className="mt-1 text-xl font-bold text-slate-950">
-            Generate UTM Link
-          </h2>
+        <KpiStat
+          label="Registrations"
+          value={summary.totalRegistrations ?? 0}
+          icon={UserPlus}
+          onClick={() => openDetail("registrations")}
+          active={detailView === "registrations"}
+        />
 
-          <p className="mt-1 text-[13px] text-slate-500">
-            Build a tracked campaign URL and save it directly.
-          </p>
-        </div>
+        <KpiStat
+          label="UTM Leads"
+          value={summary.totalLeads ?? utmLeads.length}
+          icon={Users}
+          onClick={() => openDetail("leads")}
+          active={detailView === "leads"}
+        />
 
-        <div className="space-y-4 p-5">
-          {generateError ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[15px] text-rose-700">
-              {generateError}
-            </div>
-          ) : null}
+        <KpiStat
+          label="Admissions"
+          value={summary.totalAdmissions ?? 0}
+          icon={UserCheck}
+          onClick={() => openDetail("admissions")}
+          active={detailView === "admissions"}
+        />
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <Field
-                label="Destination URL"
-                required
-                value={generateForm.url}
-                onChange={(value) =>
-                  updateGenerate("url", value)
-                }
-                placeholder="https://example.com/"
-              />
-              {generateForm.url.trim() &&
-                !isValidHttpUrl(generateForm.url) && (
-                  <p className="mt-1 text-[12px] font-semibold text-rose-600">
-                    Enter a full URL starting with http:// or https://
-                  </p>
-                )}
-            </div>
+        <KpiStat
+          label="Revenue"
+          value={`₹${Number(summary.totalRevenue || 0).toLocaleString("en-IN")}`}
+          icon={IndianRupee}
+          onClick={() => openDetail("revenue")}
+          active={detailView === "revenue"}
+        />
+      </div>
 
-            <Field
-              label="Campaign"
-              required
-              value={generateForm.campaign}
-              onChange={(value) =>
-                updateGenerate("campaign", value)
-              }
-              placeholder="August Admissions 2026"
-            />
-
-            <Field
-              label="Influencer Name"
-              value={generateForm.influencerName}
-              onChange={(value) =>
-                updateGenerate("influencerName", value)
-              }
-              placeholder="Influencer / partner name"
-            />
-
-            <PlatformSelect
-              label="Platform"
-              value={generateForm.source}
-              onChange={(value) =>
-                updateGenerate(
-                  "source",
-                  value
-                )
-              }
-            />
-
-            <MediumSelect
-              value={generateForm.medium}
-              otherValue={generateForm.mediumOther}
-              onChange={(value) => {
-                updateGenerate("medium", value);
-                if (value !== "Other") {
-                  updateGenerate("mediumOther", "");
-                }
-              }}
-              onOtherChange={(value) =>
-                updateGenerate("mediumOther", value)
-              }
-            />
-
-            <div>
-              <Field
-                label="Campaign Cost"
-                type="number"
-                value={generateForm.cost}
-                onChange={(value) =>
-                  updateGenerate("cost", value)
-                }
-                placeholder="0"
-              />
-              {Number(generateForm.cost) < 0 && (
-                <p className="mt-1 text-[12px] font-semibold text-rose-600">
-                  Cost can't be negative.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-            <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-indigo-600">
-              {generatedUrl
-                ? "Generated Link"
-                : lastSavedLink
-                  ? "Last Generated Link (saved)"
-                  : "Generated Link"}
-            </div>
-
-            <div className="mt-2 min-h-[22px] break-all font-mono text-[13px] text-slate-700">
-              {generatedUrl ||
-                lastSavedLink ||
-                "Complete the fields to preview the generated UTM URL."}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={saveGenerate}
-              disabled={
-                generateSaving ||
-                !generatedUrl ||
-                !generateMedium ||
-                Number(generateForm.cost) < 0
-              }
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {generateSaving ? (
-                <Loader2
-                  size={13}
-                  className="animate-spin"
-                />
-              ) : (
-                <Link2 size={13} />
-              )}
-              Generate & Save
-            </button>
-
-            <button
-              type="button"
-              onClick={copyGeneratedLink}
-              disabled={!generatedUrl && !lastSavedLink}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 disabled:opacity-50"
-            >
-              {copiedGenerated ? (
-                <Check size={13} />
-              ) : (
-                <Copy size={13} />
-              )}
-              {copiedGenerated ? "Copied" : "Copy Link"}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      {/* 2. Manually Add UTM Link */}
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
-        <div className="border-b border-slate-100 px-5 py-4">
-          <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-500">
-            Existing link
-          </div>
-
-          <h2 className="mt-1 text-xl font-bold text-slate-950">
-            Manually Add UTM Link
-          </h2>
-
-          <p className="mt-1 text-[13px] text-slate-500">
-            Save an already-created influencer or campaign UTM link.
-          </p>
-        </div>
-
-        <div className="space-y-4 p-5">
-          {manualError ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[15px] text-rose-700">
-              {manualError}
-            </div>
-          ) : null}
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div>
-              <Field
-                label="UTM URL"
-                required
-                value={manualForm.url}
-                onChange={(value) =>
-                  updateManual("url", value)
-                }
-                placeholder="https://example.com/?utm_source=..."
-              />
-              {manualForm.url.trim() &&
-                !isValidHttpUrl(manualForm.url) && (
-                  <p className="mt-1 text-[12px] font-semibold text-rose-600">
-                    Enter a full URL starting with http:// or https://
-                  </p>
-                )}
-            </div>
-
-            <Field
-              label="Campaign"
-              required
-              value={manualForm.campaign}
-              onChange={(value) =>
-                updateManual("campaign", value)
-              }
-              placeholder="Influencer August"
-            />
-
-            <Field
-              label="Influencer Name"
-              value={manualForm.influencerName}
-              onChange={(value) =>
-                updateManual("influencerName", value)
-              }
-              placeholder="Influencer / partner name"
-            />
-
-            <PlatformSelect
-              label="Platform / Source"
-              value={manualForm.source}
-              onChange={(value) =>
-                updateManual(
-                  "source",
-                  value
-                )
-              }
-            />
-
-            <MediumSelect
-              value={manualForm.medium}
-              otherValue={manualForm.mediumOther}
-              onChange={(value) => {
-                updateManual("medium", value);
-                if (value !== "Other") {
-                  updateManual("mediumOther", "");
-                }
-              }}
-              onOtherChange={(value) =>
-                updateManual("mediumOther", value)
-              }
-            />
-
-            <Field
-              label="Campaign Cost"
-              type="number"
-              value={manualForm.cost}
-              onChange={(value) =>
-                updateManual("cost", value)
-              }
-              placeholder="0"
-            />
-          </div>
-
+      {/* Tabbed workspace */}
+      <div
+        role="tablist"
+        aria-label="UTM views"
+        className="inline-flex gap-1 rounded-xl border border-slate-200 bg-white p-1"
+      >
+        {[
+          { key: "overview", label: "Overview", controls: "utm-panel-overview" },
+          {
+            key: "links",
+            label: `Saved Links (${filteredLinks.length})`,
+            controls: "saved-utm-links",
+          },
+          {
+            key: "leads",
+            label: `Lead Details (${utmLeads.length})`,
+            controls: "utm-lead-details",
+          },
+        ].map((tab) => (
           <button
+            key={tab.key}
             type="button"
-            onClick={saveManual}
-            disabled={
-              manualSaving ||
-              !isValidHttpUrl(manualForm.url) ||
-              !manualForm.source.trim() ||
-              !manualMedium ||
-              !manualForm.campaign.trim() ||
-              Number(manualForm.cost) < 0
-            }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
+            role="tab"
+            id={`utm-tab-${tab.key}`}
+            aria-selected={activeTab === tab.key}
+            aria-controls={tab.controls}
+            tabIndex={activeTab === tab.key ? 0 : -1}
+            onClick={() => setActiveTab(tab.key)}
+            onKeyDown={(event) => {
+              const order = ["overview", "links", "leads"];
+              const idx = order.indexOf(activeTab);
+              let next = null;
+              if (event.key === "ArrowRight") {
+                next = order[(idx + 1) % order.length];
+              } else if (event.key === "ArrowLeft") {
+                next = order[(idx - 1 + order.length) % order.length];
+              } else if (event.key === "Home") {
+                next = order[0];
+              } else if (event.key === "End") {
+                next = order[order.length - 1];
+              }
+              if (next) {
+                event.preventDefault();
+                setActiveTab(next);
+                document.getElementById(`utm-tab-${next}`)?.focus();
+              }
+            }}
+            className={`h-9 rounded-lg px-4 text-[13px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
+              activeTab === tab.key
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
           >
-            {manualSaving ? (
-              <Loader2
-                size={13}
-                className="animate-spin"
-              />
-            ) : (
-              <Plus size={13} />
-            )}
-            Save Manual UTM
+            {tab.label}
           </button>
-        </div>
-      </section>
+        ))}
+      </div>
 
-      {/* 3. Saved Influencer Links */}
+      {/* Overview panel: performance + headline metrics */}
+      {activeTab === "overview" ? (
+        <div
+          role="tabpanel"
+          id="utm-panel-overview"
+          aria-labelledby="utm-tab-overview"
+          tabIndex={0}
+          className="space-y-4 focus-visible:outline-none"
+        >
+          <div className="grid gap-4 xl:grid-cols-3">
+            <PerformanceCard
+              title="Campaign Performance"
+              rows={analytics.campaignPerformance || []}
+              labelKey="campaign"
+            />
+
+            <PerformanceCard
+              title="Source Performance"
+              rows={analytics.sourcePerformance || []}
+              labelKey="source"
+            />
+
+            <PerformanceCard
+              title="Medium Performance"
+              rows={analytics.mediumPerformance || []}
+              labelKey="medium"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <MetricCard
+              label="Top Campaign"
+              value={summary.topCampaign || "—"}
+              icon={BarChart3}
+              detail={`Period: ${
+                selectedYear === "all" ? "All Time" : selectedYear
+              }`}
+            />
+
+            <MetricCard
+              label="Top Source"
+              value={summary.topSource || "—"}
+              icon={Globe}
+              detail="Best performing UTM source"
+            />
+
+            <MetricCard
+              label="UTM Conversion"
+              value={`${Number(summary.conversionRate || 0).toFixed(1)}%`}
+              icon={MousePointerClick}
+              detail="Admissions / UTM leads"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Saved Influencer Links panel */}
+      {activeTab === "links" ? (
       <section
         id="saved-utm-links"
-        className="space-y-3 scroll-mt-28"
+        role="tabpanel"
+        aria-labelledby="utm-tab-links"
+        tabIndex={0}
+        className="space-y-3 scroll-mt-28 focus-visible:outline-none"
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -2058,9 +2209,9 @@ export default function UTMLeads({
             type="button"
             onClick={() => downloadCsv(filteredLinks)}
             disabled={!filteredLinks.length}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           >
-            <Download size={13} />
+            <Download size={13} aria-hidden="true" />
             Export
           </button>
         </div>
@@ -2070,6 +2221,7 @@ export default function UTMLeads({
             <div className="relative native:w-[230px] native:shrink-0">
               <Search
                 size={14}
+                aria-hidden="true"
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -2080,7 +2232,7 @@ export default function UTMLeads({
                 }
                 aria-label="Search saved links"
                 placeholder="Search campaign, influencer, source, medium, URL or latest lead..."
-                className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px]"
+                className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
               />
             </div>
 
@@ -2189,9 +2341,12 @@ export default function UTMLeads({
                     <button
                       type="button"
                       onClick={() => copyLink(link.url)}
+                      aria-label={`Copy link for ${link.campaign}`}
+                      className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
                       <Copy
                         size={12}
+                        aria-hidden="true"
                         className="text-slate-400 hover:text-indigo-600"
                       />
                     </button>
@@ -2200,9 +2355,12 @@ export default function UTMLeads({
                       href={link.url}
                       target="_blank"
                       rel="noreferrer"
+                      aria-label={`Open ${link.campaign} link in new tab`}
+                      className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
                       <ExternalLink
                         size={12}
+                        aria-hidden="true"
                         className="text-slate-400 hover:text-indigo-600"
                       />
                     </a>
@@ -2251,17 +2409,19 @@ export default function UTMLeads({
                         setEditingLink(link);
                         setShowLinkModal(true);
                       }}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600"
+                      aria-label={`Edit ${link.campaign}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
-                      <Pencil size={13} />
+                      <Pencil size={13} aria-hidden="true" />
                     </button>
 
                     <button
                       type="button"
                       onClick={() => deleteLink(link)}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      aria-label={`Delete ${link.campaign}`}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={13} aria-hidden="true" />
                     </button>
                   </div>
                 </td>
@@ -2270,12 +2430,16 @@ export default function UTMLeads({
           />
         </div>
       </section>
+      ) : null}
 
-
-      {/* UTM Lead Details */}
+      {/* UTM Lead Details panel */}
+      {activeTab === "leads" ? (
       <section
         id="utm-lead-details"
-        className="space-y-3 scroll-mt-28"
+        role="tabpanel"
+        aria-labelledby="utm-tab-leads"
+        tabIndex={0}
+        className="space-y-3 scroll-mt-28 focus-visible:outline-none"
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -2300,9 +2464,9 @@ export default function UTMLeads({
               )
             }
             disabled={!utmLeads.length}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
           >
-            <Download size={13} />
+            <Download size={13} aria-hidden="true" />
             Export UTM Lead Details
           </button>
         </div>
@@ -2311,6 +2475,7 @@ export default function UTMLeads({
           <div className="relative max-w-xl">
             <Search
               size={14}
+              aria-hidden="true"
               className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
             />
 
@@ -2321,8 +2486,9 @@ export default function UTMLeads({
                   event.target.value
                 )
               }
+              aria-label="Search UTM leads"
               placeholder="Search UTM lead by name, phone, campaign, source or stage..."
-              className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px]"
+              className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
             />
           </div>
         </div>
@@ -2361,6 +2527,9 @@ export default function UTMLeads({
                     <PhoneAction
                       phone={lead.phone}
                       name={lead.name}
+                      onCopied={() =>
+                        setStatusMessage("Number copied to clipboard")
+                      }
                     />
                   </div>
                 </td>
@@ -2391,8 +2560,9 @@ export default function UTMLeads({
                   <select
                     value={lead.temperature || "WARM"}
                     disabled={temperatureUpdatingId === lead.id}
+                    aria-label={`Lead temperature for ${lead.name}`}
                     onChange={(event) => updateLeadTemperature(lead.id, event.target.value)}
-                    className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none disabled:opacity-60 ${temperatureClass(lead.temperature || "WARM")}`}
+                    className={`h-8 rounded-lg border px-2 text-[12px] font-bold outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 disabled:opacity-60 ${temperatureClass(lead.temperature || "WARM")}`}
                   >
                     {LEAD_TEMPERATURES.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -2416,124 +2586,283 @@ export default function UTMLeads({
           />
         </div>
       </section>
+      ) : null}
 
-      {/* UTM Analysis */}
-      <section
-        id="utm-analysis"
-        className="space-y-4 scroll-mt-28"
-      >
-        <div>
-          <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
-            Performance
+      {/* Create UTM Link drawer (Generate / Manual) */}
+      {showCreateDrawer ? (
+        <Drawer
+          titleText="Create UTM Link"
+          subtitle="Generate a tracked URL or save an existing UTM URL manually."
+          onClose={() => setShowCreateDrawer(false)}
+          footer={
+            createMode === "generate" ? (
+              <div className="flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={copyGeneratedLink}
+                  disabled={!generatedUrl && !lastSavedLink}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                >
+                  {copiedGenerated ? (
+                    <Check size={13} aria-hidden="true" />
+                  ) : (
+                    <Copy size={13} aria-hidden="true" />
+                  )}
+                  {copiedGenerated ? "Copied" : "Copy Link"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveGenerate}
+                  disabled={
+                    generateSaving ||
+                    !generatedUrl ||
+                    !generateMedium ||
+                    Number(generateForm.cost) < 0
+                  }
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+                >
+                  {generateSaving ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Link2 size={13} aria-hidden="true" />
+                  )}
+                  Generate &amp; Save
+                </button>
+              </div>
+            ) : (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveManual}
+                  disabled={
+                    manualSaving ||
+                    !isValidHttpUrl(manualForm.url) ||
+                    !manualForm.source.trim() ||
+                    !manualMedium ||
+                    !manualForm.campaign.trim() ||
+                    Number(manualForm.cost) < 0
+                  }
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"
+                >
+                  {manualSaving ? (
+                    <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Plus size={13} aria-hidden="true" />
+                  )}
+                  Save Manual UTM
+                </button>
+              </div>
+            )
+          }
+        >
+          <div className="space-y-4">
+            <div
+              role="radiogroup"
+              aria-label="Link mode"
+              className="flex w-full gap-1 rounded-xl bg-slate-100 p-1"
+            >
+              <button
+                type="button"
+                role="radio"
+                aria-checked={createMode === "generate"}
+                onClick={() => setCreateMode("generate")}
+                className={`h-9 flex-1 rounded-lg px-3 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
+                  createMode === "generate"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-600"
+                }`}
+              >
+                Generate
+              </button>
+
+              <button
+                type="button"
+                role="radio"
+                aria-checked={createMode === "manual"}
+                onClick={() => setCreateMode("manual")}
+                className={`h-9 flex-1 rounded-lg px-3 text-[13px] font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 ${
+                  createMode === "manual"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-600"
+                }`}
+              >
+                Paste existing
+              </button>
+            </div>
+
+            {createMode === "generate" ? (
+              <>
+                {generateError ? (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[15px] text-rose-700"
+                  >
+                    {generateError}
+                  </div>
+                ) : null}
+
+                <Field
+                  label="Destination URL"
+                  required
+                  value={generateForm.url}
+                  onChange={(value) => updateGenerate("url", value)}
+                  placeholder="https://example.com/"
+                  error={
+                    generateForm.url.trim() &&
+                    !isValidHttpUrl(generateForm.url)
+                      ? "Enter a full URL starting with http:// or https://"
+                      : ""
+                  }
+                />
+
+                <Field
+                  label="Campaign"
+                  required
+                  value={generateForm.campaign}
+                  onChange={(value) => updateGenerate("campaign", value)}
+                  placeholder="August Admissions 2026"
+                />
+
+                <Field
+                  label="Influencer Name"
+                  value={generateForm.influencerName}
+                  onChange={(value) =>
+                    updateGenerate("influencerName", value)
+                  }
+                  placeholder="Influencer / partner name"
+                />
+
+                <PlatformSelect
+                  label="Platform"
+                  value={generateForm.source}
+                  onChange={(value) => updateGenerate("source", value)}
+                />
+
+                <MediumSelect
+                  value={generateForm.medium}
+                  otherValue={generateForm.mediumOther}
+                  onChange={(value) => {
+                    updateGenerate("medium", value);
+                    if (value !== "Other") {
+                      updateGenerate("mediumOther", "");
+                    }
+                  }}
+                  onOtherChange={(value) =>
+                    updateGenerate("mediumOther", value)
+                  }
+                />
+
+                <Field
+                  label="Campaign Cost"
+                  type="number"
+                  min="0"
+                  value={generateForm.cost}
+                  onChange={(value) => updateGenerate("cost", value)}
+                  placeholder="0"
+                  error={
+                    Number(generateForm.cost) < 0
+                      ? "Cost can't be negative."
+                      : ""
+                  }
+                />
+
+                <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                  <div className="text-[13px] font-bold uppercase tracking-[0.1em] text-indigo-600">
+                    {generatedUrl
+                      ? "Generated Link"
+                      : lastSavedLink
+                        ? "Last Generated Link (saved)"
+                        : "Generated Link"}
+                  </div>
+
+                  <div className="mt-2 min-h-[22px] break-all font-mono text-[13px] text-slate-700">
+                    {generatedUrl ||
+                      lastSavedLink ||
+                      "Complete the fields to preview the generated UTM URL."}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {manualError ? (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[15px] text-rose-700"
+                  >
+                    {manualError}
+                  </div>
+                ) : null}
+
+                <Field
+                  label="UTM URL"
+                  required
+                  value={manualForm.url}
+                  onChange={(value) => updateManual("url", value)}
+                  placeholder="https://example.com/?utm_source=..."
+                  error={
+                    manualForm.url.trim() &&
+                    !isValidHttpUrl(manualForm.url)
+                      ? "Enter a full URL starting with http:// or https://"
+                      : ""
+                  }
+                />
+
+                <Field
+                  label="Campaign"
+                  required
+                  value={manualForm.campaign}
+                  onChange={(value) => updateManual("campaign", value)}
+                  placeholder="Influencer August"
+                />
+
+                <Field
+                  label="Influencer Name"
+                  value={manualForm.influencerName}
+                  onChange={(value) =>
+                    updateManual("influencerName", value)
+                  }
+                  placeholder="Influencer / partner name"
+                />
+
+                <PlatformSelect
+                  label="Platform / Source"
+                  value={manualForm.source}
+                  onChange={(value) => updateManual("source", value)}
+                />
+
+                <MediumSelect
+                  value={manualForm.medium}
+                  otherValue={manualForm.mediumOther}
+                  onChange={(value) => {
+                    updateManual("medium", value);
+                    if (value !== "Other") {
+                      updateManual("mediumOther", "");
+                    }
+                  }}
+                  onOtherChange={(value) =>
+                    updateManual("mediumOther", value)
+                  }
+                />
+
+                <Field
+                  label="Campaign Cost"
+                  type="number"
+                  min="0"
+                  value={manualForm.cost}
+                  onChange={(value) => updateManual("cost", value)}
+                  placeholder="0"
+                  error={
+                    Number(manualForm.cost) < 0
+                      ? "Cost can't be negative."
+                      : ""
+                  }
+                />
+              </>
+            )}
           </div>
-
-          <h2 className="mt-1 text-2xl font-bold tracking-[-0.02em] text-slate-950">
-            UTM Analysis
-          </h2>
-
-          <p className="mt-1 text-[13px] text-slate-500">
-            Campaign performance for the selected year.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 native:grid-cols-2">
-          <MetricCard
-            label="UTM Links"
-            value={summary.totalUtmLinks ?? links.length}
-            icon={Link2}
-            detail="Saved campaign links."
-            onClick={() => openDetail("links")}
-            active={detailView === "links"}
-          />
-
-          <MetricCard
-            label="Registrations"
-            value={summary.totalRegistrations ?? 0}
-            icon={UserPlus}
-            detail="Tracked registrations."
-            onClick={() => openDetail("registrations")}
-            active={detailView === "registrations"}
-          />
-
-          <MetricCard
-            label="UTM Leads"
-            value={summary.totalLeads ?? utmLeads.length}
-            icon={Users}
-            detail="Tracked UTM leads."
-            onClick={() => openDetail("leads")}
-            active={detailView === "leads"}
-          />
-
-          <MetricCard
-            label="Admissions"
-            value={summary.totalAdmissions ?? 0}
-            icon={UserCheck}
-            detail="Admissions from UTM leads."
-            onClick={() => openDetail("admissions")}
-            active={detailView === "admissions"}
-          />
-
-          <MetricCard
-            label="Revenue"
-            value={`₹${Number(
-              summary.totalRevenue || 0
-            ).toLocaleString("en-IN")}`}
-            icon={IndianRupee}
-            detail="Received admission revenue."
-            onClick={() => openDetail("revenue")}
-            active={detailView === "revenue"}
-          />
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <PerformanceCard
-            title="Campaign Performance"
-            rows={analytics.campaignPerformance || []}
-            labelKey="campaign"
-          />
-
-          <PerformanceCard
-            title="Source Performance"
-            rows={analytics.sourcePerformance || []}
-            labelKey="source"
-          />
-
-          <PerformanceCard
-            title="Medium Performance"
-            rows={analytics.mediumPerformance || []}
-            labelKey="medium"
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard
-            label="Top Campaign"
-            value={summary.topCampaign || "—"}
-            icon={BarChart3}
-            detail={`Period: ${
-              selectedYear === "all"
-                ? "All Time"
-                : selectedYear
-            }`}
-          />
-
-          <MetricCard
-            label="Top Source"
-            value={summary.topSource || "—"}
-            icon={Globe}
-            detail="Best performing UTM source"
-          />
-
-          <MetricCard
-            label="UTM Conversion"
-            value={`${Number(
-              summary.conversionRate || 0
-            ).toFixed(1)}%`}
-            icon={MousePointerClick}
-            detail="Admissions / UTM leads"
-          />
-        </div>
-      </section>
+        </Drawer>
+      ) : null}
 
 
       {showLinkModal ? (

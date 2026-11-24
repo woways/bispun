@@ -2971,6 +2971,11 @@ router.get(
 
             null,
 
+          campaign:
+            lead.campaign && lead.campaign !== "Individual Lead"
+              ? lead.campaign
+              : null,
+
           sourceName: (lead.notes || "")
 
             .split("\n")

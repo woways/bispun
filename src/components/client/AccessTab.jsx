@@ -1,7 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
-import { Info, ChevronRight, Check, Minus, ArrowLeft, LockKeyhole } from "lucide-react";
+import { useMemo, useState } from "react";
 import {
-  ACTIONS,
+  Info,
+  ChevronRight,
+  Check,
+  LockKeyhole,
+  LayoutGrid,
+  MessageSquare,
+  Target,
+  Users,
+  Share2,
+  GraduationCap,
+  DoorOpen,
+  ClipboardList,
+  CheckCircle2,
+  Banknote,
+  BarChart3,
+  Store,
+  Gift,
+  LifeBuoy,
+} from "lucide-react";
+import {
   SCOPES,
   ACCESS_GROUPS,
   normalizeLevelPermissions,
@@ -9,17 +27,42 @@ import {
 } from "./accessModel.js";
 
 /**
- * Access editor — permissions are configured PER LEVEL (organizationConfig.levels[].permissions).
- * Every user inherits from their level by levelId; individuals are fine-tuned on the
- * People tab (reusing PermissionTree + clampPageAccessToActor for no-escalation).
- *
- * Props:
- *   levels          [{ id, name, rank, permissions }]
- *   admissionsTree  { markets: [{ key, label, streams: [{ id, name, colleges:[{id,name}] }] }] }
- *   canEdit         boolean  (Admins only; managers see read-only)
- *   saving          boolean
- *   onSave(levelId, permissions)
+ * Access editor — permissions are configured PER LEVEL. This is the artifact's
+ * single permission MATRIX: modules × the 11 actions, split Core / Extended,
+ * with expandable object (component) sub-rows. Toggles follow the brand theme.
+ * Admissions stream/college scoping is kept as a section below the matrix.
  */
+
+const CORE = ["View", "Create", "Edit", "Delete"];
+const EXT = ["Assign", "Review", "Approve", "Comment", "Import", "Message", "Export"];
+const COLS = [...CORE, ...EXT];
+
+const PAGE_ICON = {
+  dashboard: LayoutGrid,
+  chats: MessageSquare,
+  "goals-and-targets": Target,
+  "lead-store": Users,
+  "utm-leads": Share2,
+  admissions: GraduationCap,
+  walkins: DoorOpen,
+  counselling: ClipboardList,
+  "admissions-done": CheckCircle2,
+  revenue: Banknote,
+  analytics: BarChart3,
+  "my-store": Store,
+  "my-referrals": Gift,
+  help: LifeBuoy,
+};
+
+// Pages shown in the matrix: every page in a non-locked, non-personal group.
+const MATRIX_PAGES = ACCESS_GROUPS.filter((g) => !g.locked && !/^Personal/.test(g.g)).flatMap(
+  (g) => g.pages
+);
+
+const isAdminLevel = (l) =>
+  String(l?.name || "").trim().toLowerCase() === "admin" ||
+  String(l?.code || "").trim().toUpperCase() === "ADM";
+
 export default function AccessTab({ levels = [], admissionsTree, canEdit = true, saving = false, onSave }) {
   const ordered = useMemo(
     () => [...levels].sort((a, b) => (a.rank || 0) - (b.rank || 0) || a.name.localeCompare(b.name)),
@@ -29,38 +72,19 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
   const [drafts, setDrafts] = useState(() =>
     Object.fromEntries(levels.map((l) => [l.id, normalizeLevelPermissions(l.permissions)]))
   );
-  const [routePage, setRoutePage] = useState(() => new URLSearchParams(window.location.search).get("permissionPage") || "");
-  const [openStreams, setOpenStreams] = useState(() => new Set());
+  const [openPages, setOpenPages] = useState(() => new Set(["lead-store", "admissions"]));
   const [dirty, setDirty] = useState(false);
 
   const cur = ordered.find((l) => l.id === curId) || ordered[0];
   const perms = cur ? drafts[cur.id] || normalizeLevelPermissions() : null;
-  const selectedPage = useMemo(
-    () => ACCESS_GROUPS.flatMap((group) => group.pages.map((page) => ({ ...page, group }))).find((page) => page.id === routePage) || null,
-    [routePage]
-  );
-  const adminLevel = String(cur?.name || "").trim().toLowerCase() === "admin" || String(cur?.code || "").trim().toUpperCase() === "ADM";
+  const adminLevel = isAdminLevel(cur);
   const editable = canEdit && !adminLevel;
+
   const streams = useMemo(() => {
     const out = [];
     (admissionsTree?.markets || []).forEach((m) => (m.streams || []).forEach((s) => out.push(s)));
     return out;
   }, [admissionsTree]);
-
-  useEffect(() => {
-    const onPopState = () => setRoutePage(new URLSearchParams(window.location.search).get("permissionPage") || "");
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  function navigateToPage(pageId = "") {
-    const params = new URLSearchParams(window.location.search);
-    if (pageId) params.set("permissionPage", pageId);
-    else params.delete("permissionPage");
-    const query = params.toString();
-    window.history.pushState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
-    setRoutePage(pageId);
-  }
 
   if (!cur) {
     return (
@@ -81,37 +105,28 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
     setDirty(true);
   }
   const setScope = (v) => mutate((p) => (p.scope = v));
-  const toggleComp = (cid, act) =>
+  const setObjAction = (compId, act, val) =>
     mutate((p) => {
-      p.components[cid] = p.components[cid] || {};
-      if (p.components[cid][act]) delete p.components[cid][act];
-      else p.components[cid][act] = true;
+      p.components[compId] = p.components[compId] || {};
+      if (val) p.components[compId][act] = true;
+      else {
+        delete p.components[compId][act];
+        if (!Object.keys(p.components[compId]).length) delete p.components[compId];
+      }
     });
-  const bulkAction = (act, on) =>
+  const setModuleAction = (page, act, val) =>
     mutate((p) => {
-      ACCESS_GROUPS.forEach((g) => {
-        if (g.locked) return;
-        g.pages.forEach((pg) =>
-          pg.comps.forEach((c) => {
-            if (!c.acts.includes(act)) return;
-            p.components[c.id] = p.components[c.id] || {};
-            if (on) p.components[c.id][act] = true;
-            else delete p.components[c.id][act];
-          })
-        );
-      });
-    });
-  const setPageEnabled = (page, enabled) =>
-    mutate((p) => {
-      page.comps.forEach((component) => {
-        if (enabled) {
-          p.components[component.id] = Object.fromEntries(component.acts.map((action) => [action, true]));
-        } else {
-          delete p.components[component.id];
+      page.comps.forEach((c) => {
+        if (!c.acts.includes(act)) return;
+        p.components[c.id] = p.components[c.id] || {};
+        if (val) p.components[c.id][act] = true;
+        else {
+          delete p.components[c.id][act];
+          if (!Object.keys(p.components[c.id]).length) delete p.components[c.id];
         }
       });
     });
-  const toggleCollege = (streamId, collegeId) =>
+  const toggleCollege = (collegeId) =>
     mutate((p) => {
       const set = new Set(p.admissions.collegeIds);
       set.has(collegeId) ? set.delete(collegeId) : set.add(collegeId);
@@ -127,22 +142,18 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
     });
 
   /* ---------- derived ---------- */
-  const anyAction = Object.fromEntries(
-    ACTIONS.map((a) => [a, Object.values(perms.components).some((c) => c[a])])
-  );
-  const pageState = (page) => {
-    let on = 0,
-      tot = 0;
-    page.comps.forEach((c) =>
-      c.acts.forEach((a) => {
-        tot++;
-        if (perms.components[c.id]?.[a]) on++;
-      })
-    );
-    return on === 0 ? "none" : on === tot ? "all" : "some";
+  const appliesPage = (page, act) => page.comps.some((c) => c.acts.includes(act));
+  const moduleState = (page, act) => {
+    const supporting = page.comps.filter((c) => c.acts.includes(act));
+    if (!supporting.length) return "na";
+    const on = supporting.filter((c) => perms.components[c.id]?.[act]).length;
+    return on === supporting.length ? "on" : "off";
   };
-  const toggleStreamOpen = (id) =>
-    setOpenStreams((s) => {
+  const objState = (comp, act) =>
+    comp.acts.includes(act) ? (perms.components[comp.id]?.[act] ? "on" : "off") : "na";
+
+  const toggleOpen = (id) =>
+    setOpenPages((s) => {
       const n = new Set(s);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
@@ -163,114 +174,68 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
       </div>
 
       {!canEdit && (
-        <div className="flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-[12.5px] leading-relaxed text-accent-800">
-          <Info size={16} className="mt-0.5 shrink-0" />
+        <div className="flex gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-[12.5px] leading-relaxed text-indigo-800">
+          <Info size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
           Level defaults are set by Administrators — shown read-only. Adjust your own team members on the People tab.
         </div>
       )}
-
       {adminLevel && (
         <div className="flex gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-[12.5px] leading-relaxed text-indigo-800">
-          <LockKeyhole size={16} className="mt-0.5 shrink-0" />
+          <LockKeyhole size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
           Admin access is protected and always ON. It cannot be reduced or overridden.
         </div>
       )}
 
       {/* level pills */}
       <div>
-        <div className="mb-2 text-[12px] font-bold text-slate-500">Level</div>
+        <div className="mb-2 text-[12px] font-bold uppercase tracking-wide text-slate-500">Level</div>
         <div className="flex flex-wrap gap-2.5">
           {ordered.map((l) => (
             <button
               key={l.id}
               type="button"
+              aria-pressed={l.id === cur.id}
               onClick={() => setCurId(l.id)}
-              className={`rounded-full border px-4 py-2 text-[13.5px] font-bold transition ${
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[13.5px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                 l.id === cur.id
                   ? "border-brand-600 bg-brand-600 text-white shadow-brand-sm"
                   : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
               }`}
             >
+              {isAdminLevel(l) && <LockKeyhole size={13} aria-hidden="true" />}
               {l.name}
             </button>
           ))}
         </div>
       </div>
 
-      {selectedPage && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-          <button type="button" onClick={() => navigateToPage("")} className="mb-4 inline-flex items-center gap-2 text-[13px] font-bold text-brand-700 hover:text-brand-800">
-            <ArrowLeft size={15} /> Back to all pages
-          </button>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">{selectedPage.group.g}</div>
-              <h3 className="mt-1 text-[20px] font-extrabold text-slate-900">{selectedPage.name} permissions</h3>
-              <p className="mt-1 text-[12.5px] text-slate-500">Configure every component and applicable action for <b>{cur.name}</b>.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-600">{selectedPage.comps.length} components</span>
-              <ToggleSwitch
-                on={adminLevel || pageState(selectedPage) !== "none"}
-                disabled={!editable}
-                label={`${selectedPage.name} access`}
-                onClick={() => setPageEnabled(selectedPage, pageState(selectedPage) === "none")}
-              />
-            </div>
-          </div>
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200 native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
-            <table className="min-w-full text-left">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-4 py-3 text-[12px] font-bold text-slate-600">Component</th>
-                  <th className="px-4 py-3 text-[12px] font-bold text-slate-600">Permissions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {selectedPage.comps.map((component) => (
-                  <tr key={component.id}>
-                    <td className="whitespace-nowrap px-4 py-3 text-[13.5px] font-semibold text-slate-800">{component.name}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        {component.acts.map((action) => (
-                          <ActionPill
-                            key={action}
-                            label={action}
-                            on={adminLevel || !!perms.components[component.id]?.[action]}
-                            disabled={!editable}
-                            onClick={() => toggleComp(component.id, action)}
-                          />
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {!selectedPage && <>
-      {/* Q1 scope */}
-      <Question n={1} title={`Whose data can ${levelName} see?`} sub="The data scope applied to leads, admissions & tasks.">
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      {/* scope */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <h4 className="text-[15px] font-extrabold text-slate-900">Whose data can {levelName} see?</h4>
+        <p className="mb-3.5 mt-1 text-[12.5px] leading-relaxed text-slate-500">
+          The data scope applied to leads, admissions &amp; tasks.
+        </p>
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4" role="radiogroup" aria-label="Data scope">
           {SCOPES.map(([v, lbl, sub]) => {
-            const sel = perms.scope === v;
+            const sel = (adminLevel ? "everyone" : perms.scope) === v;
             return (
               <button
                 key={v}
                 type="button"
+                role="radio"
+                aria-checked={sel}
+                aria-label={`${lbl} — ${sub}`}
+                disabled={!editable}
                 onClick={() => setScope(v)}
-                className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
+                className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
                   sel ? "border-brand-600 bg-brand-50" : "border-slate-200 bg-white hover:border-slate-300"
                 } ${editable ? "" : "cursor-default opacity-80"}`}
               >
                 <span
-                  className={`flex shrink-0 items-center justify-center rounded-full border-2 ${
+                  aria-hidden="true"
+                  className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 ${
                     sel ? "border-brand-600" : "border-slate-300"
                   }`}
-                  style={{ width: 18, height: 18 }}
                 >
                   {sel && <span className="h-2.5 w-2.5 rounded-full bg-brand-600" />}
                 </span>
@@ -282,81 +247,102 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
             );
           })}
         </div>
-      </Question>
+      </section>
 
-      {/* Q2 action roll-up */}
-      <Question
-        n={2}
-        title={`What can ${levelName} do?`}
-        sub="Use these master toggles for an action across all pages, or fine-tune it inside each page. Settings & Organization stay with Admins."
-      >
-        <div className="flex flex-wrap gap-x-6 gap-y-3">
-          {ACTIONS.map((a) => {
-            const locked = adminLevel;
-            const on = adminLevel || anyAction[a];
-            return (
-              <div key={a} className="flex min-w-[118px] items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                <span className={`text-[13px] font-semibold ${locked ? "text-slate-400" : "text-slate-700"}`}>{a}</span>
-                <ToggleSwitch on={on} disabled={locked || !editable} label={`${a} all pages`} onClick={() => bulkAction(a, !on)} />
-              </div>
-            );
-          })}
+      {/* matrix */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="p-4 sm:p-5">
+          <h4 className="text-[15px] font-extrabold text-slate-900">Module &amp; Object Permissions</h4>
+          <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500">
+            {adminLevel
+              ? "Admin has full access to every module and object — protected."
+              : "Toggle any cell; expand a module to set each object."}
+          </p>
         </div>
-      </Question>
-
-      {/* Q3 pages + components */}
-      <Question
-        n={3}
-        title={`Which menus can ${levelName} open?`}
-        sub="Click a page name to open its dedicated component and action permission screen."
-      >
-        {ACCESS_GROUPS.map((grp) => (
-          <div key={grp.g}>
-            <div className="mb-2 mt-4 text-[11px] font-extrabold uppercase tracking-wider text-slate-400 first:mt-1">
-              {grp.g}
-              {grp.flag && <span className="ml-1.5 font-mono text-[10px] font-semibold text-slate-400">· {grp.flag}</span>}
-            </div>
-
-            {grp.admissionsScope && <StreamTree
-              streams={streams}
-              perms={perms}
-              openStreams={openStreams}
-              onToggleOpen={toggleStreamOpen}
-              onToggleCollege={toggleCollege}
-              onToggleStreamAll={toggleStreamAll}
-              canEdit={editable}
-            />}
-
-            {grp.pages.map((page) => {
-              const st = adminLevel ? "all" : grp.locked ? "none" : pageState(page);
-              return (
-                <div key={page.id} className={`mb-2 flex items-center gap-3 overflow-hidden rounded-xl border border-slate-200 px-3.5 py-3 ${grp.locked ? "opacity-60" : ""}`}>
-                  <button
-                    type="button"
-                    onClick={() => !grp.locked && navigateToPage(page.id)}
-                    className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch]">
+          <table className="w-full min-w-[940px] border-collapse text-left">
+            <thead>
+              <tr>
+                <th
+                  rowSpan={2}
+                  scope="col"
+                  className="sticky left-0 z-20 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                  style={{ minWidth: 230 }}
+                >
+                  Module / Object
+                </th>
+                <th
+                  colSpan={CORE.length}
+                  scope="colgroup"
+                  className="bg-slate-50 px-2 pb-1 pt-3 text-center text-[10.5px] font-bold uppercase tracking-wider text-brand-600"
+                >
+                  Core Access
+                </th>
+                <th
+                  colSpan={EXT.length}
+                  scope="colgroup"
+                  className="border-l-2 border-slate-200 bg-slate-50 px-2 pb-1 pt-3 text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-500"
+                >
+                  Extended Access
+                </th>
+              </tr>
+              <tr>
+                {COLS.map((c) => (
+                  <th
+                    key={c}
+                    scope="col"
+                    className={`border-b border-slate-200 bg-slate-50 px-2 pb-3 text-center text-[11.5px] font-semibold text-slate-600 ${
+                      c === EXT[0] ? "border-l-2" : ""
+                    }`}
                   >
-                    <PageCircle state={st} />
-                    <span className="flex-1 text-[14.5px] font-bold text-slate-800">{page.name}</span>
-                    <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
-                      {grp.locked ? "Admin only" : `${page.comps.length} components`}
-                      {!grp.locked && <ChevronRight size={13} />}
-                    </span>
-                  </button>
-                  <ToggleSwitch
-                    on={adminLevel || st !== "none"}
-                    mixed={!adminLevel && st === "some"}
-                    disabled={!editable || grp.locked}
-                    label={`${page.name} access`}
-                    onClick={() => setPageEnabled(page, st === "none")}
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {MATRIX_PAGES.map((page) => {
+                const Icon = PAGE_ICON[page.id] || LayoutGrid;
+                const expandable = page.comps.length > 1;
+                const isOpen = openPages.has(page.id);
+                return (
+                  <ModuleRows
+                    key={page.id}
+                    page={page}
+                    Icon={Icon}
+                    expandable={expandable}
+                    isOpen={isOpen}
+                    onToggleOpen={() => toggleOpen(page.id)}
+                    adminLevel={adminLevel}
+                    editable={editable}
+                    appliesPage={appliesPage}
+                    moduleState={moduleState}
+                    objState={objState}
+                    setModuleAction={setModuleAction}
+                    setObjAction={setObjAction}
                   />
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </Question>
-      </>}
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 px-4 py-3 text-[12px] text-slate-500">
+          <span className="inline-flex items-center gap-2"><Toggle state="off" disabled decorative label="Off (example)" /> Off</span>
+          <span className="inline-flex items-center gap-2"><Toggle state="on" disabled decorative label="Granted (example)" /> Granted</span>
+          <span className="inline-flex items-center gap-2"><span className="text-[11px] font-bold text-slate-300">NA</span> Not applicable</span>
+        </div>
+      </section>
+
+      {/* admissions college scope (kept; not in the artifact) */}
+      {streams.length > 0 && (
+        <StreamScope
+          streams={streams}
+          perms={perms}
+          editable={editable}
+          onToggleCollege={toggleCollege}
+          onToggleStreamAll={toggleStreamAll}
+        />
+      )}
 
       {/* save bar */}
       {editable && (
@@ -365,143 +351,232 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
             {dirty ? "Unsaved changes to " : "No unsaved changes · "}
             <b className="text-slate-700">{levelName}</b>
           </span>
-          <button
-            type="button"
-            disabled={!dirty || saving}
-            onClick={() => {
-              onSave?.(cur.id, { ...perms, flags: flagsFromComponents(perms.components) });
-              setDirty(false);
-            }}
-            className="rounded-lg bg-brand-600 px-5 py-2 text-[13.5px] font-bold text-white shadow-brand-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? "Saving…" : "Save level access"}
-          </button>
+          <div className="flex gap-2.5">
+            <button
+              type="button"
+              disabled={!dirty}
+              onClick={() => {
+                setDrafts((d) => ({ ...d, [cur.id]: normalizeLevelPermissions(cur.permissions) }));
+                setDirty(false);
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13.5px] font-bold text-slate-700 transition hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              disabled={!dirty || saving}
+              onClick={() => {
+                onSave?.(cur.id, { ...perms, flags: flagsFromComponents(perms.components) });
+                setDirty(false);
+              }}
+              className="rounded-lg bg-brand-600 px-5 py-2 text-[13.5px] font-bold text-white shadow-brand-sm transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save level access"}
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
-/* ---------- small pieces ---------- */
-function pageCompHasAny(perms, cid) {
-  return Object.values(perms.components[cid] || {}).some(Boolean);
-}
-
-function Question({ n, title, sub, children }) {
+/* ---------- rows ---------- */
+function ModuleRows({
+  page,
+  Icon,
+  expandable,
+  isOpen,
+  onToggleOpen,
+  adminLevel,
+  editable,
+  appliesPage,
+  moduleState,
+  objState,
+  setModuleAction,
+  setObjAction,
+}) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-      <div className="flex items-center gap-2 text-[15px] font-extrabold text-slate-900">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full border-[1.6px] border-slate-800 text-[11px]">{n}</span>
-        {title}
-      </div>
-      {sub && <p className="mb-3.5 mt-1 text-[12.5px] leading-relaxed text-slate-500">{sub}</p>}
-      {children}
-    </div>
+    <>
+      <tr className="border-t border-slate-100">
+        <th scope="row" className="sticky left-0 z-10 bg-white text-left font-normal" style={{ minWidth: 230 }}>
+          <div className="flex items-center gap-2.5 px-4 py-2.5">
+            {expandable ? (
+              <button
+                type="button"
+                onClick={onToggleOpen}
+                aria-expanded={isOpen}
+                aria-label={`${isOpen ? "Collapse" : "Expand"} ${page.name}`}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <ChevronRight size={14} className={`transition ${isOpen ? "rotate-90" : ""}`} aria-hidden="true" />
+              </button>
+            ) : (
+              <span className="w-6 shrink-0" />
+            )}
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+              <Icon size={15} aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[13.5px] font-bold text-slate-800">{page.name}</span>
+              <span className="block text-[11px] font-normal text-slate-400">
+                {page.comps.length} object{page.comps.length > 1 ? "s" : ""}
+              </span>
+            </span>
+          </div>
+        </th>
+        {COLS.map((c) => {
+          const sup = page.comps.filter((x) => x.acts.includes(c));
+          const grantedN = adminLevel ? sup.length : sup.filter((x) => perms.components[x.id]?.[c]).length;
+          const st = adminLevel ? "on" : appliesPage(page, c) ? moduleState(page, c) : "na";
+          return (
+            <td key={c} className={`px-2 py-2 text-center ${c === EXT[0] ? "border-l-2 border-slate-200" : ""}`}>
+              {st === "na" ? (
+                <span className="text-[11px] font-bold text-slate-300">NA</span>
+              ) : (
+                <div className="flex justify-center">
+                  <Toggle
+                    state={st}
+                    disabled={!editable}
+                    label={`${page.name} — ${c}, ${grantedN} of ${sup.length} granted`}
+                    onClick={() => setModuleAction(page, c, st !== "on")}
+                  />
+                </div>
+              )}
+            </td>
+          );
+        })}
+      </tr>
+      {isOpen &&
+        page.comps.map((comp) => (
+          <tr key={comp.id} className="bg-slate-50/60">
+            <th scope="row" className="sticky left-0 z-10 bg-slate-50/60 text-left font-normal" style={{ minWidth: 230 }}>
+              <div className="py-2 pl-[60px] pr-4 text-[13px] text-slate-600">{comp.name}</div>
+            </th>
+            {COLS.map((c) => {
+              const st = adminLevel ? (comp.acts.includes(c) ? "on" : "na") : objState(comp, c);
+              return (
+                <td key={c} className={`px-2 py-1.5 text-center ${c === EXT[0] ? "border-l-2 border-slate-200" : ""}`}>
+                  {st === "na" ? (
+                    <span className="text-[11px] font-bold text-slate-300">NA</span>
+                  ) : (
+                    <div className="flex justify-center">
+                      <Toggle
+                        state={st}
+                        disabled={!editable}
+                        label={`${comp.name} — ${c}`}
+                        onClick={() => setObjAction(comp.id, c, st !== "on")}
+                      />
+                    </div>
+                  )}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+    </>
   );
 }
 
-function PageCircle({ state }) {
-  const on = state !== "none";
-  return (
-    <span
-      className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.6px] ${
-        on ? "border-emerald-200 bg-emerald-50 text-emerald-600" : "border-slate-300 text-slate-300"
-      }`}
-    >
-      {state === "all" ? <Check size={13} strokeWidth={3} /> : state === "some" ? <Minus size={13} strokeWidth={3} /> : null}
-    </span>
-  );
-}
-
-function ActionPill({ label, on, disabled, onClick }) {
+/* ---------- brand-color toggle (binary on/off checkbox) ---------- */
+function Toggle({ state, disabled = false, decorative = false, label, onClick }) {
+  const on = state === "on";
   return (
     <button
       type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={`flex min-w-[112px] items-center justify-between gap-3 rounded-lg border px-3 py-2 text-[12px] transition ${
-        on
-          ? "border-emerald-200 bg-emerald-50 font-bold text-emerald-700"
-          : "border-slate-200 bg-white text-slate-500"
-      } ${disabled ? "opacity-40" : "hover:border-slate-300"}`}
-    >
-      {label}
-      <span className={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-emerald-600" : "bg-slate-300"}`}>
-        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`} />
-      </span>
-    </button>
-  );
-}
-
-function ToggleSwitch({ on, mixed = false, disabled = false, label, onClick }) {
-  return (
-    <button
-      type="button"
-      role="switch"
+      role="checkbox"
       aria-checked={on}
       aria-label={label}
+      aria-hidden={decorative || undefined}
+      tabIndex={decorative ? -1 : undefined}
       disabled={disabled}
       onClick={onClick}
-      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
-        on ? (mixed ? "bg-amber-500" : "bg-emerald-600") : "bg-slate-300"
-      } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+      className={`relative inline-flex h-[23px] w-[42px] shrink-0 items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+        on ? "border-brand-600 bg-brand-600" : "border-slate-300 bg-slate-200"
+      } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
     >
-      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-5" : "translate-x-0.5"}`} />
+      <span
+        className={`absolute top-1/2 h-[17px] w-[17px] -translate-y-1/2 rounded-full border border-slate-300 bg-white shadow transition-all ${
+          on ? "left-[22px]" : "left-[2px]"
+        }`}
+      />
     </button>
   );
 }
 
-function StreamTree({ streams, perms, openStreams, onToggleOpen, onToggleCollege, onToggleStreamAll, canEdit }) {
-  if (!streams.length) {
-    return (
-      <div className="mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-400">
-        No streams/colleges configured yet. Add them under Admissions to scope access per college.
-      </div>
-    );
-  }
+/* ---------- admissions college scope ---------- */
+function StreamScope({ streams, perms, editable, onToggleCollege, onToggleStreamAll }) {
+  const [open, setOpen] = useState(() => new Set());
+  const toggle = (id) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
   return (
-    <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center gap-2 text-[13.5px] font-extrabold text-slate-800">
-        <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full border-[1.6px] border-slate-800 text-[10px]">◧</span>
-        Streams & Colleges this level can see
-      </div>
-      <p className="mb-2 mt-1 text-[12px] leading-relaxed text-slate-500">
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+      <h4 className="text-[15px] font-extrabold text-slate-900">Streams &amp; Colleges this level can see</h4>
+      <p className="mb-3 mt-1 text-[12.5px] leading-relaxed text-slate-500">
         Pick the streams &amp; colleges. A Manager can then grant employees only a subset — never more than they hold.
       </p>
-      {streams.map((st) => {
-        const ids = (st.colleges || []).map((c) => c.id);
-        const on = ids.filter((id) => perms.admissions.collegeIds.includes(id)).length;
-        const tot = ids.length;
-        const state = on === 0 ? "none" : on === tot ? "all" : "some";
-        const open = openStreams.has(st.id);
-        return (
-          <div key={st.id} className="mb-2 overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2.5 px-3 py-2.5">
-              <ActionPill label="" on={state !== "none"} disabled={!canEdit} onClick={() => onToggleStreamAll(st)} />
-              <button type="button" onClick={() => onToggleOpen(st.id)} className="flex flex-1 items-center justify-between text-left">
-                <span className="text-[14px] font-bold text-slate-800">{st.name}</span>
-                <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
-                  {on}/{tot} colleges
-                  <ChevronRight size={13} className={`transition ${open ? "rotate-90" : ""}`} />
-                </span>
-              </button>
-            </div>
-            {open && (
-              <div className="flex flex-wrap gap-1.5 border-t border-slate-100 px-3 py-2.5">
-                {(st.colleges || []).map((c) => (
-                  <ActionPill
-                    key={c.id}
-                    label={c.name}
-                    on={perms.admissions.collegeIds.includes(c.id)}
-                    disabled={!canEdit}
-                    onClick={() => onToggleCollege(st.id, c.id)}
-                  />
-                ))}
+      <div className="space-y-2">
+        {streams.map((st) => {
+          const ids = (st.colleges || []).map((c) => c.id);
+          const on = ids.filter((id) => perms.admissions.collegeIds.includes(id)).length;
+          const tot = ids.length;
+          const state = tot > 0 && on === tot ? "on" : "off";
+          const isOpen = open.has(st.id);
+          return (
+            <div key={st.id} className="overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex items-center gap-3 px-3 py-2.5">
+                <Toggle
+                  state={state}
+                  disabled={!editable}
+                  label={`All colleges in ${st.name} — ${on} of ${tot} selected`}
+                  onClick={() => onToggleStreamAll(st)}
+                />
+                <button
+                  type="button"
+                  onClick={() => toggle(st.id)}
+                  aria-expanded={isOpen}
+                  className="flex flex-1 items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                >
+                  <span className="text-[14px] font-bold text-slate-800">{st.name}</span>
+                  <span className="flex items-center gap-1.5 text-[12px] text-slate-400">
+                    {on}/{tot} colleges
+                    <ChevronRight size={13} className={`transition ${isOpen ? "rotate-90" : ""}`} aria-hidden="true" />
+                  </span>
+                </button>
               </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+              {isOpen && (
+                <div className="flex flex-wrap gap-2 border-t border-slate-100 px-3 py-2.5">
+                  {(st.colleges || []).map((c) => {
+                    const sel = perms.admissions.collegeIds.includes(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={sel}
+                        disabled={!editable}
+                        onClick={() => onToggleCollege(c.id)}
+                        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                          sel
+                            ? "border-brand-200 bg-brand-50 text-brand-700"
+                            : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                        }`}
+                      >
+                        {sel && <Check size={12} aria-hidden="true" />}
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }

@@ -511,7 +511,9 @@ function ModalShell({
   onClose,
   children,
   max = "max-w-md",
+  placement = "drawer",
 }) {
+  const isCenter = placement === "center";
   const panelRef = useRef(null);
   const restoreRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -568,7 +570,9 @@ function ModalShell({
   // keeps its Escape/Back/focus independent of the popup it was opened from.
   return createPortal(
     <div
-      className="fixed inset-0 z-[10000] flex justify-end bg-slate-950/45 backdrop-blur-sm"
+      className={`fixed inset-0 z-[10000] flex bg-slate-950/45 backdrop-blur-sm ${
+        isCenter ? "items-end justify-center p-0 sm:items-center sm:p-4" : "justify-end"
+      }`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCloseRef.current?.();
       }}
@@ -580,7 +584,11 @@ function ModalShell({
         aria-labelledby={headingId}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className={`flex h-full w-full ${max} flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none`}
+        className={`flex w-full ${max} flex-col overflow-hidden bg-white shadow-2xl outline-none ${
+          isCenter
+            ? "max-h-[92vh] rounded-t-2xl border border-slate-200 sm:rounded-2xl"
+            : "h-full border-l border-slate-200 animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+        }`}
       >
         <style>{"@keyframes drawerSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
@@ -727,6 +735,7 @@ function StreamModal({
       }
       subtitle="Example: Engineering, Medical, Management."
       onClose={onClose}
+      placement="center"
     >
       <form
         onSubmit={submit}

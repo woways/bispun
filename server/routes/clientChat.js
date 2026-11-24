@@ -479,7 +479,26 @@ router.get("/:id/messages", async (req, res) => {
       })),
     }));
 
-    // Mark as read up to now.
+    // Read receipts: the "read by everyone else" cursor is the EARLIEST
+    // lastReadAt among the other members, so a message counts as read only
+    // once every other member has read past it. For a 1-to-1 chat this is
+    // simply the other person's lastReadAt. No schema change required.
+    const otherMembers = await prisma.conversationMember.findMany({
+      where: { conversationId, userId: { not: req.clientUser.userId } },
+      select: { lastReadAt: true },
+    });
+    let readReceiptAt = null;
+    if (otherMembers.length) {
+      const times = otherMembers.map((om) =>
+        om.lastReadAt ? new Date(om.lastReadAt).getTime() : 0
+      );
+      const minTime = Math.min(...times);
+      if (minTime > 0) readReceiptAt = new Date(minTime).toISOString();
+    }
+
+    // Mark my own cursor as read up to now, and let the other participants'
+    // open threads turn their sent ticks to read.
+    const readAt = new Date();
     await prisma.conversationMember.update({
       where: {
         conversationId_userId: {
@@ -487,10 +506,19 @@ router.get("/:id/messages", async (req, res) => {
           userId: req.clientUser.userId,
         },
       },
-      data: { lastReadAt: new Date() },
+      data: { lastReadAt: readAt },
     });
 
-    return res.json({ success: true, messages: ordered });
+    req.app
+      .get("io")
+      ?.to(`conversation:${conversationId}`)
+      .emit("conversation:read", {
+        conversationId,
+        userId: req.clientUser.userId,
+        lastReadAt: readAt.toISOString(),
+      });
+
+    return res.json({ success: true, messages: ordered, readReceiptAt });
   } catch (error) {
     console.error("Failed to fetch messages:", error);
     return res

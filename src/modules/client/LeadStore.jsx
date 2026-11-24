@@ -50,6 +50,8 @@ import {
   ArrowUpDown,
   WrapText,
   Pin,
+  MoreVertical,
+  Megaphone,
 } from "lucide-react";
 
 import {
@@ -231,6 +233,7 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "assignedTo", label: "Assigned To" },
   { key: "temperature", label: "Lead Type" },
   { key: "status", label: "Status" },
+  { key: "dataset", label: "Dataset" },
   { key: "created", label: "Created" },
 ];
 
@@ -243,6 +246,7 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   assignedTo: true,
   temperature: true,
   status: true,
+  dataset: true,
   created: false,
 };
 
@@ -258,6 +262,7 @@ const DEFAULT_INDIVIDUAL_COLUMN_ORDER = [
   "temperature",
   "status",
   "intelligence",
+  "dataset",
   "created",
 ];
 
@@ -273,6 +278,7 @@ const INDIVIDUAL_COLUMN_LABELS = {
   temperature: "Lead Type",
   status: "Status",
   intelligence: "Lead Intelligence",
+  dataset: "Dataset",
   created: "Created",
 };
 
@@ -3102,71 +3108,6 @@ function MiniPill({
   );
 }
 
-function StoreMetric({
-  label,
-  value,
-  icon: Icon,
-  detail,
-  tone = "indigo",
-  onClick = null,
-  active = false,
-}) {
-  const tones = {
-    indigo:
-      "bg-indigo-50 text-indigo-600 border-indigo-100",
-    emerald:
-      "bg-emerald-50 text-emerald-600 border-emerald-100",
-    amber:
-      "bg-amber-50 text-amber-600 border-amber-100",
-    slate:
-      "bg-slate-50 text-slate-600 border-slate-200",
-  };
-
-  const Component = onClick ? "button" : "div";
-
-  return (
-    <Component
-      type={onClick ? "button" : undefined}
-      onClick={onClick || undefined}
-      className={`w-full text-left bg-white border rounded-xl p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
-        active
-          ? "border-indigo-300 ring-2 ring-indigo-100"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
-      } ${onClick ? "cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-200" : ""}`}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={`h-9 w-9 shrink-0 rounded-lg border flex items-center justify-center ${
-            tones[
-              tone
-            ] ||
-            tones.indigo
-          }`}
-        >
-          <Icon
-            size={17}
-            aria-hidden="true"
-          />
-        </div>
-
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-baseline gap-2">
-            <span className="shrink-0 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 tabular-nums">
-              {value}
-            </span>
-            <span className="truncate text-[12px] sm:text-[13px] font-semibold text-slate-700">
-              {label}
-            </span>
-          </div>
-
-          <div className="mt-1 truncate text-[11px] leading-4 text-slate-400">
-            {detail}
-          </div>
-        </div>
-      </div>
-    </Component>
-  );
-}
 
 export default function LeadStore({
   selectedYear = "all",
@@ -3315,6 +3256,76 @@ export default function LeadStore({
   );
   const [draggedColumn, setDraggedColumn] = useState("");
   const [columnOrderSaving, setColumnOrderSaving] = useState(false);
+
+  // ⋮ import/metrics menu beside the Import button (replaces the old KPI cards).
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
+  const importMenuBtnRef = useRef(null);
+  const importMenuRef = useRef(null);
+
+  // User-created columns ({ key, label, type: "Text" | "Number", visible }).
+  // Values are held client-side per lead+column (no custom-field API yet).
+  const [customColumns, setCustomColumns] = useState([]);
+  const [customColumnValues, setCustomColumnValues] = useState({});
+  const [newColumnName, setNewColumnName] = useState("");
+  const [newColumnType, setNewColumnType] = useState("Text");
+
+  const visibleCustomColumns = customColumns.filter((column) => column.visible);
+
+  function addCustomColumn() {
+    const name = newColumnName.trim();
+    if (!name) return;
+    const key = `cc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    setCustomColumns((current) => [
+      ...current,
+      { key, label: name, type: newColumnType, visible: true },
+    ]);
+    setNewColumnName("");
+    setSuccessMessage(`Column "${name}" (${newColumnType}) added`);
+  }
+
+  function removeCustomColumn(key) {
+    setCustomColumns((current) => current.filter((column) => column.key !== key));
+  }
+
+  function toggleCustomColumn(key) {
+    setCustomColumns((current) =>
+      current.map((column) =>
+        column.key === key ? { ...column, visible: !column.visible } : column
+      )
+    );
+  }
+
+  function setCustomColumnValue(leadId, key, value) {
+    setCustomColumnValues((current) => ({ ...current, [`${leadId}:${key}`]: value }));
+  }
+
+  useEffect(() => {
+    if (!importMenuOpen) return undefined;
+
+    function handlePointerDown(event) {
+      if (
+        importMenuRef.current?.contains(event.target) ||
+        importMenuBtnRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setImportMenuOpen(false);
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setImportMenuOpen(false);
+        importMenuBtnRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [importMenuOpen]);
 
   const [
     expandedCustomFields,
@@ -4288,7 +4299,7 @@ export default function LeadStore({
   );
 
   const visibleIndividualColumnCount =
-    2 + visibleOrderedColumnKeys.length;
+    2 + visibleOrderedColumnKeys.length + visibleCustomColumns.length;
 
   const individualCellPadding =
     individualDensity === "compact"
@@ -4379,7 +4390,13 @@ export default function LeadStore({
     const pos = orderedFrozen.indexOf(columnKey);
     let left = 40;
     for (let i = 0; i < pos; i += 1) left += freezeWidthOf(orderedFrozen[i]);
-    return { left, width: freezeWidthOf(columnKey) };
+    // isLast marks the right-most frozen column, which carries the divider line
+    // so users can see where the frozen region ends.
+    return {
+      left,
+      width: freezeWidthOf(columnKey),
+      isLast: pos === orderedFrozen.length - 1,
+    };
   }
 
   // Cycle a column through ascending -> descending -> unsorted.
@@ -4394,6 +4411,21 @@ export default function LeadStore({
       setSortDir("asc");
     }
   }
+
+  // Dataset name per lead (for the Dataset column + its sort). Declared before
+  // the sort memo below, which references it — a const used earlier would hit
+  // the temporal dead zone and crash the whole screen on render.
+  const datasetNameById = useMemo(() => {
+    const map = {};
+    datasets.forEach((dataset) => {
+      map[dataset.id] =
+        dataset.name ||
+        dataset.sourceName ||
+        dataset.sourceFileName ||
+        "Dataset";
+    });
+    return map;
+  }, [datasets]);
 
   // Sort the FULL filtered set before pagination so sort spans all pages.
   const sortedIndividualLeads = useMemo(() => {
@@ -4410,6 +4442,11 @@ export default function LeadStore({
           return String(lead.stage || lead.leadStatus || "").toLowerCase();
         case "assignedTo":
           return String(lead.assignedToName || "").toLowerCase();
+        case "dataset":
+          if (lead.datasetId)
+            return String(datasetNameById[lead.datasetId] || "").toLowerCase();
+          if (lead.campaign) return String(lead.campaign).toLowerCase();
+          return lead.isManual ? "manual" : "~";
         default:
           return String(lead[sortKey] ?? "").toLowerCase();
       }
@@ -4422,7 +4459,7 @@ export default function LeadStore({
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [filteredIndividualLeads, sortKey, sortDir]);
+  }, [filteredIndividualLeads, sortKey, sortDir, datasetNameById]);
 
   const paginatedIndividualLeads =
     sortedIndividualLeads.slice(
@@ -4859,12 +4896,14 @@ export default function LeadStore({
       temperature: "min-w-[110px]",
       status: "min-w-[145px]",
       intelligence: "min-w-[135px]",
+      dataset: "min-w-[150px] max-w-[200px]",
       created: "min-w-[125px]",
     }[columnKey] || "min-w-[120px]";
 
     return (
       <th
         key={columnKey}
+        scope="col"
         aria-sort={sortKey === columnKey ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
         onDragOver={(event) => {
           if (canReorderColumns) {
@@ -5114,6 +5153,40 @@ export default function LeadStore({
       );
     }
 
+    if (columnKey === "dataset") {
+      const datasetName = lead.datasetId
+        ? datasetNameById[lead.datasetId] || "Dataset"
+        : "";
+      return (
+        <td key={columnKey} className={`min-w-[150px] max-w-[200px] px-3 ${individualCellPadding}`}>
+          {lead.datasetId ? (
+            <span
+              title={`Imported from ${datasetName}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] font-medium text-slate-600"
+            >
+              <FileText size={12} className="shrink-0 text-indigo-500" aria-hidden="true" />
+              <span className="truncate">{datasetName}</span>
+            </span>
+          ) : lead.campaign ? (
+            <span
+              title={`Campaign: ${lead.campaign}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[12px] font-medium text-violet-700"
+            >
+              <Megaphone size={12} className="shrink-0 text-violet-500" aria-hidden="true" />
+              <span className="truncate">{lead.campaign}</span>
+            </span>
+          ) : lead.isManual ? (
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-400">
+              <Pencil size={12} aria-hidden="true" />
+              Manual
+            </span>
+          ) : (
+            <span className="text-[12px] font-semibold text-slate-300">—</span>
+          )}
+        </td>
+      );
+    }
+
     return (
       <td key={columnKey} title={formatDate(lead.createdAt)} className={`min-w-[125px] px-3 ${individualCellPadding} whitespace-nowrap text-[12px] text-slate-500`}>
         {formatDate(lead.createdAt)}
@@ -5231,17 +5304,36 @@ export default function LeadStore({
           eyebrow: "Lead Store / Datasets",
           title: "Import Batches",
           subtitle:
-            "Every file or batch imported into Lead Store for this period.",
-          columns: ["Batch", "Type", "Imported", "Duplicates", "Uploaded"],
+            "Every file or batch imported into Lead Store, with the details allocated at import.",
+          columns: [
+            "Batch",
+            "Type",
+            "Source",
+            "Assigned To",
+            "Imported",
+            "Duplicates",
+            "Converted",
+            "Uploaded",
+          ],
           empty: "No import batches yet.",
           rows: datasets.map((d) => (
             <tr key={d.id}>
-              <td className="px-4 py-3 font-semibold text-slate-800">{d.name}</td>
+              <td className="px-4 py-3 font-semibold text-slate-800">
+                {d.name}
+                {d.sourceFileName && d.sourceFileName !== d.name ? (
+                  <span className="mt-0.5 block text-[11px] font-normal text-slate-400">
+                    {d.sourceFileName}
+                  </span>
+                ) : null}
+              </td>
               <td className="px-4 py-3 text-slate-600">{d.typeLabel || d.type}</td>
+              <td className="px-4 py-3 text-slate-600">{d.sourceName || "—"}</td>
+              <td className="px-4 py-3 text-slate-600">{d.assignedTo || "Unassigned"}</td>
               <td className="px-4 py-3 text-slate-600">
                 {d.importedCount ?? d.count ?? 0}
               </td>
               <td className="px-4 py-3 text-slate-600">{d.duplicateCount || 0}</td>
+              <td className="px-4 py-3 font-semibold text-emerald-700">{d.converted || 0}</td>
               <td className="px-4 py-3 text-slate-500">
                 {formatDate(d.uploadedAt || d.createdAt)}
               </td>
@@ -5473,11 +5565,7 @@ export default function LeadStore({
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-            Data / Lead inventory
-          </div>
-
-          <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-950">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
             Lead Store
           </h1>
 
@@ -5547,49 +5635,104 @@ export default function LeadStore({
             />
             Import Leads
           </button>
+
+          <div className="relative">
+            <button
+              ref={importMenuBtnRef}
+              type="button"
+              onClick={() => setImportMenuOpen((open) => !open)}
+              aria-haspopup="true"
+              aria-expanded={importMenuOpen}
+              aria-controls="leadstore-import-menu"
+              aria-label="Import stats, batches and datasets"
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
+            </button>
+
+            {importMenuOpen && (
+              <div
+                id="leadstore-import-menu"
+                ref={importMenuRef}
+                aria-label="Imports and datasets"
+                className="absolute right-0 z-[60] mt-1.5 w-[300px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.18)]"
+              >
+                <div className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                  Imports &amp; datasets
+                </div>
+
+                {[
+                  {
+                    key: "datasets",
+                    label: "Import Batches",
+                    sub: "Datasets uploaded — open one to see its leads",
+                    count: datasets.length,
+                    noun: "batches",
+                    Icon: Database,
+                    tone: "bg-indigo-50 text-indigo-600",
+                  },
+                  {
+                    key: "imported",
+                    label: "Imported Leads",
+                    sub: "All leads brought in via import",
+                    count: importedLeads,
+                    noun: "leads",
+                    Icon: Users,
+                    tone: "bg-indigo-50 text-indigo-600",
+                  },
+                  {
+                    key: "duplicates",
+                    label: "Duplicates Skipped",
+                    sub: "Not leads — review & manage",
+                    count: duplicatesSkipped,
+                    noun: "duplicates",
+                    Icon: Layers3,
+                    tone: "bg-amber-50 text-amber-600",
+                  },
+                  {
+                    key: "converted",
+                    label: "Converted",
+                    sub: "Reached Admission Done",
+                    count: totalConverted,
+                    noun: "leads",
+                    Icon: UserCheck,
+                    tone: "bg-emerald-50 text-emerald-600",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => {
+                      setImportMenuOpen(false);
+                      openDetail(item.key);
+                    }}
+                    aria-label={`${item.label}, ${item.count.toLocaleString("en-IN")} ${item.noun}, open`}
+                    className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
+                  >
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
+                      aria-hidden="true"
+                    >
+                      <item.Icon size={16} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-semibold text-slate-800">
+                        {item.label}
+                      </span>
+                      <span className="block truncate text-[11px] text-slate-400">
+                        {item.sub}
+                      </span>
+                    </span>
+                    <span className="text-[16px] font-bold tabular-nums text-slate-900" aria-hidden="true">
+                      {item.count.toLocaleString("en-IN")}
+                    </span>
+                    <ChevronRight size={15} className="shrink-0 text-slate-300" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StoreMetric
-          label="Import Batches"
-          value={datasets.length}
-          icon={Database}
-          detail="Files / batches imported into Lead Store"
-          tone="indigo"
-          active={detailView === "datasets"}
-          onClick={() => openDetail("datasets")}
-        />
-
-        <StoreMetric
-          label="Imported Leads"
-          value={importedLeads.toLocaleString("en-IN")}
-          icon={Users}
-          detail="Leads created from imported datasets"
-          tone="slate"
-          active={detailView === "imported"}
-          onClick={() => openDetail("imported")}
-        />
-
-        <StoreMetric
-          label="Converted"
-          value={totalConverted.toLocaleString("en-IN")}
-          icon={UserCheck}
-          detail="Lead Store leads that reached Admission Done"
-          tone="emerald"
-          active={detailView === "converted"}
-          onClick={() => openDetail("converted")}
-        />
-
-        <StoreMetric
-          label="Duplicates Skipped"
-          value={duplicatesSkipped.toLocaleString("en-IN")}
-          icon={Layers3}
-          detail="Duplicate rows skipped during imports"
-          tone="amber"
-          active={detailView === "duplicates"}
-          onClick={() => openDetail("duplicates")}
-        />
       </div>
 
       {leadStoreMetricFilter && (
@@ -5722,6 +5865,74 @@ export default function LeadStore({
                           />
                         </label>
                       ))}
+
+                      {customColumns.map((column) => (
+                        <div key={column.key} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2 text-[13px] text-slate-700 hover:bg-slate-50">
+                          <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={column.visible}
+                              onChange={() => toggleCustomColumn(column.key)}
+                              className="h-4 w-4 shrink-0 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="truncate">{column.label}</span>
+                            <span className="shrink-0 rounded border border-slate-200 px-1 text-[9px] font-bold uppercase tracking-[0.04em] text-slate-400">
+                              {column.type}
+                            </span>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeCustomColumn(column.key)}
+                            aria-label={`Remove ${column.label} column`}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                          >
+                            <X size={13} aria-hidden="true" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-400">Create column</div>
+                      <div className="mt-2 space-y-2">
+                        <label className="block">
+                          <span className="mb-1 block text-[12px] font-semibold text-slate-600">Column name</span>
+                          <input
+                            type="text"
+                            value={newColumnName}
+                            onChange={(event) => setNewColumnName(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addCustomColumn();
+                              }
+                            }}
+                            placeholder="e.g. City, Budget, Batch year"
+                            className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                          />
+                        </label>
+                        <div className="flex items-end gap-2">
+                          <label className="min-w-0 flex-1">
+                            <span className="mb-1 block text-[12px] font-semibold text-slate-600">Type</span>
+                            <select
+                              value={newColumnType}
+                              onChange={(event) => setNewColumnType(event.target.value)}
+                              className="h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-semibold text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                            >
+                              <option value="Text">Text (alphabets)</option>
+                              <option value="Number">Number</option>
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            onClick={addCustomColumn}
+                            disabled={!newColumnName.trim()}
+                            className="h-9 shrink-0 rounded-lg bg-indigo-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="mt-3 border-t border-slate-100 pt-3">
@@ -6358,7 +6569,11 @@ export default function LeadStore({
                     const fz = freezeMeta(columnKey);
                     if (!fz) return th;
                     return cloneElement(th, {
-                      className: `${th.props.className} sticky z-[25] bg-slate-50`,
+                      className: `${th.props.className} sticky z-[25] bg-slate-50${
+                        fz.isLast
+                          ? " border-r-2 border-indigo-300 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                          : ""
+                      }`,
                       style: {
                         ...th.props.style,
                         left: fz.left,
@@ -6368,6 +6583,24 @@ export default function LeadStore({
                       },
                     });
                   })}
+
+                  {visibleCustomColumns.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      className="min-w-[140px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        {column.label}
+                        <span
+                          className="rounded border border-slate-200 px-1 text-[9px] font-bold text-slate-400"
+                          aria-hidden="true"
+                        >
+                          {column.type === "Number" ? "123" : "ABC"}
+                        </span>
+                      </span>
+                    </th>
+                  ))}
 
                   <th className="lg:sticky lg:right-0 z-20 min-w-[92px] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Actions
@@ -6435,6 +6668,10 @@ export default function LeadStore({
                                 selected
                                   ? "bg-indigo-50"
                                   : "bg-white group-hover:bg-slate-50"
+                              }${
+                                fz.isLast
+                                  ? " border-r-2 border-indigo-300 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                                  : ""
                               }`,
                               style: {
                                 ...cell.props.style,
@@ -6444,6 +6681,26 @@ export default function LeadStore({
                                 maxWidth: fz.width,
                               },
                             });
+                          })}
+
+                          {visibleCustomColumns.map((column) => {
+                            const valueKey = `${lead.id}:${column.key}`;
+                            return (
+                              <td
+                                key={column.key}
+                                className={`min-w-[140px] px-3 ${individualCellPadding}`}
+                              >
+                                <input
+                                  type={column.type === "Number" ? "number" : "text"}
+                                  value={customColumnValues[valueKey] ?? ""}
+                                  onChange={(event) =>
+                                    setCustomColumnValue(lead.id, column.key, event.target.value)
+                                  }
+                                  aria-label={`${column.label} for ${lead.name}`}
+                                  className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-[13px] text-slate-700 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                                />
+                              </td>
+                            );
                           })}
 
                           <td className={`lg:sticky lg:right-0 z-10 min-w-[92px] border-l border-slate-100 px-2 ${individualCellPadding} ${selected ? "bg-indigo-50" : "bg-white group-hover:bg-slate-50"}`}>

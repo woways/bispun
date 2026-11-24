@@ -313,6 +313,14 @@ export function attachSocketServer(httpServer, config) {
               },
               data: { lastReadAt: message.createdAt },
             });
+            // Let the sender's open thread turn this message's tick to read.
+            activeViewerIds.forEach((viewerId) =>
+              io.to(`conversation:${conversationId}`).emit("conversation:read", {
+                conversationId,
+                userId: viewerId,
+                lastReadAt: message.createdAt,
+              })
+            );
           }
         } catch (readError) {
           console.error("Unable to sync active chat read state:", readError);

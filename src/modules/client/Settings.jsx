@@ -41,11 +41,23 @@ import {
   EyeOff,
   Play,
   PhoneCall,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 
 import {
   apiRequest,
 } from "../../lib/api";
+
+import {
+  SCOPES,
+  TEAM_TEMPLATES,
+  levelPermissionsFromTemplateRole,
+  templateRolePercent,
+  levelPermissionPercent,
+  suggestLevelCode,
+  flagsFromComponents,
+} from "../../components/client/accessModel.js";
 
 import {
   getPrefs as getNotifSoundPrefs,
@@ -67,7 +79,6 @@ import PermissionTree, {
   normalizeClientPageAccess,
 } from "../../components/client/PermissionTree";
 import AccessTab from "../../components/client/AccessTab";
-import { flagsFromComponents } from "../../components/client/accessModel";
 
 const QUICK_BRAND_COLOR_KEYS = [
   "indigo",
@@ -922,6 +933,15 @@ export default function SettingsView({
   };
   const [organizationForm, setOrganizationForm] = useState(emptyOrganizationForm);
   const [usersManagementTab, setUsersManagementTab] = useState("users");
+  const [applyingTemplate, setApplyingTemplate] = useState(null);
+  const [appliedTemplate, setAppliedTemplate] = useState(null);
+  const [storedTemplateKey, setStoredTemplateKey] = useState(() => {
+    try {
+      return localStorage.getItem("bispun.appliedTemplate");
+    } catch {
+      return null;
+    }
+  });
 
   const [
     userSearch,
@@ -1018,6 +1038,77 @@ export default function SettingsView({
       setUsersError(err?.data?.message || "Unable to save level access");
     } finally {
       setLevelAccessSaving(false);
+    }
+  }
+
+  // Apply a team template: safe merge — create any missing levels and set their
+  // permissions, update matching ones by name. Never deletes a level or a user.
+  // The protected Admin level is left untouched (admin roles are skipped).
+  async function applyTeamTemplate(templateKey) {
+    const template = TEAM_TEMPLATES.find((t) => t.key === templateKey);
+    if (!template) return;
+    const roles = template.roles.filter((r) => !r.admin);
+    const existingNames = new Set(organization.levels.map((l) => String(l.name).toLowerCase()));
+    const toCreate = roles.filter((r) => !existingNames.has(r.name.toLowerCase()));
+    const toUpdate = roles.filter((r) => existingNames.has(r.name.toLowerCase()));
+    const summary =
+      `Apply "${template.name}"?\n\n` +
+      `• Create ${toCreate.length} new level${toCreate.length === 1 ? "" : "s"}: ${toCreate.map((r) => r.name).join(", ") || "none"}\n` +
+      `• Update permissions on ${toUpdate.length} existing level${toUpdate.length === 1 ? "" : "s"}: ${toUpdate.map((r) => r.name).join(", ") || "none"}\n\n` +
+      `No levels or users are deleted. Administrator access is unchanged.`;
+    if (!window.confirm(summary)) return;
+
+    setApplyingTemplate(templateKey);
+    setUsersError("");
+    try {
+      let levels = organization.levels;
+      let created = 0;
+      let updated = 0;
+      const takenCodes = new Set(levels.map((l) => String(l.code || "").toUpperCase()));
+      let nextRank = levels.reduce((max, l) => Math.max(max, Number(l.rank) || 0), 0);
+
+      for (const role of roles) {
+        const permissions = levelPermissionsFromTemplateRole(role);
+        permissions.flags = flagsFromComponents(permissions.components);
+        let level = levels.find((l) => String(l.name).toLowerCase() === role.name.toLowerCase());
+        if (!level) {
+          const code = suggestLevelCode(role.name, [...takenCodes]);
+          takenCodes.add(code);
+          nextRank += 1;
+          const createData = await apiRequest("/api/client/users/levels", {
+            method: "POST",
+            body: JSON.stringify({ name: role.name, code, rank: nextRank, description: role.role || "" }),
+          });
+          levels = createData.levels || levels;
+          level = levels.find((l) => String(l.name).toLowerCase() === role.name.toLowerCase());
+          created += 1;
+        } else {
+          updated += 1;
+        }
+        if (!level) continue;
+        const accessData = await apiRequest(`/api/client/users/levels/${level.id}/access`, {
+          method: "PATCH",
+          body: JSON.stringify({ permissions }),
+        });
+        levels = accessData.levels || levels;
+      }
+
+      setOrganization((prev) => ({ ...prev, levels }));
+      await loadUsers();
+      setAppliedTemplate(templateKey);
+      setStoredTemplateKey(templateKey);
+      try {
+        localStorage.setItem("bispun.appliedTemplate", templateKey);
+      } catch {
+        /* localStorage unavailable — session state still reflects it */
+      }
+      showSettingsSuccess(
+        `"${template.name}" applied — ${created} level${created === 1 ? "" : "s"} created, ${updated} updated.`
+      );
+    } catch (error) {
+      setUsersError(error?.data?.message || "Unable to apply template");
+    } finally {
+      setApplyingTemplate(null);
     }
   }
 
@@ -3300,6 +3391,7 @@ export default function SettingsView({
 
               <div className="inline-flex max-w-full items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                 {[
+                  ["templates", "Templates", TEAM_TEMPLATES.length],
                   ["users", "Users", users.length],
                   ["departments", "Departments", organization.departments.length],
                   ["levels", "Levels", organization.levels.length],
@@ -3518,67 +3610,45 @@ export default function SettingsView({
                         onClick={() => openOrganizationModal("department")}
                         className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700"
                       >
-                        <Plus size={14} />
+                        <Plus size={14} aria-hidden="true" />
                         Add Department
                       </button>
                     )}
                   </div>
 
-                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    <div className="divide-y divide-slate-100">
+                  {organization.departments.length ? (
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {organization.departments.map((department) => {
-                        const memberCount = users.filter(
-                          (user) => user.department === department.name
-                        ).length;
-
+                        const memberCount = users.filter((user) => user.department === department.name).length;
                         return (
-                          <div
-                            key={department.id}
-                            className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-slate-50/70"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[13px] font-semibold text-slate-800">
-                                  {department.name}
-                                </span>
-                                <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
-                                  {department.code}
-                                </span>
-                                {department.system && (
-                                  <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">
-                                    Default
-                                  </span>
-                                )}
+                          <div key={department.id} className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-[15px] font-bold text-slate-900">{department.name}</div>
+                                <div className="mt-0.5 font-mono text-[11px] text-slate-400">{department.code}</div>
                               </div>
-                              <div className="mt-1 text-[11px] text-slate-400">
-                                {memberCount} {memberCount === 1 ? "member" : "members"}
-                              </div>
+                              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><Building size={18} aria-hidden="true" /></span>
                             </div>
-
-                            {!department.system && currentUser?.role === "CLIENT_ADMIN" && (
-                              <div className="flex items-center gap-1">
-                              <button type="button" onClick={() => openEditOrganizationModal("department", department)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Edit department"><Pencil size={13}/></button>
-                              <button
-                                type="button"
-                                onClick={() => deleteOrganizationItem("department", department.id)}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                                title="Delete department"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                              </div>
-                            )}
+                            {department.description && <div className="text-[12.5px] leading-relaxed text-slate-500">{department.description}</div>}
+                            <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px] text-slate-500">
+                              <span className="inline-flex items-center gap-2">
+                                {department.system && <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Default</span>}
+                                {memberCount} {memberCount === 1 ? "member" : "members"}
+                              </span>
+                              {!department.system && currentUser?.role === "CLIENT_ADMIN" && (
+                                <span className="flex items-center gap-1">
+                                  <button type="button" onClick={() => openEditOrganizationModal("department", department)} aria-label={`Edit ${department.name}`} title="Edit department" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Pencil size={13} aria-hidden="true" /></button>
+                                  <button type="button" onClick={() => deleteOrganizationItem("department", department.id)} aria-label={`Delete ${department.name}`} title="Delete department" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Trash2 size={13} aria-hidden="true" /></button>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
-
-                      {!organization.departments.length && (
-                        <div className="px-4 py-12 text-center text-[13px] text-slate-400">
-                          No departments yet.
-                        </div>
-                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-[13px] text-slate-400">No departments yet.</div>
+                  )}
                 </div>
               )}
 
@@ -3664,6 +3734,85 @@ export default function SettingsView({
                 </div>
               )}
 
+              {usersManagementTab === "templates" && (
+                <div className="space-y-5">
+                  <p className="flex items-center gap-2 text-[13px] text-slate-500">
+                    <Sparkles size={16} aria-hidden="true" className="shrink-0 text-indigo-600" />
+                    Pick a template — it creates your levels and their access. Then add people and assign a level.
+                  </p>
+
+                  {appliedTemplate && (
+                    <div role="status" className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[13px] font-semibold text-emerald-700">
+                      <Check size={16} aria-hidden="true" />
+                      <span><b>{TEAM_TEMPLATES.find((t) => t.key === appliedTemplate)?.name}</b> applied. Next: add users &amp; assign a level.</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <h3 className="text-[14px] font-bold text-slate-900">Team templates</h3>
+                    <div className="mt-0.5 text-[12px] text-slate-500">Applying one creates any missing levels and sets their permissions. Existing levels and users are never deleted.</div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    {TEAM_TEMPLATES.map((tpl) => {
+                      const isApplied = (appliedTemplate || storedTemplateKey) === tpl.key;
+                      return (
+                      <div key={tpl.key} className={`flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm ${isApplied ? "border-indigo-300 ring-2 ring-indigo-500/60" : "border-slate-200"}`}>
+                        <div className="border-b border-slate-100 p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-600">{tpl.tagline} · {tpl.roles.length} levels</div>
+                            {isApplied && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                                <Check size={12} strokeWidth={3} aria-hidden="true" /> Applied
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 text-[16px] font-bold text-slate-900">{tpl.name}</div>
+                        </div>
+                        <ul className="flex-1 px-4 py-2">
+                          {tpl.roles.map((r) => (
+                            <li key={r.name} className="flex items-center justify-between gap-3 border-b border-dashed border-slate-100 py-2 last:border-0">
+                              <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-800">{r.name}</span>
+                              <span
+                                aria-label={r.admin ? `${r.name}, full permissions` : `${r.name}, ${Math.round(templateRolePercent(r) * 100)}% of permissions`}
+                                className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${r.admin ? "bg-emerald-50 text-emerald-700" : "bg-indigo-50 text-indigo-600"}`}
+                              >
+                                {r.admin ? "Full" : `${Math.round(templateRolePercent(r) * 100)}%`}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex gap-2 border-t border-slate-100 bg-slate-50 p-3">
+                          <button
+                            type="button"
+                            disabled={currentUser?.role !== "CLIENT_ADMIN" || applyingTemplate !== null}
+                            aria-busy={applyingTemplate === tpl.key}
+                            aria-label={`${isApplied ? "Re-apply" : "Apply"} ${tpl.name}`}
+                            onClick={() => applyTeamTemplate(tpl.key)}
+                            className="inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {applyingTemplate === tpl.key ? "Applying…" : isApplied ? "Re-apply" : "Apply"}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Preview ${tpl.name}`}
+                            onClick={() => setUsersManagementTab("access")}
+                            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                          >
+                            Preview <ArrowRight size={14} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </div>
+                      );
+                    })}
+                  </div>
+
+                  {currentUser?.role !== "CLIENT_ADMIN" && (
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can apply templates.</div>
+                  )}
+                </div>
+              )}
+
               {usersManagementTab === "levels" && (() => {
                 const items = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
                 const type = "level";
@@ -3678,41 +3827,53 @@ export default function SettingsView({
                       </div>
                       {currentUser?.role === "CLIENT_ADMIN" && (
                         <button type="button" onClick={() => openOrganizationModal(type)} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm hover:bg-indigo-700">
-                          <Plus size={14} /> Add Level
+                          <Plus size={14} aria-hidden="true" /> Add Level
                         </button>
                       )}
                     </div>
-                    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                      <div className="divide-y divide-slate-100">
+                    {items.length ? (
+                      <div className="space-y-3">
                         {items.map((item) => {
                           const memberCount = users.filter((user) => user.levelId === item.id).length;
+                          const admin = String(item.name).trim().toLowerCase() === "admin" || String(item.code).trim().toUpperCase() === "ADM";
+                          const pct = admin ? 100 : Math.round(levelPermissionPercent(item.permissions) * 100);
+                          const scopeLbl = admin ? "Everyone" : (SCOPES.find((s) => s[0] === item.permissions?.scope)?.[1] || "Only themselves");
                           return (
-                            <div key={item.id} className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-slate-50/70">
-                              <div className="min-w-0">
+                            <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
+                              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[15px] font-extrabold text-indigo-600">L{item.rank}</span>
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[13px] font-semibold text-slate-800">{item.name}</span>
+                                  <span className="text-[15px] font-bold text-slate-900">{item.name}</span>
                                   <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{item.code}</span>
-                                  <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Rank {item.rank}</span>
-                                  {item.system && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Default</span>}
-                                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${item.active !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{item.active !== false ? "Active" : "Inactive"}</span>
+                                  {admin && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Protected</span>}
+                                  {item.system && !admin && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Default</span>}
+                                  {item.active === false && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Inactive</span>}
                                 </div>
-                                {item.description && <div className="mt-1 text-[12px] text-slate-500">{item.description}</div>}
-                                <div className="mt-1 text-[11px] text-slate-400">{memberCount} {memberCount === 1 ? "member" : "members"}</div>
+                                <div className="mt-1 text-[12px] text-slate-500">Scope: {scopeLbl} · {memberCount} user{memberCount === 1 ? "" : "s"}</div>
+                              </div>
+                              <div className="w-full sm:w-44">
+                                <div role="progressbar" aria-label={`Permission coverage for ${item.name}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-valuetext={admin ? "Full access" : `${pct}% of permissions`} className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                  <span className="block h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
+                                </div>
+                                <div className="mt-1 text-[11px] text-slate-400">{admin ? "Full access" : `${pct}% of permissions`}</div>
                               </div>
                               {currentUser?.role === "CLIENT_ADMIN" && (
-                                <div className="flex items-center gap-1">
-                                  <button type="button" onClick={() => moveLevel(item.id, -1)} disabled={item.rank <= 1} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level up">↑</button>
-                                  <button type="button" onClick={() => moveLevel(item.id, 1)} disabled={item.rank >= items.length} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-30" title="Move level down">↓</button>
-                                  <button type="button" onClick={() => openEditOrganizationModal(type, item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title={`Edit ${type}`}><Pencil size={13}/></button>
-                                  {!item.system && <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600" title={`Delete ${type}`}><Trash2 size={13}/></button>}
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <button type="button" onClick={openCreateUser} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Plus size={13} aria-hidden="true" /> Add user</button>
+                                  <button type="button" onClick={() => setUsersManagementTab("access")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><KeyRound size={13} aria-hidden="true" /> Edit access</button>
+                                  <button type="button" onClick={() => moveLevel(item.id, -1)} disabled={item.rank <= 1} aria-label={`Move ${item.name} up`} title="Move level up" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-30">↑</button>
+                                  <button type="button" onClick={() => moveLevel(item.id, 1)} disabled={item.rank >= items.length} aria-label={`Move ${item.name} down`} title="Move level down" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-30">↓</button>
+                                  <button type="button" onClick={() => openEditOrganizationModal(type, item)} aria-label={`Edit ${item.name}`} title="Edit level" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Pencil size={13} aria-hidden="true" /></button>
+                                  {!item.system && <button type="button" onClick={() => deleteOrganizationItem(type, item.id)} aria-label={`Delete ${item.name}`} title="Delete level" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Trash2 size={13} aria-hidden="true" /></button>}
                                 </div>
                               )}
                             </div>
                           );
                         })}
-                        {!items.length && <div className="px-4 py-12 text-center text-[13px] text-slate-400">No levels yet.</div>}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-[13px] text-slate-400">No levels yet.</div>
+                    )}
                   </div>
                 );
               })()}
@@ -3878,7 +4039,7 @@ export default function SettingsView({
                                   }
                                   className={`relative w-10 h-6 rounded-full transition-colors ${
                                     source.showInForms
-                                      ? "bg-emerald-600"
+                                      ? "bg-indigo-600"
                                       : "bg-slate-200"
                                   }`}
                                 >
@@ -4079,7 +4240,7 @@ export default function SettingsView({
                                   }
                                   className={`relative w-10 h-6 rounded-full transition-colors ${
                                     field.showInForms
-                                      ? "bg-emerald-600"
+                                      ? "bg-indigo-600"
                                       : "bg-slate-200"
                                   }`}
                                 >

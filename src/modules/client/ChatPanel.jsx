@@ -27,7 +27,6 @@ import {
   MessageSquare,
   ChevronLeft,
   Check,
-  Archive,
   Mail,
   Reply,
   MoreVertical,
@@ -133,7 +132,7 @@ function escapeRegExp(value) {
 
 // Highlights "@Name" tokens in a message body when the name matches a known
 // group member. Returns a string (no mentions) or an array of React nodes.
-function renderBodyWithMentions(body, memberNames) {
+function renderBodyWithMentions(body, memberNames, mine = false) {
   const text = String(body || "");
   const names = (Array.isArray(memberNames) ? memberNames : [])
     .map((name) => String(name || "").trim())
@@ -156,7 +155,11 @@ function renderBodyWithMentions(body, memberNames) {
     nodes.push(
       <span
         key={`mention-${key++}`}
-        className="rounded bg-indigo-100 px-0.5 font-semibold text-indigo-700"
+        className={`rounded px-1 font-semibold ${
+          mine
+            ? "bg-white/10 text-white underline decoration-white/50 underline-offset-2"
+            : "bg-indigo-100 text-indigo-700"
+        }`}
       >
         {match[0]}
       </span>
@@ -317,6 +320,8 @@ export default function ChatPanel({
   const [composerEmojiCategory, setComposerEmojiCategory] = useState("Smileys");
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState("");
+  const [convFilter, setConvFilter] = useState("all"); // all | unread | groups | favourites
+  const [othersReadAt, setOthersReadAt] = useState(null); // read-receipt cursor (ISO) for the open chat
   const [replyTo, setReplyTo] = useState(null);
   const [messageMenuId, setMessageMenuId] = useState(null);
   const [messageReactionMoreId, setMessageReactionMoreId] = useState(null);
@@ -590,6 +595,7 @@ export default function ChatPanel({
   const threadScrollRef = useRef(null);
   const composerRef = useRef(null);
   const activeIdRef = useRef(null);
+  const activeIsGroupRef = useRef(false);
   const targetConversationHandledRef = useRef(null);
 
   // Mobile layout + keyboard-safe height (below lg only; desktop keeps the
@@ -705,6 +711,22 @@ export default function ChatPanel({
       });
     });
 
+    // Read receipts: another member advanced their read cursor. For a 1-to-1
+    // chat this directly turns the sender's ticks blue. Groups recompute
+    // "read by everyone" from the server on the next open (avoids a false
+    // "read" when only one of several members has seen it).
+    socket.on("conversation:read", ({ conversationId, userId, lastReadAt }) => {
+      if (conversationId !== activeIdRef.current) return;
+      if (userId === myId) return;
+      if (activeIsGroupRef.current) return;
+      if (!lastReadAt) return;
+      setOthersReadAt((current) => {
+        const next = new Date(lastReadAt).getTime();
+        if (!current) return lastReadAt;
+        return next > new Date(current).getTime() ? lastReadAt : current;
+      });
+    });
+
     socket.on("message:reaction", ({ messageId, reactions }) => {
       setMessages((current) =>
         current.map((message) =>
@@ -797,9 +819,11 @@ export default function ChatPanel({
   async function loadMessages(conversationId) {
     setLoadingThread(true);
     setError("");
+    setOthersReadAt(null);
     try {
       const data = await apiRequest(`/api/client/chat/${conversationId}/messages`);
       setMessages(Array.isArray(data.messages) ? data.messages : []);
+      setOthersReadAt(data.readReceiptAt || null);
     } catch (err) {
       setError(err?.data?.message || "Unable to load messages");
     } finally {
@@ -1669,6 +1693,11 @@ export default function ChatPanel({
     () => conversations.find((c) => c.id === activeId) || null,
     [conversations, activeId]
   );
+  activeIsGroupRef.current = Boolean(activeConversation?.isGroup);
+
+  // Read-receipt cursor for the open chat, as a timestamp. A message I sent is
+  // "read" when its createdAt is at or before this.
+  const readCursorMs = othersReadAt ? new Date(othersReadAt).getTime() : 0;
 
   const mentionCandidates = useMemo(() => {
     if (!mention || !activeConversation?.isGroup) return [];
@@ -1696,6 +1725,13 @@ export default function ChatPanel({
   const filteredConversations = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = conversations.filter((c) => !c.isArchived);
+    if (convFilter === "unread") {
+      list = list.filter((c) => (c.unreadCount || 0) > 0 && !c.isMuted);
+    } else if (convFilter === "groups") {
+      list = list.filter((c) => c.isGroup);
+    } else if (convFilter === "favourites") {
+      list = list.filter((c) => c.isFavorite);
+    }
     if (q) {
       list = list.filter((c) =>
         String(c.title || "").toLowerCase().includes(q) ||
@@ -1703,7 +1739,7 @@ export default function ChatPanel({
       );
     }
     return list;
-  }, [conversations, search]);
+  }, [conversations, search, convFilter]);
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
@@ -1782,9 +1818,9 @@ export default function ChatPanel({
         </div>
       )}
 
-      <div className="m-0 flex min-h-0 flex-1 overflow-hidden rounded-none border-0 bg-white shadow-none lg:mx-7 lg:mb-5 lg:rounded-[16px] lg:border lg:border-neutral-200 lg:shadow-[0_2px_8px_rgba(0,0,0,0.05)]">
+      <div className="m-0 flex min-h-0 flex-1 overflow-hidden bg-white lg:mx-1 lg:mb-1 lg:mt-1 lg:gap-3 lg:overflow-visible lg:bg-transparent">
         {/* LEFT NAV + CHAT LIST */}
-        <div className={`w-full flex-shrink-0 border-r border-slate-200 bg-white lg:flex lg:w-[350px] lg:flex-col ${activeId ? "hidden" : "flex flex-col"}`}>
+        <div role="region" aria-label="Conversations" className={`w-full flex-shrink-0 bg-white lg:flex lg:w-[316px] lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:shadow-[0_1px_8px_rgba(0,0,0,0.05)] ${activeId ? "hidden" : "flex flex-col"}`}>
           <div className="flex h-[66px] items-center justify-between border-b border-neutral-200 px-4">
             <div className="flex items-center gap-3">
               <button
@@ -1834,7 +1870,7 @@ export default function ChatPanel({
                   {canDeleteChats && (
                     <button type="button" onClick={() => setSelectionMode(true)} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Select chats" title="Select chats"><ListChecks size={16} /></button>
                   )}
-                  <button type="button" onClick={openNewChat} className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-neutral-300 bg-white px-3.5 text-[13px] font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50"><Plus size={14} />New</button>
+                  <button type="button" onClick={openNewChat} className="inline-flex h-9 items-center gap-2 rounded-[9px] bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2"><Plus size={14} aria-hidden="true" />New</button>
                 </>
               )}
             </div>
@@ -1852,6 +1888,38 @@ export default function ChatPanel({
               />
             </div>
           </div>
+
+          {!selectionMode && (
+            <div
+              role="group"
+              aria-label="Filter conversations"
+              className="flex flex-wrap gap-1.5 px-3 pb-2"
+            >
+              {[
+                { key: "all", label: "All" },
+                { key: "unread", label: "Unread" },
+                { key: "groups", label: "Groups" },
+                { key: "favourites", label: "Favourites" },
+              ].map((f) => {
+                const on = convFilter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setConvFilter(f.key)}
+                    className={`rounded-full px-3 py-1 text-[12.5px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+                      on
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "border border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loadingList ? (
@@ -1903,7 +1971,7 @@ export default function ChatPanel({
         </div>
 
         {/* CENTER THREAD */}
-        <div className={`relative min-h-0 min-w-0 flex-1 flex-col ${activeId ? "flex" : "hidden lg:flex"}`}>
+        <div role="region" aria-label={activeConversation ? `Chat with ${activeConversation.title}` : "Conversation thread"} className={`relative min-h-0 min-w-0 flex-1 flex-col bg-white lg:overflow-hidden lg:rounded-2xl lg:shadow-[0_1px_8px_rgba(0,0,0,0.05)] ${activeId ? "flex" : "hidden lg:flex"}`}>
           {activeConversation ? (
             <>
               <div className="flex h-[66px] flex-shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4">
@@ -1921,7 +1989,7 @@ export default function ChatPanel({
                     className="min-w-0 flex-1 rounded-lg py-1 text-left hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
                     <span className="block truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</span>
-                    <span className="block truncate text-[13px] text-slate-500">{(() => { const ms = (activeConversation.members || []).filter(Boolean); const names = ms.map(m => m.id === currentUser?.id ? "You" : (m.name || "Unknown")); if (names.length === 0) return "No members"; if (names.length <= 4) return names.join(", "); return `${names.slice(0, 3).join(", ")} +${names.length - 3} more`; })()}</span>
+                    <span className="block truncate text-[13px] text-slate-500">{(() => { const n = (activeConversation.members || []).filter(Boolean).length; if (n === 0) return "No members"; return `${n} member${n === 1 ? "" : "s"}`; })()}</span>
                   </button>
                 ) : (
                   <div className="min-w-0 flex-1">
@@ -1963,9 +2031,18 @@ export default function ChatPanel({
                     <MoreVertical size={17} />
                   </button>
                   {headerMenuOpen && (
-                    <div className="absolute right-0 top-11 z-40 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                    <div className="absolute right-0 top-11 z-40 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl">
+                      <button type="button" onClick={() => { toggleFavorite(activeConversation); announceChat(activeConversation.isFavorite ? "Removed from favourites" : "Added to favourites"); setHeaderMenuOpen(false); }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50">
+                        <Star size={14} aria-hidden="true" className={activeConversation.isFavorite ? "fill-amber-400 text-amber-400" : ""} />
+                        {activeConversation.isFavorite ? "Remove from favourites" : "Add to favourites"}
+                      </button>
+                      <button type="button" onClick={() => { toggleMute(activeConversation); announceChat(activeConversation.isMuted ? "Unmuted" : "Muted"); setHeaderMenuOpen(false); }} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50">
+                        {activeConversation.isMuted ? <Bell size={14} aria-hidden="true" /> : <BellOff size={14} aria-hidden="true" />}
+                        {activeConversation.isMuted ? "Unmute" : "Mute"}
+                      </button>
+                      <div className="my-1 border-t border-slate-100" />
                       {activeConversation.isGroup ? (
-                        <button type="button" onClick={renameGroup} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil size={14} />Rename group</button>
+                        <button type="button" onClick={renameGroup} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil size={14} aria-hidden="true" />Rename group</button>
                       ) : (
                         <button type="button" onClick={setChatNickname} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50"><Pencil size={14} />Rename (only you)</button>
                       )}
@@ -1993,11 +2070,19 @@ export default function ChatPanel({
               )}
 
               {pinnedMessages.length > 0 && (
-                <div className="border-b border-amber-200 bg-amber-50/80 px-4 py-2">
-                  <div className="flex items-center gap-2 text-[12px] font-bold text-amber-700">
-                    <Pin size={11} /> {pinnedMessages.length} pinned message{pinnedMessages.length > 1 ? "s" : ""}
-                    <span className="min-w-0 flex-1 truncate font-medium text-amber-900">{pinnedMessages[0]?.body}</span>
-                  </div>
+                <div className="flex items-center gap-2 border-b border-neutral-200 bg-indigo-50 px-4 py-2 text-[12.5px] text-slate-600">
+                  <Pin size={13} aria-hidden="true" className="flex-shrink-0 text-indigo-600" />
+                  <span className="min-w-0 flex-1 truncate">
+                    <span className="font-bold text-slate-900">Pinned:</span> {pinnedMessages[0]?.body}
+                  </span>
+                  {pinnedMessages.length > 1 && (
+                    <span
+                      aria-label={`${pinnedMessages.length - 1} more pinned message${pinnedMessages.length - 1 === 1 ? "" : "s"}`}
+                      className="flex-shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-700"
+                    >
+                      +{pinnedMessages.length - 1}
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -2047,7 +2132,8 @@ export default function ChatPanel({
                           )}
 
                           <div className={`flex max-w-[76%] flex-col sm:max-w-[70%] ${mine ? "items-end" : "items-start"}`}>
-                            <div className={`cb-bubble cb-fade-in-up relative px-4 py-2.5 text-[14px] leading-5.5 ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-50 text-neutral-900" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
+                            <div className={`cb-bubble cb-fade-in-up relative px-4 py-2.5 text-[14px] leading-5.5 ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-600 text-white" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
+                              <span className="sr-only">{mine ? "You" : m.sender?.name || "Member"}: </span>
                               {!mine && activeConversation.isGroup && <div className="mb-1 text-[13px] font-semibold text-indigo-600">{m.sender?.name}</div>}
 
                               {m.replyTo && (
@@ -2062,7 +2148,7 @@ export default function ChatPanel({
                               )}
 
                               {m.deletedForEveryone ? (
-                                <div className="flex items-center gap-2 italic text-slate-500">
+                                <div className={`flex items-center gap-2 italic ${mine ? "text-white/80" : "text-slate-500"}`}>
                                   <Trash2 size={13} /> This message was deleted
                                 </div>
                               ) : room ? (
@@ -2074,7 +2160,7 @@ export default function ChatPanel({
                                   <button
                                     type="button"
                                     onClick={() => joinMeeting(room)}
-                                    className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[13px] font-bold text-white hover:bg-indigo-700"
+                                    className={`rounded-lg px-3 py-1.5 text-[13px] font-bold transition ${mine ? "bg-white text-indigo-700 hover:bg-indigo-50" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
                                   >
                                     Join
                                   </button>
@@ -2085,7 +2171,8 @@ export default function ChatPanel({
                                     m.body,
                                     (activeConversation.members || []).filter(Boolean).map(
                                       (mem) => mem.name
-                                    )
+                                    ),
+                                    mine
                                   )}
                                 </div>
                               ) : null}
@@ -2154,7 +2241,7 @@ export default function ChatPanel({
                                 </div>
                               ) : null}
 
-                              <div className="mt-1.5 flex items-center justify-end gap-1 text-right text-[11px] text-neutral-400">
+                              <div className={`mt-1.5 flex items-center justify-end gap-1 text-right text-[11px] ${mine ? "text-white/90" : "text-neutral-400"}`}>
                                 {m.starred && (
                                   <Star
                                     size={10}
@@ -2162,7 +2249,34 @@ export default function ChatPanel({
                                     aria-label="Starred message"
                                   />
                                 )}
-                                {formatTime(m.createdAt)}
+                                <span>{formatTime(m.createdAt)}</span>
+                                {mine && !m.deletedForEveryone && !m.isSystem ? (() => {
+                                  const isRead =
+                                    readCursorMs > 0 &&
+                                    new Date(m.createdAt).getTime() <= readCursorMs;
+                                  return (
+                                    <span
+                                      role="img"
+                                      aria-label={isRead ? "Read" : "Sent"}
+                                      className={`ml-0.5 inline-flex ${isRead ? "text-sky-300" : "text-white"}`}
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.6"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                      >
+                                        <path d="M1.5 12.5l4 4 8-9" />
+                                        {isRead && <path d="M8.5 16.5l1.8 1.8 8-9" />}
+                                      </svg>
+                                    </span>
+                                  );
+                                })() : null}
                               </div>
                             </div>
 
@@ -2744,7 +2858,10 @@ export default function ChatPanel({
           <div className="fixed inset-0 z-[150] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
             <div ref={membersRef} role="dialog" aria-modal="true" aria-labelledby="members-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-                <h2 id="members-title" className="text-[14px] font-semibold text-slate-950">Members ({activeMembers.length})</h2>
+                <h2 id="members-title" className="text-[14px] font-semibold text-slate-950">
+                  Members{" "}
+                  <span aria-live="polite" className="font-medium text-slate-500">({activeMembers.length})</span>
+                </h2>
                 <button type="button" onClick={() => { setMembersOpen(false); setAddMemberOpen(false); setAddMemberIds([]); }} aria-label="Close members" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
               </div>
 
@@ -2754,13 +2871,16 @@ export default function ChatPanel({
                   const isCreator = activeConversation.createdByUserId === mem.id;
                   const showRemove = (canManage || isSelf) && activeMembers.length > 1;
                   return (
-                    <li key={mem.id} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-50">
-                      <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-[12px] font-black text-white ${avatarGradient(mem.name)}`}>
+                    <li key={mem.id} className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50">
+                      <span className={`flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br text-[13px] font-bold text-white ${avatarGradient(mem.name)}`}>
                         {mem.avatarUrl ? <img src={mem.avatarUrl} alt="" aria-hidden="true" className="h-full w-full object-cover" /> : initialsOf(mem.name)}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-semibold text-slate-900">{mem.name}{isSelf ? " (You)" : ""}{isCreator ? " · Admin" : ""}</span>
-                        <span className="block truncate text-[13px] text-slate-500">{mem.email}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="truncate text-[14px] font-semibold text-slate-900">{mem.name}{isSelf ? " (You)" : ""}</span>
+                          {isCreator && <span className="flex-shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-indigo-600">Admin</span>}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[12.5px] text-slate-500">{mem.email}</span>
                       </span>
                       {showRemove ? (
                         <button type="button" onClick={() => removeMember(mem.id, mem.name)} disabled={memberBusy} aria-label={isSelf ? "Leave group" : `Remove ${mem.name} from group`} className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-40">
