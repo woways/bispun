@@ -1355,11 +1355,11 @@ export default function CalendarModal({
 
         {/* BODY: left mini-month + agenda, right week grid */}
 
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 bg-slate-50/70 p-3 lg:flex-row">
 
           {/* LEFT PANEL */}
 
-          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto border-b border-slate-200 bg-white lg:w-[300px] lg:flex-none lg:flex-shrink-0 lg:border-b-0 lg:border-r">
+          <div className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white lg:w-[300px] lg:flex-none lg:flex-shrink-0">
 
             {/* Mini-month */}
 
@@ -1548,6 +1548,39 @@ export default function CalendarModal({
 
 
 
+            {/* STATUS LEGEND */}
+            <div className="border-t border-slate-200 px-4 py-3.5">
+              <h3
+                id="calendar-status-legend"
+                className="mb-2.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400"
+              >
+                Status
+              </h3>
+              <ul
+                aria-labelledby="calendar-status-legend"
+                className="space-y-2.5"
+              >
+                {[
+                  ["Scheduled", "border-sky-500"],
+                  ["Completed", "border-emerald-500"],
+                  ["Cancelled", "border-rose-500"],
+                ].map(([label, ring]) => (
+                  <li
+                    key={label}
+                    className="flex items-center gap-2.5 text-[13px] font-medium text-slate-700"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-3.5 w-3.5 flex-shrink-0 rounded-full border-2 bg-white ${ring}`}
+                    />
+                    {label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+
+
             {/* AGENDA FOR SELECTED DAY */}
 
             <div className="border-t border-slate-200 px-4 py-3.5">
@@ -1665,7 +1698,7 @@ export default function CalendarModal({
           {/* RIGHT: WEEK GRID (desktop only — mobile uses the month picker +
               selected-day agenda in the left panel above). */}
 
-          <div className="hidden min-h-0 min-w-0 flex-1 flex-col lg:flex">
+          <div className="hidden min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white lg:flex">
 
             {/* View toolbar */}
 
@@ -2913,7 +2946,7 @@ function FragmentRow({
 
             onClick={() => onSlotClick(day, hour)}
 
-            className="relative h-[64px] cursor-pointer border-b border-r border-slate-300 bg-blue-50/50 px-1.5 py-1 transition hover:bg-blue-100/60"
+            className="relative h-[64px] cursor-pointer border-b border-r border-slate-300 bg-white px-1.5 py-1 transition hover:bg-slate-50"
 
           >
 
