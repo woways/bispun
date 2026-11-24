@@ -182,6 +182,21 @@ const FULL_WEEKDAYS = [
   "Saturday",
 ];
 
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 
@@ -1365,49 +1380,65 @@ export default function CalendarModal({
 
             <div className="p-4">
 
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between gap-1">
 
-                <div className="text-[14px] font-extrabold tracking-[-0.01em] text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => setAnchorDate((d) => addMonths(d, -1))}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft size={15} />
+                </button>
 
-                  {formatMonthYear(anchorDate)}
+                <div className="flex items-center gap-1.5">
+                  <select
+                    aria-label="Month"
+                    value={anchorDate.getMonth()}
+                    onChange={(e) =>
+                      setAnchorDate(
+                        (d) =>
+                          new Date(d.getFullYear(), Number(e.target.value), 1)
+                      )
+                    }
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    {MONTHS.map((m, i) => (
+                      <option key={m} value={i}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
 
+                  <select
+                    aria-label="Year"
+                    value={anchorDate.getFullYear()}
+                    onChange={(e) =>
+                      setAnchorDate(
+                        (d) => new Date(Number(e.target.value), d.getMonth(), 1)
+                      )
+                    }
+                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-[13px] font-bold text-slate-800 focus:border-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  >
+                    {Array.from({ length: 12 }, (_, i) => {
+                      const y = new Date().getFullYear() - 5 + i;
+                      return (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
 
-                <div className="flex items-center gap-1">
-
-                  <button
-
-                    type="button"
-
-                    onClick={() => setAnchorDate((d) => addMonths(d, -1))}
-
-                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-7 lg:w-7"
-
-                    aria-label="Previous month"
-
-                  >
-
-                    <ChevronLeft size={15} />
-
-                  </button>
-
-                  <button
-
-                    type="button"
-
-                    onClick={() => setAnchorDate((d) => addMonths(d, 1))}
-
-                    className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-7 lg:w-7"
-
-                    aria-label="Next month"
-
-                  >
-
-                    <ChevronRight size={15} />
-
-                  </button>
-
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setAnchorDate((d) => addMonths(d, 1))}
+                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                  aria-label="Next month"
+                >
+                  <ChevronRight size={15} />
+                </button>
 
               </div>
 
@@ -1544,39 +1575,6 @@ export default function CalendarModal({
 
               </button>
 
-            </div>
-
-
-
-            {/* STATUS LEGEND */}
-            <div className="border-t border-slate-200 px-4 py-3.5">
-              <h3
-                id="calendar-status-legend"
-                className="mb-2.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500 lg:text-slate-400"
-              >
-                Status
-              </h3>
-              <ul
-                aria-labelledby="calendar-status-legend"
-                className="space-y-2.5"
-              >
-                {[
-                  ["Scheduled", "border-sky-500"],
-                  ["Completed", "border-emerald-500"],
-                  ["Cancelled", "border-rose-500"],
-                ].map(([label, ring]) => (
-                  <li
-                    key={label}
-                    className="flex items-center gap-2.5 text-[13px] font-medium text-slate-700"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`h-3.5 w-3.5 flex-shrink-0 rounded-full border-2 bg-white ${ring}`}
-                    />
-                    {label}
-                  </li>
-                ))}
-              </ul>
             </div>
 
 
@@ -1957,17 +1955,21 @@ export default function CalendarModal({
             </div>
             ) : (
             <>
-            {/* Day headers */}
+            {/* Time grid — the day headers are sticky INSIDE the same scroll
+                container as the hour rows, so the vertical column gridlines line
+                up exactly (the scrollbar subtracts equal width from both). */}
+
+            <div ref={timeGridRef} className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
 
             <div
 
-              className="grid flex-shrink-0 border-b border-l border-slate-300 bg-white"
+              className="sticky top-0 z-20 grid border-b border-l border-slate-300 bg-white"
 
               style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
 
             >
 
-              <div className="border-r border-slate-200" />
+              <div className="border-r border-slate-300" />
 
               {weekDays.map((day) => {
 
@@ -1985,7 +1987,18 @@ export default function CalendarModal({
 
                     onClick={() => setSelectedDate(startOfDay(day))}
 
-                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-300 py-1.5 text-center transition-colors last:border-r-0 ${
+                    aria-pressed={isSelected}
+
+                    aria-current={isToday ? "date" : undefined}
+
+                    aria-label={day.toLocaleDateString("en-IN", {
+                      weekday: "long",
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+
+                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-300 py-1.5 text-center transition-colors last:border-r-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
 
                       isSelected ? "bg-brand-50" : "hover:bg-slate-50"
 
@@ -2024,12 +2037,6 @@ export default function CalendarModal({
               })}
 
             </div>
-
-
-
-            {/* Time grid */}
-
-            <div ref={timeGridRef} className="min-h-0 flex-1 overflow-y-auto">
 
               <div
 
