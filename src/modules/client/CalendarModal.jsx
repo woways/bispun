@@ -2044,7 +2044,7 @@ export default function CalendarModal({
 
             <div
 
-              className="grid flex-shrink-0 border-b border-slate-200 bg-white"
+              className="grid flex-shrink-0 border-b border-l border-slate-200 bg-white"
 
               style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
 
@@ -2116,7 +2116,7 @@ export default function CalendarModal({
 
               <div
 
-                className="grid"
+                className="grid border-l border-slate-200"
 
                 style={{ gridTemplateColumns: `48px repeat(${dayCount}, 1fr)` }}
 
