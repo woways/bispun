@@ -2985,7 +2985,7 @@ function FragmentRow({
 
       {/* Hour label */}
 
-      <div className="relative h-[64px] border-b border-r border-slate-200 pr-2 text-right text-[11px] font-semibold text-slate-400">
+      <div className="relative h-[64px] border-b border-r border-slate-200 bg-white pr-2 text-right text-[11px] font-semibold text-slate-400">
 
         <span className="relative -top-1.5">
 
@@ -3029,7 +3029,7 @@ function FragmentRow({
 
             onClick={() => onSlotClick(day, hour)}
 
-            className="relative h-[64px] cursor-pointer border-b border-r border-slate-200 px-1.5 py-1 transition hover:bg-slate-50/70"
+            className="relative h-[64px] cursor-pointer border-b border-r border-slate-200 bg-white px-1.5 py-1 transition hover:bg-slate-50"
 
           >
 
