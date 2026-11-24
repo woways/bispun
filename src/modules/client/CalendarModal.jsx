@@ -383,7 +383,6 @@ export default function CalendarModal({
 
   const [viewMode, setViewMode] = useState("week"); // "day" | "week" | "month"
 
-  const [layout, setLayout] = useState("calendar"); // "calendar" | "list"
 
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
 
@@ -1241,9 +1240,9 @@ export default function CalendarModal({
         {/* Polite announcement of the visible view + month for assistive tech.
             Re-announces on both month navigation and view switches. */}
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {`${layout === "list" ? "List" : "Calendar"} view, ${
+          {`${
             viewMode === "month" ? "Month" : viewMode === "day" ? "Day" : "Week"
-          }, ${formatMonthYear(anchorDate)}`}
+          } view, ${formatMonthYear(anchorDate)}`}
         </div>
 
         {/* Deep-link fallback: assertive, focusable notice shown when a
@@ -1755,31 +1754,6 @@ export default function CalendarModal({
 
                 <div
                   role="group"
-                  aria-label="Display mode"
-                  className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
-                >
-                  {[
-                    ["calendar", "Calendar"],
-                    ["list", "List"],
-                  ].map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setLayout(value)}
-                      aria-pressed={layout === value}
-                      className={`rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-100 ${
-                        layout === value
-                          ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                <div
-                  role="group"
                   aria-label="Calendar view"
                   className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
                 >
@@ -1830,97 +1804,7 @@ export default function CalendarModal({
 
 
 
-            {layout === "list" ? (
-            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-              {(() => {
-                const daysWithEvents = weekDays.filter(
-                  (d) => eventsForDay(d).length > 0
-                );
-                if (daysWithEvents.length === 0) {
-                  return (
-                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-[13px] font-medium text-slate-500">
-                      No events in this range. Switch to Calendar and click a
-                      time slot to add one.
-                    </p>
-                  );
-                }
-                return (
-                  <ul role="list" className="space-y-6">
-                    {daysWithEvents.map((d) => {
-                      const headingId = `agenda-day-${toDateInput(d)}`;
-                      const isTodayHeading = sameDay(d, today);
-                      return (
-                        <li key={toDateInput(d)}>
-                          <section aria-labelledby={headingId}>
-                            <h3
-                              id={headingId}
-                              className="mb-2 flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500"
-                            >
-                              {d.toLocaleDateString("en-IN", {
-                                weekday: "long",
-                                day: "numeric",
-                                month: "long",
-                              })}
-                              {isTodayHeading && (
-                                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
-                                  Today
-                                </span>
-                              )}
-                            </h3>
-                            <ul role="list" className="space-y-2">
-                              {eventsForDay(d).map((event) => (
-                                <li key={event.id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => openDetail(event)}
-                                    aria-label={`${
-                                      event.title || "Untitled"
-                                    }, ${
-                                      event.allDay
-                                        ? "All day"
-                                        : `${formatTimeLabel(event.startAt)}${
-                                            event.endAt
-                                              ? ` to ${formatTimeLabel(
-                                                  event.endAt
-                                                )}`
-                                              : ""
-                                          }`
-                                    }, ${
-                                      TYPE_LABELS[event.type] || "Other"
-                                    }, ${statusLabel(event.status)}`}
-                                    className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${eventStyle(
-                                      event
-                                    )}`}
-                                  >
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block truncate text-[13px] font-bold">
-                                        {event.title || "Untitled"}
-                                      </span>
-                                      <span className="mt-0.5 flex items-center gap-1.5 text-[12px] font-semibold opacity-80">
-                                        <Clock size={11} aria-hidden="true" />
-                                        {event.allDay
-                                          ? "All day"
-                                          : formatTimeLabel(event.startAt)}
-                                        <span aria-hidden="true">·</span>
-                                        {TYPE_LABELS[event.type] || "Other"}
-                                      </span>
-                                    </span>
-                                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                                      {statusLabel(event.status)}
-                                    </span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </section>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                );
-              })()}
-            </div>
-            ) : viewMode === "month" ? (
+            {viewMode === "month" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <table className="h-full w-full table-fixed border-collapse">
                 <caption className="sr-only">
