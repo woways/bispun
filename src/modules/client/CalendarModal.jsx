@@ -38,6 +38,10 @@ import {
 
   Video,
 
+  Pencil,
+
+  ExternalLink,
+
 } from "lucide-react";
 
 
@@ -123,6 +127,16 @@ const TYPE_STYLES = {
 
 
 const STATUS_OPTIONS = ["SCHEDULED", "COMPLETED", "CANCELLED"];
+
+const STATUS_LABELS = {
+  SCHEDULED: "Scheduled",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+function statusLabel(status) {
+  return STATUS_LABELS[status] || "Scheduled";
+}
 
 
 
@@ -369,6 +383,8 @@ export default function CalendarModal({
 
   const [viewMode, setViewMode] = useState("week"); // "day" | "week" | "month"
 
+  const [layout, setLayout] = useState("calendar"); // "calendar" | "list"
+
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
 
   const [events, setEvents] = useState([]);
@@ -382,6 +398,10 @@ export default function CalendarModal({
 
 
   const [editorOpen, setEditorOpen] = useState(false);
+
+  // Read-only "meeting detail" drawer. Clicking any event opens this first;
+  // its Edit button hands off to the editor.
+  const [detailEvent, setDetailEvent] = useState(null);
 
   const [editingEvent, setEditingEvent] = useState(null);
 
@@ -419,6 +439,10 @@ export default function CalendarModal({
 
   const editorRef = useRef(null);
 
+  const detailRef = useRef(null);
+
+  const detailTitleRef = useRef(null);
+
   const connectDialogRef = useRef(null);
 
   const connectBtnRef = useRef(null);
@@ -427,9 +451,24 @@ export default function CalendarModal({
   // overlay owns dismissal: connect dialog > event editor > calendar. Each
   // stands down while a higher one is open so a single Escape closes only the
   // topmost.
-  useOverlayDismiss(open && !editorOpen && !connectDialogOpen, onClose, {
-    containerRef: calendarRef,
-  });
+  useOverlayDismiss(
+    open && !editorOpen && !detailEvent && !connectDialogOpen,
+    onClose,
+    {
+      containerRef: calendarRef,
+    }
+  );
+
+  // Detail drawer sits above the calendar but below the editor; it stands down
+  // while the editor is open so a single Escape closes only the topmost.
+  useOverlayDismiss(
+    Boolean(detailEvent) && !editorOpen && !connectDialogOpen,
+    () => setDetailEvent(null),
+    {
+      containerRef: detailRef,
+      initialFocusRef: detailTitleRef,
+    }
+  );
 
   useOverlayDismiss(editorOpen && !connectDialogOpen, () => setEditorOpen(false), {
     containerRef: editorRef,
@@ -807,6 +846,26 @@ export default function CalendarModal({
 
 
 
+  // View an event read-only first (detail drawer). Edit is one tap away.
+  function openDetail(event) {
+
+    setDetailEvent(event);
+
+  }
+
+  // Hand off from the detail drawer to the editor form.
+  function editFromDetail() {
+
+    if (!detailEvent) return;
+
+    const event = detailEvent;
+
+    setDetailEvent(null);
+
+    openEdit(event);
+
+  }
+
   function openEdit(event) {
 
     const start = new Date(event.startAt);
@@ -1182,9 +1241,9 @@ export default function CalendarModal({
         {/* Polite announcement of the visible view + month for assistive tech.
             Re-announces on both month navigation and view switches. */}
         <div className="sr-only" aria-live="polite" aria-atomic="true">
-          {`${
+          {`${layout === "list" ? "List" : "Calendar"} view, ${
             viewMode === "month" ? "Month" : viewMode === "day" ? "Day" : "Week"
-          } view, ${formatMonthYear(anchorDate)}`}
+          }, ${formatMonthYear(anchorDate)}`}
         </div>
 
         {/* Deep-link fallback: assertive, focusable notice shown when a
@@ -1530,7 +1589,7 @@ export default function CalendarModal({
 
                       type="button"
 
-                      onClick={() => openEdit(event)}
+                      onClick={() => openDetail(event)}
 
                       className={`block w-full rounded-2xl border px-3.5 py-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
 
@@ -1696,6 +1755,31 @@ export default function CalendarModal({
 
                 <div
                   role="group"
+                  aria-label="Display mode"
+                  className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
+                >
+                  {[
+                    ["calendar", "Calendar"],
+                    ["list", "List"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setLayout(value)}
+                      aria-pressed={layout === value}
+                      className={`rounded-[8px] px-3 py-1.5 text-[12px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-100 ${
+                        layout === value
+                          ? "bg-indigo-600 text-white shadow-sm"
+                          : "text-slate-600 hover:bg-white/70 hover:text-slate-900"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div
+                  role="group"
                   aria-label="Calendar view"
                   className="ml-1.5 flex items-center rounded-[11px] bg-slate-100 p-1"
                 >
@@ -1746,7 +1830,97 @@ export default function CalendarModal({
 
 
 
-            {viewMode === "month" ? (
+            {layout === "list" ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              {(() => {
+                const daysWithEvents = weekDays.filter(
+                  (d) => eventsForDay(d).length > 0
+                );
+                if (daysWithEvents.length === 0) {
+                  return (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-10 text-center text-[13px] font-medium text-slate-500">
+                      No events in this range. Switch to Calendar and click a
+                      time slot to add one.
+                    </p>
+                  );
+                }
+                return (
+                  <ul role="list" className="space-y-6">
+                    {daysWithEvents.map((d) => {
+                      const headingId = `agenda-day-${toDateInput(d)}`;
+                      const isTodayHeading = sameDay(d, today);
+                      return (
+                        <li key={toDateInput(d)}>
+                          <section aria-labelledby={headingId}>
+                            <h3
+                              id={headingId}
+                              className="mb-2 flex items-center gap-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500"
+                            >
+                              {d.toLocaleDateString("en-IN", {
+                                weekday: "long",
+                                day: "numeric",
+                                month: "long",
+                              })}
+                              {isTodayHeading && (
+                                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-700">
+                                  Today
+                                </span>
+                              )}
+                            </h3>
+                            <ul role="list" className="space-y-2">
+                              {eventsForDay(d).map((event) => (
+                                <li key={event.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => openDetail(event)}
+                                    aria-label={`${
+                                      event.title || "Untitled"
+                                    }, ${
+                                      event.allDay
+                                        ? "All day"
+                                        : `${formatTimeLabel(event.startAt)}${
+                                            event.endAt
+                                              ? ` to ${formatTimeLabel(
+                                                  event.endAt
+                                                )}`
+                                              : ""
+                                          }`
+                                    }, ${
+                                      TYPE_LABELS[event.type] || "Other"
+                                    }, ${statusLabel(event.status)}`}
+                                    className={`flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${eventStyle(
+                                      event
+                                    )}`}
+                                  >
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-[13px] font-bold">
+                                        {event.title || "Untitled"}
+                                      </span>
+                                      <span className="mt-0.5 flex items-center gap-1.5 text-[12px] font-semibold opacity-80">
+                                        <Clock size={11} aria-hidden="true" />
+                                        {event.allDay
+                                          ? "All day"
+                                          : formatTimeLabel(event.startAt)}
+                                        <span aria-hidden="true">·</span>
+                                        {TYPE_LABELS[event.type] || "Other"}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 rounded-full bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                      {statusLabel(event.status)}
+                                    </span>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
+            </div>
+            ) : viewMode === "month" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <table className="h-full w-full table-fixed border-collapse">
                 <caption className="sr-only">
@@ -1830,7 +2004,7 @@ export default function CalendarModal({
                                   <button
                                     key={event.id}
                                     type="button"
-                                    onClick={() => openEdit(event)}
+                                    onClick={() => openDetail(event)}
                                     className="flex items-center rounded-md bg-indigo-50 px-1.5 py-0.5 text-left text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                                   >
                                     <span className="truncate">
@@ -1876,7 +2050,7 @@ export default function CalendarModal({
 
             >
 
-              <div />
+              <div className="border-r border-slate-200" />
 
               {weekDays.map((day) => {
 
@@ -1894,7 +2068,7 @@ export default function CalendarModal({
 
                     onClick={() => setSelectedDate(startOfDay(day))}
 
-                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 py-1.5 text-center transition-colors ${
+                    className={`flex min-h-[58px] flex-col items-center justify-center gap-0.5 border-r border-slate-200 py-1.5 text-center transition-colors last:border-r-0 ${
 
                       isSelected ? "bg-brand-50" : "hover:bg-slate-50"
 
@@ -1964,7 +2138,7 @@ export default function CalendarModal({
 
                     onSlotClick={openCreate}
 
-                    onEventClick={openEdit}
+                    onEventClick={openDetail}
 
                     now={now}
 
@@ -2475,6 +2649,220 @@ export default function CalendarModal({
 
         </div>
 
+      )}
+
+      {/* MEETING DETAIL DRAWER — read-only view opened when an event is clicked.
+          Edit hands off to the editor drawer above. */}
+      {detailEvent && !editorOpen && (
+        <div className="fixed inset-0 z-[135] flex justify-end bg-slate-950/50">
+          <div
+            ref={detailRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-detail-title"
+            className="flex h-full w-full max-w-md flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[evtSlideIn_0.25s_ease-out] motion-reduce:animate-none"
+          >
+            {/* Header */}
+            <div className="flex flex-shrink-0 items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0">
+                <h2
+                  id="event-detail-title"
+                  ref={detailTitleRef}
+                  tabIndex={-1}
+                  className="text-[20px] font-extrabold leading-tight tracking-[-0.02em] text-slate-950 outline-none"
+                >
+                  {detailEvent.title || "Untitled event"}
+                </h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${
+                      TYPE_STYLES[detailEvent.type] || TYPE_STYLES.OTHER
+                    }`}
+                  >
+                    {TYPE_LABELS[detailEvent.type] || "Other"}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-bold text-slate-600">
+                    {statusLabel(detailEvent.status)}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailEvent(null)}
+                aria-label="Close event details"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
+              {/* Basic info */}
+              <section>
+                <h3 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                  Basic info
+                </h3>
+                <dl className="space-y-2 text-[13px]">
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">Type</dt>
+                    <dd className="text-right font-bold text-slate-800">
+                      {TYPE_LABELS[detailEvent.type] || "Other"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">Status</dt>
+                    <dd className="text-right font-bold text-slate-800">
+                      {statusLabel(detailEvent.status)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">Date</dt>
+                    <dd className="text-right font-bold text-slate-800">
+                      {new Date(detailEvent.startAt).toLocaleDateString("en-IN", {
+                        weekday: "long",
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">Time</dt>
+                    <dd className="text-right font-bold text-slate-800">
+                      {detailEvent.allDay
+                        ? "All day"
+                        : `${formatTimeLabel(detailEvent.startAt)}${
+                            detailEvent.endAt
+                              ? ` – ${formatTimeLabel(detailEvent.endAt)}`
+                              : ""
+                          }`}
+                    </dd>
+                  </div>
+                </dl>
+              </section>
+
+              {/* Invitees */}
+              <section>
+                <h3 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                  Invitees
+                </h3>
+                {detailEvent.assignedToUser?.name ||
+                detailEvent.createdBy?.name ? (
+                  <dl className="space-y-2 text-[13px]">
+                    {detailEvent.assignedToUser?.name && (
+                      <div className="flex items-center gap-2">
+                        <UserRound
+                          size={14}
+                          className="text-slate-400"
+                          aria-hidden="true"
+                        />
+                        <dt className="font-semibold text-slate-500">
+                          Assigned to
+                        </dt>
+                        <dd className="ml-auto font-bold text-slate-800">
+                          {detailEvent.assignedToUser.name}
+                        </dd>
+                      </div>
+                    )}
+                    {detailEvent.createdBy?.name && (
+                      <div className="flex items-center gap-2">
+                        <UserRound
+                          size={14}
+                          className="text-slate-400"
+                          aria-hidden="true"
+                        />
+                        <dt className="font-semibold text-slate-500">
+                          Organizer
+                        </dt>
+                        <dd className="ml-auto font-bold text-slate-800">
+                          {detailEvent.createdBy.name}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+                ) : (
+                  <p className="text-[13px] font-medium text-slate-500">
+                    No invitees.
+                  </p>
+                )}
+              </section>
+
+              {/* Related */}
+              <section>
+                <h3 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                  Related
+                </h3>
+                {detailEvent.meetingRoom || detailEvent.location ? (
+                  <div className="space-y-2 text-[13px]">
+                    {detailEvent.meetingRoom && (
+                      <a
+                        href={detailEvent.meetingRoom}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 font-bold text-brand-700 underline underline-offset-2 hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                      >
+                        <Video size={14} aria-hidden="true" />
+                        Join meeting
+                        <ExternalLink size={12} aria-hidden="true" />
+                        <span className="sr-only">(opens in a new tab)</span>
+                      </a>
+                    )}
+                    {detailEvent.location && (
+                      <div className="flex items-start gap-2 font-semibold text-slate-700">
+                        <MapPin
+                          size={14}
+                          className="mt-0.5 flex-shrink-0 text-slate-400"
+                          aria-hidden="true"
+                        />
+                        <span>{detailEvent.location}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[13px] font-medium text-slate-500">
+                    Nothing linked.
+                  </p>
+                )}
+              </section>
+
+              {/* Notes */}
+              <section>
+                <h3 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                  Notes
+                </h3>
+                {detailEvent.description ? (
+                  <p className="whitespace-pre-wrap text-[13px] font-medium leading-relaxed text-slate-700">
+                    {detailEvent.description}
+                  </p>
+                ) : (
+                  <p className="text-[13px] font-medium text-slate-500">
+                    No notes.
+                  </p>
+                )}
+              </section>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
+              <button
+                type="button"
+                onClick={() => setDetailEvent(null)}
+                className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={editFromDetail}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+              >
+                <Pencil size={14} aria-hidden="true" />
+                Edit
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* CONNECT GOOGLE ACCOUNT DIALOG — in-place connect (works for employees,
