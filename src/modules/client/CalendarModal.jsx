@@ -42,6 +42,14 @@ import {
 
   ExternalLink,
 
+  MoreVertical,
+
+  Copy,
+
+  CheckCircle2,
+
+  Ban,
+
 } from "lucide-react";
 
 
@@ -166,6 +174,29 @@ function eventStyle(event) {
 
   return TYPE_STYLES[event.type] || TYPE_STYLES.OTHER;
 
+}
+
+// List/detail status pills — WCAG-safe (bg-*-100 / text-*-800).
+const LIST_STATUS_PILL = {
+  SCHEDULED: "bg-indigo-100 text-indigo-800",
+  COMPLETED: "bg-emerald-100 text-emerald-800",
+  CANCELLED: "bg-rose-100 text-rose-800",
+};
+
+function formatListWhen(ev) {
+  const start = new Date(ev.startAt);
+  const date = start.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  if (ev.allDay) return `${date} · All day`;
+  const time = start.toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${date} · ${time}`;
 }
 
 
@@ -436,6 +467,18 @@ export default function CalendarModal({
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [pendingMeetNotice, setPendingMeetNotice] = useState("");
+
+  // Detail-drawer action menu (disclosure + Tab) + inline destructive confirm.
+  const [detailActionsOpen, setDetailActionsOpen] = useState(false);
+  const [detailConfirmDelete, setDetailConfirmDelete] = useState(false);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const detailActionsRef = useRef(null);
+  const detailActionsBtnRef = useRef(null);
+
+  // List view (master-detail) selection.
+  const [listSelectedId, setListSelectedId] = useState(null);
+  const [listConfirmDelete, setListConfirmDelete] = useState(false);
+  const detailPaneHeadingRef = useRef(null);
 
 
 
@@ -1177,6 +1220,123 @@ export default function CalendarModal({
 
 
 
+  /* ---- Detail-drawer actions (status / clone / delete) ----------- */
+
+  async function patchDetailStatus(nextStatus, ev = detailEvent) {
+    const id = ev?.id;
+    if (!id) return;
+    setDetailBusy(true);
+    setError("");
+    try {
+      await apiRequest(`/api/client/calendar/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      setDetailEvent((c) => (c && c.id === id ? { ...c, status: nextStatus } : c));
+      setDetailActionsOpen(false);
+      await loadEvents();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to update status");
+    } finally {
+      setDetailBusy(false);
+    }
+  }
+
+  async function cloneDetailEvent(ev = detailEvent) {
+    const src = ev;
+    if (!src?.id) return;
+    setDetailBusy(true);
+    setError("");
+    try {
+      await apiRequest("/api/client/calendar", {
+        method: "POST",
+        body: JSON.stringify({
+          title: `${src.title || "Untitled"} (copy)`,
+          description: src.description || null,
+          location: src.location || null,
+          type: src.type || "MEETING",
+          status: "SCHEDULED",
+          allDay: Boolean(src.allDay),
+          startAt: src.startAt,
+          endAt: src.endAt || null,
+          assignedToUserId: src.assignedToUserId || null,
+          meetingRoom: src.meetingRoom || null,
+        }),
+      });
+      setDetailActionsOpen(false);
+      if (detailEvent?.id === src.id) setDetailEvent(null);
+      await loadEvents();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to clone meeting");
+    } finally {
+      setDetailBusy(false);
+    }
+  }
+
+  async function deleteDetailEvent(ev = detailEvent) {
+    const id = ev?.id;
+    if (!id) return;
+    setDetailBusy(true);
+    setError("");
+    try {
+      await apiRequest(`/api/client/calendar/${id}`, {
+        method: "DELETE",
+      });
+      setDetailActionsOpen(false);
+      setDetailConfirmDelete(false);
+      if (detailEvent?.id === id) setDetailEvent(null);
+      if (listSelectedId === id) setListSelectedId(null);
+      await loadEvents();
+    } catch (err) {
+      setError(err?.data?.message || "Unable to delete meeting");
+    } finally {
+      setDetailBusy(false);
+    }
+  }
+
+
+
+  // Disclosure menu dismissal: Escape (capture-phase so it closes the menu,
+  // not the whole drawer) + outside click, returning focus to the trigger.
+  useEffect(() => {
+    if (!detailActionsOpen) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setDetailActionsOpen(false);
+        setDetailConfirmDelete(false);
+        detailActionsBtnRef.current?.focus();
+      }
+    };
+    const onDown = (e) => {
+      if (
+        detailActionsRef.current &&
+        !detailActionsRef.current.contains(e.target) &&
+        detailActionsBtnRef.current &&
+        !detailActionsBtnRef.current.contains(e.target)
+      ) {
+        setDetailActionsOpen(false);
+        setDetailConfirmDelete(false);
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", onDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKey, true);
+      document.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [detailActionsOpen]);
+
+  useEffect(() => {
+    if (!detailEvent) {
+      setDetailActionsOpen(false);
+      setDetailConfirmDelete(false);
+    }
+  }, [detailEvent]);
+
+
+
   /* ---- Derived data ---------------------------------------------- */
 
 
@@ -1240,6 +1400,240 @@ export default function CalendarModal({
 
 
   /* ---- Render ---------------------------------------------------- */
+
+  function selectListRow(id) {
+    setListSelectedId(id);
+    setListConfirmDelete(false);
+  }
+
+  function renderListView() {
+    const sorted = [...events].sort(
+      (a, b) => new Date(a.startAt) - new Date(b.startAt)
+    );
+    const selected = sorted.find((e) => e.id === listSelectedId) || null;
+
+    return (
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* MASTER list */}
+        <div className="flex w-full max-w-[340px] flex-shrink-0 flex-col overflow-y-auto border-r border-slate-200 [scrollbar-width:thin]">
+          {sorted.length === 0 ? (
+            <p className="p-5 text-[13px] font-medium text-slate-500">
+              No meetings in this range.
+            </p>
+          ) : (
+            <ul>
+              {sorted.map((ev) => {
+                const isSel = ev.id === listSelectedId;
+                return (
+                  <li key={ev.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectListRow(ev.id)}
+                      aria-current={isSel ? "true" : undefined}
+                      className={`block w-full border-b border-l-[3px] border-slate-100 px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${
+                        isSel
+                          ? "border-l-brand-600 bg-brand-50"
+                          : "border-l-transparent hover:bg-slate-50"
+                      }`}
+                    >
+                      <div
+                        className={`truncate text-[13px] ${
+                          isSel
+                            ? "font-extrabold text-slate-900"
+                            : "font-bold text-slate-800"
+                        }`}
+                      >
+                        {ev.title || "Untitled"}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5 text-[12px] font-semibold text-slate-500">
+                        <Clock size={11} aria-hidden="true" />
+                        {formatListWhen(ev)}
+                      </div>
+                      <span
+                        className={`mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          LIST_STATUS_PILL[ev.status] || LIST_STATUS_PILL.SCHEDULED
+                        }`}
+                      >
+                        {statusLabel(ev.status)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* DETAIL pane (announced on change) */}
+        <div
+          role="region"
+          aria-label="Meeting details"
+          aria-live="polite"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-5"
+        >
+          {selected ? (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3
+                    ref={detailPaneHeadingRef}
+                    className="text-[18px] font-extrabold leading-tight tracking-[-0.02em] text-slate-950"
+                  >
+                    {selected.title || "Untitled event"}
+                  </h3>
+                  <span
+                    className={`mt-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                      LIST_STATUS_PILL[selected.status] || LIST_STATUS_PILL.SCHEDULED
+                    }`}
+                  >
+                    {statusLabel(selected.status)}
+                  </span>
+                </div>
+              </div>
+
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+                <div>
+                  <dt className="font-semibold text-slate-400">From</dt>
+                  <dd className="font-semibold text-slate-700">
+                    {selected.allDay ? "All day" : formatListWhen(selected)}
+                  </dd>
+                </div>
+                {selected.endAt && !selected.allDay && (
+                  <div>
+                    <dt className="font-semibold text-slate-400">To</dt>
+                    <dd className="font-semibold text-slate-700">
+                      {formatListWhen({ ...selected, startAt: selected.endAt })}
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt className="font-semibold text-slate-400">Type</dt>
+                  <dd className="font-semibold text-slate-700">
+                    {TYPE_LABELS[selected.type] || "Other"}
+                  </dd>
+                </div>
+                {(selected.assignedToUser?.name || selected.createdByUser?.name) && (
+                  <div>
+                    <dt className="font-semibold text-slate-400">Owner</dt>
+                    <dd className="font-semibold text-slate-700">
+                      {selected.assignedToUser?.name || selected.createdByUser?.name}
+                    </dd>
+                  </div>
+                )}
+                {selected.location && (
+                  <div className="col-span-2">
+                    <dt className="font-semibold text-slate-400">Location</dt>
+                    <dd className="font-semibold text-slate-700">{selected.location}</dd>
+                  </div>
+                )}
+              </dl>
+
+              {selected.meetingRoom && (
+                <a
+                  href={selected.meetingRoom}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-emerald-700"
+                >
+                  <Video size={13} aria-hidden="true" />
+                  Join meeting
+                  <ExternalLink size={12} aria-hidden="true" />
+                  <span className="sr-only">(opens in a new tab)</span>
+                </a>
+              )}
+
+              <div>
+                <h4 className="mb-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
+                  Notes
+                </h4>
+                {selected.description ? (
+                  <RichTextView
+                    html={selected.description}
+                    className="text-[13px] font-medium leading-relaxed text-slate-700"
+                  />
+                ) : (
+                  <p className="text-[13px] font-medium text-slate-500">No notes.</p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => openEdit(selected)}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-[13px] font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                >
+                  <Pencil size={13} aria-hidden="true" />
+                  Edit
+                </button>
+                {selected.status !== "COMPLETED" && (
+                  <button
+                    type="button"
+                    onClick={() => patchDetailStatus("COMPLETED", selected)}
+                    disabled={detailBusy}
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+                  >
+                    <CheckCircle2 size={14} className="text-emerald-600" aria-hidden="true" />
+                    Mark as conducted
+                  </button>
+                )}
+                {selected.status !== "CANCELLED" && (
+                  <button
+                    type="button"
+                    onClick={() => patchDetailStatus("CANCELLED", selected)}
+                    disabled={detailBusy}
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+                  >
+                    <Ban size={14} className="text-amber-600" aria-hidden="true" />
+                    Cancel
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => cloneDetailEvent(selected)}
+                  disabled={detailBusy}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+                >
+                  <Copy size={14} className="text-slate-500" aria-hidden="true" />
+                  Clone
+                </button>
+                {listConfirmDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => deleteDetailEvent(selected)}
+                    disabled={detailBusy}
+                    aria-label="Confirm delete? Activate to permanently delete this meeting"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-rose-600 px-3 text-[13px] font-bold text-white hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Confirm delete?
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setListConfirmDelete(true)}
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-300 bg-white px-3 text-[13px] font-semibold text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    Delete
+                  </button>
+                )}
+                {listConfirmDelete && (
+                  <span role="alert" className="text-[11px] font-medium text-rose-600">
+                    This can't be undone.
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center text-center text-[13px] font-medium text-slate-500">
+              Select a meeting to see its details.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
 
 
@@ -1839,6 +2233,8 @@ export default function CalendarModal({
 
                     ["month", "Month"],
 
+                    ["list", "List"],
+
                   ].map(([value, label]) => (
 
                     <button
@@ -1877,7 +2273,9 @@ export default function CalendarModal({
 
 
 
-            {viewMode === "month" ? (
+            {viewMode === "list" ? (
+            renderListView()
+            ) : viewMode === "month" ? (
             <div className="min-h-0 flex-1 overflow-y-auto">
               <table className="h-full w-full table-fixed border-collapse">
                 <caption className="sr-only">
@@ -2809,22 +3207,108 @@ export default function CalendarModal({
             </div>
 
             {/* Footer */}
-            <div className="flex flex-shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
-              <button
-                type="button"
-                onClick={() => setDetailEvent(null)}
-                className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={editFromDetail}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-              >
-                <Pencil size={14} aria-hidden="true" />
-                Edit
-              </button>
+            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
+              {/* More actions (disclosure + Tab) */}
+              <div className="relative">
+                <button
+                  ref={detailActionsBtnRef}
+                  type="button"
+                  onClick={() => setDetailActionsOpen((o) => !o)}
+                  aria-label="More actions"
+                  aria-haspopup="true"
+                  aria-expanded={detailActionsOpen}
+                  disabled={detailBusy}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"
+                >
+                  {detailBusy ? (
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                  ) : (
+                    <MoreVertical size={18} aria-hidden="true" />
+                  )}
+                </button>
+
+                {detailActionsOpen && (
+                  <div
+                    ref={detailActionsRef}
+                    className="absolute bottom-full left-0 z-10 mb-2 w-60 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl"
+                  >
+                    {detailEvent.status !== "COMPLETED" && (
+                      <button
+                        type="button"
+                        onClick={() => patchDetailStatus("COMPLETED")}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
+                      >
+                        <CheckCircle2 size={16} className="text-emerald-600" aria-hidden="true" />
+                        Mark as conducted
+                      </button>
+                    )}
+                    {detailEvent.status !== "CANCELLED" && (
+                      <button
+                        type="button"
+                        onClick={() => patchDetailStatus("CANCELLED")}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
+                      >
+                        <Ban size={16} className="text-amber-600" aria-hidden="true" />
+                        Cancel meeting
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={cloneDetailEvent}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
+                    >
+                      <Copy size={16} className="text-slate-500" aria-hidden="true" />
+                      Clone
+                    </button>
+
+                    <div className="my-1 border-t border-slate-100" />
+
+                    {detailConfirmDelete ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={deleteDetailEvent}
+                          aria-label="Confirm delete? Activate to permanently delete this meeting"
+                          className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-bold text-rose-700 hover:bg-rose-50 focus-visible:bg-rose-100 focus-visible:outline-none"
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                          Confirm delete?
+                        </button>
+                        <p role="alert" className="px-4 pb-1.5 text-[11px] font-medium text-rose-600">
+                          This permanently deletes the meeting.
+                        </p>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setDetailConfirmDelete(true)}
+                        className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 focus-visible:bg-rose-100 focus-visible:outline-none"
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDetailEvent(null)}
+                  className="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={editFromDetail}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                >
+                  <Pencil size={14} aria-hidden="true" />
+                  Edit
+                </button>
+              </div>
             </div>
           </div>
         </div>

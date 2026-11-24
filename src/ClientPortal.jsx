@@ -100,6 +100,7 @@ import {
 import { hydrateFromServer as hydrateNotifSoundPrefs } from "./lib/notificationPrefs";
 
 import CalendarModal from "./modules/client/CalendarModal";
+import QuickCreateDrawer from "./components/QuickCreateDrawer";
 
 // Route-level client modules are code-split (React.lazy) so the authenticated
 // shell (header + bottom nav) paints immediately and each module's JS downloads
@@ -1510,6 +1511,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }
 
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
 
   // Global CRM year workspace shared by all operational modules.
   const currentYear = new Date().getFullYear();
@@ -1614,6 +1616,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     if (!calendarOpen) return undefined;
     return pushBackInterceptor(() => setCalendarOpen(false));
   }, [calendarOpen]);
+  useEffect(() => {
+    if (!quickCreateOpen) return undefined;
+    return pushBackInterceptor(() => setQuickCreateOpen(false));
+  }, [quickCreateOpen]);
   useEffect(() => {
     if (!notificationsOpen) return undefined;
     return pushBackInterceptor(() => setNotificationsOpen(false));
@@ -4815,6 +4821,17 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
             <button
               type="button"
+              onClick={() => setQuickCreateOpen(true)}
+              aria-label="Quick create"
+              aria-haspopup="dialog"
+              aria-expanded={quickCreateOpen}
+              className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            >
+              <Plus size={19} aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
               onClick={() => setCalendarOpen(true)}
               aria-label="Open calendar"
               aria-haspopup="dialog"
@@ -5745,6 +5762,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     <option value="__add_year__">+ Add Year</option>
                   </select>
                 </div>
+
+                {/* QUICK CREATE */}
+                <button
+                  type="button"
+                  onClick={() => setQuickCreateOpen(true)}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+                  aria-label="Quick create"
+                  aria-haspopup="dialog"
+                  aria-expanded={quickCreateOpen}
+                  title="Create task or meeting"
+                >
+                  <Plus size={19} />
+                </button>
 
                 {/* CALENDAR */}
                 <button
@@ -6701,6 +6731,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         currentUser={user}
         focusEventId={calendarFocusEventId}
         onFocusConsumed={() => setCalendarFocusEventId(null)}
+      />
+
+      <QuickCreateDrawer
+        open={quickCreateOpen}
+        onClose={() => setQuickCreateOpen(false)}
       />
 
       {/* Shell-level KPI drill-down popup (Dashboard + Analytics KPIs). Opens
