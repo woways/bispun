@@ -90,7 +90,7 @@ function bestMo(rows) {
 // Decorative trend sparkline (area + line + endpoint dot). aria-hidden: the
 // same figures live in the card value/note and the targets table. The gradient
 // id is sanitized (useId() contains ":", invalid inside url(#...)).
-function Sparkline({ values, hero = false }) {
+function Sparkline({ values }) {
   const gid = "spark-" + useId().replace(/:/g, "");
   const v = (values || []).filter((x) => x != null && !Number.isNaN(x));
   if (v.length < 2) return <div className="mt-auto h-8 pt-2.5" aria-hidden="true" />;
@@ -101,77 +101,49 @@ function Sparkline({ values, hero = false }) {
   const pts = v.map((val, i) => [X(i), Y(val)]);
   const line = "M " + pts.map((p) => p.join(" ")).join(" L ");
   const area = `M ${pts[0][0]} ${H} L ` + pts.map((p) => p.join(" ")).join(" L ") + ` L ${pts[n - 1][0]} ${H} Z`;
-  const stroke = hero ? "#ffffff" : "rgb(var(--brand-600))";
-  const fill = hero ? "#ffffff" : "rgb(var(--brand-500))";
   return (
     <div className="mt-auto pt-2.5">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" focusable="false" className="block h-8 w-full">
         <defs>
           <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={fill} stopOpacity={hero ? 0.5 : 0.26} />
-            <stop offset="1" stopColor={fill} stopOpacity="0" />
+            <stop offset="0" stopColor="rgb(var(--brand-500))" stopOpacity="0.26" />
+            <stop offset="1" stopColor="rgb(var(--brand-500))" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={area} fill={`url(#${gid})`} />
-        <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="2.4" fill={stroke} vectorEffect="non-scaling-stroke" />
+        <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="2.4" fill="rgb(var(--brand-600))" vectorEffect="non-scaling-stroke" />
       </svg>
     </div>
   );
 }
 
-// One KPI card: icon tile + label, big value (+inline delta), note, then a
-// trend spark or a thin progress bar. hero = highlighted brand-gradient card.
-function KpiCard({ label, icon: Icon, value, note, delta = null, spark = null, bar = null, hero = false }) {
+// One KPI card — always white. icon tile + label, value (+inline delta), note,
+// and an optional trend sparkline pinned to the bottom.
+function KpiCard({ label, icon: Icon, value, note, delta = null, spark = null }) {
   return (
-    <div
-      className={`relative flex min-h-[120px] flex-col overflow-hidden rounded-2xl p-[14px] pb-3 transition ${
-        hero
-          ? "border border-transparent text-white shadow-lg sm:col-span-2 xl:col-span-1"
-          : "border border-slate-200 bg-white shadow-sm hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
-      }`}
-      style={hero ? { backgroundImage: "linear-gradient(150deg, rgb(var(--brand-700)), rgb(var(--brand-800)) 55%, rgb(var(--brand-900)))" } : undefined}
-    >
-      {hero && (
-        <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-11 h-40 w-40 rounded-full"
-          style={{ background: "radial-gradient(circle, rgba(255,255,255,.16), transparent 70%)" }} />
-      )}
-      <div className="relative z-10 flex items-center gap-2.5">
-        <span className={`grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border ${hero ? "border-white/30 bg-white/15 text-white" : "border-brand-100 bg-brand-50 text-brand-600"}`}>
+    <div className={`flex ${spark ? "min-h-[118px]" : ""} flex-col rounded-2xl border border-slate-200 bg-white p-[14px] pb-3 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md`}>
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
           <Icon size={15} aria-hidden="true" focusable="false" />
         </span>
-        <span className={`text-[10.5px] font-bold uppercase tracking-[0.07em] ${hero ? "text-white" : "text-slate-500"}`}>{label}</span>
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-500 native:leading-[1.15]">{label}</span>
       </div>
-      <div className={`relative z-10 mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[27px] font-bold leading-none tracking-[-0.03em] [font-variant-numeric:tabular-nums] ${hero ? "text-white" : "text-slate-900"}`}>
+      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[25px] font-bold leading-none tracking-[-0.03em] text-slate-900 [font-variant-numeric:tabular-nums] native:text-[20px]">
         {value}
         {delta}
       </div>
-      <div className={`relative z-10 mt-1 text-[11.5px] font-medium ${hero ? "text-white" : "text-slate-500"}`}>{note}</div>
-      {bar != null ? (
-        <div className="relative z-10 mt-auto pt-2.5">
-          <div className={`h-[5px] w-full overflow-hidden rounded-full ${hero ? "bg-white/25" : "bg-slate-100"}`}>
-            <div className={`h-full rounded-full ${hero ? "bg-white" : "bg-gradient-to-r from-brand-400 to-brand-600"}`} style={{ width: `${Math.min(100, bar)}%` }} />
-          </div>
-        </div>
-      ) : spark != null ? (
-        spark
-      ) : (
-        <div className="mt-auto" />
-      )}
+      <div className="mt-1 text-[11.5px] font-medium text-slate-500">{note}</div>
+      {spark}
     </div>
   );
 }
 
-function DeltaChip({ value, hero = false }) {
+function DeltaChip({ value }) {
   if (value == null) return null;
   const up = value >= 0;
-  const cls = hero
-    ? `bg-white ${up ? "text-brand-700" : "text-rose-600"}`
-    : up
-    ? "bg-brand-50 text-brand-700"
-    : "bg-rose-50 text-rose-600";
   return (
-    <span className={`inline-flex items-center gap-0.5 self-center rounded-full px-1.5 py-0.5 text-[10.5px] font-extrabold ${cls}`}>
+    <span className={`inline-flex items-center gap-0.5 self-center rounded-full px-1.5 py-0.5 text-[10.5px] font-extrabold ${up ? "bg-brand-50 text-brand-700" : "bg-rose-50 text-rose-600"}`}>
       {up ? <ArrowUpRight size={11} aria-hidden="true" /> : <ArrowDownRight size={11} aria-hidden="true" />}
       {Math.abs(value)}%
     </span>
@@ -195,11 +167,11 @@ function AttainmentKpis({ monthRows, year, name = null }) {
   const volSeries = monthRows.map((m) => (m.monthlyTarget > 0 ? m.totalAchieved : null));
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard hero icon={TargetIcon}
+      <KpiCard icon={TargetIcon}
         label={`${name ? name + " · " : ""}Year attainment · ${year}`}
-        value={<span>{avg}%</span>} delta={<DeltaChip value={delta} hero />}
-        note={tracked ? `${status} · ${hit} of ${tracked} months on target` : "No targets set yet"}
-        spark={<Sparkline values={attSeries} hero />} />
+        value={<span>{avg}%</span>} delta={<DeltaChip value={delta} />}
+        note={tracked ? `${status} · ${hit}/${tracked} months on target` : "No targets set yet"}
+        spark={<Sparkline values={attSeries} />} />
       <KpiCard icon={BarChart3} label="Achieved vs target"
         value={<span>{nf.format(totAch)} <span className="text-[14px] font-semibold text-slate-500">/ {nf.format(totTgt)}</span></span>}
         note={`${progress}% of total target volume`} spark={<Sparkline values={volSeries} />} />
@@ -223,17 +195,17 @@ function TeamKpis({ roster, teamAverage, year }) {
   const status = perfStatus(teamAverage, n);
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard hero icon={TargetIcon} label={`Team attainment · ${year}`}
+      <KpiCard icon={TargetIcon} label={`Team attainment · ${year}`}
         value={<span>{teamAverage}%</span>}
-        note={`${status} · ${onTarget} of ${n} on target`} bar={teamAverage} />
+        note={`${status} · ${onTarget} of ${n} on target`} />
       <KpiCard icon={Users} label="Members" value={<span>{n}</span>}
         note={`${mgr} managers · ${emp} employees`} />
       <KpiCard icon={CheckCircle2} label="Members on target"
         value={<span>{onTarget} <span className="text-[14px] font-semibold text-slate-500">/ {n}</span></span>}
-        note={`${otRate}% of the team`} bar={otRate} />
+        note={`${otRate}% of the team`} />
       <KpiCard icon={Trophy} label="Top performer"
-        value={top ? <span>{top.yearAveragePercent}%</span> : <span>—</span>}
-        note={top ? top.name : "—"} bar={top ? top.yearAveragePercent : null} />
+        value={top ? <span className="text-[18px] [overflow-wrap:anywhere]">{top.name}</span> : <span>—</span>}
+        note={top ? `${top.yearAveragePercent}% attainment` : "—"} />
     </div>
   );
 }
