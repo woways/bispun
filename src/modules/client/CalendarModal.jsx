@@ -187,13 +187,6 @@ const LIST_STATUS_PILL = {
   CANCELLED: "bg-rose-100 text-rose-800",
 };
 
-function guestInitials(g) {
-  const base = (g.name || g.email || "?").trim();
-  const parts = base.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return base.slice(0, 2).toUpperCase();
-}
-
 function formatListWhen(ev) {
   const start = new Date(ev.startAt);
   const date = start.toLocaleDateString("en-IN", {
@@ -495,6 +488,11 @@ export default function CalendarModal({
   const [notesDraft, setNotesDraft] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSavedMsg, setNotesSavedMsg] = useState("");
+
+  // Inline guest editing in the List detail pane (auto-saves on change).
+  const [guestsDraft, setGuestsDraft] = useState([]);
+  const [guestsStatus, setGuestsStatus] = useState(""); // polite: "Saving…"/"Saved"
+  const [guestsError, setGuestsError] = useState(""); // assertive
 
 
 
@@ -1388,7 +1386,45 @@ export default function CalendarModal({
     const sel = events.find((e) => e.id === listSelectedId);
     setNotesDraft(sel?.description || "");
     setNotesSavedMsg("");
+    setGuestsDraft(
+      Array.isArray(sel?.guests)
+        ? sel.guests.map((g) => ({
+            userId: g.userId || null,
+            name: g.name,
+            email: g.email,
+          }))
+        : []
+    );
+    setGuestsStatus("");
+    setGuestsError("");
   }, [listSelectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveListGuests(ev, nextGuests, prevGuests) {
+    if (!ev?.id) return;
+    setGuestsError("");
+    setGuestsStatus("Saving…");
+    // Optimistic.
+    setEvents((prev) =>
+      prev.map((e) => (e.id === ev.id ? { ...e, guests: nextGuests } : e))
+    );
+    try {
+      await apiRequest(`/api/client/calendar/${ev.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ guests: nextGuests }),
+      });
+      setGuestsStatus("Saved");
+    } catch (err) {
+      // Revert the optimistic change and announce assertively.
+      setGuestsDraft(prevGuests);
+      setEvents((prev) =>
+        prev.map((e) => (e.id === ev.id ? { ...e, guests: prevGuests } : e))
+      );
+      setGuestsStatus("");
+      setGuestsError(
+        err?.data?.message || "Couldn't save guest change. Please try again."
+      );
+    }
+  }
 
   async function saveListNotes(ev) {
     if (!ev?.id) return;
@@ -1592,8 +1628,8 @@ export default function CalendarModal({
         >
           {selected ? (
             <>
-              <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                <div className="space-y-4">
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3
@@ -1612,8 +1648,8 @@ export default function CalendarModal({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-4">
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3.5">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[13px] sm:grid-cols-3">
                   <div>
                     <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">From</dt>
                     <dd className="mt-0.5 font-semibold text-slate-800">
@@ -1653,38 +1689,34 @@ export default function CalendarModal({
                 </dl>
               </div>
 
-              {Array.isArray(selected.guests) && selected.guests.length > 0 && (
-                <div>
-                  <h4 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
-                    Guests ({selected.guests.length})
+              <div>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <h4
+                    id="list-guests-label"
+                    className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500"
+                  >
+                    Guests
                   </h4>
-                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {selected.guests.map((g) => (
-                      <li
-                        key={g.id || g.userId || g.email}
-                        className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-slate-800"
-                        >
-                          {guestInitials(g)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-slate-800">
-                            {g.name || g.email || "Guest"}
-                          </span>
-                          {g.email && g.name && (
-                            <span className="block truncate text-[12px] text-slate-500">
-                              {g.email}
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <span aria-live="polite" className="text-[12px] font-semibold text-emerald-600">
+                    {guestsStatus}
+                  </span>
                 </div>
-              )}
+                <GuestPicker
+                  value={guestsDraft}
+                  onChange={(next) => {
+                    const prev = guestsDraft;
+                    setGuestsDraft(next);
+                    saveListGuests(selected, next, prev);
+                  }}
+                  users={users}
+                  ariaLabelledby="list-guests-label"
+                />
+                {guestsError && (
+                  <p role="alert" className="mt-1.5 text-[12px] font-semibold text-rose-600">
+                    {guestsError}
+                  </p>
+                )}
+              </div>
 
               {selected.meetingRoom && (
                 <a
