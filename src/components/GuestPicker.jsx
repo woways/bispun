@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { X, Search, UserRound } from "lucide-react";
+import { X, Search, UserRound, Plus } from "lucide-react";
 
 /* Searchable multi-guest picker. Replaces the single "Assigned to" select:
    type to search company users, click to add, each guest becomes a removable
@@ -52,10 +52,33 @@ export default function GuestPicker({
     );
   }, [q, matches.length]);
 
+  // Exact match among existing users OR already-added guests → no "Add new".
+  const exact =
+    users.some(
+      (u) =>
+        (u.name || "").toLowerCase() === q || (u.email || "").toLowerCase() === q
+    ) ||
+    (value || []).some(
+      (g) =>
+        (g.name || "").toLowerCase() === q || (g.email || "").toLowerCase() === q
+    );
+  const showAdd = q.length > 0 && !exact;
+
   function addGuest(u) {
     onChange?.([...(value || []), { userId: u.id, name: u.name, email: u.email }]);
     setQuery("");
     setAnnounce(`${u.name || u.email || "Guest"} added`);
+  }
+  function addNewGuest() {
+    const text = query.trim();
+    if (!text) return;
+    const isEmail = text.includes("@");
+    onChange?.([
+      ...(value || []),
+      { userId: null, name: isEmail ? null : text, email: isEmail ? text : null },
+    ]);
+    setQuery("");
+    setAnnounce(`${text} added`);
   }
   function removeGuest(idx) {
     const removed = (value || [])[idx];
@@ -106,7 +129,7 @@ export default function GuestPicker({
         />
       </div>
 
-      {matches.length > 0 && (
+      {(matches.length > 0 || showAdd) && (
         <ul className="mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-sm">
           {matches.map((u) => (
             <li key={u.id}>
@@ -115,7 +138,7 @@ export default function GuestPicker({
                 onClick={() => addGuest(u)}
                 className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
               >
-                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-slate-800">
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-slate-800" aria-hidden="true">
                   {initials(u.name, u.email)}
                 </span>
                 <span className="min-w-0">
@@ -131,14 +154,25 @@ export default function GuestPicker({
               </button>
             </li>
           ))}
-        </ul>
-      )}
 
-      {q && matches.length === 0 && (
-        <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-slate-500">
-          <UserRound size={12} aria-hidden="true" />
-          No matching people.
-        </p>
+          {showAdd && (
+            <li>
+              <button
+                type="button"
+                onClick={addNewGuest}
+                aria-label={`Add guest ${query.trim()}`}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-slate-50 focus-visible:bg-slate-100 focus-visible:outline-none"
+              >
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700" aria-hidden="true">
+                  <Plus size={14} />
+                </span>
+                <span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">
+                  Add “{query.trim()}”
+                </span>
+              </button>
+            </li>
+          )}
+        </ul>
       )}
 
       <div aria-live="polite" aria-atomic="true" className="sr-only">

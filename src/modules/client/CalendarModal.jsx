@@ -187,6 +187,13 @@ const LIST_STATUS_PILL = {
   CANCELLED: "bg-rose-100 text-rose-800",
 };
 
+function guestInitials(g) {
+  const base = (g.name || g.email || "?").trim();
+  const parts = base.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return base.slice(0, 2).toUpperCase();
+}
+
 function formatListWhen(ev) {
   const start = new Date(ev.startAt);
   const date = start.toLocaleDateString("en-IN", {
@@ -483,6 +490,11 @@ export default function CalendarModal({
   const [listSelectedId, setListSelectedId] = useState(null);
   const [listConfirmDelete, setListConfirmDelete] = useState(false);
   const detailPaneHeadingRef = useRef(null);
+
+  // Inline notes editing in the List detail pane.
+  const [notesDraft, setNotesDraft] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSavedMsg, setNotesSavedMsg] = useState("");
 
 
 
@@ -1370,6 +1382,36 @@ export default function CalendarModal({
     }
   }, [viewMode, events, listSelectedId]);
 
+  // Load the selected meeting's notes into the editor draft when selection
+  // changes (keyed on id only, so a background refresh won't clobber typing).
+  useEffect(() => {
+    const sel = events.find((e) => e.id === listSelectedId);
+    setNotesDraft(sel?.description || "");
+    setNotesSavedMsg("");
+  }, [listSelectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveListNotes(ev) {
+    if (!ev?.id) return;
+    const html = notesDraft;
+    setNotesSaving(true);
+    setError("");
+    setEvents((prev) =>
+      prev.map((e) => (e.id === ev.id ? { ...e, description: html } : e))
+    );
+    try {
+      await apiRequest(`/api/client/calendar/${ev.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ description: html || null }),
+      });
+      setNotesSavedMsg("Saved");
+    } catch (err) {
+      setError(err?.data?.message || "Unable to save notes");
+      await loadEvents();
+    } finally {
+      setNotesSaving(false);
+    }
+  }
+
 
 
   /* ---- Derived data ---------------------------------------------- */
@@ -1570,56 +1612,74 @@ export default function CalendarModal({
                 </div>
               </div>
 
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
-                <div>
-                  <dt className="font-semibold text-slate-400">From</dt>
-                  <dd className="font-semibold text-slate-700">
-                    {selected.allDay ? "All day" : formatListWhen(selected)}
-                  </dd>
-                </div>
-                {selected.endAt && !selected.allDay && (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px] sm:grid-cols-3">
                   <div>
-                    <dt className="font-semibold text-slate-400">To</dt>
-                    <dd className="font-semibold text-slate-700">
-                      {formatListWhen({ ...selected, startAt: selected.endAt })}
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">From</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-800">
+                      {selected.allDay ? "All day" : formatListWhen(selected)}
                     </dd>
                   </div>
-                )}
-                <div>
-                  <dt className="font-semibold text-slate-400">Type</dt>
-                  <dd className="font-semibold text-slate-700">
-                    {TYPE_LABELS[selected.type] || "Other"}
-                  </dd>
-                </div>
-                {(selected.assignedToUser?.name || selected.createdByUser?.name) && (
+                  {selected.endAt && !selected.allDay && (
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">To</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">
+                        {formatListWhen({ ...selected, startAt: selected.endAt })}
+                      </dd>
+                    </div>
+                  )}
                   <div>
-                    <dt className="font-semibold text-slate-400">Owner</dt>
-                    <dd className="font-semibold text-slate-700">
-                      {selected.assignedToUser?.name || selected.createdByUser?.name}
-                    </dd>
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">Status</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-800">{statusLabel(selected.status)}</dd>
                   </div>
-                )}
-                {selected.location && (
-                  <div className="col-span-2">
-                    <dt className="font-semibold text-slate-400">Location</dt>
-                    <dd className="font-semibold text-slate-700">{selected.location}</dd>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">Type</dt>
+                    <dd className="mt-0.5 font-semibold text-slate-800">{TYPE_LABELS[selected.type] || "Other"}</dd>
                   </div>
-                )}
-              </dl>
+                  {(selected.assignedToUser?.name || selected.createdByUser?.name) && (
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">Owner</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">
+                        {selected.assignedToUser?.name || selected.createdByUser?.name}
+                      </dd>
+                    </div>
+                  )}
+                  {selected.location && (
+                    <div className="col-span-2 sm:col-span-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-[0.04em] text-slate-500">Location</dt>
+                      <dd className="mt-0.5 font-semibold text-slate-800">{selected.location}</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
 
               {Array.isArray(selected.guests) && selected.guests.length > 0 && (
                 <div>
-                  <h4 className="mb-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-                    Guests
+                  <h4 className="mb-2 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500">
+                    Guests ({selected.guests.length})
                   </h4>
-                  <ul className="flex flex-wrap gap-1.5">
+                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {selected.guests.map((g) => (
                       <li
                         key={g.id || g.userId || g.email}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-semibold text-slate-700"
+                        className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white p-2.5"
                       >
-                        <UserRound size={12} className="text-slate-400" aria-hidden="true" />
-                        {g.name || g.email || "Guest"}
+                        <span
+                          aria-hidden="true"
+                          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-bold text-slate-800"
+                        >
+                          {guestInitials(g)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold text-slate-800">
+                            {g.name || g.email || "Guest"}
+                          </span>
+                          {g.email && g.name && (
+                            <span className="block truncate text-[12px] text-slate-500">
+                              {g.email}
+                            </span>
+                          )}
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -1641,16 +1701,38 @@ export default function CalendarModal({
               )}
 
               <div>
-                <h4 className="mb-1.5 text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-400">
-                  Notes
-                </h4>
-                {selected.description ? (
-                  <RichTextView
-                    html={selected.description}
-                    className="text-[13px] font-medium leading-relaxed text-slate-700"
-                  />
-                ) : (
-                  <p className="text-[13px] font-medium text-slate-500">No notes.</p>
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <h4
+                    id="list-notes-label"
+                    className="text-[12px] font-extrabold uppercase tracking-[0.08em] text-slate-500"
+                  >
+                    Notes
+                  </h4>
+                  <span aria-live="polite" className="text-[12px] font-semibold text-emerald-600">
+                    {notesSavedMsg}
+                  </span>
+                </div>
+                <RichTextEditor
+                  value={notesDraft}
+                  onChange={(html) => {
+                    setNotesDraft(html);
+                    if (notesSavedMsg) setNotesSavedMsg("");
+                  }}
+                  ariaLabelledby="list-notes-label"
+                  placeholder="Add notes…"
+                />
+                {notesDraft !== (selected.description || "") && (
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => saveListNotes(selected)}
+                      disabled={notesSaving}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-brand-600 px-4 text-[13px] font-bold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                    >
+                      {notesSaving && <Loader2 size={13} className="animate-spin" aria-hidden="true" />}
+                      Save notes
+                    </button>
+                  </div>
                 )}
               </div>
                 </div>
