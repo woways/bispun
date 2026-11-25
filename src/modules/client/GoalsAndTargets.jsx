@@ -87,56 +87,37 @@ function bestMo(rows) {
   return w.length ? [...w].sort((a, b) => b.overallPercent - a.overallPercent)[0] : null;
 }
 
-// Decorative trend sparkline (area + line + endpoint dot). aria-hidden: the
-// same figures live in the card value/note and the targets table. The gradient
-// id is sanitized (useId() contains ":", invalid inside url(#...)).
-function Sparkline({ values }) {
-  const gid = "spark-" + useId().replace(/:/g, "");
-  const v = (values || []).filter((x) => x != null && !Number.isNaN(x));
-  if (v.length < 2) return <div className="mt-auto h-8 pt-2.5" aria-hidden="true" />;
-  const W = 120, H = 32, pX = 2, pY = 4, n = v.length;
-  const mn = Math.min(...v), mx = Math.max(...v), rng = mx - mn || 1;
-  const X = (i) => +(pX + (W - 2 * pX) * (i / (n - 1))).toFixed(1);
-  const Y = (val) => +(pY + (H - 2 * pY) * (1 - (val - mn) / rng)).toFixed(1);
-  const pts = v.map((val, i) => [X(i), Y(val)]);
-  const line = "M " + pts.map((p) => p.join(" ")).join(" L ");
-  const area = `M ${pts[0][0]} ${H} L ` + pts.map((p) => p.join(" ")).join(" L ") + ` L ${pts[n - 1][0]} ${H} Z`;
-  return (
-    <div className="mt-auto pt-2.5">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" focusable="false" className="block h-8 w-full">
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="rgb(var(--brand-500))" stopOpacity="0.26" />
-            <stop offset="1" stopColor="rgb(var(--brand-500))" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={area} fill={`url(#${gid})`} />
-        <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="2.4" fill="rgb(var(--brand-600))" vectorEffect="non-scaling-stroke" />
-      </svg>
-    </div>
-  );
-}
-
-// One KPI card — always white. icon tile + label, value (+inline delta), note,
-// and an optional trend sparkline pinned to the bottom.
-function KpiCard({ label, icon: Icon, value, note, delta = null, spark = null }) {
-  return (
-    <div className={`flex ${spark ? "min-h-[118px]" : ""} flex-col rounded-2xl border border-slate-200 bg-white p-[14px] pb-3 shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md`}>
+// One KPI card — white, one uniform size across My Targets and Team Targets:
+// icon tile + label up top, value (+inline delta) and note pinned to the bottom.
+// With `onClick` the whole card becomes a button (used to jump to the table).
+function KpiCard({ label, icon: Icon, value, note, delta = null, onClick = null }) {
+  const base =
+    "flex min-h-[104px] flex-col rounded-2xl border border-slate-200 bg-white p-[14px] shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md";
+  const body = (
+    <>
       <div className="flex items-center gap-2.5">
         <span className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
           <Icon size={15} aria-hidden="true" focusable="false" />
         </span>
         <span className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-slate-500 native:leading-[1.15]">{label}</span>
       </div>
-      <div className="mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[25px] font-bold leading-none tracking-[-0.03em] text-slate-900 [font-variant-numeric:tabular-nums] native:text-[20px]">
-        {value}
-        {delta}
+      <div className="mt-auto pt-3">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[25px] font-bold leading-none tracking-[-0.03em] text-slate-900 [font-variant-numeric:tabular-nums] native:text-[20px]">
+          {value}
+          {delta}
+        </div>
+        <div className="mt-1 text-[11.5px] font-medium text-slate-500">{note}</div>
       </div>
-      <div className="mt-1 text-[11.5px] font-medium text-slate-500">{note}</div>
-      {spark}
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${base} text-left`}>
+        {body}
+      </button>
+    );
+  }
+  return <div className={base}>{body}</div>;
 }
 
 function DeltaChip({ value }) {
@@ -148,6 +129,13 @@ function DeltaChip({ value }) {
       {Math.abs(value)}%
     </span>
   );
+}
+
+// Clicking any My Targets / drill KPI card scrolls down to the target table.
+function scrollToTargetsTable() {
+  if (typeof document === "undefined") return;
+  const el = document.getElementById("targetsTable");
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function AttainmentKpis({ monthRows, year, name = null }) {
@@ -163,24 +151,21 @@ function AttainmentKpis({ monthRows, year, name = null }) {
   const progress = totTgt > 0 ? Math.round((totAch / totTgt) * 100) : 0;
   const trk = monthRows.filter((m) => m.monthlyTarget > 0);
   const delta = trk.length >= 2 ? trk[trk.length - 1].overallPercent - trk[trk.length - 2].overallPercent : null;
-  const attSeries = monthRows.map((m) => (m.monthlyTarget > 0 ? m.overallPercent : null));
-  const volSeries = monthRows.map((m) => (m.monthlyTarget > 0 ? m.totalAchieved : null));
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard icon={TargetIcon}
+      <KpiCard onClick={scrollToTargetsTable} icon={TargetIcon}
         label={`${name ? name + " · " : ""}Year attainment · ${year}`}
         value={<span>{avg}%</span>} delta={<DeltaChip value={delta} />}
-        note={tracked ? `${status} · ${hit}/${tracked} months on target` : "No targets set yet"}
-        spark={<Sparkline values={attSeries} />} />
-      <KpiCard icon={BarChart3} label="Achieved vs target"
+        note={tracked ? `${status} · ${hit}/${tracked} months on target` : "No targets set yet"} />
+      <KpiCard onClick={scrollToTargetsTable} icon={BarChart3} label="Achieved vs target"
         value={<span>{nf.format(totAch)} <span className="text-[14px] font-semibold text-slate-500">/ {nf.format(totTgt)}</span></span>}
-        note={`${progress}% of total target volume`} spark={<Sparkline values={volSeries} />} />
-      <KpiCard icon={CalendarDays} label="Months on target"
+        note={`${progress}% of total target volume`} />
+      <KpiCard onClick={scrollToTargetsTable} icon={CalendarDays} label="Months on target"
         value={<span>{hit} <span className="text-[14px] font-semibold text-slate-500">/ {tracked || 0}</span></span>}
-        note={tracked ? `${hitRate}% hit rate` : "No tracked months"} spark={<Sparkline values={attSeries} />} />
-      <KpiCard icon={Trophy} label="Best month"
+        note={tracked ? `${hitRate}% hit rate` : "No tracked months"} />
+      <KpiCard onClick={scrollToTargetsTable} icon={Trophy} label="Best month"
         value={best ? <span>{MONTH_ABBR[best.month - 1]} <span className="text-[14px] font-semibold text-slate-500">{best.overallPercent}%</span></span> : <span>—</span>}
-        note={best ? "Peak attainment this year" : "No target data yet"} spark={<Sparkline values={attSeries} />} />
+        note={best ? "Peak attainment this year" : "No target data yet"} />
     </div>
   );
 }
@@ -204,8 +189,8 @@ function TeamKpis({ roster, teamAverage, year }) {
         value={<span>{onTarget} <span className="text-[14px] font-semibold text-slate-500">/ {n}</span></span>}
         note={`${otRate}% of the team`} />
       <KpiCard icon={Trophy} label="Top performer"
-        value={top ? <span className="text-[18px] [overflow-wrap:anywhere]">{top.name}</span> : <span>—</span>}
-        note={top ? `${top.yearAveragePercent}% attainment` : "—"} />
+        value={top ? <span>{top.yearAveragePercent}%</span> : <span>—</span>}
+        note={top ? top.name : "No members yet"} />
     </div>
   );
 }
@@ -615,7 +600,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
     const weekIdx = Array.from({ length: maxWeeks }, (_, i) => i + 1);
 
     return (
-      <div className="overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.05)]">
+      <div id="targetsTable" className="scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white shadow-[0_1px_2px_rgba(16,24,40,.04),0_8px_24px_rgba(16,24,40,.05)]">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-center text-[11px]">
             <thead>
