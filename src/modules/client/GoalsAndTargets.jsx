@@ -276,11 +276,11 @@ function AttainmentChart({ monthRows, title, sub }) {
                   <text x={pad.l - 8} y={Y(v) + 3} textAnchor="end" className="fill-slate-400" fontSize="10" fontWeight="600">{v}</text>
                 </g>
               ))}
-              <line x1={pad.l} y1={Y(100)} x2={W - pad.r} y2={Y(100)} className="stroke-rose-500" strokeWidth="2" strokeDasharray="5 5" opacity="0.85" />
+              <line x1={pad.l} y1={Y(100)} x2={W - pad.r} y2={Y(100)} className="stroke-rose-500" strokeWidth="1.25" strokeDasharray="4 4" opacity="0.8" />
               {C.length > 0 && (
                 <>
                   <path d={area} fill={`url(#${gradId})`} />
-                  <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
                 </>
               )}
               {C.map((p) => (
