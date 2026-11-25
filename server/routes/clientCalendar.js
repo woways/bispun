@@ -450,12 +450,17 @@ async function validateAssignee(
 // The CalendarEventGuest table may not be migrated on every environment yet.
 // Probe once and cache, so the calendar API degrades to "no guests" instead of
 // returning 500s before the 0012 migration is applied.
-let _guestsTableReady = null;
+// Once the table is confirmed present we cache `true` for the life of the
+// process. We never cache a negative result — otherwise a process that started
+// (or first probed) before the 0012 migration would silently drop all guest
+// writes forever until restarted. Re-probing while absent is a tiny query.
+let _guestsTableReady = false;
 
 async function guestsEnabled() {
-  if (_guestsTableReady !== null) return _guestsTableReady;
+  if (_guestsTableReady) return true;
   try {
-    const rows = await prisma.$queryRaw`SELECT to_regclass('"CalendarEventGuest"') AS t`;
+    // Cast to text: the pg adapter can't deserialize the raw `regclass` type.
+    const rows = await prisma.$queryRaw`SELECT to_regclass('"CalendarEventGuest"')::text AS t`;
     _guestsTableReady = Boolean(rows && rows[0] && rows[0].t);
   } catch {
     _guestsTableReady = false;
