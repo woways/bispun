@@ -131,18 +131,127 @@ function DeltaChip({ value }) {
   );
 }
 
-// Clicking any My Targets / drill KPI card scrolls down to the target table
-// and briefly highlights it so the jump is unmistakable.
-function scrollToTargetsTable() {
-  if (typeof document === "undefined") return;
-  const el = document.getElementById("targetsTable");
-  if (!el) return;
-  el.scrollIntoView({ behavior: "smooth", block: "start" });
-  el.classList.add("ring-2", "ring-brand-300", "ring-offset-2");
-  window.setTimeout(() => el.classList.remove("ring-2", "ring-brand-300", "ring-offset-2"), 1300);
+const ROLE_LABEL = { CLIENT_ADMIN: "Client Admin", MANAGER: "Manager", EMPLOYEE: "Employee" };
+const roleName = (r) => r.roleLabel || ROLE_LABEL[r.role] || r.role;
+
+// Small attainment % pill used inside the detail drawer.
+function Pill({ p }) {
+  const cls = p >= 100 ? "bg-brand-100 text-brand-700" : p > 0 ? "bg-brand-50 text-brand-500" : "bg-slate-100 text-slate-400";
+  return <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-extrabold [font-variant-numeric:tabular-nums] ${cls}`}>{p}%</span>;
 }
 
-function AttainmentKpis({ monthRows, year, name = null }) {
+// Build the detail-drawer config (title/value/sub + rows) for a KPI key.
+// ctx.kind "my" uses monthRows; "team" uses roster.
+function buildKpiDrawer(key, ctx) {
+  const nf = new Intl.NumberFormat("en-IN");
+  const small = (t) => <span className="text-[16px] font-semibold text-slate-500">{t}</span>;
+  if (ctx.kind === "my") {
+    const my = ctx.monthRows || [];
+    const who = ctx.name ? `${ctx.name} · ` : "";
+    const withT = my.filter((m) => m.monthlyTarget > 0);
+    const avg = yrAvg(my), best = bestMo(my);
+    const tracked = withT.length;
+    const hit = withT.filter((m) => m.overallPercent >= 100).length;
+    const totTgt = my.reduce((s, m) => s + (m.monthlyTarget || 0), 0);
+    const totAch = my.reduce((s, m) => s + (m.totalAchieved || 0), 0);
+    if (key === "att") return {
+      eyebrow: `${who}My Targets`, title: "Monthly attainment", value: <span>{avg}%</span>, sub: "Attainment % for each month this year",
+      rows: my.map((m) => ({ label: MONTH_NAMES[m.month - 1], sub: m.monthlyTarget > 0 ? `${m.totalAchieved} of ${m.monthlyTarget} achieved` : "No target set", right: m.monthlyTarget > 0 ? <Pill p={m.overallPercent} /> : "—" })),
+    };
+    if (key === "vol") return {
+      eyebrow: `${who}My Targets`, title: "Achieved vs target", value: <span>{nf.format(totAch)} {small(`/ ${nf.format(totTgt)}`)}</span>, sub: "Achieved against target, month by month",
+      rows: my.map((m) => ({ label: MONTH_NAMES[m.month - 1], sub: m.monthlyTarget > 0 ? `${m.overallPercent}% of target` : "No target set", right: m.monthlyTarget > 0 ? `${nf.format(m.totalAchieved)} / ${nf.format(m.monthlyTarget)}` : "—" })),
+    };
+    if (key === "moh") return {
+      eyebrow: `${who}My Targets`, title: "Months on target", value: <span>{hit} {small(`/ ${tracked || 0}`)}</span>, sub: "Which months hit 100% of target",
+      rows: withT.map((m) => ({ label: MONTH_NAMES[m.month - 1], sub: `${m.overallPercent}% attainment`, right: m.overallPercent >= 100 ? <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-extrabold text-brand-700">Hit</span> : <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-extrabold text-rose-600">Below</span> })),
+    };
+    if (key === "best") return {
+      eyebrow: `${who}My Targets`, title: "Best months", value: best ? <span>{MONTH_ABBR[best.month - 1]} · {best.overallPercent}%</span> : <span>—</span>, sub: "Months ranked by attainment",
+      rows: [...withT].sort((a, b) => b.overallPercent - a.overallPercent).map((m, i) => ({ label: `${i + 1}. ${MONTH_NAMES[m.month - 1]}`, sub: `${m.totalAchieved} of ${m.monthlyTarget}`, right: <Pill p={m.overallPercent} /> })),
+    };
+  } else {
+    const sorted = [...(ctx.roster || [])].sort((a, b) => b.yearAveragePercent - a.yearAveragePercent);
+    const onT = sorted.filter((r) => r.yearAveragePercent >= 100);
+    if (key === "team-att") return {
+      eyebrow: "Team Targets", title: "Team attainment", value: <span>{ctx.teamAverage}%</span>, sub: "Year attainment for each member",
+      rows: sorted.map((r) => ({ label: r.name, sub: roleName(r), right: <Pill p={r.yearAveragePercent} /> })),
+    };
+    if (key === "members") return {
+      eyebrow: "Team Targets", title: "Members", value: <span>{sorted.length}</span>, sub: "Everyone tracked this year",
+      rows: sorted.map((r) => ({ label: r.name, sub: r.jobTitle || r.email || "", right: roleName(r) })),
+    };
+    if (key === "members-ot") return {
+      eyebrow: "Team Targets", title: "Members on target", value: <span>{onT.length} {small(`/ ${sorted.length}`)}</span>, sub: "Members at 100% attainment or above",
+      rows: onT.map((r) => ({ label: r.name, sub: roleName(r), right: <Pill p={r.yearAveragePercent} /> })),
+    };
+    if (key === "top") return {
+      eyebrow: "Team Targets", title: "Top performers", value: sorted[0] ? <span>{sorted[0].yearAveragePercent}%</span> : <span>—</span>, sub: "Members ranked by attainment",
+      rows: sorted.map((r, i) => ({ label: `${i + 1}. ${r.name}`, sub: roleName(r), right: <Pill p={r.yearAveragePercent} /> })),
+    };
+  }
+  return null;
+}
+
+// Right-side detail drawer with pagination (opened by a KPI card).
+function KpiDrawer({ config, onClose }) {
+  const [page, setPage] = useState(0);
+  const PAGE = 6;
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!config) return null;
+  const pages = Math.max(1, Math.ceil(config.rows.length / PAGE));
+  const pg = Math.min(page, pages - 1);
+  const slice = config.rows.slice(pg * PAGE, (pg + 1) * PAGE);
+  return (
+    <>
+      <div onClick={onClose} className="fixed inset-0 z-[60] bg-slate-900/45" aria-hidden="true" />
+      <aside role="dialog" aria-modal="true" aria-label={config.title}
+        className="fixed right-0 top-0 z-[61] flex h-full w-[min(430px,94vw)] flex-col bg-white shadow-[-24px_0_60px_-24px_rgba(15,23,42,.45)]">
+        <div className="border-b border-slate-200 p-[18px]">
+          <div className="flex items-start justify-between gap-2.5">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-brand-600">{config.eyebrow}</span>
+            <button type="button" onClick={onClose} aria-label="Close" className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="mt-2.5 text-[18px] font-semibold tracking-tight text-slate-900">{config.title}</div>
+          <div className="mt-0.5 text-[30px] font-bold tracking-tight text-slate-900 [font-variant-numeric:tabular-nums]">{config.value}</div>
+          <div className="mt-0.5 text-[12px] font-medium text-slate-500">{config.sub}</div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-3 py-2">
+          {config.rows.length ? slice.map((r, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 border-b border-slate-100 px-2.5 py-2.5 last:border-0">
+              <div className="min-w-0">
+                <div className="truncate text-[13px] font-bold text-slate-700">{r.label}</div>
+                {r.sub ? <div className="mt-0.5 truncate text-[11.5px] text-slate-500">{r.sub}</div> : null}
+              </div>
+              <div className="flex-shrink-0 text-[13px] font-extrabold text-slate-900 [font-variant-numeric:tabular-nums]">{r.right}</div>
+            </div>
+          )) : <div className="p-9 text-center text-[13px] text-slate-500">Nothing to show yet.</div>}
+        </div>
+        {pages > 1 && (
+          <div className="flex items-center justify-between gap-2.5 border-t border-slate-200 px-4 py-3">
+            <span className="text-[12px] font-semibold text-slate-400">Page {pg + 1} of {pages}</span>
+            <div className="flex items-center gap-1">
+              <button type="button" disabled={pg === 0} onClick={() => setPage(pg - 1)} className="h-[30px] rounded-lg border border-slate-200 px-2.5 text-[12.5px] font-bold text-slate-500 transition hover:bg-slate-50 disabled:opacity-40">Prev</button>
+              {Array.from({ length: pages }, (_, i) => (
+                <button key={i} type="button" onClick={() => setPage(i)} aria-current={i === pg ? "page" : undefined}
+                  className={`h-[30px] min-w-[30px] rounded-lg px-2 text-[12.5px] font-bold transition ${i === pg ? "bg-brand-600 text-white" : "border border-slate-200 text-slate-500 hover:bg-slate-50"}`}>{i + 1}</button>
+              ))}
+              <button type="button" disabled={pg === pages - 1} onClick={() => setPage(pg + 1)} className="h-[30px] rounded-lg border border-slate-200 px-2.5 text-[12.5px] font-bold text-slate-500 transition hover:bg-slate-50 disabled:opacity-40">Next</button>
+            </div>
+          </div>
+        )}
+      </aside>
+    </>
+  );
+}
+
+function AttainmentKpis({ monthRows, year, name = null, onOpen }) {
   const nf = new Intl.NumberFormat("en-IN");
   const avg = yrAvg(monthRows);
   const best = bestMo(monthRows);
@@ -157,24 +266,24 @@ function AttainmentKpis({ monthRows, year, name = null }) {
   const delta = trk.length >= 2 ? trk[trk.length - 1].overallPercent - trk[trk.length - 2].overallPercent : null;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard onClick={scrollToTargetsTable} icon={TargetIcon}
+      <KpiCard onClick={() => onOpen("att")} icon={TargetIcon}
         label={`${name ? name + " · " : ""}Year attainment · ${year}`}
         value={<span>{avg}%</span>} delta={<DeltaChip value={delta} />}
         note={tracked ? `${status} · ${hit}/${tracked} months on target` : "No targets set yet"} />
-      <KpiCard onClick={scrollToTargetsTable} icon={BarChart3} label="Achieved vs target"
+      <KpiCard onClick={() => onOpen("vol")} icon={BarChart3} label="Achieved vs target"
         value={<span>{nf.format(totAch)} <span className="text-[14px] font-semibold text-slate-500">/ {nf.format(totTgt)}</span></span>}
         note={`${progress}% of total target volume`} />
-      <KpiCard onClick={scrollToTargetsTable} icon={CalendarDays} label="Months on target"
+      <KpiCard onClick={() => onOpen("moh")} icon={CalendarDays} label="Months on target"
         value={<span>{hit} <span className="text-[14px] font-semibold text-slate-500">/ {tracked || 0}</span></span>}
         note={tracked ? `${hitRate}% hit rate` : "No tracked months"} />
-      <KpiCard onClick={scrollToTargetsTable} icon={Trophy} label="Best month"
+      <KpiCard onClick={() => onOpen("best")} icon={Trophy} label="Best month"
         value={best ? <span>{MONTH_ABBR[best.month - 1]} <span className="text-[14px] font-semibold text-slate-500">{best.overallPercent}%</span></span> : <span>—</span>}
         note={best ? "Peak attainment this year" : "No target data yet"} />
     </div>
   );
 }
 
-function TeamKpis({ roster, teamAverage, year }) {
+function TeamKpis({ roster, teamAverage, year, onOpen }) {
   const n = roster.length;
   const onTarget = roster.filter((r) => Number(r.yearAveragePercent || 0) >= 100).length;
   const otRate = n ? Math.round((onTarget / n) * 100) : 0;
@@ -184,15 +293,15 @@ function TeamKpis({ roster, teamAverage, year }) {
   const status = perfStatus(teamAverage, n);
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard icon={TargetIcon} label={`Team attainment · ${year}`}
+      <KpiCard onClick={() => onOpen("team-att")} icon={TargetIcon} label={`Team attainment · ${year}`}
         value={<span>{teamAverage}%</span>}
         note={`${status} · ${onTarget} of ${n} on target`} />
-      <KpiCard icon={Users} label="Members" value={<span>{n}</span>}
+      <KpiCard onClick={() => onOpen("members")} icon={Users} label="Members" value={<span>{n}</span>}
         note={`${mgr} managers · ${emp} employees`} />
-      <KpiCard icon={CheckCircle2} label="Members on target"
+      <KpiCard onClick={() => onOpen("members-ot")} icon={CheckCircle2} label="Members on target"
         value={<span>{onTarget} <span className="text-[14px] font-semibold text-slate-500">/ {n}</span></span>}
         note={`${otRate}% of the team`} />
-      <KpiCard icon={Trophy} label="Top performer"
+      <KpiCard onClick={() => onOpen("top")} icon={Trophy} label="Top performer"
         value={top ? <span>{top.yearAveragePercent}%</span> : <span>—</span>}
         note={top ? top.name : "No members yet"} />
     </div>
@@ -344,6 +453,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
   const [teamLoading, setTeamLoading] = useState(false);
   const [drill, setDrill] = useState(null);
   const [quarter, setQuarter] = useState("all"); // all | q1 | q2 | q3 | q4
+  const [drawerKey, setDrawerKey] = useState(null); // open KPI detail drawer
 
   /* ---- Load ------------------------------------------------------ */
   async function loadMe() {
@@ -392,6 +502,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
     setDrill(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, year]);
+
+  // Close any open KPI drawer when the view or drilled-into person changes.
+  useEffect(() => { setDrawerKey(null); }, [view, drill]);
 
   /* ---- Actions --------------------------------------------------- */
   async function setAchieved(month, week, value) {
@@ -928,7 +1041,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         ) : (
           <>
-            <AttainmentKpis monthRows={months} year={year} />
+            <AttainmentKpis monthRows={months} year={year} onOpen={setDrawerKey} />
             <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-[12px] font-semibold text-brand-700">
               Type what you achieved each week, then press Enter or click away to save. Targets and percentages are automatic.
             </div>
@@ -964,7 +1077,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 <div className="text-[13px] text-slate-500">{drill.owner?.jobTitle || drill.owner?.email}</div>
               </div>
             </div>
-            <AttainmentKpis monthRows={drill.months} year={year} name={drill.owner?.name} />
+            <AttainmentKpis monthRows={drill.months} year={year} name={drill.owner?.name} onOpen={setDrawerKey} />
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-700">
               Type each <b>Week Target</b> (numbers only). Monthly Target = sum of week targets. Achieved is entered by the employee.
             </div>
@@ -983,7 +1096,7 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
         ) : (
           <>
             <div className="text-[13px] font-medium text-slate-500">Company-wide performance overview</div>
-            <TeamKpis roster={roster} teamAverage={teamAverage} year={year} />
+            <TeamKpis roster={roster} teamAverage={teamAverage} year={year} onOpen={setDrawerKey} />
 
             {/* Search + department filter (View all lives at the end of this row) */}
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm native:relative native:flex-nowrap native:max-w-full native:overflow-x-auto">
@@ -1175,6 +1288,20 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
             </div>
           </>
         )
+      )}
+
+      {drawerKey && (
+        <KpiDrawer
+          config={buildKpiDrawer(
+            drawerKey,
+            view === "me"
+              ? { kind: "my", monthRows: months, year }
+              : drill
+              ? { kind: "my", monthRows: drill.months, name: drill.owner?.name, year }
+              : { kind: "team", roster, teamAverage, year }
+          )}
+          onClose={() => setDrawerKey(null)}
+        />
       )}
     </div>
   );
