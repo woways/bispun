@@ -132,12 +132,17 @@ router.post("/meet", requireClientUser, async (req, res) => {
       req.body?.startISO || new Date(now).toISOString();
     const endISO =
       req.body?.endISO || new Date(now + 60 * 60 * 1000).toISOString();
+    const attendees = Array.isArray(req.body?.attendees)
+      ? req.body.attendees
+      : [];
     const result = await createMeetEvent(req.clientUser.userId, {
       summary: req.body?.summary || "Meeting",
       description: req.body?.description || "",
       startISO,
       endISO,
-      attendees: Array.isArray(req.body?.attendees) ? req.body.attendees : [],
+      attendees,
+      // With guests, let Google email each of them a real calendar invite.
+      sendUpdates: attendees.length ? "all" : undefined,
     });
     if (!result.meetLink) {
       // The event was created, but Google is still provisioning the Meet

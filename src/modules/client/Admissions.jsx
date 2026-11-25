@@ -26,6 +26,7 @@ import {
   Pencil,
   Trash2,
   Building2,
+  Globe2,
   Upload,
   Paperclip,
   ExternalLink,
@@ -2801,6 +2802,36 @@ function AdmissionsManager({
     },
   };
 
+  // Clean-card accents (light theme): a bright shade for the DECORATIVE dot only,
+  // and a -700 shade wherever the colour is used as TEXT or as a hover fill behind
+  // white text, so every stream colour clears WCAG AA 4.5:1 (per a11y review).
+  // Literal class strings so Tailwind JIT picks them up.
+  const STREAM_ACCENTS = {
+    blue:    { tile: "border-[#dbeafe] bg-[#eff6ff] text-[#1d4ed8]", text: "text-[#1d4ed8]", dot: "bg-[#2563eb]", open: "border-[#dbeafe] bg-[#eff6ff] text-[#1d4ed8] hover:bg-[#1d4ed8] hover:text-white hover:border-[#1d4ed8]" },
+    orange:  { tile: "border-[#ffedd5] bg-[#fff7ed] text-[#c2410c]", text: "text-[#c2410c]", dot: "bg-[#ea580c]", open: "border-[#ffedd5] bg-[#fff7ed] text-[#c2410c] hover:bg-[#c2410c] hover:text-white hover:border-[#c2410c]" },
+    purple:  { tile: "border-[#ede9fe] bg-[#f5f3ff] text-[#6d28d9]", text: "text-[#6d28d9]", dot: "bg-[#7c3aed]", open: "border-[#ede9fe] bg-[#f5f3ff] text-[#6d28d9] hover:bg-[#6d28d9] hover:text-white hover:border-[#6d28d9]" },
+    green:   { tile: "border-[#d1fae5] bg-[#ecfdf5] text-[#047857]", text: "text-[#047857]", dot: "bg-[#059669]", open: "border-[#d1fae5] bg-[#ecfdf5] text-[#047857] hover:bg-[#047857] hover:text-white hover:border-[#047857]" },
+    rose:    { tile: "border-[#ffe4e6] bg-[#fff1f2] text-[#be123c]", text: "text-[#be123c]", dot: "bg-[#e11d48]", open: "border-[#ffe4e6] bg-[#fff1f2] text-[#be123c] hover:bg-[#be123c] hover:text-white hover:border-[#be123c]" },
+    slate:   { tile: "border-[#e2e8f0] bg-[#f8fafc] text-[#334155]", text: "text-[#334155]", dot: "bg-[#475569]", open: "border-[#e2e8f0] bg-[#f8fafc] text-[#334155] hover:bg-[#334155] hover:text-white hover:border-[#334155]" },
+    sky:     { tile: "border-[#e0f2fe] bg-[#f0f9ff] text-[#0369a1]", text: "text-[#0369a1]", dot: "bg-[#0284c7]", open: "border-[#e0f2fe] bg-[#f0f9ff] text-[#0369a1] hover:bg-[#0369a1] hover:text-white hover:border-[#0369a1]" },
+    cyan:    { tile: "border-[#cffafe] bg-[#ecfeff] text-[#0e7490]", text: "text-[#0e7490]", dot: "bg-[#0891b2]", open: "border-[#cffafe] bg-[#ecfeff] text-[#0e7490] hover:bg-[#0e7490] hover:text-white hover:border-[#0e7490]" },
+    teal:    { tile: "border-[#ccfbf1] bg-[#f0fdfa] text-[#0f766e]", text: "text-[#0f766e]", dot: "bg-[#0d9488]", open: "border-[#ccfbf1] bg-[#f0fdfa] text-[#0f766e] hover:bg-[#0f766e] hover:text-white hover:border-[#0f766e]" },
+    lime:    { tile: "border-[#ecfccb] bg-[#f7fee7] text-[#4d7c0f]", text: "text-[#4d7c0f]", dot: "bg-[#65a30d]", open: "border-[#ecfccb] bg-[#f7fee7] text-[#4d7c0f] hover:bg-[#4d7c0f] hover:text-white hover:border-[#4d7c0f]" },
+    yellow:  { tile: "border-[#fef9c3] bg-[#fefce8] text-[#a16207]", text: "text-[#a16207]", dot: "bg-[#ca8a04]", open: "border-[#fef9c3] bg-[#fefce8] text-[#a16207] hover:bg-[#a16207] hover:text-white hover:border-[#a16207]" },
+    amber:   { tile: "border-[#fef3c7] bg-[#fffbeb] text-[#b45309]", text: "text-[#b45309]", dot: "bg-[#d97706]", open: "border-[#fef3c7] bg-[#fffbeb] text-[#b45309] hover:bg-[#b45309] hover:text-white hover:border-[#b45309]" },
+    red:     { tile: "border-[#fee2e2] bg-[#fef2f2] text-[#b91c1c]", text: "text-[#b91c1c]", dot: "bg-[#dc2626]", open: "border-[#fee2e2] bg-[#fef2f2] text-[#b91c1c] hover:bg-[#b91c1c] hover:text-white hover:border-[#b91c1c]" },
+    pink:    { tile: "border-[#fce7f3] bg-[#fdf2f8] text-[#be185d]", text: "text-[#be185d]", dot: "bg-[#db2777]", open: "border-[#fce7f3] bg-[#fdf2f8] text-[#be185d] hover:bg-[#be185d] hover:text-white hover:border-[#be185d]" },
+    fuchsia: { tile: "border-[#fae8ff] bg-[#fdf4ff] text-[#a21caf]", text: "text-[#a21caf]", dot: "bg-[#c026d3]", open: "border-[#fae8ff] bg-[#fdf4ff] text-[#a21caf] hover:bg-[#a21caf] hover:text-white hover:border-[#a21caf]" },
+    indigo:  { tile: "border-[#e0e7ff] bg-[#eef2ff] text-[#4338ca]", text: "text-[#4338ca]", dot: "bg-[#4f46e5]", open: "border-[#e0e7ff] bg-[#eef2ff] text-[#4338ca] hover:bg-[#4338ca] hover:text-white hover:border-[#4338ca]" },
+    navy:    { tile: "border-[#dbeafe] bg-[#eff6ff] text-[#1e3a8a]", text: "text-[#1e3a8a]", dot: "bg-[#1e3a8a]", open: "border-[#dbeafe] bg-[#eff6ff] text-[#1e3a8a] hover:bg-[#1e3a8a] hover:text-white hover:border-[#1e3a8a]" },
+    black:   { tile: "border-[#e4e4e7] bg-[#fafafa] text-[#27272a]", text: "text-[#27272a]", dot: "bg-[#27272a]", open: "border-[#e4e4e7] bg-[#fafafa] text-[#27272a] hover:bg-[#27272a] hover:text-white hover:border-[#27272a]" },
+    emerald: { tile: "border-[#d1fae5] bg-[#ecfdf5] text-[#047857]", text: "text-[#047857]", dot: "bg-[#059669]", open: "border-[#d1fae5] bg-[#ecfdf5] text-[#047857] hover:bg-[#047857] hover:text-white hover:border-[#047857]" },
+  };
+
+  function accentForColor(color) {
+    return STREAM_ACCENTS[color] || STREAM_ACCENTS.blue;
+  }
+
   function gradientForColor(
     color = "blue",
     variant = 0
@@ -3471,36 +3502,34 @@ function AdmissionsManager({
     const visibleStreams = streams.slice(0, 4);
 
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-wrap gap-3">
+      <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
           <button
             type="button"
             onClick={() => {
               detailTriggerRef.current = document.activeElement;
               setShowAllAdmissions(true);
             }}
-            className="w-full rounded-xl bg-gradient-to-br from-brand-500 via-brand-600 to-brand-800 px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px]"
+            className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
           >
-            <div className="text-[13px] font-semibold text-white/70">
-              Total Admissions
-            </div>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-brand-600" aria-hidden="true" />
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.05em] text-slate-500">
+                Total Admissions
+              </span>
+            </span>
 
-            <div className="mt-2 text-3xl font-bold">
+            <span className="text-[22px] font-bold leading-none tracking-[-0.02em] text-slate-950 [font-variant-numeric:tabular-nums]">
               {overall.admissions}
-            </div>
+            </span>
 
-            <div className="mt-2 text-[13px] text-white/60">
-              Across all streams
-            </div>
+            <span className="text-[11px] text-slate-500">Across all streams</span>
           </button>
 
-          {visibleStreams.map((stream, index) => {
-            const gradient =
-              gradientForColor(
-                stream.color ||
-                  recommendedStreamColor(stream.name),
-                index
-              );
+          {visibleStreams.map((stream) => {
+            const acc = accentForColor(
+              stream.color || recommendedStreamColor(stream.name)
+            );
 
             return (
               <button
@@ -3510,19 +3539,22 @@ function AdmissionsManager({
                   detailTriggerRef.current = document.activeElement;
                   setSelectedStream(stream);
                 }}
-                className={`w-full rounded-xl px-4 py-4 text-left text-white transition hover:-translate-y-0.5 hover:shadow-md sm:w-[210px] lg:w-[220px] ${gradient.bg}`}
+                className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
               >
-                <div className="text-[13px] font-semibold text-white/75">
-                  {stream.name}
-                </div>
+                <span className="flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${acc.dot}`} aria-hidden="true" />
+                  <span className="truncate text-[10.5px] font-bold uppercase tracking-[0.05em] text-slate-500">
+                    {stream.name}
+                  </span>
+                </span>
 
-                <div className="mt-2 text-3xl font-bold">
+                <span className="text-[22px] font-bold leading-none tracking-[-0.02em] text-slate-950 [font-variant-numeric:tabular-nums]">
                   {stream.totalAdmissions || 0}
-                </div>
+                </span>
 
-                <div className="mt-2 text-[13px] text-white/70">
+                <span className="text-[11px] text-slate-500">
                   {stream.totalColleges || 0} colleges
-                </div>
+                </span>
               </button>
             );
           })}
@@ -4062,57 +4094,98 @@ function AdmissionsManager({
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {streams.map((stream, index) => {
+            {streams.map((stream) => {
               const Icon = streamIcon(stream.name);
+              const acc = accentForColor(
+                stream.color || recommendedStreamColor(stream.name)
+              );
 
               return (
-                <GradientCard
+                <div
                   key={stream.id}
-                  title={stream.name}
-                  subtitle={`${stream.totalAdmissions || 0} Admissions`}
-                  description={stream.description || ""}
-                  icon={Icon}
-                  index={index}
-                  color={
-                    stream.color ||
-                    recommendedStreamColor(stream.name)
-                  }
-                  openLabel={`Open ${stream.name}`}
-                  onOpen={() => {
-                    detailTriggerRef.current = document.activeElement;
-                    setSelectedStream(stream);
-                    setSelectedPartner(null);
-                    setSelectedBranch(null);
-                  }}
-                  onEdit={() =>
-                    setStreamModal({
-                      mode: "edit",
-                      stream,
-                    })
-                  }
-                  onDelete={() => deleteStream(stream)}
-                  extra={
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                        <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                          Colleges
-                        </div>
-                        <div className="mt-1 text-xl font-bold">
-                          {stream.totalColleges || 0}
-                        </div>
-                      </div>
+                  className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition hover:-translate-y-1 hover:shadow-md motion-reduce:transform-none"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className={`grid h-11 w-11 place-items-center rounded-xl border ${acc.tile}`}>
+                      <Icon size={20} aria-hidden="true" focusable="false" />
+                    </span>
 
-                      <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                        <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                          Branches
-                        </div>
-                        <div className="mt-1 text-xl font-bold">
-                          {stream.totalBranches || 0}
-                        </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Edit ${stream.name}`}
+                        onClick={() =>
+                          setStreamModal({ mode: "edit", stream })
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      >
+                        <Pencil size={14} aria-hidden="true" />
+                      </button>
+
+                      <button
+                        type="button"
+                        aria-label={`Delete ${stream.name}`}
+                        onClick={() => deleteStream(stream)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                      >
+                        <Trash2 size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
+                      {stream.name}
+                    </div>
+                    <div className={`mt-1 inline-flex items-center gap-1.5 text-[12.5px] font-semibold ${acc.text}`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${acc.dot}`} aria-hidden="true" />
+                      {stream.totalAdmissions || 0} Admissions
+                    </div>
+                  </div>
+
+                  {stream.description ? (
+                    <div className="min-h-[34px] text-[12.5px] leading-5 text-slate-500">
+                      {stream.description}
+                    </div>
+                  ) : (
+                    <div className="min-h-[34px]" />
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">
+                        Colleges
+                      </div>
+                      <div className="mt-1 text-[17px] font-bold text-slate-900 [font-variant-numeric:tabular-nums]">
+                        {stream.totalColleges || 0}
                       </div>
                     </div>
-                  }
-                />
+
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">
+                        Branches
+                      </div>
+                      <div className="mt-1 text-[17px] font-bold text-slate-900 [font-variant-numeric:tabular-nums]">
+                        {stream.totalBranches || 0}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-label={`Open ${stream.name}`}
+                    onClick={() => {
+                      detailTriggerRef.current = document.activeElement;
+                      setSelectedStream(stream);
+                      setSelectedPartner(null);
+                      setSelectedBranch(null);
+                    }}
+                    className={`mt-auto flex h-10 w-full items-center justify-between rounded-xl border px-3.5 text-[13px] font-bold transition ${acc.open} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1`}
+                  >
+                    Open {stream.name}
+                    <ChevronRight size={16} aria-hidden="true" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -4986,63 +5059,86 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
         {showSkeleton ? (
           [0, 1, 2].map((index) => (
             <div
               key={index}
               aria-hidden="true"
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] native:p-3"
+              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] native:p-2.5"
             >
-              <div className="h-3 w-28 animate-pulse rounded bg-slate-200" />
-              <div className="mt-2 h-6 w-12 animate-pulse rounded bg-slate-200" />
-              <div className="mt-3 border-t border-slate-100 pt-3">
-                <div className="h-3 w-32 animate-pulse rounded bg-slate-100" />
+              <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-lg bg-slate-200" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="h-2.5 w-20 animate-pulse rounded bg-slate-200" />
+                <div className="h-5 w-10 animate-pulse rounded bg-slate-100" />
               </div>
             </div>
           ))
         ) : [
           {
-            label: "Overall Admissions",
+            label: "Overall",
             value: data.all.length,
             detail: "Across Domestic & International",
             filter: "ALL",
+            icon: GraduationCap,
           },
           {
-            label: "Domestic Admissions",
+            label: "Domestic",
             value: data.domestic.length,
             detail: "All Domestic admissions",
             filter: "DOMESTIC",
+            icon: Building2,
           },
           {
-            label: "International Admissions",
+            label: "International",
             value: data.international.length,
             detail: "All International admissions",
             filter: "INTERNATIONAL",
+            icon: Globe2,
           },
-        ].map((item) => (
-          <button
-            type="button"
-            key={item.label}
-            onClick={() => {
-              setFilter(item.filter);
-              window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-            }}
-            className="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-200 hover:bg-indigo-50/30 native:flex native:flex-col native:p-2.5 native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1"
-          >
-            <div className="text-[12px] font-semibold uppercase tracking-[0.09em] text-slate-400 native:text-[10px] native:leading-[1.15] native:tracking-normal native:text-slate-500">
-              {item.label}
-            </div>
+        ].map((item) => {
+          const active = filter === item.filter;
+          const isIntl = item.filter === "INTERNATIONAL";
+          const Icon = item.icon;
+          return (
+            <button
+              type="button"
+              key={item.label}
+              title={item.detail}
+              aria-pressed={active}
+              onClick={() => {
+                setFilter(item.filter);
+                window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+              }}
+              className={`flex items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 native:focus-visible:ring-indigo-500 ${
+                active
+                  ? isIntl
+                    ? "border-cyan-500 bg-cyan-50/50"
+                    : "border-brand-500 bg-brand-50/60"
+                  : "border-slate-200 hover:border-brand-200"
+              }`}
+            >
+              <span
+                className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg border ${
+                  isIntl
+                    ? "border-cyan-100 bg-cyan-50 text-cyan-600"
+                    : "border-brand-100 bg-brand-50 text-brand-600"
+                }`}
+              >
+                <Icon size={16} aria-hidden="true" focusable="false" />
+              </span>
 
-            <div className="mt-2 text-[24px] font-bold leading-none tracking-tight text-slate-950 native:mt-1.5 native:text-[19px]">
-              {item.value}
-            </div>
-
-            <div className="mt-3 border-t border-slate-100 pt-3 text-[13px] leading-5 font-medium text-slate-500 native:mt-auto native:border-t-0 native:pt-1.5 native:text-[10px] native:leading-[1.25]">
-              {item.detail}
-            </div>
-          </button>
-        ))}
+              <span className="min-w-0">
+                <span className="block truncate text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-500 native:text-[10px] native:leading-[1.15]">
+                  {item.label}
+                </span>
+                <span className="mt-1 block text-[22px] font-bold leading-none tracking-[-0.03em] text-slate-950 [font-variant-numeric:tabular-nums] native:text-[18px]">
+                  {item.value}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div> : null}

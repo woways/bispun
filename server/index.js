@@ -73,6 +73,7 @@ import razorpayWebhook from "./routes/razorpayWebhook.js";
 import http from "http";
 import { attachSocketServer } from "./socket.js";
 import clientTargetsRoutes from "./routes/clientTargets.js";
+import clientTasksRoutes from "./routes/clientTasks.js";
 import clientReferralsRoutes from "./routes/clientReferrals.js";
 import clientStoreRoutes from "./routes/clientStore.js";
 import filesRoutes from "./routes/files.js";
@@ -238,6 +239,7 @@ app.use("/api/client/telephony", clientTelephonyRoutes);
 app.use("/api/webhooks/whatsapp", whatsappWebhookRouter);
 app.use("/api/webhooks/telephony", telephonyWebhookRouter);
 app.use("/api/client/targets", clientTargetsRoutes);
+app.use("/api/client/tasks", clientTasksRoutes);
 app.use("/api/client/referrals", clientReferralsRoutes);
 app.use("/api/client/store", clientStoreRoutes);
 

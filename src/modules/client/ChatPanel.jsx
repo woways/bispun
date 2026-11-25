@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   Check,
   Mail,
+  Phone,
   Reply,
   MoreVertical,
   Copy,
@@ -132,7 +133,7 @@ function escapeRegExp(value) {
 
 // Highlights "@Name" tokens in a message body when the name matches a known
 // group member. Returns a string (no mentions) or an array of React nodes.
-function renderBodyWithMentions(body, memberNames, mine = false) {
+function renderBodyWithMentions(body, memberNames, mine = false, keyPrefix = "") {
   const text = String(body || "");
   const names = (Array.isArray(memberNames) ? memberNames : [])
     .map((name) => String(name || "").trim())
@@ -154,7 +155,7 @@ function renderBodyWithMentions(body, memberNames, mine = false) {
     }
     nodes.push(
       <span
-        key={`mention-${key++}`}
+        key={`${keyPrefix}mention-${key++}`}
         className={`rounded px-1 font-semibold ${
           mine
             ? "bg-white/10 text-white underline decoration-white/50 underline-offset-2"
@@ -169,6 +170,69 @@ function renderBodyWithMentions(body, memberNames, mine = false) {
 
   if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
   return nodes;
+}
+
+const MESSAGE_URL_REGEX = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/gi;
+
+// Renders a message body with clickable URLs plus @mention highlights. URLs open
+// in a new tab (noopener noreferrer); only http/https are linked and a bare
+// "www." is sent to https. Rendered as React text/elements — no HTML injection.
+function renderMessageBody(body, memberNames, mine = false) {
+  const text = String(body || "");
+  if (!text) return text;
+  if (!/https?:\/\/|www\./i.test(text)) {
+    return renderBodyWithMentions(text, memberNames, mine);
+  }
+
+  const out = [];
+  const re = new RegExp(MESSAGE_URL_REGEX.source, "gi");
+  let lastIndex = 0;
+  let key = 0;
+  let match;
+
+  const pushText = (chunk, prefix) => {
+    if (!chunk) return;
+    const seg = renderBodyWithMentions(chunk, memberNames, mine, prefix);
+    if (Array.isArray(seg)) out.push(...seg);
+    else out.push(seg);
+  };
+
+  while ((match = re.exec(text)) !== null) {
+    pushText(text.slice(lastIndex, match.index), `s${key}-`);
+
+    let raw = match[0];
+    let trail = "";
+    const trailMatch = raw.match(/[.,!?;:)\]}'"]+$/);
+    if (trailMatch) {
+      trail = trailMatch[0];
+      raw = raw.slice(0, raw.length - trail.length);
+    }
+    const href = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    out.push(
+      <a
+        key={`url-${key}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`break-all rounded-sm underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${
+          mine
+            ? "text-white decoration-white/60 hover:decoration-white focus-visible:ring-white"
+            : "text-indigo-600 decoration-indigo-300 hover:text-indigo-700 focus-visible:ring-indigo-600"
+        }`}
+      >
+        {raw}
+        <span className="sr-only"> (opens in new tab)</span>
+      </a>
+    );
+    if (trail) out.push(trail);
+
+    lastIndex = match.index + match[0].length;
+    key += 1;
+  }
+
+  pushText(text.slice(lastIndex), `s${key}-`);
+  return out;
 }
 
 const EMOJI_CATEGORIES = {
@@ -322,6 +386,7 @@ export default function ChatPanel({
   const [search, setSearch] = useState("");
   const [convFilter, setConvFilter] = useState("all"); // all | unread | groups | favourites
   const [othersReadAt, setOthersReadAt] = useState(null); // read-receipt cursor (ISO) for the open chat
+  const [profileOpen, setProfileOpen] = useState(false); // 1-to-1 contact info drawer
   const [replyTo, setReplyTo] = useState(null);
   const [messageMenuId, setMessageMenuId] = useState(null);
   const [messageReactionMoreId, setMessageReactionMoreId] = useState(null);
@@ -353,6 +418,9 @@ export default function ChatPanel({
   const [addMemberIds, setAddMemberIds] = useState([]);
   const [memberBusy, setMemberBusy] = useState(false);
   const membersRef = useRef(null);
+  const profileRef = useRef(null);
+  const profileBtnRef = useRef(null);
+  const membersBtnRef = useRef(null);
   const addMemberRef = useRef(null);
   // Image lightbox (full-size attachment preview).
   const [lightbox, setLightbox] = useState(null); // { url, fileName }
@@ -642,8 +710,17 @@ export default function ChatPanel({
       setMembersOpen(false);
       setAddMemberOpen(false);
       setAddMemberIds([]);
+      requestAnimationFrame(() => membersBtnRef.current?.focus());
     },
-    { containerRef: membersRef }
+    { manageFocus: false }
+  );
+  useOverlayDismiss(
+    profileOpen,
+    () => {
+      setProfileOpen(false);
+      requestAnimationFrame(() => profileBtnRef.current?.focus());
+    },
+    { manageFocus: false }
   );
   useOverlayDismiss(lightbox !== null, () => setLightbox(null), {
     containerRef: lightboxRef,
@@ -1793,7 +1870,7 @@ export default function ChatPanel({
   return (
     <div
       ref={rootRef}
-      className="flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-[#f5f5f4]"
+      className="relative flex h-[calc(100vh-104px)] w-full flex-col overflow-hidden bg-[#f5f5f4]"
       style={
         isMobileChat && mobileChatHeight
           ? { height: `${mobileChatHeight}px` }
@@ -1971,7 +2048,7 @@ export default function ChatPanel({
         </div>
 
         {/* CENTER THREAD */}
-        <div role="region" aria-label={activeConversation ? `Chat with ${activeConversation.title}` : "Conversation thread"} className={`relative min-h-0 min-w-0 flex-1 flex-col bg-white lg:overflow-hidden lg:rounded-2xl lg:shadow-[0_1px_8px_rgba(0,0,0,0.05)] ${activeId ? "flex" : "hidden lg:flex"}`}>
+        <div role="region" aria-label={activeConversation ? `Chat with ${activeConversation.title}` : "Conversation thread"} className={`relative min-h-0 min-w-0 flex-1 flex-col bg-white lg:overflow-hidden lg:rounded-2xl lg:shadow-[0_1px_8px_rgba(0,0,0,0.05)] ${activeId ? (membersOpen && activeConversation?.isGroup ? "hidden lg:flex" : "flex") : "hidden lg:flex"}`}>
           {activeConversation ? (
             <>
               <div className="flex h-[66px] flex-shrink-0 items-center gap-3 border-b border-neutral-200 bg-white px-4">
@@ -1983,8 +2060,11 @@ export default function ChatPanel({
                 </span>
                 {activeConversation.isGroup ? (
                   <button
+                    ref={membersBtnRef}
                     type="button"
                     onClick={openMembersPanel}
+                    aria-expanded={membersOpen}
+                    aria-controls="group-members-panel"
                     aria-label={`View ${(activeConversation.members || []).filter(Boolean).length} members of ${activeConversation.title}`}
                     className="min-w-0 flex-1 rounded-lg py-1 text-left hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
                   >
@@ -1992,9 +2072,57 @@ export default function ChatPanel({
                     <span className="block truncate text-[13px] text-slate-500">{(() => { const n = (activeConversation.members || []).filter(Boolean).length; if (n === 0) return "No members"; return `${n} member${n === 1 ? "" : "s"}`; })()}</span>
                   </button>
                 ) : (
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</div>
-                    <div className="truncate text-[13px] text-slate-500">{activeConversation.otherMembers?.[0]?.email || "Team member"}</div>
+                  <div className="relative min-w-0 flex-1">
+                    <button
+                      ref={profileBtnRef}
+                      type="button"
+                      onClick={() => setProfileOpen((o) => !o)}
+                      aria-expanded={profileOpen}
+                      aria-controls="contact-popover"
+                      aria-label={`Contact details for ${activeConversation.title}`}
+                      className="w-full min-w-0 rounded-lg py-1 text-left hover:bg-indigo-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                    >
+                      <span className="block truncate text-[16px] font-semibold tracking-[-0.01em] text-slate-900">{activeConversation.title}</span>
+                      <span className="block truncate text-[13px] text-slate-500">{activeConversation.otherMembers?.[0]?.email || "Team member"}</span>
+                    </button>
+                    {profileOpen && (() => {
+                      const contact = activeConversation.otherMembers?.[0] || {};
+                      return (
+                        <>
+                          <button
+                            type="button"
+                            aria-hidden="true"
+                            tabIndex={-1}
+                            onClick={() => setProfileOpen(false)}
+                            className="fixed inset-0 z-[55] cursor-default"
+                          />
+                          <div
+                            id="contact-popover"
+                            role="group"
+                            aria-label={`Contact details for ${activeConversation.title}`}
+                            className="absolute left-0 top-full z-[56] mt-2 w-72 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl"
+                          >
+                            {contact.phone ? (
+                              <a href={`tel:${contact.phone}`} className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600"><Phone size={16} aria-hidden="true" /></span>
+                                <span className="min-w-0"><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</span><span className="block truncate text-[14px] font-medium text-slate-800">{contact.phone}</span></span>
+                              </a>
+                            ) : (
+                              <div className="flex items-center gap-3 rounded-lg px-2.5 py-2.5">
+                                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400"><Phone size={16} aria-hidden="true" /></span>
+                                <span className="min-w-0"><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Phone</span><span className="block text-[13px] text-slate-400">Not provided</span></span>
+                              </div>
+                            )}
+                            {contact.email && (
+                              <a href={`mailto:${contact.email}`} className="flex items-center gap-3 rounded-lg px-2.5 py-2.5 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500">
+                                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600"><Mail size={16} aria-hidden="true" /></span>
+                                <span className="min-w-0"><span className="block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Email</span><span className="block truncate text-[14px] font-medium text-slate-800">{contact.email}</span></span>
+                              </a>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
                 <button
@@ -2132,7 +2260,7 @@ export default function ChatPanel({
                           )}
 
                           <div className={`flex max-w-[76%] flex-col sm:max-w-[70%] ${mine ? "items-end" : "items-start"}`}>
-                            <div className={`cb-bubble cb-fade-in-up relative px-4 py-2.5 text-[14px] leading-5.5 ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-600 text-white" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
+                            <div className={`cb-bubble cb-fade-in-up relative px-3 py-1.5 text-[14px] leading-[1.4] ${mine ? "rounded-[16px] rounded-br-[5px] bg-indigo-600 text-white" : "rounded-[16px] rounded-bl-[5px] bg-neutral-100 text-neutral-900"} ${m.pinned ? "ring-1 ring-amber-300" : ""}`}>
                               <span className="sr-only">{mine ? "You" : m.sender?.name || "Member"}: </span>
                               {!mine && activeConversation.isGroup && <div className="mb-1 text-[13px] font-semibold text-indigo-600">{m.sender?.name}</div>}
 
@@ -2152,22 +2280,22 @@ export default function ChatPanel({
                                   <Trash2 size={13} /> This message was deleted
                                 </div>
                               ) : room ? (
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-indigo-600">
-                                    <Video size={13} />
+                                <div className="flex flex-wrap items-center gap-2 py-0.5">
+                                  <span className={`flex h-6 w-6 items-center justify-center rounded-md ${mine ? "bg-white/90 text-indigo-600" : "bg-white text-indigo-600"}`}>
+                                    <Video size={13} aria-hidden="true" />
                                   </span>
-                                  <span className="text-[14px] font-semibold">Meeting started</span>
+                                  <span className="text-[13.5px] font-semibold">Meeting started</span>
                                   <button
                                     type="button"
                                     onClick={() => joinMeeting(room)}
-                                    className={`rounded-lg px-3 py-1.5 text-[13px] font-bold transition ${mine ? "bg-white text-indigo-700 hover:bg-indigo-50" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}
+                                    className={`inline-flex min-h-[28px] items-center rounded-lg px-3 py-1 text-[12.5px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 ${mine ? "bg-white text-indigo-700 hover:bg-indigo-50 focus-visible:ring-white" : "bg-indigo-600 text-white hover:bg-indigo-700 focus-visible:ring-indigo-600"}`}
                                   >
                                     Join
                                   </button>
                                 </div>
                               ) : m.body ? (
                                 <div className="whitespace-pre-wrap break-words">
-                                  {renderBodyWithMentions(
+                                  {renderMessageBody(
                                     m.body,
                                     (activeConversation.members || []).filter(Boolean).map(
                                       (mem) => mem.name
@@ -2241,7 +2369,7 @@ export default function ChatPanel({
                                 </div>
                               ) : null}
 
-                              <div className={`mt-1.5 flex items-center justify-end gap-1 text-right text-[11px] ${mine ? "text-white/90" : "text-neutral-400"}`}>
+                              <div className={`mt-0.5 flex items-center justify-end gap-1 text-right text-[11px] ${mine ? "text-white/90" : "text-neutral-400"}`}>
                                 {m.starred && (
                                   <Star
                                     size={10}
@@ -2808,61 +2936,26 @@ export default function ChatPanel({
           )}
         </div>
 
-
-      </div>
-
-
-      {newOpen && (
-        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
-          <div ref={newChatRef} role="dialog" aria-modal="true" aria-labelledby="newchat-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-              <div id="newchat-title" className="text-[14px] font-semibold text-slate-950">New chat</div>
-              <button type="button" onClick={() => setNewOpen(false)} aria-label="Close new chat" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
-            </div>
-            <div className="border-b border-slate-100 p-3">
-              <div className="relative">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} aria-label="Search people" placeholder="Search people" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[16px] font-medium text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />
-              </div>
-              {selectedIds.length > 1 && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} aria-label="Group name" placeholder="Group name" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[16px] font-semibold text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />}
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {filteredUsers.length === 0 ? <div className="px-3 py-8 text-center text-xs text-slate-500">No people found.</div> : filteredUsers.map((u) => {
-                const selected = selectedIds.includes(u.id);
-                return (
-                  <button key={u.id} type="button" onClick={() => toggleUser(u.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${selected ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
-                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[12px] font-black text-white ${avatarGradient(u.name)}`}>{initialsOf(u.name)}</span>
-                    <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-semibold text-slate-900">{u.name}</div><div className="truncate text-[13px] text-slate-500">{u.email}</div></div>
-                    <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"}`}>{selected && <Check size={12} />}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
-              <span className="text-[13px] font-semibold text-slate-500">{selectedIds.length === 0 ? "Select people" : selectedIds.length === 1 ? "1-to-1 chat" : `Group of ${selectedIds.length}`}</span>
-              <button type="button" onClick={createConversation} disabled={selectedIds.length === 0 || creating} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{creating && <Loader2 size={14} className="animate-spin" />} Start chat</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {membersOpen && activeConversation && (() => {
-        const activeMembers = (activeConversation.members || []).filter(Boolean);
-        const canManage =
-          activeConversation.isGroup &&
-          (currentUser?.role === "CLIENT_ADMIN" ||
-            activeConversation.createdByUserId === currentUser?.id);
-        const memberIdSet = new Set(activeMembers.map((mem) => mem.id));
-        const addableUsers = users.filter((u) => !memberIdSet.has(u.id));
-        return (
-          <div className="fixed inset-0 z-[150] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
-            <div ref={membersRef} role="dialog" aria-modal="true" aria-labelledby="members-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+        {membersOpen && activeConversation?.isGroup && (() => {
+          const activeMembers = (activeConversation.members || []).filter(Boolean);
+          const canManage =
+            currentUser?.role === "CLIENT_ADMIN" ||
+            activeConversation.createdByUserId === currentUser?.id;
+          const memberIdSet = new Set(activeMembers.map((mem) => mem.id));
+          const addableUsers = users.filter((u) => !memberIdSet.has(u.id));
+          return (
+            <section
+              id="group-members-panel"
+              role="region"
+              aria-label="Group members"
+              className="flex w-full flex-shrink-0 flex-col overflow-hidden bg-white lg:w-[320px] lg:rounded-2xl lg:shadow-[0_1px_8px_rgba(0,0,0,0.05)]"
+            >
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
                 <h2 id="members-title" className="text-[14px] font-semibold text-slate-950">
                   Members{" "}
                   <span aria-live="polite" className="font-medium text-slate-500">({activeMembers.length})</span>
                 </h2>
-                <button type="button" onClick={() => { setMembersOpen(false); setAddMemberOpen(false); setAddMemberIds([]); }} aria-label="Close members" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
+                <button type="button" onClick={() => { setMembersOpen(false); setAddMemberOpen(false); setAddMemberIds([]); requestAnimationFrame(() => membersBtnRef.current?.focus()); }} aria-label="Close members" className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><X size={16} /></button>
               </div>
 
               <ul className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -2920,10 +3013,46 @@ export default function ChatPanel({
                   </div>
                 )
               ) : null}
+            </section>
+          );
+        })()}
+
+      </div>
+
+
+      {newOpen && (
+        <div className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4">
+          <div ref={newChatRef} role="dialog" aria-modal="true" aria-labelledby="newchat-title" className="flex max-h-[85dvh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
+              <div id="newchat-title" className="text-[14px] font-semibold text-slate-950">New chat</div>
+              <button type="button" onClick={() => setNewOpen(false)} aria-label="Close new chat" className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 lg:h-8 lg:w-8"><X size={16} /></button>
+            </div>
+            <div className="border-b border-slate-100 p-3">
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} aria-label="Search people" placeholder="Search people" className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-[16px] font-medium text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />
+              </div>
+              {selectedIds.length > 1 && <input value={groupName} onChange={(e) => setGroupName(e.target.value)} aria-label="Group name" placeholder="Group name" className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-[16px] font-semibold text-slate-700 outline-none focus:border-indigo-400 lg:h-9 lg:text-xs" />}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {filteredUsers.length === 0 ? <div className="px-3 py-8 text-center text-xs text-slate-500">No people found.</div> : filteredUsers.map((u) => {
+                const selected = selectedIds.includes(u.id);
+                return (
+                  <button key={u.id} type="button" onClick={() => toggleUser(u.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${selected ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                    <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[12px] font-black text-white ${avatarGradient(u.name)}`}>{initialsOf(u.name)}</span>
+                    <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-semibold text-slate-900">{u.name}</div><div className="truncate text-[13px] text-slate-500">{u.email}</div></div>
+                    <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border ${selected ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300"}`}>{selected && <Check size={12} />}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">
+              <span className="text-[13px] font-semibold text-slate-500">{selectedIds.length === 0 ? "Select people" : selectedIds.length === 1 ? "1-to-1 chat" : `Group of ${selectedIds.length}`}</span>
+              <button type="button" onClick={createConversation} disabled={selectedIds.length === 0 || creating} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700 disabled:opacity-50">{creating && <Loader2 size={14} className="animate-spin" />} Start chat</button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {lightbox && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center bg-slate-950/80 p-4">

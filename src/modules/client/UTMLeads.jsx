@@ -616,10 +616,14 @@ function Field({
   type = "text",
   placeholder,
   error,
+  hint,
   min,
 }) {
   const id = useId();
   const errId = `${id}-err`;
+  const hintId = `${id}-hint`;
+  const describedBy =
+    [hint && hintId, error && errId].filter(Boolean).join(" ") || undefined;
 
   return (
     <div>
@@ -639,6 +643,12 @@ function Field({
         )}
       </label>
 
+      {hint ? (
+        <p id={hintId} className="mb-1.5 text-[12px] leading-5 text-slate-500">
+          {hint}
+        </p>
+      ) : null}
+
       <input
         id={id}
         type={type}
@@ -652,7 +662,7 @@ function Field({
         }
         placeholder={placeholder}
         aria-invalid={error ? "true" : undefined}
-        aria-describedby={error ? errId : undefined}
+        aria-describedby={describedBy}
         className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
       />
 
@@ -673,8 +683,10 @@ function PlatformSelect({
   label = "Platform",
   value,
   onChange,
+  hint,
 }) {
   const id = useId();
+  const hintId = `${id}-hint`;
   const options = [
     "Instagram",
     "YouTube",
@@ -697,6 +709,12 @@ function PlatformSelect({
         {label}
       </label>
 
+      {hint ? (
+        <p id={hintId} className="mb-1.5 text-[12px] leading-5 text-slate-500">
+          {hint}
+        </p>
+      ) : null}
+
       <div className="relative">
         <select
           id={id}
@@ -706,6 +724,7 @@ function PlatformSelect({
               event.target.value
             )
           }
+          aria-describedby={hint ? hintId : undefined}
           className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-600"
         >
           <option value="">
@@ -738,9 +757,11 @@ function MediumSelect({
   onChange,
   onOtherChange,
   required = true,
+  hint,
 }) {
   const id = useId();
   const otherId = useId();
+  const hintId = `${id}-hint`;
 
   return (
     <div>
@@ -757,6 +778,12 @@ function MediumSelect({
         ) : null}
       </label>
 
+      {hint ? (
+        <p id={hintId} className="mb-1.5 text-[12px] leading-5 text-slate-500">
+          {hint}
+        </p>
+      ) : null}
+
       <div className="relative">
         <select
           id={id}
@@ -765,6 +792,7 @@ function MediumSelect({
             onChange(event.target.value)
           }
           required={required}
+          aria-describedby={hint ? hintId : undefined}
           className="h-10 w-full appearance-none rounded-lg border border-slate-200 bg-white px-3 pr-10 text-[15px] text-slate-800 focus:outline-none focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-600"
         >
           <option value="">
@@ -826,23 +854,24 @@ function MetricCard({
 
   const content = (
     <>
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
-        <div>
-          <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">
-            {label}
-          </div>
-
-          <div className="mt-2 text-[22px] leading-none font-bold text-slate-950">
-            {value}
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-500">
+          {label}
         </div>
 
-        <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-600">
-          <Icon size={16} aria-hidden="true" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+          <Icon size={15} aria-hidden="true" />
         </div>
       </div>
 
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
+      <div
+        title={typeof value === "string" ? value : undefined}
+        className="mt-3 truncate text-[19px] font-bold leading-tight tracking-[-0.02em] text-slate-950"
+      >
+        {value}
+      </div>
+
+      <div className="mt-1.5 text-[12px] leading-5 text-slate-500">
         {detail}
         {onClick ? (
           <span className="ml-1 font-semibold text-indigo-600">
@@ -876,6 +905,7 @@ function KpiStat({
   label,
   value,
   icon: Icon,
+  caption,
   active = false,
   onClick,
 }) {
@@ -903,7 +933,14 @@ function KpiStat({
         {value}
       </div>
 
-      <span className="text-[11px] font-semibold text-indigo-600">
+      {caption ? (
+        <span className="text-[11px] leading-4 text-slate-500">{caption}</span>
+      ) : null}
+
+      <span
+        className="text-[11px] font-semibold text-indigo-600"
+        aria-hidden="true"
+      >
         View details
       </span>
     </button>
@@ -1155,7 +1192,7 @@ function PhoneAction({ phone, name, onCopied }) {
   }, [menu]);
 
   if (!phone) {
-    return <span className="text-slate-400">—</span>;
+    return <span className="text-slate-500">—</span>;
   }
 
   function closeMenu() {
@@ -1751,52 +1788,77 @@ export default function UTMLeads({
     rows,
     labelKey,
   }) {
-    const max =
-      Math.max(
-        1,
-        ...rows.map((row) => Number(row.leads || 0))
-      );
+    const visibleRows = rows.slice(0, 6);
+    const max = Math.max(
+      1,
+      ...rows.map((row) => Number(row.leads || 0))
+    );
+    const total = rows.reduce(
+      (sum, row) => sum + Number(row.leads || 0),
+      0
+    );
 
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-        <div className="text-[15px] font-bold text-slate-900">
-          {title}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-[15px] font-bold tracking-[-0.01em] text-slate-900">
+            {title}
+          </h2>
+          <span className="text-[12px] font-semibold text-slate-500">
+            {total > 0 ? `${total} leads` : "Leads"}
+          </span>
         </div>
 
-        <div className="mt-4 space-y-4">
-          {rows.slice(0, 6).map((row) => {
+        <div className="mt-5 space-y-4">
+          {visibleRows.map((row, index) => {
             const value = Number(row.leads || 0);
             const width =
-              value <= 0
-                ? 0
-                : Math.max(8, (value / max) * 100);
+              value <= 0 ? 0 : Math.max(4, (value / max) * 100);
+            const name = row[labelKey] || "—";
 
             return (
-              <div key={row[labelKey]}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="truncate text-[13px] font-semibold text-slate-700">
-                    {row[labelKey]}
-                  </div>
+              <div
+                key={`${name}-${index}`}
+                className="grid grid-cols-[20px_1fr] items-center gap-x-3"
+              >
+                <span
+                  aria-hidden="true"
+                  className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-100 text-[11px] font-bold tabular-nums text-slate-500"
+                >
+                  {index + 1}
+                </span>
 
-                  <div className="text-[13px] font-bold text-slate-950">
-                    {value}
-                  </div>
-                </div>
-
-                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="min-w-0">
                   <div
-                    className="h-full rounded-full bg-indigo-600"
-                    style={{ width: `${width}%` }}
-                  />
+                    title={name}
+                    className="mb-1.5 truncate text-[13px] font-semibold text-slate-700"
+                  >
+                    {name}
+                    <span className="sr-only">
+                      : {value} {value === 1 ? "lead" : "leads"}
+                    </span>
+                  </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className="h-full rounded-full bg-indigo-500"
+                      style={{ width: `${width}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             );
           })}
 
           {!rows.length ? (
-            <div className="py-8 text-center text-[13px] text-slate-500">
-              No data yet.
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 py-8 text-center text-[13px] font-medium text-slate-500">
+              No campaigns yet.
             </div>
+          ) : total === 0 ? (
+            <p className="pt-1 text-[12px] leading-5 text-slate-500">
+              No leads attributed yet — numbers fill in as leads come through
+              these links.
+            </p>
           ) : null}
         </div>
       </div>
@@ -2030,6 +2092,7 @@ export default function UTMLeads({
           label="UTM Links"
           value={summary.totalUtmLinks ?? links.length}
           icon={Link2}
+          caption="Saved campaign links"
           onClick={() => openDetail("links")}
           active={detailView === "links"}
         />
@@ -2038,6 +2101,7 @@ export default function UTMLeads({
           label="Registrations"
           value={summary.totalRegistrations ?? 0}
           icon={UserPlus}
+          caption="Sign-ups from these links"
           onClick={() => openDetail("registrations")}
           active={detailView === "registrations"}
         />
@@ -2046,6 +2110,7 @@ export default function UTMLeads({
           label="UTM Leads"
           value={summary.totalLeads ?? utmLeads.length}
           icon={Users}
+          caption="Leads attributed to links"
           onClick={() => openDetail("leads")}
           active={detailView === "leads"}
         />
@@ -2054,6 +2119,7 @@ export default function UTMLeads({
           label="Admissions"
           value={summary.totalAdmissions ?? 0}
           icon={UserCheck}
+          caption="Admitted from UTM leads"
           onClick={() => openDetail("admissions")}
           active={detailView === "admissions"}
         />
@@ -2062,6 +2128,7 @@ export default function UTMLeads({
           label="Revenue"
           value={`₹${Number(summary.totalRevenue || 0).toLocaleString("en-IN")}`}
           icon={IndianRupee}
+          caption="Fees received from them"
           onClick={() => openDetail("revenue")}
           active={detailView === "revenue"}
         />
@@ -2159,8 +2226,8 @@ export default function UTMLeads({
               label="Top Campaign"
               value={summary.topCampaign || "—"}
               icon={BarChart3}
-              detail={`Period: ${
-                selectedYear === "all" ? "All Time" : selectedYear
+              detail={`Most leads in ${
+                selectedYear === "all" ? "all time" : selectedYear
               }`}
             />
 
@@ -2168,14 +2235,14 @@ export default function UTMLeads({
               label="Top Source"
               value={summary.topSource || "—"}
               icon={Globe}
-              detail="Best performing UTM source"
+              detail="Channel bringing the most leads"
             />
 
             <MetricCard
               label="UTM Conversion"
               value={`${Number(summary.conversionRate || 0).toFixed(1)}%`}
               icon={MousePointerClick}
-              detail="Admissions / UTM leads"
+              detail="Share of UTM leads that became admissions"
             />
           </div>
         </div>
@@ -2192,7 +2259,7 @@ export default function UTMLeads({
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
+            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-500">
               Saved links
             </div>
 
@@ -2316,25 +2383,32 @@ export default function UTMLeads({
                 className="hover:bg-slate-50/80"
               >
                 <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
+                  <div className="text-[13px] font-semibold text-slate-900">
                     {link.campaign}
                   </div>
-                  <div className="mt-0.5 text-[13px] text-slate-400">
+                  <div className="mt-0.5 text-[12px] text-slate-500">
                     {formatDate(link.createdAt)}
                   </div>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
+                <td className="px-4 py-3 text-[13px] text-slate-600">
                   {link.influencerName || "—"}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] capitalize text-slate-600">
-                  {link.source} / {link.medium}
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] font-medium capitalize text-slate-600">
+                    <span>{link.source}</span>
+                    <span className="text-slate-400" aria-hidden="true">/</span>
+                    <span>{link.medium}</span>
+                  </span>
                 </td>
 
                 <td className="px-4 py-3">
-                  <div className="flex max-w-[250px] items-center gap-2">
-                    <span className="truncate font-mono text-[13px] text-slate-600">
+                  <div className="inline-flex max-w-[230px] items-center gap-0.5 rounded-md border border-slate-200 bg-slate-50 py-0.5 pl-2.5 pr-1">
+                    <span
+                      title={link.url}
+                      className="truncate font-mono text-[12px] text-slate-600"
+                    >
                       {link.url}
                     </span>
 
@@ -2342,13 +2416,9 @@ export default function UTMLeads({
                       type="button"
                       onClick={() => copyLink(link.url)}
                       aria-label={`Copy link for ${link.campaign}`}
-                      className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
-                      <Copy
-                        size={12}
-                        aria-hidden="true"
-                        className="text-slate-400 hover:text-indigo-600"
-                      />
+                      <Copy size={12} aria-hidden="true" />
                     </button>
 
                     <a
@@ -2356,49 +2426,62 @@ export default function UTMLeads({
                       target="_blank"
                       rel="noreferrer"
                       aria-label={`Open ${link.campaign} link in new tab`}
-                      className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
-                      <ExternalLink
-                        size={12}
-                        aria-hidden="true"
-                        className="text-slate-400 hover:text-indigo-600"
-                      />
+                      <ExternalLink size={12} aria-hidden="true" />
                     </a>
                   </div>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-bold text-slate-900">
+                <td className="px-4 py-3 text-right text-[14px] font-bold tabular-nums text-slate-900">
                   {link.leads || 0}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
-                  ₹{Number(link.cost || 0).toLocaleString("en-IN")}
+                <td className="px-4 py-3 text-right text-[13px] tabular-nums text-slate-700">
+                  {Number(link.cost || 0)
+                    ? `₹${Number(link.cost).toLocaleString("en-IN")}`
+                    : "—"}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
+                <td className="px-4 py-3 text-right text-[13px] font-semibold tabular-nums text-slate-800">
                   {link.leads
                     ? `₹${Number(link.costPerLead || 0).toLocaleString("en-IN")}`
                     : "—"}
                 </td>
 
                 <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
+                  <div className="text-[13px] font-semibold text-slate-900">
                     {link.latestLead?.name || "—"}
                   </div>
-                  <div className="mt-0.5 text-[13px] text-slate-500">
-                    {link.latestLead?.phone ||
-                      (link.latestLead?.createdAt
-                        ? formatDate(link.latestLead.createdAt)
-                        : "No leads yet")}
+                  <div className="mt-0.5 text-[12px] text-slate-500">
+                    {link.latestLead?.phone ? (
+                      <PhoneAction
+                        phone={link.latestLead.phone}
+                        name={link.latestLead.name}
+                        onCopied={() =>
+                          setStatusMessage("Number copied to clipboard")
+                        }
+                      />
+                    ) : link.latestLead?.createdAt ? (
+                      formatDate(link.latestLead.createdAt)
+                    ) : (
+                      "No leads yet"
+                    )}
                   </div>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-bold text-emerald-700">
-                  {link.adm || 0}
+                <td className="px-4 py-3 text-right text-[14px] font-bold tabular-nums">
+                  <span className={link.adm ? "text-slate-900" : "text-slate-500"}>
+                    {link.adm || 0}
+                  </span>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-bold text-slate-900">
-                  ₹{Number(link.rev || 0).toLocaleString("en-IN")}
+                <td className="px-4 py-3 text-right text-[14px] font-bold tabular-nums">
+                  <span className={link.rev ? "text-slate-900" : "text-slate-500"}>
+                    {link.rev
+                      ? `₹${Number(link.rev).toLocaleString("en-IN")}`
+                      : "—"}
+                  </span>
                 </td>
 
                 <td className="px-4 py-3">
@@ -2410,7 +2493,7 @@ export default function UTMLeads({
                         setShowLinkModal(true);
                       }}
                       aria-label={`Edit ${link.campaign}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
                       <Pencil size={13} aria-hidden="true" />
                     </button>
@@ -2419,7 +2502,7 @@ export default function UTMLeads({
                       type="button"
                       onClick={() => deleteLink(link)}
                       aria-label={`Delete ${link.campaign}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
                     >
                       <Trash2 size={13} aria-hidden="true" />
                     </button>
@@ -2443,7 +2526,7 @@ export default function UTMLeads({
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-400">
+            <div className="text-[13px] font-bold uppercase tracking-[0.12em] text-slate-500">
               Lead details
             </div>
 
@@ -2514,16 +2597,17 @@ export default function UTMLeads({
                 className="hover:bg-slate-50/80"
               >
                 <td className="px-4 py-3 whitespace-nowrap">
-                  <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-1 font-mono text-[11px] font-semibold text-slate-600">
                     {lead.leadDisplayId || "—"}
                   </span>
                 </td>
+
                 <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
+                  <div className="text-[13px] font-semibold text-slate-900">
                     {lead.name}
                   </div>
 
-                  <div className="mt-0.5 text-[13px] text-slate-500">
+                  <div className="mt-0.5 text-[12px] text-slate-500">
                     <PhoneAction
                       phone={lead.phone}
                       name={lead.name}
@@ -2534,19 +2618,19 @@ export default function UTMLeads({
                   </div>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
+                <td className="px-4 py-3 text-[13px] text-slate-600">
                   {lead.course || "—"}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-600">
+                <td className="px-4 py-3 text-[13px] capitalize text-slate-600">
                   {lead.source || "—"}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] font-semibold text-slate-700">
+                <td className="px-4 py-3 text-[13px] font-semibold text-slate-800">
                   {lead.campaign || "—"}
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-600">
+                <td className="px-4 py-3 text-[13px] capitalize text-slate-600">
                   {lead.medium || "—"}
                 </td>
 
@@ -2572,11 +2656,13 @@ export default function UTMLeads({
                   </select>
                 </td>
 
-                <td className="px-4 py-3 text-[15px] text-slate-700">
-                  {lead.assigned || "Unassigned"}
+                <td className="px-4 py-3 text-[13px]">
+                  <span className={lead.assigned ? "text-slate-700" : "text-slate-500"}>
+                    {lead.assigned || "Unassigned"}
+                  </span>
                 </td>
 
-                <td className="px-4 py-3 text-[13px] text-slate-500">
+                <td className="px-4 py-3 text-[12px] text-slate-500 whitespace-nowrap">
                   {formatDate(
                     lead.createdAt
                   )}
@@ -2673,7 +2759,7 @@ export default function UTMLeads({
                     : "text-slate-600"
                 }`}
               >
-                Generate
+                Generate UTM
               </button>
 
               <button
@@ -2687,7 +2773,7 @@ export default function UTMLeads({
                     : "text-slate-600"
                 }`}
               >
-                Paste existing
+                Manual UTM
               </button>
             </div>
 
@@ -2708,6 +2794,7 @@ export default function UTMLeads({
                   value={generateForm.url}
                   onChange={(value) => updateGenerate("url", value)}
                   placeholder="https://example.com/"
+                  hint="The page people land on when they click your link."
                   error={
                     generateForm.url.trim() &&
                     !isValidHttpUrl(generateForm.url)
@@ -2722,6 +2809,7 @@ export default function UTMLeads({
                   value={generateForm.campaign}
                   onChange={(value) => updateGenerate("campaign", value)}
                   placeholder="August Admissions 2026"
+                  hint="A name for this push, so you can group its leads later."
                 />
 
                 <Field
@@ -2731,12 +2819,14 @@ export default function UTMLeads({
                     updateGenerate("influencerName", value)
                   }
                   placeholder="Influencer / partner name"
+                  hint="Optional — the partner or influencer sharing this link."
                 />
 
                 <PlatformSelect
                   label="Platform"
                   value={generateForm.source}
                   onChange={(value) => updateGenerate("source", value)}
+                  hint="Where the link is shared (utm_source) — e.g. Instagram, YouTube."
                 />
 
                 <MediumSelect
@@ -2751,6 +2841,7 @@ export default function UTMLeads({
                   onOtherChange={(value) =>
                     updateGenerate("mediumOther", value)
                   }
+                  hint="The type of channel (utm_medium) — e.g. Influencer, Paid Social."
                 />
 
                 <Field
@@ -2760,6 +2851,7 @@ export default function UTMLeads({
                   value={generateForm.cost}
                   onChange={(value) => updateGenerate("cost", value)}
                   placeholder="0"
+                  hint="Optional — what you spent, used to work out cost per lead."
                   error={
                     Number(generateForm.cost) < 0
                       ? "Cost can't be negative."
@@ -2800,6 +2892,7 @@ export default function UTMLeads({
                   value={manualForm.url}
                   onChange={(value) => updateManual("url", value)}
                   placeholder="https://example.com/?utm_source=..."
+                  hint="Paste the full link you already built, with its utm_ tags."
                   error={
                     manualForm.url.trim() &&
                     !isValidHttpUrl(manualForm.url)
@@ -2814,6 +2907,7 @@ export default function UTMLeads({
                   value={manualForm.campaign}
                   onChange={(value) => updateManual("campaign", value)}
                   placeholder="Influencer August"
+                  hint="A name for this push, so you can group its leads later."
                 />
 
                 <Field
@@ -2823,12 +2917,14 @@ export default function UTMLeads({
                     updateManual("influencerName", value)
                   }
                   placeholder="Influencer / partner name"
+                  hint="Optional — the partner or influencer sharing this link."
                 />
 
                 <PlatformSelect
                   label="Platform / Source"
                   value={manualForm.source}
                   onChange={(value) => updateManual("source", value)}
+                  hint="Where the link is shared (utm_source) — e.g. Instagram, YouTube."
                 />
 
                 <MediumSelect
@@ -2843,6 +2939,7 @@ export default function UTMLeads({
                   onOtherChange={(value) =>
                     updateManual("mediumOther", value)
                   }
+                  hint="The type of channel (utm_medium) — e.g. Influencer, Paid Social."
                 />
 
                 <Field
@@ -2852,6 +2949,7 @@ export default function UTMLeads({
                   value={manualForm.cost}
                   onChange={(value) => updateManual("cost", value)}
                   placeholder="0"
+                  hint="Optional — what you spent, used to work out cost per lead."
                   error={
                     Number(manualForm.cost) < 0
                       ? "Cost can't be negative."

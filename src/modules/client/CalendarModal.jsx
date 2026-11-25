@@ -1054,6 +1054,15 @@ export default function CalendarModal({
 
       : "";
 
+    // Google event id, captured when we generate a Meet so guests get invited
+    // and later reschedules propagate to them. Only sent when newly generated.
+    let googleEventIdValue = null;
+
+    // Guest emails (company users may have none) → Google emails each an invite.
+    const guestAttendees = (editingEvent.guests || [])
+      .map((g) => (g.email || "").trim())
+      .filter((e) => e && e.includes("@"));
+
     if (editingEvent.hasMeeting && !/^https?:\/\//i.test(meetingRoomValue)) {
 
       // A Meet link is requested but Google isn't connected → guide the user to
@@ -1081,15 +1090,21 @@ export default function CalendarModal({
 
             summary: editingEvent.title.trim() || "Meeting",
 
+            description: editingEvent.description.trim() || "",
+
             startISO: new Date(startForMeet).toISOString(),
 
             endISO: new Date(endForMeet).toISOString(),
+
+            attendees: guestAttendees,
 
           }),
 
         });
 
         meetingRoomValue = meet?.meetLink || "";
+
+        googleEventIdValue = meet?.eventId || null;
 
         if (!meetingRoomValue) {
 
@@ -1155,6 +1170,9 @@ export default function CalendarModal({
       guests: editingEvent.guests || [],
 
       meetingRoom: editingEvent.hasMeeting ? meetingRoomValue || null : null,
+
+      // Only send when freshly generated, so we never wipe a stored id on edit.
+      ...(googleEventIdValue ? { googleEventId: googleEventIdValue } : {}),
 
     };
 
@@ -2954,6 +2972,42 @@ export default function CalendarModal({
                   Add video meeting
                 </label>
               </div>
+
+              {/* Paste a link, or leave blank to auto-generate a Google Meet.
+                  Guests with an email are emailed a calendar invite on save. */}
+              {editingEvent.hasMeeting && (
+                <div>
+                  <label
+                    htmlFor="edit-meeting-link"
+                    className="mb-1.5 block text-[13px] font-semibold text-slate-600"
+                  >
+                    Meeting link
+                  </label>
+                  <input
+                    id="edit-meeting-link"
+                    type="url"
+                    inputMode="url"
+                    autoComplete="off"
+                    value={editingEvent.meetingRoom}
+                    onChange={(e) =>
+                      setEditingEvent((c) => ({
+                        ...c,
+                        meetingRoom: e.target.value,
+                      }))
+                    }
+                    aria-describedby="edit-meeting-link-hint"
+                    placeholder="https://… (Zoom/Teams/Meet)"
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500"
+                  />
+                  <p
+                    id="edit-meeting-link-hint"
+                    className="mt-1 text-[12px] text-slate-500"
+                  >
+                    Leave blank to auto-generate a Google Meet link and invite
+                    your guests.
+                  </p>
+                </div>
+              )}
 
               {/* Date + time range. When All day is on, Date spans the full
                   width (no empty time cells); otherwise Date / Start / End share

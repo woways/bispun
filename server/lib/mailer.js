@@ -125,3 +125,133 @@ Amount paid: ${inr(amount)}
     text,
   });
 }
+
+/* ---------------- meeting invite (fallback when Google not connected) -------- */
+
+// Build a "YYYYMMDDTHHMMSSZ" UTC stamp for a Google Calendar template link.
+function gcalStamp(date) {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+// "Add to Google Calendar" template URL — works in any browser/Gmail with no
+// server state. Pre-fills title, time, details and location/link.
+function addToGoogleCalendarUrl({ title, startAt, endAt, description, location }) {
+  const start = gcalStamp(startAt);
+  const end = gcalStamp(endAt || new Date(new Date(startAt).getTime() + 3600000));
+  if (!start || !end) return "";
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title || "Meeting",
+    dates: `${start}/${end}`,
+  });
+  if (description) params.set("details", description);
+  if (location) params.set("location", location);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function formatWhen(startAt, endAt) {
+  const opts = {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  };
+  const start = new Date(startAt);
+  const startStr = new Intl.DateTimeFormat("en-IN", opts).format(start);
+  if (!endAt) return `${startStr} IST`;
+  const end = new Date(endAt);
+  const endStr = new Intl.DateTimeFormat("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  }).format(end);
+  return `${startStr} – ${endStr} IST`;
+}
+
+/**
+ * Meeting invite sent to a guest when the organizer hasn't connected Google (so
+ * Google Calendar can't send its native invite). Carries the join link, the
+ * meeting details and an "Add to Google Calendar" button. Best-effort via
+ * sendMail — never throws.
+ */
+export async function sendMeetingInviteEmail({
+  toEmail,
+  guestName,
+  title,
+  description,
+  startAt,
+  endAt,
+  location,
+  meetingLink,
+  organizerName,
+}) {
+  if (!toEmail) return { sent: false, skipped: true };
+  const safeName = guestName || "there";
+  const whenStr = formatWhen(startAt, endAt);
+  const host = organizerName ? ` by ${organizerName}` : "";
+  const addUrl = addToGoogleCalendarUrl({
+    title,
+    startAt,
+    endAt,
+    description,
+    location: meetingLink || location,
+  });
+
+  const joinButton = meetingLink
+    ? `<a href="${meetingLink}"
+         style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;
+                font-weight:600;font-size:14px;padding:12px 22px;border-radius:10px;margin:4px 8px 4px 0">
+        Join meeting
+      </a>`
+    : "";
+
+  const addButton = addUrl
+    ? `<a href="${addUrl}"
+         style="display:inline-block;border:1px solid #c7d2fe;background:#eef2ff;color:#3730a3;
+                text-decoration:none;font-weight:600;font-size:14px;padding:11px 20px;border-radius:10px;margin:4px 0">
+        Add to Google Calendar
+      </a>`
+    : "";
+
+  const html = `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#0f172a">
+    <div style="font-size:22px;font-weight:700;color:#4f46e5;margin-bottom:8px">Bispun</div>
+    <h2 style="font-size:18px;margin:16px 0 4px">You're invited to a meeting</h2>
+    <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 16px">
+      Hi ${safeName}, you've been invited${host} to <strong>${title || "a meeting"}</strong>.
+    </p>
+
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px 16px;font-size:13px;color:#334155;margin-bottom:18px">
+      <div style="margin-bottom:6px"><span style="color:#64748b">When:</span> <strong>${whenStr}</strong></div>
+      ${location ? `<div style="margin-bottom:6px"><span style="color:#64748b">Where:</span> ${location}</div>` : ""}
+      ${meetingLink ? `<div><span style="color:#64748b">Link:</span> <a href="${meetingLink}" style="color:#4f46e5">${meetingLink}</a></div>` : ""}
+    </div>
+
+    ${description ? `<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 16px">${description}</p>` : ""}
+
+    <div>${joinButton}${addButton}</div>
+
+    <p style="font-size:12px;color:#94a3b8;margin:20px 0 0">— Sent via Bispun</p>
+  </div>`;
+
+  const text = `You're invited to a meeting${host}.
+
+${title || "Meeting"}
+When: ${whenStr}
+${location ? `Where: ${location}\n` : ""}${meetingLink ? `Join: ${meetingLink}\n` : ""}${description ? `\n${description}\n` : ""}
+${addUrl ? `Add to Google Calendar: ${addUrl}` : ""}
+
+— Sent via Bispun`;
+
+  return sendMail({
+    to: toEmail,
+    subject: `Invitation: ${title || "Meeting"} — ${whenStr}`,
+    html,
+    text,
+  });
+}

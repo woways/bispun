@@ -128,22 +128,22 @@ function CounsellingMetric({
     <Component
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
+      className={`w-full bg-white border rounded-xl p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-2.5">
         <div>
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">
             {label}
           </div>
-          <div className="mt-2 text-[22px] leading-none font-bold tracking-tight text-slate-950">
+          <div className="mt-1.5 text-[18px] leading-none font-bold tracking-tight text-slate-950">
             {value}
           </div>
         </div>
-        <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${tones[tone] || tones.indigo}`}>
-          <Icon size={17} />
+        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${tones[tone] || tones.indigo}`}>
+          <Icon size={15} aria-hidden="true" />
         </div>
       </div>
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
+      <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-[12px] leading-5 text-slate-500">
         {detail}
       </div>
     </Component>
@@ -685,11 +685,11 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
               key={session.id}
               className="bg-white border border-slate-200 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden"
             >
-              <div className="p-5">
+              <div className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <div className="text-base font-bold text-slate-950">
+                      <div className="text-[15px] font-bold text-slate-950">
                         {session.student}
                       </div>
                       {session.leadDisplayId ? (
@@ -702,7 +702,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-4 mt-5 native:grid-cols-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-5 gap-y-3.5 mt-4 native:grid-cols-2">
                       <Info label="When" value={formatDateTime(session.scheduledAt)} />
                       <Info label="Counsellor" value={session.counsellor} />
                       <Info label="Mode" value={prettyMode(session.mode)} />
@@ -763,23 +763,26 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                     <button
                       type="button"
                       title="Call student"
+                      aria-label={`Call ${session.student}`}
                       onClick={() => setCallLead({ id: session.leadId || null, name: session.student, phone: session.phone })}
                       disabled={!session.phone}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 disabled:text-slate-300 disabled:hover:bg-transparent"
                     >
-                      <PhoneCall size={14} />
+                      <PhoneCall size={14} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       title="Edit"
+                      aria-label={`Edit ${session.student}`}
                       onClick={() => openEdit(session)}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
                     >
-                      <Pencil size={14} />
+                      <Pencil size={14} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       title="Delete"
+                      aria-label={`Delete ${session.student}`}
                       onClick={() => remove(session)}
                       disabled={actionId === session.id}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-rose-500 hover:bg-rose-50 disabled:opacity-50"
@@ -787,7 +790,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       {actionId === session.id ? (
                         <Loader2 size={14} className="animate-spin" />
                       ) : (
-                        <Trash2 size={14} />
+                        <Trash2 size={14} aria-hidden="true" />
                       )}
                     </button>
                   </div>

@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { X, Loader2, Plus, CheckCircle2 } from "lucide-react";
+import { X, Loader2, Plus, CheckCircle2, Video } from "lucide-react";
 import { apiRequest } from "../lib/api";
 import { useOverlayDismiss } from "../lib/useOverlayDismiss";
 import RichTextEditor from "./RichTextEditor";
@@ -47,6 +47,8 @@ const emptyMeeting = () => ({
   endTime: "10:00",
   guests: [],
   location: "",
+  addGoogleMeet: false,
+  meetingLink: "",
 });
 
 export default function QuickCreateDrawer({ open, onClose, onCreated }) {
@@ -158,7 +160,7 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
     setInvalid("");
     setSaving(true);
     try {
-      await apiRequest("/api/client/calendar", {
+      const res = await apiRequest("/api/client/calendar", {
         method: "POST",
         body: JSON.stringify({
           title: meeting.title.trim(),
@@ -171,13 +173,29 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
           endAt,
           assignedToUserId: null,
           guests: meeting.guests,
+          addGoogleMeet: meeting.addGoogleMeet,
+          meetingRoom: meeting.addGoogleMeet
+            ? null
+            : meeting.meetingLink.trim() || null,
         }),
       });
-      finish("Meeting created.");
+      finish(inviteMessage("Meeting created.", res?.invite));
     } catch (err) {
       setError(err?.data?.message || "Unable to create meeting.");
       setSaving(false);
     }
+  }
+
+  // Append an invite-delivery outcome to the success message so the polite live
+  // region tells the organizer what happened to the guests.
+  function inviteMessage(base, invite) {
+    if (!invite) return base;
+    if (invite.pending) return `${base} Generating the Meet link…`;
+    if (invite.notified > 0) {
+      const n = invite.notified;
+      return `${base} ${n} ${n === 1 ? "guest was" : "guests were"} invited.`;
+    }
+    return base;
   }
 
   function finish(msg) {
@@ -462,6 +480,66 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
                     className={`${field} border-slate-300`}
                   />
                 </div>
+
+                {/* Video meeting — auto Google Meet (native checkbox) or a
+                    pasted link. Guests with an email get a calendar invite. */}
+                <fieldset className="rounded-xl border border-slate-200 p-3">
+                  <legend className="flex items-center gap-1.5 px-1 text-[13px] font-bold text-slate-600">
+                    <Video size={14} aria-hidden="true" /> Video meeting
+                  </legend>
+
+                  <label
+                    htmlFor={`${uid}-mtg-automeet`}
+                    className="flex cursor-pointer items-center gap-2.5"
+                  >
+                    <input
+                      id={`${uid}-mtg-automeet`}
+                      type="checkbox"
+                      checked={meeting.addGoogleMeet}
+                      onChange={(e) =>
+                        setMeeting((c) => ({
+                          ...c,
+                          addGoogleMeet: e.target.checked,
+                          meetingLink: e.target.checked ? "" : c.meetingLink,
+                        }))
+                      }
+                      className="h-4 w-4 accent-brand-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    />
+                    <span className="text-sm font-semibold text-slate-800">
+                      Add Google Meet link
+                    </span>
+                  </label>
+                  <p className="mt-1 pl-[26px] text-[12px] text-slate-500">
+                    Creates a Google Meet link and emails each guest a calendar
+                    invite.
+                  </p>
+
+                  <div className="mt-3">
+                    <label htmlFor={`${uid}-mtg-link`} className={labelCls}>
+                      Or paste a link (Zoom/Teams/Meet)
+                    </label>
+                    <input
+                      id={`${uid}-mtg-link`}
+                      type="url"
+                      inputMode="url"
+                      autoComplete="off"
+                      value={meeting.meetingLink}
+                      disabled={meeting.addGoogleMeet}
+                      onChange={(e) =>
+                        setMeeting((c) => ({ ...c, meetingLink: e.target.value }))
+                      }
+                      aria-describedby={`${uid}-mtg-link-hint`}
+                      placeholder="https://…"
+                      className={`${field} border-slate-300 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400`}
+                    />
+                    <p
+                      id={`${uid}-mtg-link-hint`}
+                      className="mt-1 text-[12px] text-slate-500"
+                    >
+                      Turn off “Add Google Meet link” to paste your own.
+                    </p>
+                  </div>
+                </fieldset>
 
                 <SubmitBar saving={saving} label="Add meeting" />
               </form>

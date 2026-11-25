@@ -111,33 +111,61 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // surface a `pending` flag if it is still not ready — we never fabricate a link.
 export async function createMeetEvent(
   userId,
-  { summary, description, startISO, endISO, attendees = [] }
+  {
+    summary,
+    description,
+    startISO,
+    endISO,
+    attendees = [],
+    // When set (e.g. "all"), Google Calendar emails each attendee a real
+    // invitation. Omitted by default so existing callers notify nobody.
+    sendUpdates,
+    // When false, create a plain calendar event WITHOUT a Google Meet
+    // conference (used when the organizer pasted their own Zoom/Teams link).
+    withMeet = true,
+    // Optional location/link text stored on the event (shown in the invite).
+    location,
+  }
 ) {
   const calendar = await getCalendarForUser(userId);
   if (!calendar) throw new Error("Google account not connected");
-  const res = await calendar.events.insert({
-    calendarId: "primary",
-    conferenceDataVersion: 1,
-    // No sendUpdates => Google sends no invitation emails (API default), which
-    // also keeps automated/test runs from notifying real attendees.
-    requestBody: {
-      summary: summary || "Meeting",
-      description: description || "",
-      start: { dateTime: startISO },
-      end: { dateTime: endISO },
-      attendees: attendees.filter(Boolean).map((email) => ({ email })),
-      conferenceData: {
-        createRequest: {
-          requestId: crypto.randomUUID(),
-          conferenceSolutionKey: { type: "hangoutsMeet" },
-        },
+
+  const requestBody = {
+    summary: summary || "Meeting",
+    description: description || "",
+    start: { dateTime: startISO },
+    end: { dateTime: endISO },
+    attendees: attendees.filter(Boolean).map((email) => ({ email })),
+  };
+  if (location) requestBody.location = location;
+  if (withMeet) {
+    requestBody.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
       },
-    },
-  });
+    };
+  }
+
+  const insertParams = {
+    calendarId: "primary",
+    conferenceDataVersion: withMeet ? 1 : 0,
+    requestBody,
+  };
+  // Without sendUpdates Google sends no invitation emails (API default), which
+  // also keeps automated/test runs from notifying real attendees.
+  if (sendUpdates) insertParams.sendUpdates = sendUpdates;
+
+  const res = await calendar.events.insert(insertParams);
 
   let data = res.data;
   const eventId = data.id;
   let meetLink = extractMeetLink(data);
+
+  // A pasted-link event has no conference to provision — return immediately.
+  if (!withMeet) {
+    return { meetLink: null, pending: false, eventId, htmlLink: data.htmlLink };
+  }
 
   // Poll for the asynchronously-created conference (short, bounded backoff).
   let attempts = 0;
@@ -170,6 +198,65 @@ export async function createMeetEvent(
     htmlLink: data.htmlLink,
   };
 }
+
+// Push a reschedule / detail change to an existing Google Calendar event so the
+// invited guests are re-notified. Best-effort: resolves to { ok:false } instead
+// of throwing, so a failed sync never breaks the calendar update.
+export async function updateMeetEvent(
+  userId,
+  eventId,
+  {
+    summary,
+    description,
+    startISO,
+    endISO,
+    location,
+    attendees,
+    sendUpdates = "all",
+  } = {}
+) {
+  if (!eventId) return { ok: false };
+  try {
+    const calendar = await getCalendarForUser(userId);
+    if (!calendar) return { ok: false };
+    const requestBody = {};
+    if (summary !== undefined) requestBody.summary = summary || "Meeting";
+    if (description !== undefined) requestBody.description = description || "";
+    if (startISO) requestBody.start = { dateTime: startISO };
+    if (endISO) requestBody.end = { dateTime: endISO };
+    if (location !== undefined) requestBody.location = location || "";
+    if (Array.isArray(attendees)) {
+      requestBody.attendees = attendees
+        .filter(Boolean)
+        .map((email) => ({ email }));
+    }
+    const res = await calendar.events.patch({
+      calendarId: "primary",
+      eventId,
+      sendUpdates,
+      requestBody,
+    });
+    return { ok: true, meetLink: extractMeetLink(res.data) };
+  } catch (error) {
+    console.error("[google] updateMeetEvent failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+}
+
+// Cancel/delete a Google Calendar event and notify guests. Best-effort.
+export async function cancelMeetEvent(userId, eventId, { sendUpdates = "all" } = {}) {
+  if (!eventId) return { ok: false };
+  try {
+    const calendar = await getCalendarForUser(userId);
+    if (!calendar) return { ok: false };
+    await calendar.events.delete({ calendarId: "primary", eventId, sendUpdates });
+    return { ok: true };
+  } catch (error) {
+    console.error("[google] cancelMeetEvent failed:", error.message);
+    return { ok: false, error: error.message };
+  }
+}
+
 export function hasGmailSendScope(scopes = []) {
   return Array.isArray(scopes) &&
     scopes.includes("https://www.googleapis.com/auth/gmail.send");

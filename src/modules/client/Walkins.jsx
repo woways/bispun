@@ -121,22 +121,22 @@ function WalkinMetric({
     <Component
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
+      className={`w-full bg-white border rounded-xl p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${active ? "border-indigo-300 ring-2 ring-indigo-100" : "border-slate-200"} ${onClick ? "hover:border-indigo-200 hover:bg-indigo-50/30" : ""}`}
     >
-      <div className="flex flex-row-reverse items-start justify-end gap-3">
+      <div className="flex flex-row-reverse items-start justify-end gap-2.5">
         <div>
-          <div className="text-[13px] font-semibold uppercase tracking-[0.09em] text-slate-400">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.07em] text-slate-500">
             {label}
           </div>
-          <div className="mt-2 text-[22px] leading-none font-bold tracking-tight text-slate-950">
+          <div className="mt-1.5 text-[18px] leading-none font-bold tracking-tight text-slate-950">
             {value}
           </div>
         </div>
-        <div className={`w-9 h-9 rounded-lg border flex items-center justify-center ${tones[tone] || tones.indigo}`}>
-          <Icon size={17} />
+        <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${tones[tone] || tones.indigo}`}>
+          <Icon size={15} aria-hidden="true" />
         </div>
       </div>
-      <div className="mt-3 pt-3 border-t border-slate-100 text-[13px] leading-5 text-slate-500">
+      <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-[12px] leading-5 text-slate-500">
         {detail}
       </div>
     </Component>
@@ -675,7 +675,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="text-[15px] font-semibold text-slate-900">
+                  <div className="text-[13px] font-semibold text-slate-900">
                     {walkIn.visitorName}
                   </div>
                   {walkIn.studentName ? (
@@ -684,29 +684,29 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
                     </div>
                   ) : null}
                   {walkIn.course ? (
-                    <div className="text-xs text-slate-400 mt-0.5">
+                    <div className="text-[12px] text-slate-500 mt-0.5">
                       {walkIn.course}
                     </div>
                   ) : null}
                 </td>
-                <td className="px-4 py-3 text-[15px] text-slate-600 whitespace-nowrap">
+                <td className="px-4 py-3 text-[13px] text-slate-600 whitespace-nowrap">
                   <div>{walkIn.phone}</div>
                   {walkIn.alternatePhone ? (
-                    <div className="mt-0.5 text-xs text-slate-400">
+                    <div className="mt-0.5 text-[12px] text-slate-500">
                       Alt: {walkIn.alternatePhone}
                     </div>
                   ) : null}
                 </td>
-                <td className="px-4 py-3 text-[15px] text-slate-700">
+                <td className="px-4 py-3 text-[13px] text-slate-700">
                   {walkIn.purpose}
                 </td>
-                <td className="px-4 py-3 text-[15px] text-slate-600">
+                <td className="px-4 py-3 text-[13px] text-slate-600">
                   {walkIn.accompaniedBy}
                 </td>
-                <td className="px-4 py-3 text-[15px] font-medium text-slate-700">
+                <td className="px-4 py-3 text-[13px] font-medium text-slate-700">
                   {walkIn.counsellor}
                 </td>
-                <td className="px-4 py-3 text-[15px] text-slate-600">
+                <td className="px-4 py-3 text-[13px] text-slate-600">
                   {walkIn.notes || walkIn.outcome}
                 </td>
                 <td className="px-4 py-3">
@@ -718,6 +718,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
                       <button
                         type="button"
                         title="Convert to lead"
+                        aria-label={`Convert ${walkIn.visitorName} to lead`}
                         onClick={() => convert(walkIn)}
                         disabled={actionId === walkIn.id}
                         className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
@@ -725,25 +726,27 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
                         {actionId === walkIn.id ? (
                           <Loader2 size={14} className="animate-spin" />
                         ) : (
-                          <UserRoundCheck size={14} />
+                          <UserRoundCheck size={14} aria-hidden="true" />
                         )}
                       </button>
                     ) : null}
                     <button
                       type="button"
                       title="Edit"
+                      aria-label={`Edit ${walkIn.visitorName}`}
                       onClick={() => openEdit(walkIn)}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-slate-500 hover:bg-slate-100"
                     >
-                      <Pencil size={14} />
+                      <Pencil size={14} aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       title="Delete"
+                      aria-label={`Delete ${walkIn.visitorName}`}
                       onClick={() => remove(walkIn)}
                       className="w-8 h-8 rounded-lg inline-flex items-center justify-center text-rose-500 hover:bg-rose-50"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={14} aria-hidden="true" />
                     </button>
                   </div>
                 </td>

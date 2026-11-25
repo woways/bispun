@@ -21,6 +21,9 @@ import {
   Upload,
   Check,
   Globe2,
+  Briefcase,
+  MapPin,
+  Copy,
   Mail,
   Smartphone,
   MessageCircle,
@@ -96,13 +99,8 @@ const QUICK_BRAND_COLORS = BRAND_COLORS.filter((color) =>
 const TABS = [
   {
     k: "company",
-    l: "Company",
+    l: "Company & Branding",
     i: Building,
-  },
-  {
-    k: "branding",
-    l: "Branding",
-    i: Palette,
   },
   {
     k: "users",
@@ -140,7 +138,7 @@ const TABS = [
 // from TABS; only keys present in visibleTabs render, and empty groups are
 // skipped, so permission filtering still applies.
 const TAB_GROUPS = [
-  { label: "Workspace", keys: ["company", "branding", "integrations"] },
+  { label: "Workspace", keys: ["company", "integrations"] },
   { label: "Access", keys: ["users"] },
   { label: "Leads", keys: ["sources", "fields"] },
   { label: "System", keys: ["notifications", "activity"] },
@@ -219,37 +217,109 @@ function Field({
   placeholder,
   mono = false,
   disabled = false,
+  icon: Icon,
+  note,
+  className = "",
 }) {
+  const id = useId();
+  const noteId = useId();
+
   return (
-    <div>
-      <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">
+    <div className={className}>
+      <label
+        htmlFor={id}
+        className="block text-[13px] font-semibold text-slate-600 mb-1.5"
+      >
         {label}
       </label>
 
-      <input
-        value={
-          value
-        }
-        onChange={(
-          event
-        ) =>
-          onChange?.(
-            event.target
-              .value
-          )
-        }
-        disabled={
-          disabled
-        }
-        placeholder={
-          placeholder
-        }
-        className={`w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 ${
-          mono
-            ? "font-mono"
-            : ""
-        }`}
+      <div className="relative">
+        {Icon && (
+          <Icon
+            size={15}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+        )}
+
+        <input
+          id={id}
+          value={value}
+          onChange={(event) => onChange?.(event.target.value)}
+          disabled={disabled}
+          placeholder={placeholder}
+          aria-describedby={note ? noteId : undefined}
+          className={`w-full h-10 ${
+            Icon ? "pl-9 pr-3" : "px-3"
+          } border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 ${
+            mono ? "font-mono" : ""
+          }`}
+        />
+      </div>
+
+      {note && (
+        <p
+          id={noteId}
+          className="mt-1.5 text-[11.5px] leading-snug text-slate-500"
+        >
+          {note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SubdomainPill({ value }) {
+  const [copied, setCopied] = useState(false);
+  const shown = value || "workspace.bispun.com";
+
+  return (
+    <div className="mt-1.5 inline-flex max-w-full items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1">
+      <Globe2
+        size={13}
+        aria-hidden="true"
+        className="flex-shrink-0 text-slate-400"
       />
+
+      <span className="truncate font-mono text-[12px] text-slate-700">
+        {shown}
+      </span>
+
+      <button
+        type="button"
+        onClick={() => {
+          if (!value) return;
+          navigator.clipboard
+            ?.writeText(value)
+            .then(() => {
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1500);
+            })
+            .catch(() => {});
+        }}
+        className="flex-shrink-0 rounded-md p-1 text-brand-600 transition hover:bg-brand-50 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        aria-label={
+          copied
+            ? "Subdomain copied"
+            : `Copy subdomain ${shown} to clipboard`
+        }
+        title={copied ? "Copied" : "Copy"}
+      >
+        {copied ? (
+          <Check
+            size={13}
+            strokeWidth={3}
+            aria-hidden="true"
+            className="text-emerald-600"
+          />
+        ) : (
+          <Copy size={13} aria-hidden="true" />
+        )}
+      </button>
+
+      <span role="status" aria-live="polite" className="sr-only">
+        {copied ? "Subdomain copied to clipboard" : ""}
+      </span>
     </div>
   );
 }
@@ -2818,11 +2888,13 @@ export default function SettingsView({
         {/* CONTENT */}
 
         <section
-          className={`bg-white border border-slate-200 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${
-            tab === "branding" ? "overflow-visible" : "overflow-hidden"
-          }`}
+          className={
+            tab === "company"
+              ? "overflow-visible"
+              : "bg-white border border-slate-200 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden"
+          }
         >
-          {tab !== "users" && (
+          {tab !== "users" && tab !== "company" && (
             <div className="px-6 py-5 border-b border-slate-200">
               <div className="flex items-center gap-2">
                 {activeTab && (
@@ -2846,147 +2918,147 @@ export default function SettingsView({
 
           {tab ===
             "company" && (
-            <div className="p-6 space-y-6">
-              <div>
-                <h3 className="text-[15px] font-bold text-slate-900">
-                  Company Profile
-                </h3>
-
-                <p className="text-[13px] text-slate-500 mt-1">
-                  Core workspace identity
-                  shown throughout the CRM.
-                </p>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3.5">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className="flex h-11 w-11 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-600 text-[13px] font-bold text-white shadow-sm"
-                    >
-                      {logoPreview ? (
-                        <img
-                          src={logoPreview}
-                          alt="Company logo"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        tenant?.short ||
-                        "CB"
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="truncate text-[16px] font-bold text-slate-950">
-                        {
-                          form.companyName ||
-                          tenant?.name ||
-                          tenant?.brandName ||
-                          "CRM Workspace"
-                        }
-                      </div>
-                      <div className="mt-0.5 truncate text-[12px] text-slate-500">
-                        {
-                          form.subdomain ||
-                          tenant?.subdomain ||
-                          "Workspace"
-                        }
-                      </div>
+            <div>
+              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
+                <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+                  <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-brand-50 text-brand-600">
+                      <Building size={17} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="text-[15px] font-bold text-slate-900">
+                        Company Profile
+                      </h3>
+                      <p className="mt-0.5 text-[12.5px] text-slate-500">
+                        Core workspace identity shown throughout the CRM.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px]">
-                    <div className="inline-flex items-center gap-2 text-slate-600">
-                      <Building size={14} className="text-slate-400" />
-                      <span className="font-semibold">
-                        {
-                          form.businessType ||
-                          tenant?.business ||
-                          "Business not set"
+                  <div className="flex flex-1 flex-col gap-6 p-5">
+
+              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50/70 to-slate-50/40 px-4 py-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <div className="relative flex-shrink-0" aria-hidden="true">
+                      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-brand-600 text-[16px] font-bold text-white shadow-[0_6px_18px_-8px_rgba(79,70,229,0.9)]">
+                        {logoPreview ? (
+                          <img
+                            src={logoPreview}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          tenant?.short || "CB"
+                        )}
+                      </div>
+
+                      <span className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
+                        <Pencil size={11} />
+                      </span>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="truncate text-[17px] font-bold text-slate-950">
+                        {form.companyName ||
+                          tenant?.name ||
+                          tenant?.brandName ||
+                          "CRM Workspace"}
+                      </div>
+
+                      <SubdomainPill
+                        value={
+                          form.subdomain || tenant?.subdomain || ""
                         }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100"
+                        aria-hidden="true"
+                      />
+                      Active
+                    </span>
+
+                    <div className="inline-flex items-center gap-2 text-slate-600">
+                      <Briefcase size={14} aria-hidden="true" className="text-slate-400" />
+                      <span className="font-semibold">
+                        {form.businessType ||
+                          tenant?.business ||
+                          "Business not set"}
                       </span>
                     </div>
 
                     <div className="inline-flex items-center gap-2 text-slate-600">
-                      <Globe2 size={14} className="text-slate-400" />
+                      <MapPin size={14} aria-hidden="true" className="text-slate-400" />
                       <span className="font-semibold">
-                        {
-                          form.city ||
-                          tenant?.city ||
-                          "City not set"
-                        }
+                        {form.city || tenant?.city || "City not set"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Field
-                  label="Company Name"
-                  value={
-                    form.companyName
-                  }
-                  onChange={(
-                    value
-                  ) =>
-                    update(
-                      "companyName",
-                      value
-                    )
-                  }
-                />
+              <div className="space-y-5">
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className="mb-2.5 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    Identity
+                  </legend>
 
-                <Field
-                  label="Business Type"
-                  value={
-                    form.businessType
-                  }
-                  onChange={(
-                    value
-                  ) =>
-                    update(
-                      "businessType",
-                      value
-                    )
-                  }
-                />
+                  <div className="space-y-3.5">
+                    <Field
+                      label="Company Name"
+                      icon={Building}
+                      className="max-w-[460px]"
+                      placeholder="e.g. Bright Future Academy"
+                      value={form.companyName}
+                      onChange={(value) => update("companyName", value)}
+                    />
 
-                <Field
-                  label="City"
-                  value={
-                    form.city
-                  }
-                  onChange={(
-                    value
-                  ) =>
-                    update(
-                      "city",
-                      value
-                    )
-                  }
-                  placeholder="e.g. Hyderabad"
-                />
+                    <Field
+                      label="Business Type"
+                      icon={Briefcase}
+                      className="max-w-[460px]"
+                      placeholder="e.g. Education Consultancy"
+                      value={form.businessType}
+                      onChange={(value) => update("businessType", value)}
+                    />
+                  </div>
+                </fieldset>
 
-                <Field
-                  label="Subdomain"
-                  value={
-                    form.subdomain
-                  }
-                  onChange={(
-                    value
-                  ) =>
-                    update(
-                      "subdomain",
-                      value
-                    )
-                  }
-                  mono
-                />
+                <fieldset className="m-0 min-w-0 border-0 p-0">
+                  <legend className="mb-2.5 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    Location &amp; web address
+                  </legend>
 
+                  <div className="space-y-3.5">
+                    <Field
+                      label="City"
+                      icon={MapPin}
+                      className="max-w-[460px]"
+                      placeholder="e.g. Hyderabad"
+                      value={form.city}
+                      onChange={(value) => update("city", value)}
+                    />
+
+                    <Field
+                      label="Subdomain"
+                      icon={Globe2}
+                      mono
+                      className="max-w-[460px]"
+                      placeholder="e.g. brightfuture.bispun.com"
+                      value={form.subdomain}
+                      onChange={(value) => update("subdomain", value)}
+                      note="Auto-generated from the company name — e.g. friend.bispun.com. Override only if you need a different address."
+                    />
+                  </div>
+                </fieldset>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
+              <div className="mt-auto rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
                 <Globe2
                   size={16}
                   className="text-slate-500 mt-0.5"
@@ -3002,27 +3074,26 @@ export default function SettingsView({
                   </div>
                 </div>
               </div>
+                  </div>
+                </div>
 
-              <AccountDeletionSection />
-            </div>
-          )}
+                {/* RIGHT COLUMN: Brand Appearance + Logo */}
+                <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+                  <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-brand-50 text-brand-600">
+                      <Palette size={17} aria-hidden="true" />
+                    </span>
+                    <div>
+                      <h3 className="text-[15px] font-bold text-slate-900">
+                        Brand Appearance
+                      </h3>
+                      <p className="mt-0.5 text-[12.5px] text-slate-500">
+                        Configure the visual identity used inside the client portal.
+                      </p>
+                    </div>
+                  </div>
 
-          {/* BRANDING */}
-
-          {tab ===
-            "branding" && (
-            <div className="p-6 space-y-7">
-              <div>
-                <h3 className="text-[15px] font-bold text-slate-900">
-                  Brand Appearance
-                </h3>
-
-                <p className="text-[13px] text-slate-500 mt-1">
-                  Configure the visual
-                  identity used inside the
-                  client portal.
-                </p>
-              </div>
+                  <div className="flex flex-1 flex-col gap-7 p-5">
 
               <div>
                 <label className="block text-[13px] font-semibold text-slate-600 mb-3">
@@ -3096,25 +3167,25 @@ export default function SettingsView({
                         </button>
                       );
                     })}
+                  </div>
 
-                    <div className="relative ml-auto">
+                  <div className="mt-4 flex justify-center">
+                    <div className="relative">
                       <button
                         type="button"
                         onClick={() =>
                           setCustomPaletteOpen((current) => !current)
                         }
-                        className={`group flex min-w-[92px] flex-col items-center gap-2 rounded-xl border px-3 py-2.5 transition-all ${
+                        className={`group inline-flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-semibold shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
                           customPaletteOpen
-                            ? "border-brand-300 bg-brand-50/70"
-                            : "border-dashed border-slate-300 bg-slate-50/50 hover:border-brand-300 hover:bg-brand-50/50"
+                            ? "border-brand-300 bg-brand-50 text-brand-700"
+                            : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-700 hover:shadow-md"
                         }`}
                       >
-                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-brand-600 shadow-sm ring-1 ring-slate-200">
-                          <Plus size={17} />
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+                          <Plus size={13} aria-hidden="true" />
                         </span>
-                        <span className="text-[12px] font-semibold text-slate-700 group-hover:text-brand-700">
-                          Customize
-                        </span>
+                        Customize color
                       </button>
 
                       {customPaletteOpen && (
@@ -3371,6 +3442,11 @@ export default function SettingsView({
                   </div>
                 </div>
               </div>
+                  </div>
+                </div>
+              </div>
+
+              <AccountDeletionSection />
             </div>
           )}
 
@@ -3389,42 +3465,58 @@ export default function SettingsView({
                 </p>
               </div>
 
-              <div className="inline-flex max-w-full items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-                {[
-                  ["templates", "Templates", TEAM_TEMPLATES.length],
-                  ["users", "Users", users.length],
-                  ["departments", "Departments", organization.departments.length],
-                  ["levels", "Levels", organization.levels.length],
-                  ["access", "Access", organization.levels.length],
-                  ["roles", "Roles", organization.roles.length],
-                ].map(([key, label, count]) => {
-                  const active = usersManagementTab === key;
+              <nav
+                aria-label="User management sections"
+                className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+              >
+                <div
+                  className="flex gap-1 overflow-x-auto"
+                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                >
+                  {[
+                    ["templates", "Templates", TEAM_TEMPLATES.length, Sparkles],
+                    ["users", "Users", users.length, Users],
+                    ["departments", "Departments", organization.departments.length, Building],
+                    ["levels", "Levels", organization.levels.length, Layers],
+                    ["access", "Access", organization.levels.length, ShieldCheck],
+                    ["roles", "Roles", organization.roles.length, KeyRound],
+                  ].map(([key, label, count, Icon]) => {
+                    const active = usersManagementTab === key;
 
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setUsersManagementTab(key)}
-                      className={`inline-flex h-10 items-center gap-2.5 rounded-lg px-4 text-[15px] font-semibold transition-colors ${
-                        active
-                          ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200"
-                          : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
-                      }`}
-                    >
-                      <span>{label}</span>
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => setUsersManagementTab(key)}
+                        className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-[13px] font-medium transition-all shrink-0 ${
                           active
-                            ? "bg-indigo-50 text-indigo-600"
-                            : "bg-slate-200/70 text-slate-500"
+                            ? "bg-white text-indigo-700 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/60"
+                            : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
                         }`}
                       >
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                        <Icon
+                          size={14}
+                          aria-hidden="true"
+                          className={active ? "text-indigo-600" : "text-slate-400"}
+                        />
+
+                        <span>{label}</span>
+
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
+                            active
+                              ? "bg-indigo-50 text-indigo-600"
+                              : "bg-slate-200/70 text-slate-500"
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </nav>
 
               {usersError &&
                 !userModalOpen &&

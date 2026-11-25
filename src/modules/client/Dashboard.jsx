@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   UserCheck,
@@ -26,6 +26,9 @@ import {
   MessageCircle,
   Download,
   ArrowUpRight,
+  Phone,
+  Video,
+  Pin,
 } from "lucide-react";
 
 // Charts are code-split so the ~556KB recharts library is NOT loaded on the
@@ -50,6 +53,7 @@ import { donutCenterTotal } from "../../lib/donutCenterTotal";
 import { MobileRecordCard } from "../../components/mobileUi";
 import ChartSkeleton from "../../components/ChartSkeleton";
 import { Badge, statusTone } from "../../components/ui";
+import GuestPicker from "../../components/GuestPicker";
 
 const PIE_COLORS = [
   "#1d4ed8",
@@ -120,6 +124,23 @@ function axisMoney(value) {
 function LayoutDashboardIcon() {
   return <Activity size={13} />;
 }
+
+const DASH_TASK_TYPES = [
+  { value: "CALL", label: "Call", icon: Phone, tone: "border-indigo-100 bg-indigo-50 text-indigo-600" },
+  { value: "MEETING", label: "Meeting", icon: CalendarDays, tone: "border-cyan-100 bg-cyan-50 text-cyan-600" },
+  { value: "FOLLOWUP", label: "Follow-up", icon: Clock, tone: "border-amber-100 bg-amber-50 text-amber-600" },
+  { value: "COUNSELLING", label: "Counselling", icon: MessageCircle, tone: "border-violet-100 bg-violet-50 text-violet-600" },
+  { value: "PAYMENT", label: "Payment", icon: DollarSign, tone: "border-emerald-100 bg-emerald-50 text-emerald-600" },
+  { value: "GENERAL", label: "General", icon: CheckCircle2, tone: "border-slate-200 bg-slate-50 text-slate-600" },
+];
+const DASH_TASK_TYPE_MAP = Object.fromEntries(
+  DASH_TASK_TYPES.map((t) => [t.value, t])
+);
+const DASH_TASK_PRIORITIES = [
+  { value: "LOW", label: "Low" },
+  { value: "NORMAL", label: "Normal" },
+  { value: "HIGH", label: "High" },
+];
 
 function MetricCard({
   label,
@@ -259,6 +280,7 @@ function emptyEventForm() {
     location: "",
     description: "",
     allDay: false,
+    guests: [],
   };
 }
 
@@ -312,6 +334,27 @@ export default function Dashboard({
   const [kpiDetailData, setKpiDetailData] = useState(null);
   const [kpiDetailLoading, setKpiDetailLoading] = useState(false);
   const [kpiDetailError, setKpiDetailError] = useState("");
+
+  // Dashboard Tasks board + New Task drawer
+  const [dashTasks, setDashTasks] = useState([]);
+  const [dashTasksLoading, setDashTasksLoading] = useState(true);
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskFormError, setTaskFormError] = useState("");
+  const [taskForm, setTaskForm] = useState({
+    title: "",
+    type: "GENERAL",
+    priority: "NORMAL",
+    dueDate: "",
+    dueTime: "",
+    assignedToUserId: "",
+    notes: "",
+    pinned: false,
+  });
+  const newTaskBtnRef = useRef(null);
+  const taskTriggerRef = useRef(null);
+  const taskTitleRef = useRef(null);
+  const taskDrawerRef = useRef(null);
 
 
   const [
@@ -606,6 +649,181 @@ export default function Dashboard({
     loadCalendarUsers();
   }, []);
 
+  async function loadDashTasks() {
+    setDashTasksLoading(true);
+    try {
+      const result = await apiRequest("/api/client/tasks?scope=all");
+      setDashTasks(Array.isArray(result?.tasks) ? result.tasks : []);
+    } catch (error) {
+      setDashTasks([]);
+    } finally {
+      setDashTasksLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadDashTasks();
+  }, []);
+
+  function setTaskField(field, value) {
+    setTaskForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function openTaskDrawer() {
+    taskTriggerRef.current =
+      typeof document !== "undefined" ? document.activeElement : null;
+    setTaskForm({
+      title: "",
+      type: "GENERAL",
+      priority: "NORMAL",
+      dueDate: "",
+      dueTime: "",
+      assignedToUserId: "",
+      notes: "",
+      pinned: false,
+    });
+    setTaskFormError("");
+    setTaskDrawerOpen(true);
+  }
+
+  function closeTaskDrawer() {
+    setTaskDrawerOpen(false);
+    const trigger = taskTriggerRef.current || newTaskBtnRef.current;
+    if (trigger && typeof trigger.focus === "function") {
+      setTimeout(() => {
+        try {
+          trigger.focus();
+        } catch (_) {}
+      }, 0);
+    }
+  }
+
+  async function submitTask(event) {
+    event.preventDefault();
+    const title = taskForm.title.trim();
+    if (!title) {
+      setTaskFormError("Task title is required.");
+      if (taskTitleRef.current) taskTitleRef.current.focus();
+      return;
+    }
+    setTaskSaving(true);
+    setTaskFormError("");
+    try {
+      let dueAt = null;
+      if (taskForm.dueDate) {
+        const dt = new Date(
+          `${taskForm.dueDate}T${taskForm.dueTime || "09:00"}`
+        );
+        if (!Number.isNaN(dt.getTime())) dueAt = dt.toISOString();
+      }
+      const result = await apiRequest("/api/client/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          type: taskForm.type,
+          priority: taskForm.priority,
+          dueAt,
+          assignedToUserId: taskForm.assignedToUserId || null,
+          notes: taskForm.notes ? taskForm.notes.trim() : null,
+          pinned: taskForm.pinned,
+        }),
+      });
+      if (result?.task) {
+        setDashTasks((prev) => [result.task, ...prev]);
+      } else {
+        loadDashTasks();
+      }
+      closeTaskDrawer();
+    } catch (error) {
+      setTaskFormError(
+        error?.data?.message || "Couldn't create task. Please try again."
+      );
+    } finally {
+      setTaskSaving(false);
+    }
+  }
+
+  async function toggleTaskDone(task) {
+    const next = !task.done;
+    setDashTasks((prev) =>
+      prev.map((t) =>
+        t.id === task.id
+          ? {
+              ...t,
+              done: next,
+              completedAt: next ? new Date().toISOString() : null,
+            }
+          : t
+      )
+    );
+    try {
+      await apiRequest(`/api/client/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ done: next }),
+      });
+    } catch (error) {
+      setDashTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, done: !next } : t))
+      );
+    }
+  }
+
+  async function toggleTaskPin(task) {
+    const next = !task.pinned;
+    setDashTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, pinned: next } : t))
+    );
+    try {
+      await apiRequest(`/api/client/tasks/${task.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ pinned: next }),
+      });
+    } catch (error) {
+      setDashTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, pinned: !next } : t))
+      );
+    }
+  }
+
+  // Drawer: scroll-lock, focus-in on open, Esc to close, restore on close.
+  useEffect(() => {
+    if (!taskDrawerOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = setTimeout(() => {
+      if (taskTitleRef.current) taskTitleRef.current.focus();
+    }, 30);
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeTaskDrawer();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      clearTimeout(focusTimer);
+    };
+  }, [taskDrawerOpen]);
+
+  function handleDrawerKeyDown(e) {
+    if (e.key !== "Tab" || !taskDrawerRef.current) return;
+    const focusable = taskDrawerRef.current.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
   useEffect(() => {
     loadDashboard(selectedYear);
   }, [selectedYear]);
@@ -613,6 +831,24 @@ export default function Dashboard({
   useEffect(() => {
     loadCalendar();
   }, [calendarMonth, calendarRefreshToken]);
+
+  // Event drawer: scroll-lock + Esc to close (matches the New Task drawer).
+  useEffect(() => {
+    if (!eventModalOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setEventModalOpen(false);
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [eventModalOpen]);
 
   function openCreateEvent(
     date = new Date()
@@ -683,6 +919,9 @@ export default function Dashboard({
         event.description || "",
       allDay:
         event.allDay === true,
+      guests: Array.isArray(event.guests)
+        ? event.guests
+        : [],
     });
 
     setEventModalOpen(true);
@@ -736,6 +975,10 @@ export default function Dashboard({
 
         allDay:
           eventForm.allDay,
+
+        guests: Array.isArray(eventForm.guests)
+          ? eventForm.guests
+          : [],
       };
 
       if (editingEvent) {
@@ -743,7 +986,7 @@ export default function Dashboard({
           `/api/client/calendar/${editingEvent.id}`,
           {
             method: "PATCH",
-            body: payload,
+            body: JSON.stringify(payload),
           }
         );
       } else {
@@ -751,7 +994,7 @@ export default function Dashboard({
           "/api/client/calendar",
           {
             method: "POST",
-            body: payload,
+            body: JSON.stringify(payload),
           }
         );
       }
@@ -1162,6 +1405,14 @@ export default function Dashboard({
     },
   ];
 
+  const openDashTasks = dashTasks.filter((t) => !t.done);
+  const sortedDashTasks = [...dashTasks].sort(
+    (a, b) =>
+      (a.done ? 1 : 0) - (b.done ? 1 : 0) ||
+      (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)
+  );
+  const todayMeetings = todayEvents;
+
   return (
     <div className="cb-dashboard-root space-y-5">
       {/* WORKSPACE HEADER */}
@@ -1318,6 +1569,179 @@ export default function Dashboard({
 
                 </>
               )}
+
+              {/* TODAY'S TASKS + TODAY'S MEETINGS */}
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <section
+                  aria-labelledby="dash-tasks-title"
+                  className="flex h-[360px] flex-col overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-hidden="true">
+                      <CheckCircle2 size={17} />
+                    </span>
+                    <div className="min-w-0">
+                      <h2 id="dash-tasks-title" className="text-[15px] font-bold text-slate-950">
+                        Today&apos;s Tasks{" "}
+                        <span className="font-semibold text-slate-500">({openDashTasks.length})</span>
+                      </h2>
+                      <p className="text-[12px] text-slate-500">Pinned stay on top</p>
+                    </div>
+                    <button
+                      ref={newTaskBtnRef}
+                      type="button"
+                      onClick={openTaskDrawer}
+                      className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[12.5px] font-bold text-white transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                    >
+                      <Plus size={14} aria-hidden="true" /> New Task
+                    </button>
+                  </div>
+
+                  <div
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Today's tasks list"
+                    className="min-h-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                  >
+                    {dashTasksLoading ? (
+                      <div className="flex h-full items-center justify-center text-[12px] text-slate-500" role="status">
+                        <Loader2 size={15} className="mr-2 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        Loading tasks…
+                      </div>
+                    ) : dashTasks.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                        <CheckCircle2 size={22} className="text-slate-300" aria-hidden="true" />
+                        <p className="mt-2 text-[13px] font-semibold text-slate-700">No tasks yet</p>
+                        <p className="mt-1 text-[12px] text-slate-500">Create a task and it shows up here.</p>
+                      </div>
+                    ) : (
+                      <ul role="list" className="divide-y divide-slate-50 p-2">
+                        {sortedDashTasks.map((task) => {
+                          const meta = DASH_TASK_TYPE_MAP[task.type] || DASH_TASK_TYPE_MAP.GENERAL;
+                          const TypeIcon = meta.icon;
+                          const due = task.dueAt
+                            ? `${formatUiDate(task.dueAt, { day: "numeric", month: "short" })}, ${formatUiTime(task.dueAt)}`
+                            : "No due date";
+                          return (
+                            <li key={task.id} className={`flex items-center gap-3 rounded-xl px-2 py-2.5 ${task.done ? "opacity-55" : ""}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleTaskDone(task)}
+                                aria-pressed={task.done}
+                                aria-label={`Mark "${task.title}" ${task.done ? "not complete" : "complete"}`}
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${task.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 bg-white text-transparent hover:border-indigo-500"} focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1`}
+                              >
+                                <CheckCircle2 size={12} aria-hidden="true" />
+                              </button>
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${meta.tone}`} aria-hidden="true">
+                                <TypeIcon size={15} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`truncate text-[13px] font-bold text-slate-900 ${task.done ? "line-through" : ""}`}>{task.title}</span>
+                                  {task.pinned ? (
+                                    <span className="shrink-0 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.05em] text-indigo-700">Pinned</span>
+                                  ) : null}
+                                </div>
+                                <div className="mt-0.5 truncate text-[11px] text-slate-500">
+                                  {meta.label}
+                                  {" · "}
+                                  {due}
+                                  {task.assignedToName ? ` · ${task.assignedToName}` : ""}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleTaskPin(task)}
+                                aria-pressed={task.pinned}
+                                aria-label={`${task.pinned ? "Unpin" : "Pin"} "${task.title}"`}
+                                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition ${task.pinned ? "border-indigo-100 bg-indigo-50 text-indigo-600" : "border-slate-200 bg-white text-slate-500 hover:text-slate-700"} focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1`}
+                              >
+                                <Pin size={13} aria-hidden="true" />
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </section>
+
+                <section
+                  aria-labelledby="dash-meetings-title"
+                  className="flex h-[360px] flex-col overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                >
+                  <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white" aria-hidden="true">
+                      <CalendarDays size={17} />
+                    </span>
+                    <div className="min-w-0">
+                      <h2 id="dash-meetings-title" className="text-[15px] font-bold text-slate-950">
+                        Today&apos;s Meetings{" "}
+                        <span className="font-semibold text-slate-500">({todayMeetings.length})</span>
+                      </h2>
+                      <p className="text-[12px] text-slate-500">Calls, visits &amp; scheduled time</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openCreateEvent(new Date())}
+                      className="ml-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[12.5px] font-bold text-white transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                    >
+                      <Plus size={14} aria-hidden="true" /> Add Event
+                    </button>
+                  </div>
+
+                  <div
+                    tabIndex={0}
+                    role="region"
+                    aria-label="Today's meetings list"
+                    className="min-h-0 flex-1 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+                  >
+                    {todayMeetings.length === 0 ? (
+                      <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+                        <CalendarDays size={22} className="text-slate-300" aria-hidden="true" />
+                        <p className="mt-2 text-[13px] font-semibold text-slate-700">No meetings today</p>
+                      </div>
+                    ) : (
+                      <ul role="list" className="divide-y divide-slate-50 p-2">
+                        {todayMeetings.map((event) => {
+                          const online = Boolean(event.meetingLink);
+                          const where = event.location || event.meetingRoom || event.description || "";
+                          return (
+                            <li key={event.id} className="flex items-center gap-3 px-2 py-2.5">
+                              <div className="w-14 shrink-0 text-right">
+                                <div className="text-[12px] font-extrabold text-slate-900">{eventTime(event)}</div>
+                              </div>
+                              <div className="h-8 w-0.5 shrink-0 rounded bg-cyan-500/40" aria-hidden="true" />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-[13px] font-bold text-slate-900">{event.title}</div>
+                                <div className="mt-0.5 flex items-center gap-2">
+                                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${online ? "bg-cyan-50 text-cyan-700" : "bg-slate-100 text-slate-600"}`}>
+                                    {online ? <Video size={10} aria-hidden="true" /> : <MapPin size={10} aria-hidden="true" />}
+                                    {online ? "Online" : "In person"}
+                                  </span>
+                                  {where ? <span className="truncate text-[11px] text-slate-500">{where}</span> : null}
+                                </div>
+                              </div>
+                              {online ? (
+                                <a
+                                  href={event.meetingLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-[11.5px] font-bold text-white hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                  aria-label={`Join ${event.title} at ${eventTime(event)} (opens in new tab)`}
+                                >
+                                  <Video size={13} aria-hidden="true" /> Join
+                                </a>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </section>
+              </div>
 
               {(canSeeDashboardSection("revenue-trend") || canSeeDashboardSection("leads-by-source")) && (
                 <>
@@ -1535,42 +1959,51 @@ export default function Dashboard({
                   </div>
                 </div>
               
-                <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-5 native:grid-cols-2">
+                <ul role="list" className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   {actionCenterItems.map((item) => {
                     const Icon = actionIconByKey[item.key] || Activity;
                     const tone = actionToneByName[item.tone] || actionToneByName.slate;
+                    const count = Number(item.count || 0);
+                    const isClear = count === 0;
               
                     return (
+                      <li key={item.key}>
                       <button
-                        key={item.key}
                         type="button"
                         onClick={() => openActionDetail(item)}
-                        className="group bg-white p-4 text-left transition-colors hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
-                        aria-label={`Open ${item.label} details`}
+                        className="group flex h-full w-full flex-col rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_24px_-16px_rgba(15,23,42,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
+                        aria-label={isClear ? `${item.label}: 0. Clear.` : `${item.label}: ${count}${item.amount !== undefined ? `, ${money(item.amount)}` : ""}. View details.`}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-bold leading-5 text-slate-900">{item.label}</div>
-                            <div className="mt-2 text-[24px] font-extrabold tracking-tight text-slate-950">
-                              {Number(item.count || 0).toLocaleString("en-IN")}
-                            </div>
-                            {item.amount !== undefined ? (
-                              <div className="mt-0.5 text-[12px] font-bold text-slate-600">{money(item.amount)}</div>
-                            ) : null}
-                          </div>
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${tone}`}>
-                            <Icon size={16} />
-                          </div>
+                        <div className="flex items-center gap-2.5">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${tone}`}>
+                            <Icon size={15} aria-hidden="true" />
+                          </span>
+                          <span className="text-[11.5px] font-bold leading-tight text-slate-600">{item.label}</span>
                         </div>
-                        <div className="mt-3 text-[11px] leading-4 text-slate-500">{item.detail}</div>
-                        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
-                          View details
-                          <ChevronRight size={12} />
+                        <div className="mt-3 flex items-center gap-2">
+                          <span className={`text-[24px] font-extrabold leading-none tracking-tight tabular-nums ${isClear ? "text-slate-500" : "text-slate-950"}`}>
+                            {count.toLocaleString("en-IN")}
+                          </span>
+                          {isClear ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700">
+                              <CheckCircle2 size={11} aria-hidden="true" /> Clear
+                            </span>
+                          ) : null}
                         </div>
+                        {!isClear && item.amount !== undefined ? (
+                          <div className="mt-1.5 text-[12px] font-extrabold text-slate-700">{money(item.amount)}</div>
+                        ) : null}
+                        <div className="mt-2 flex-1 text-[10.5px] leading-snug text-slate-500">{item.detail}</div>
+                        {!isClear ? (
+                          <span className="mt-2.5 inline-flex items-center gap-1 text-[10.5px] font-bold text-indigo-600">
+                            View details <ChevronRight size={12} aria-hidden="true" />
+                          </span>
+                        ) : null}
                       </button>
+                      </li>
                     );
                   })}
-                </div>
+                </ul>
               </section>
               )}
 
@@ -1592,53 +2025,37 @@ export default function Dashboard({
 
                   {recentAdmissionsData.length ? (
                     <>
-                    <div className="hidden lg:block overflow-x-auto">
-                      <table className="w-full min-w-[620px] text-left">
-                        <thead>
-                          <tr className="border-b border-slate-100 bg-slate-50/60 text-[12px] font-bold uppercase tracking-[0.06em] text-slate-500">
-                            <th className="px-4 py-2.5">Student</th>
-                            <th className="px-3 py-2.5">College</th>
-                            <th className="px-3 py-2.5">Counsellor</th>
-                            <th className="px-3 py-2.5">Date</th>
-                            <th className="px-3 py-2.5">Amount</th>
-                            <th className="px-3 py-2.5">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recentAdmissionsData.slice(0, 5).map((item, index) => (
-                            <tr
-                              key={item.id || `${item.studentName || item.leadName || "admission"}-${index}`}
-                              className="border-b border-slate-50 text-[13px] text-slate-600 last:border-0"
-                            >
-                              <td className="px-4 py-3 font-semibold text-slate-900">
-                                {item.studentName || item.leadName || item.name || "—"}
-                              </td>
-                              <td className="px-3 py-3">
-                                {item.collegeName || item.universityName || item.college || "—"}
-                              </td>
-                              <td className="px-3 py-3">
-                                {item.counsellorName || item.admissionDoneBy || item.assignedTo || "—"}
-                              </td>
-                              <td className="px-3 py-3">
-                                {item.dateOfAdmission || item.admissionDate || item.createdAt
-                                  ? formatUiDate(item.dateOfAdmission || item.admissionDate || item.createdAt)
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-3 font-semibold text-slate-800">
-                                {item.amount != null
-                                  ? money(item.amount)
-                                  : item.revenue != null
-                                  ? money(item.revenue)
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-3">
-                                {item.revenueStatus || item.status || "—"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <ul role="list" className="hidden lg:block divide-y divide-slate-100">
+                      {recentAdmissionsData.slice(0, 5).map((item, index) => {
+                        const student = item.studentName || item.leadName || item.name || "—";
+                        const college = item.collegeName || item.universityName || item.college || "—";
+                        const counsellor = item.counsellorName || item.admissionDoneBy || item.assignedTo || "";
+                        const dateVal = item.dateOfAdmission || item.admissionDate || item.createdAt;
+                        const dateStr = dateVal ? formatUiDate(dateVal) : "";
+                        const amount = item.amount != null ? money(item.amount) : item.revenue != null ? money(item.revenue) : "—";
+                        const status = item.revenueStatus || item.status || "";
+                        const sub = [college, dateStr, counsellor || "Unassigned"].filter(Boolean).join(" · ");
+                        const inits = String(student).trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+                        return (
+                          <li
+                            key={item.id || `${student}-${index}`}
+                            className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-slate-50/70"
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-extrabold text-indigo-700" aria-hidden="true">
+                              {inits}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[13.5px] font-bold text-slate-900">{student}</div>
+                              <div className="mt-0.5 truncate text-[12px] text-slate-500">{sub}</div>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <div className="text-[13px] font-extrabold tabular-nums text-slate-900">{amount}</div>
+                              {status ? <Badge tone={statusTone(status)}>{status}</Badge> : null}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
 
                     <div
                       className="lg:hidden divide-y divide-slate-100"
@@ -2158,11 +2575,11 @@ export default function Dashboard({
 
           <div className="rounded-[14px] border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
-              <h3 className="text-[15px] font-bold text-slate-900">
+              <h2 className="text-[15px] font-bold text-slate-900">
                 Team Performance
-              </h3>
+              </h2>
 
-              <div className="text-[12px] font-semibold text-slate-400">
+              <div className="text-[12px] font-semibold text-slate-500">
                 {selectedYear ===
                 "all"
                   ? "All Time"
@@ -2172,61 +2589,77 @@ export default function Dashboard({
 
             {data.teamPerformance
               .length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                {data.teamPerformance.map(
-                  (member) => (
+              <div role="list" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                {data.teamPerformance.map((member) => {
+                  const maxRev = Math.max(
+                    ...data.teamPerformance.map((m) => Number(m.revenue || 0)),
+                    1
+                  );
+                  const pct = Math.round((Number(member.revenue || 0) / maxRev) * 100);
+                  const inits = String(member.name || "—")
+                    .trim()
+                    .split(/\s+/)
+                    .map((w) => w[0])
+                    .slice(0, 2)
+                    .join("")
+                    .toUpperCase();
+                  return (
                     <div
-                      key={
-                        member.name
-                      }
-                      className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition hover:border-slate-200 hover:bg-white"
+                      key={member.name}
+                      role="listitem"
+                      className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.25)] motion-reduce:transition-none"
                     >
-                      <div className="text-sm font-medium text-slate-900">
-                        {
-                          member.name
-                        }
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-extrabold text-indigo-700"
+                          aria-hidden="true"
+                        >
+                          {inits}
+                        </span>
+                        <div className="truncate text-[13.5px] font-bold text-slate-900">
+                          {member.name}
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                      <div className="mt-3 grid grid-cols-3 gap-2">
                         <div>
-                          <div className="text-slate-500">
+                          <div className="text-[15px] font-extrabold tabular-nums text-slate-900">
+                            {member.leads}
+                          </div>
+                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
                             Leads
                           </div>
-
-                          <div className="font-semibold text-slate-900">
-                            {
-                              member.leads
-                            }
-                          </div>
                         </div>
-
                         <div>
-                          <div className="text-slate-500">
+                          <div className="text-[15px] font-extrabold tabular-nums text-slate-900">
+                            {member.admissions}
+                          </div>
+                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
                             Adm
                           </div>
-
-                          <div className="font-semibold text-slate-900">
-                            {
-                              member.admissions
-                            }
-                          </div>
                         </div>
-
                         <div>
-                          <div className="text-slate-500">
-                            Rev
+                          <div className="text-[14px] font-extrabold tabular-nums text-slate-900">
+                            {money(member.revenue)}
                           </div>
-
-                          <div className="font-semibold text-slate-900">
-                            {money(
-                              member.revenue
-                            )}
+                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
+                            Rev
                           </div>
                         </div>
                       </div>
+
+                      <div
+                        className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"
+                        aria-hidden="true"
+                      >
+                        <div
+                          className="h-full rounded-full bg-indigo-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                  )
-                )}
+                  );
+                })}
               </div>
             ) : (
               <div className="py-8 text-center text-sm text-slate-500">
@@ -2240,6 +2673,237 @@ export default function Dashboard({
 
             </>
           )}
+
+      {/* NEW TASK DRAWER */}
+      {taskDrawerOpen && (
+        <div className="fixed inset-0 z-[135] flex justify-end">
+          <div
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeTaskDrawer();
+            }}
+            aria-hidden="true"
+          />
+          <div
+            ref={taskDrawerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="new-task-title"
+            onKeyDown={handleDrawerKeyDown}
+            className="relative flex h-full w-full max-w-[460px] flex-col bg-white shadow-2xl motion-safe:transition-transform"
+          >
+            <div className="flex items-start gap-3 border-b border-slate-100 px-5 py-4">
+              <div className="min-w-0">
+                <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600" aria-hidden="true">
+                  New Task
+                </div>
+                <h2 id="new-task-title" className="text-[17px] font-bold text-slate-950">
+                  Create a task
+                </h2>
+                <p className="mt-0.5 text-[12px] text-slate-500">
+                  It&apos;s saved to Tasks and shows on the dashboard.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeTaskDrawer}
+                aria-label="Close New Task"
+                className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <form onSubmit={submitTask} className="flex min-h-0 flex-1 flex-col">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+                {taskFormError ? (
+                  <div role="alert" className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] font-semibold text-rose-700">
+                    <AlertCircle size={15} aria-hidden="true" />
+                    {taskFormError}
+                  </div>
+                ) : null}
+
+                <div>
+                  <label htmlFor="task-title" className="text-[12px] font-bold text-slate-700">
+                    Task title <span className="text-rose-600">(required)</span>
+                  </label>
+                  <input
+                    id="task-title"
+                    ref={taskTitleRef}
+                    type="text"
+                    required
+                    aria-required="true"
+                    aria-invalid={taskFormError ? "true" : undefined}
+                    aria-describedby={taskFormError ? "task-title-error" : undefined}
+                    value={taskForm.title}
+                    onChange={(e) => setTaskField("title", e.target.value)}
+                    placeholder="e.g. Call Ananya about B.Tech admission"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                  />
+                  {taskFormError ? (
+                    <p id="task-title-error" className="mt-1 text-[11.5px] font-semibold text-rose-600">
+                      {taskFormError}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div role="group" aria-labelledby="task-type-label">
+                  <div id="task-type-label" className="text-[12px] font-bold text-slate-700">Type</div>
+                  <div className="mt-1.5 grid grid-cols-3 gap-2">
+                    {DASH_TASK_TYPES.map((t) => {
+                      const TIcon = t.icon;
+                      const active = taskForm.type === t.value;
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setTaskField("type", t.value)}
+                          className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${active ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                        >
+                          <TIcon size={16} aria-hidden="true" />
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="task-lead" className="text-[12px] font-bold text-slate-700">
+                    Linked lead <span className="font-semibold text-slate-500">(optional)</span>
+                  </label>
+                  <input
+                    id="task-lead"
+                    type="text"
+                    value={taskForm.leadId || ""}
+                    onChange={(e) => setTaskField("leadId", e.target.value)}
+                    placeholder="Lead name or id (optional)"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="task-date" className="text-[12px] font-bold text-slate-700">Due date</label>
+                    <input
+                      id="task-date"
+                      type="date"
+                      value={taskForm.dueDate}
+                      onChange={(e) => setTaskField("dueDate", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="task-time" className="text-[12px] font-bold text-slate-700">Time</label>
+                    <input
+                      id="task-time"
+                      type="time"
+                      value={taskForm.dueTime}
+                      onChange={(e) => setTaskField("dueTime", e.target.value)}
+                      className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="task-assignee" className="text-[12px] font-bold text-slate-700">Assign to</label>
+                  <select
+                    id="task-assignee"
+                    value={taskForm.assignedToUserId}
+                    onChange={(e) => setTaskField("assignedToUserId", e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                  >
+                    <option value="">Unassigned</option>
+                    {calendarUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div role="group" aria-labelledby="task-priority-label">
+                  <div id="task-priority-label" className="text-[12px] font-bold text-slate-700">Priority</div>
+                  <div className="mt-1.5 grid grid-cols-3 gap-2">
+                    {DASH_TASK_PRIORITIES.map((p) => {
+                      const active = taskForm.priority === p.value;
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setTaskField("priority", p.value)}
+                          className={`rounded-lg border px-2 py-2 text-[12.5px] font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 ${active ? "border-indigo-500 bg-indigo-50 text-indigo-700 ring-1 ring-indigo-500" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="task-notes" className="text-[12px] font-bold text-slate-700">Notes</label>
+                  <textarea
+                    id="task-notes"
+                    rows={3}
+                    value={taskForm.notes}
+                    onChange={(e) => setTaskField("notes", e.target.value)}
+                    placeholder="Context, next step, anything to remember"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div>
+                    <div className="text-[13px] font-bold text-slate-900">Pin to top</div>
+                    <div className="text-[11px] text-slate-500">Keep this task above the list</div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={taskForm.pinned}
+                    aria-label="Pin to top"
+                    onClick={() => setTaskField("pinned", !taskForm.pinned)}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${taskForm.pinned ? "bg-indigo-600" : "bg-slate-300"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${taskForm.pinned ? "left-[22px]" : "left-0.5"}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-3 border-t border-slate-100 px-5 py-4">
+                <button
+                  type="button"
+                  onClick={closeTaskDrawer}
+                  className="h-10 flex-1 rounded-lg border border-slate-200 bg-white text-[13px] font-bold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={taskSaving}
+                  aria-busy={taskSaving}
+                  className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-indigo-600 text-[13px] font-bold text-white hover:bg-indigo-700 disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                >
+                  {taskSaving ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                      Creating…
+                    </>
+                  ) : (
+                    "Create task"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* EVENT MODAL */}
 
@@ -3066,7 +3730,7 @@ export default function Dashboard({
 
       {eventModalOpen && (
         <div
-          className="fixed inset-0 z-[100] bg-slate-950/35 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          className="fixed inset-0 z-[100] flex justify-end bg-slate-950/45 backdrop-blur-[2px]"
           onMouseDown={(event) => {
             if (
               event.target ===
@@ -3078,15 +3742,18 @@ export default function Dashboard({
         >
           <form
             onSubmit={saveEvent}
-            className="w-full max-w-xl max-h-[94vh] sm:max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white border border-slate-200 shadow-[0_24px_80px_rgba(15,23,42,0.22)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="event-drawer-title"
+            className="relative flex h-full w-full max-w-[460px] flex-col overflow-y-auto border-l border-slate-200 bg-white shadow-2xl motion-safe:transition-transform"
           >
             <div className="sticky top-0 bg-white z-10 px-5 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <div className="text-sm font-bold text-slate-950">
+                <h2 id="event-drawer-title" className="text-sm font-bold text-slate-950">
                   {editingEvent
                     ? "Edit event"
                     : "Add event"}
-                </div>
+                </h2>
 
                 <div className="mt-0.5 text-[13px] text-slate-500">
                   Add meetings,
@@ -3336,6 +4003,23 @@ export default function Dashboard({
                   )}
                 </select>
               </label>
+
+              <div className="block">
+                <span id="event-guests-label" className="text-[13px] font-semibold text-slate-600 flex items-center gap-1.5">
+                  <Users size={12} aria-hidden="true" />
+                  Guests
+                </span>
+                <div className="mt-1.5">
+                  <GuestPicker
+                    value={eventForm.guests || []}
+                    onChange={(guests) =>
+                      setEventForm((form) => ({ ...form, guests }))
+                    }
+                    users={calendarUsers}
+                    ariaLabelledby="event-guests-label"
+                  />
+                </div>
+              </div>
 
               <label className="block">
                 <span className="text-[13px] font-semibold text-slate-600 flex items-center gap-1.5">

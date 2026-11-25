@@ -10,6 +10,14 @@ import prisma from "../lib/prisma.js";
 
 import { canModifyCalendarEvent } from "../lib/calendarAccess.js";
 
+import {
+  createMeetEvent,
+  updateMeetEvent,
+  cancelMeetEvent,
+} from "../lib/google.js";
+
+import { sendMeetingInviteEmail } from "../lib/mailer.js";
+
 
 
 import {
@@ -219,6 +227,12 @@ function formatEvent(
     meetingRoom:
 
       event.meetingRoom,
+
+
+
+    googleEventId:
+
+      event.googleEventId ?? null,
 
 
 
@@ -525,6 +539,103 @@ async function syncGuests(companyId, eventId, input) {
       data: rows.map((r) => ({ ...r, eventId })),
     });
   }
+}
+
+// Email addresses from a guests payload (company users may have no email set).
+function guestEmails(input) {
+  return normalizeGuests(input)
+    .map((g) => (g.email || "").trim())
+    .filter((e) => e && e.includes("@"));
+}
+
+// Deliver invites for a meeting to its guests. Used when the client did NOT
+// already create a Google event itself (that path — the calendar editor's
+// /google/meet call — invites guests directly and passes us a googleEventId).
+// Strategy:
+//  1. addGoogleMeet (quick-create "Add Google Meet link"): create a Google
+//     Calendar event with the guests as attendees and sendUpdates:"all" so
+//     Google emails each guest a real invite (Meet link + RSVP). Returns the
+//     generated link + googleEventId so we can persist and later reschedule.
+//  2. Otherwise (pasted link, or guests without a Meet, or any Google failure):
+//     send a branded Bispun email per guest via the platform Gmail account.
+// Best-effort: never throws. Returns { via, link, googleEventId, pending,
+// notified }.
+async function deliverMeetingInvites({
+  organizerUserId,
+  organizerName,
+  title,
+  description,
+  startAt,
+  endAt,
+  location,
+  link,
+  addGoogleMeet,
+  guests,
+}) {
+  const emails = guestEmails(guests);
+  const result = {
+    via: "none",
+    link: link || null,
+    googleEventId: null,
+    pending: false,
+    notified: 0,
+  };
+  // Nothing to do unless we must generate a Meet link or have guests to notify.
+  if (!addGoogleMeet && emails.length === 0) return result;
+
+  const startISO = new Date(startAt).toISOString();
+  const endISO = new Date(
+    endAt || new Date(startAt).getTime() + 3600000
+  ).toISOString();
+
+  // --- Google path: auto-generate a Meet link + real invite ---
+  if (addGoogleMeet) {
+    try {
+      const g = await createMeetEvent(organizerUserId, {
+        summary: title,
+        description: description || "",
+        startISO,
+        endISO,
+        attendees: emails,
+        sendUpdates: emails.length ? "all" : undefined,
+        withMeet: true,
+      });
+      result.via = "google";
+      result.googleEventId = g.eventId || null;
+      result.pending = Boolean(g.pending);
+      result.link = g.meetLink || result.link;
+      result.notified = emails.length;
+      return result;
+    } catch (error) {
+      // "not connected" is the expected fallback trigger; log anything else.
+      if (!/not connected/i.test(String(error?.message || ""))) {
+        console.error(
+          "[calendar] Google invite failed, falling back to email:",
+          error.message
+        );
+      }
+    }
+  }
+
+  // --- Email fallback (branded Bispun invite with whatever link we have) ---
+  for (const g of normalizeGuests(guests)) {
+    const email = (g.email || "").trim();
+    if (!email || !email.includes("@")) continue;
+    const r = await sendMeetingInviteEmail({
+      toEmail: email,
+      guestName: g.name,
+      title,
+      description,
+      startAt,
+      endAt,
+      location,
+      meetingLink: result.link,
+      organizerName,
+    });
+    if (r?.sent) result.notified += 1;
+  }
+  result.via = "email";
+  return result;
 }
 
 
@@ -1014,6 +1125,25 @@ router.post(
 
 
 
+      const addGoogleMeet =
+
+        Boolean(req.body?.addGoogleMeet);
+
+
+
+      // When the calendar editor generated a Google Meet itself, it passes the
+      // Google event id so we link to it (guests were invited there already).
+
+      const incomingGoogleEventId =
+
+        cleanString(
+
+          req.body?.googleEventId
+
+        ) || null;
+
+
+
       const type =
 
         String(
@@ -1346,6 +1476,12 @@ router.post(
 
 
 
+            googleEventId:
+
+              incomingGoogleEventId,
+
+
+
             createdByUserId:
 
               userId ||
@@ -1414,6 +1550,53 @@ router.post(
 
       await syncGuests(companyId, event.id, req.body?.guests);
 
+      // Send invites (Google Calendar invite if the organizer has connected
+      // Google, else a branded email) and persist any generated Meet link.
+      // Best-effort — a failure here never fails event creation.
+      let inviteStatus = null;
+      // If the editor already created a Google event (incomingGoogleEventId), the
+      // guests were invited there — nothing more to send. Otherwise deliver
+      // invites (auto-Meet generation or branded email) for a meeting.
+      if (!incomingGoogleEventId && (addGoogleMeet || type === "MEETING")) {
+        try {
+          const organizer = await prisma.user
+            .findUnique({ where: { id: userId }, select: { name: true } })
+            .catch(() => null);
+          const invite = await deliverMeetingInvites({
+            organizerUserId: userId,
+            organizerName: organizer?.name || null,
+            title,
+            description,
+            startAt,
+            endAt,
+            location,
+            link: meetingRoom,
+            addGoogleMeet,
+            guests: req.body?.guests,
+          });
+          if (invite && invite.via !== "none") {
+            await prisma.calendarEvent
+              .update({
+                where: { id: event.id },
+                data: {
+                  meetingRoom: invite.link ?? meetingRoom ?? null,
+                  googleEventId: invite.googleEventId ?? null,
+                },
+              })
+              .catch(() => {});
+          }
+          inviteStatus = invite
+            ? {
+                via: invite.via,
+                pending: invite.pending,
+                notified: invite.notified,
+              }
+            : null;
+        } catch (e) {
+          console.error("[calendar] invite delivery threw:", e.message);
+        }
+      }
+
       const createdEvent = await prisma.calendarEvent.findUnique({
         where: { id: event.id },
         include: await buildInclude(),
@@ -1434,6 +1617,12 @@ router.post(
           message:
 
             "Calendar event created",
+
+
+
+          invite:
+
+            inviteStatus,
 
 
 
@@ -1680,6 +1869,28 @@ router.patch(
           cleanString(
 
             req.body.meetingRoom
+
+          ) || null;
+
+      }
+
+
+
+      if (
+
+        req.body
+
+          ?.googleEventId !==
+
+        undefined
+
+      ) {
+
+        data.googleEventId =
+
+          cleanString(
+
+            req.body.googleEventId
 
           ) || null;
 
@@ -2188,6 +2399,102 @@ router.patch(
         include: await buildInclude(),
       });
 
+      // Keep guests in sync with the change. If this event already has a Google
+      // Calendar event, push the reschedule / link / guest changes to it (which
+      // re-notifies attendees). Otherwise, if it now warrants invites, send them
+      // for the first time. Best-effort — never fails the update.
+      let fresh = updatedEvent;
+      try {
+        const addGoogleMeet = Boolean(req.body?.addGoogleMeet);
+        const emails = (updatedEvent?.guests || [])
+          .map((g) => (g.email || "").trim())
+          .filter((e) => e && e.includes("@"));
+        const startISO = new Date(updatedEvent.startAt).toISOString();
+        const endISO = new Date(
+          updatedEvent.endAt ||
+            new Date(updatedEvent.startAt).getTime() + 3600000
+        ).toISOString();
+
+        if (updatedEvent?.googleEventId) {
+          if (updatedEvent.status === "CANCELLED") {
+            // Cancel the Google event so invited guests are notified, then drop
+            // the link so a later edit doesn't try to patch a deleted event.
+            await cancelMeetEvent(
+              req.clientUser.userId,
+              updatedEvent.googleEventId,
+              { sendUpdates: "all" }
+            );
+            await prisma.calendarEvent
+              .update({
+                where: { id: existing.id },
+                data: { googleEventId: null },
+              })
+              .catch(() => {});
+            fresh = await prisma.calendarEvent.findUnique({
+              where: { id: existing.id },
+              include: await buildInclude(),
+            });
+          } else {
+            await updateMeetEvent(
+              req.clientUser.userId,
+              updatedEvent.googleEventId,
+              {
+                summary: updatedEvent.title,
+                description: updatedEvent.description || "",
+                startISO,
+                endISO,
+                location:
+                  updatedEvent.meetingRoom || updatedEvent.location || "",
+                attendees: emails,
+                sendUpdates: "all",
+              }
+            );
+          }
+        } else if (
+          (updatedEvent?.type === "MEETING" ||
+            addGoogleMeet ||
+            updatedEvent?.meetingRoom) &&
+          (addGoogleMeet || emails.length)
+        ) {
+          const organizer = await prisma.user
+            .findUnique({
+              where: { id: req.clientUser.userId },
+              select: { name: true },
+            })
+            .catch(() => null);
+          const invite = await deliverMeetingInvites({
+            organizerUserId: req.clientUser.userId,
+            organizerName: organizer?.name || null,
+            title: updatedEvent.title,
+            description: updatedEvent.description,
+            startAt: updatedEvent.startAt,
+            endAt: updatedEvent.endAt,
+            location: updatedEvent.location,
+            link: updatedEvent.meetingRoom,
+            addGoogleMeet,
+            guests: updatedEvent.guests,
+          });
+          if (invite && invite.via !== "none") {
+            await prisma.calendarEvent
+              .update({
+                where: { id: existing.id },
+                data: {
+                  meetingRoom:
+                    invite.link ?? updatedEvent.meetingRoom ?? null,
+                  googleEventId: invite.googleEventId ?? null,
+                },
+              })
+              .catch(() => {});
+            fresh = await prisma.calendarEvent.findUnique({
+              where: { id: existing.id },
+              include: await buildInclude(),
+            });
+          }
+        }
+      } catch (e) {
+        console.error("[calendar] update invite sync threw:", e.message);
+      }
+
       return res.json({
 
         success:
@@ -2206,7 +2513,7 @@ router.patch(
 
           formatEvent(
 
-            updatedEvent || event
+            fresh || updatedEvent || event
 
           ),
 
@@ -2328,6 +2635,18 @@ router.delete(
           forbidden: true,
           message: "You can only delete events you created or are assigned to",
         });
+      }
+
+      // Cancel the linked Google Calendar event first so invited guests are
+      // notified of the cancellation. Best-effort — never blocks the delete.
+      if (existing.googleEventId) {
+        try {
+          await cancelMeetEvent(req.clientUser.userId, existing.googleEventId, {
+            sendUpdates: "all",
+          });
+        } catch (e) {
+          console.error("[calendar] cancelMeetEvent on delete failed:", e.message);
+        }
       }
 
       await prisma.calendarEvent.delete({

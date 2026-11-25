@@ -42,7 +42,13 @@ function requireChatDelete(req, res, next) {
 
 function userMini(user) {
   return user
-    ? { id: user.id, name: user.name, email: user.email, avatarUrl: user.avatarUrl || null }
+    ? {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || null,
+        avatarUrl: user.avatarUrl || null,
+      }
     : null;
 }
 
@@ -137,7 +143,7 @@ router.get("/", async (req, res) => {
       include: {
         members: {
           include: {
-            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            user: { select: { id: true, name: true, email: true, phone: true, avatarUrl: true } },
           },
         },
         messages: {
@@ -620,7 +626,7 @@ router.post("/", async (req, res) => {
       include: {
         members: {
           include: {
-            user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+            user: { select: { id: true, name: true, email: true, phone: true, avatarUrl: true } },
           },
         },
         messages: { orderBy: { createdAt: "desc" }, take: 1 },

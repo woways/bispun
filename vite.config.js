@@ -6,6 +6,10 @@ export default defineConfig({
 
   server: {
     port: 5173,
+    // Bind all interfaces (IPv4 + IPv6) so http://127.0.0.1 and http://localhost
+    // both reach the dev server. Default "localhost" can bind IPv6-only on some
+    // Windows setups, which makes 127.0.0.1 unreachable ("server can't be reached").
+    host: true,
   },
 
   build: {

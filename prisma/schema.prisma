@@ -238,6 +238,7 @@ model Company {
   auditLogs               AuditLog[]
   walkIns                 WalkIn[]
   counsellingSessions     CounsellingSession[]
+  dashboardTasks          DashboardTask[]
   admissionPartners       AdmissionPartner[]
   admissionStreams        AdmissionStream[]
   admissionBranches       AdmissionBranch[]
@@ -1476,6 +1477,12 @@ model CalendarEvent {
   location    String?
   meetingRoom String?
 
+  // Video-meeting link (auto-generated Google Meet or a pasted Zoom/Teams/Meet
+  // URL). googleEventId ties this event to the Google Calendar event we created
+  // so reschedules can be pushed to guests who were invited.
+  meetingLink   String?
+  googleEventId String?
+
   createdByUserId String?
   createdByUser   User?   @relation("CalendarEventCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
@@ -1513,6 +1520,39 @@ model CalendarEventGuest {
 
   @@index([eventId])
   @@index([userId])
+}
+
+// Dashboard "Today's Tasks" board. A lightweight to-do owned by a company and
+// (optionally) assigned to a user and linked to a lead. Separate from TargetTask
+// (which models goal/target numbers), this is the free-form task list shown on
+// the dashboard. type/priority are kept as plain strings (app-validated) so the
+// additive SQL migration needs no Postgres enum types.
+model DashboardTask {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  title    String
+  type     String  @default("GENERAL") // CALL | MEETING | FOLLOWUP | COUNSELLING | PAYMENT | GENERAL
+  priority String  @default("NORMAL") // LOW | NORMAL | HIGH
+
+  dueAt  DateTime?
+  pinned Boolean   @default(false)
+  done   Boolean   @default(false)
+  notes  String?
+
+  leadId           String?
+  assignedToUserId String?
+  createdByUserId  String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  @@index([companyId, dueAt])
+  @@index([companyId, done])
+  @@index([companyId, assignedToUserId])
 }
 
 model Conversation {
