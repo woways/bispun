@@ -142,6 +142,20 @@ const DASH_TASK_PRIORITIES = [
   { value: "HIGH", label: "High" },
 ];
 
+// Event descriptions may contain rich-text HTML; show a plain-text snippet.
+function stripHtml(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function MetricCard({
   label,
   value,
@@ -1706,7 +1720,7 @@ export default function Dashboard({
                       <ul role="list" className="divide-y divide-slate-50 p-2">
                         {todayMeetings.map((event) => {
                           const online = Boolean(event.meetingLink);
-                          const where = event.location || event.meetingRoom || event.description || "";
+                          const where = event.location || event.meetingRoom || stripHtml(event.description) || "";
                           return (
                             <li key={event.id} className="flex items-center gap-3 px-2 py-2.5">
                               <div className="w-14 shrink-0 text-right">
