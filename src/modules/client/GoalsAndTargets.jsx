@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import {
   Loader2,
@@ -12,14 +12,17 @@ import {
   Download,
   CalendarDays,
   Trophy,
-  Gauge,
+  Users,
+  CheckCircle2,
+  BarChart3,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronDown,
 } from "lucide-react";
 
 import GoalsAndTargetsAll from "./GoalsAndTargetsAll";
 
 import { apiRequest } from "../../lib/api";
-
-import sharedGoalsIllustration from "../../assets/Shared goals-amico.svg";
 
 const MONTH_NAMES = [
   "January","February","March","April","May","June",
@@ -62,6 +65,292 @@ function initialsOf(name) {
 }
 
 const LAUNCH_YEAR = 2026;
+
+/* ------------------------------------------------------------------ */
+/* Premium KPI cards + attainment chart (CRM-style)                    */
+/* brand-* is a per-tenant themeable ramp, so the hero gradient uses   */
+/* the darker end (700→900) to keep white text legible on every hue.   */
+/* ------------------------------------------------------------------ */
+
+function perfStatus(avg, tracked) {
+  if (!tracked) return "No data";
+  if (avg >= 100) return "Ahead";
+  if (avg >= 80) return "On track";
+  return "Needs focus";
+}
+function yrAvg(rows) {
+  const v = rows.filter((m) => m.monthlyTarget > 0).map((m) => m.overallPercent);
+  return v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : 0;
+}
+function bestMo(rows) {
+  const w = rows.filter((m) => m.monthlyTarget > 0);
+  return w.length ? [...w].sort((a, b) => b.overallPercent - a.overallPercent)[0] : null;
+}
+
+// Decorative trend sparkline (area + line + endpoint dot). aria-hidden: the
+// same figures live in the card value/note and the targets table. The gradient
+// id is sanitized (useId() contains ":", invalid inside url(#...)).
+function Sparkline({ values, hero = false }) {
+  const gid = "spark-" + useId().replace(/:/g, "");
+  const v = (values || []).filter((x) => x != null && !Number.isNaN(x));
+  if (v.length < 2) return <div className="mt-auto h-8 pt-2.5" aria-hidden="true" />;
+  const W = 120, H = 32, pX = 2, pY = 4, n = v.length;
+  const mn = Math.min(...v), mx = Math.max(...v), rng = mx - mn || 1;
+  const X = (i) => +(pX + (W - 2 * pX) * (i / (n - 1))).toFixed(1);
+  const Y = (val) => +(pY + (H - 2 * pY) * (1 - (val - mn) / rng)).toFixed(1);
+  const pts = v.map((val, i) => [X(i), Y(val)]);
+  const line = "M " + pts.map((p) => p.join(" ")).join(" L ");
+  const area = `M ${pts[0][0]} ${H} L ` + pts.map((p) => p.join(" ")).join(" L ") + ` L ${pts[n - 1][0]} ${H} Z`;
+  const stroke = hero ? "#ffffff" : "rgb(var(--brand-600))";
+  const fill = hero ? "#ffffff" : "rgb(var(--brand-500))";
+  return (
+    <div className="mt-auto pt-2.5">
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true" focusable="false" className="block h-8 w-full">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={fill} stopOpacity={hero ? 0.5 : 0.26} />
+            <stop offset="1" stopColor={fill} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${gid})`} />
+        <path d={line} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <circle cx={pts[n - 1][0]} cy={pts[n - 1][1]} r="2.4" fill={stroke} vectorEffect="non-scaling-stroke" />
+      </svg>
+    </div>
+  );
+}
+
+// One KPI card: icon tile + label, big value (+inline delta), note, then a
+// trend spark or a thin progress bar. hero = highlighted brand-gradient card.
+function KpiCard({ label, icon: Icon, value, note, delta = null, spark = null, bar = null, hero = false }) {
+  return (
+    <div
+      className={`relative flex min-h-[120px] flex-col overflow-hidden rounded-2xl p-[14px] pb-3 transition ${
+        hero
+          ? "border border-transparent text-white shadow-lg sm:col-span-2 xl:col-span-1"
+          : "border border-slate-200 bg-white shadow-sm hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
+      }`}
+      style={hero ? { backgroundImage: "linear-gradient(150deg, rgb(var(--brand-700)), rgb(var(--brand-800)) 55%, rgb(var(--brand-900)))" } : undefined}
+    >
+      {hero && (
+        <span aria-hidden="true" className="pointer-events-none absolute -right-8 -top-11 h-40 w-40 rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(255,255,255,.16), transparent 70%)" }} />
+      )}
+      <div className="relative z-10 flex items-center gap-2.5">
+        <span className={`grid h-7 w-7 flex-shrink-0 place-items-center rounded-lg border ${hero ? "border-white/30 bg-white/15 text-white" : "border-brand-100 bg-brand-50 text-brand-600"}`}>
+          <Icon size={15} aria-hidden="true" focusable="false" />
+        </span>
+        <span className={`text-[10.5px] font-bold uppercase tracking-[0.07em] ${hero ? "text-white" : "text-slate-500"}`}>{label}</span>
+      </div>
+      <div className={`relative z-10 mt-2.5 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[27px] font-bold leading-none tracking-[-0.03em] [font-variant-numeric:tabular-nums] ${hero ? "text-white" : "text-slate-900"}`}>
+        {value}
+        {delta}
+      </div>
+      <div className={`relative z-10 mt-1 text-[11.5px] font-medium ${hero ? "text-white" : "text-slate-500"}`}>{note}</div>
+      {bar != null ? (
+        <div className="relative z-10 mt-auto pt-2.5">
+          <div className={`h-[5px] w-full overflow-hidden rounded-full ${hero ? "bg-white/25" : "bg-slate-100"}`}>
+            <div className={`h-full rounded-full ${hero ? "bg-white" : "bg-gradient-to-r from-brand-400 to-brand-600"}`} style={{ width: `${Math.min(100, bar)}%` }} />
+          </div>
+        </div>
+      ) : spark != null ? (
+        spark
+      ) : (
+        <div className="mt-auto" />
+      )}
+    </div>
+  );
+}
+
+function DeltaChip({ value, hero = false }) {
+  if (value == null) return null;
+  const up = value >= 0;
+  const cls = hero
+    ? `bg-white ${up ? "text-brand-700" : "text-rose-600"}`
+    : up
+    ? "bg-brand-50 text-brand-700"
+    : "bg-rose-50 text-rose-600";
+  return (
+    <span className={`inline-flex items-center gap-0.5 self-center rounded-full px-1.5 py-0.5 text-[10.5px] font-extrabold ${cls}`}>
+      {up ? <ArrowUpRight size={11} aria-hidden="true" /> : <ArrowDownRight size={11} aria-hidden="true" />}
+      {Math.abs(value)}%
+    </span>
+  );
+}
+
+function AttainmentKpis({ monthRows, year, name = null }) {
+  const nf = new Intl.NumberFormat("en-IN");
+  const avg = yrAvg(monthRows);
+  const best = bestMo(monthRows);
+  const tracked = monthRows.filter((m) => m.monthlyTarget > 0).length;
+  const hit = monthRows.filter((m) => m.monthlyTarget > 0 && Number(m.overallPercent || 0) >= 100).length;
+  const hitRate = tracked ? Math.round((hit / tracked) * 100) : 0;
+  const status = perfStatus(avg, tracked);
+  const totTgt = monthRows.reduce((s, m) => s + (m.monthlyTarget || 0), 0);
+  const totAch = monthRows.reduce((s, m) => s + (m.totalAchieved || 0), 0);
+  const progress = totTgt > 0 ? Math.round((totAch / totTgt) * 100) : 0;
+  const trk = monthRows.filter((m) => m.monthlyTarget > 0);
+  const delta = trk.length >= 2 ? trk[trk.length - 1].overallPercent - trk[trk.length - 2].overallPercent : null;
+  const attSeries = monthRows.map((m) => (m.monthlyTarget > 0 ? m.overallPercent : null));
+  const volSeries = monthRows.map((m) => (m.monthlyTarget > 0 ? m.totalAchieved : null));
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <KpiCard hero icon={TargetIcon}
+        label={`${name ? name + " · " : ""}Year attainment · ${year}`}
+        value={<span>{avg}%</span>} delta={<DeltaChip value={delta} hero />}
+        note={tracked ? `${status} · ${hit} of ${tracked} months on target` : "No targets set yet"}
+        spark={<Sparkline values={attSeries} hero />} />
+      <KpiCard icon={BarChart3} label="Achieved vs target"
+        value={<span>{nf.format(totAch)} <span className="text-[14px] font-semibold text-slate-500">/ {nf.format(totTgt)}</span></span>}
+        note={`${progress}% of total target volume`} spark={<Sparkline values={volSeries} />} />
+      <KpiCard icon={CalendarDays} label="Months on target"
+        value={<span>{hit} <span className="text-[14px] font-semibold text-slate-500">/ {tracked || 0}</span></span>}
+        note={tracked ? `${hitRate}% hit rate` : "No tracked months"} spark={<Sparkline values={attSeries} />} />
+      <KpiCard icon={Trophy} label="Best month"
+        value={best ? <span>{MONTH_ABBR[best.month - 1]} <span className="text-[14px] font-semibold text-slate-500">{best.overallPercent}%</span></span> : <span>—</span>}
+        note={best ? "Peak attainment this year" : "No target data yet"} spark={<Sparkline values={attSeries} />} />
+    </div>
+  );
+}
+
+function TeamKpis({ roster, teamAverage, year }) {
+  const n = roster.length;
+  const onTarget = roster.filter((r) => Number(r.yearAveragePercent || 0) >= 100).length;
+  const otRate = n ? Math.round((onTarget / n) * 100) : 0;
+  const mgr = roster.filter((r) => r.role === "MANAGER").length;
+  const emp = roster.filter((r) => r.role === "EMPLOYEE").length;
+  const top = n ? [...roster].sort((a, b) => b.yearAveragePercent - a.yearAveragePercent)[0] : null;
+  const status = perfStatus(teamAverage, n);
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <KpiCard hero icon={TargetIcon} label={`Team attainment · ${year}`}
+        value={<span>{teamAverage}%</span>}
+        note={`${status} · ${onTarget} of ${n} on target`} bar={teamAverage} />
+      <KpiCard icon={Users} label="Members" value={<span>{n}</span>}
+        note={`${mgr} managers · ${emp} employees`} />
+      <KpiCard icon={CheckCircle2} label="Members on target"
+        value={<span>{onTarget} <span className="text-[14px] font-semibold text-slate-500">/ {n}</span></span>}
+        note={`${otRate}% of the team`} bar={otRate} />
+      <KpiCard icon={Trophy} label="Top performer"
+        value={top ? <span>{top.yearAveragePercent}%</span> : <span>—</span>}
+        note={top ? top.name : "—"} bar={top ? top.yearAveragePercent : null} />
+    </div>
+  );
+}
+
+// Collapsible monthly attainment chart (area + 100% target line + hover).
+// The same monthly figures appear in the targets table, which is the text
+// alternative, so the chart is marked role="img" and routes SR users there.
+function AttainmentChart({ monthRows, title, sub }) {
+  const [open, setOpen] = useState(true);
+  const [hover, setHover] = useState(null);
+  const svgRef = useRef(null);
+  // useId() contains ":" which is invalid inside an SVG url(#...) reference, so
+  // strip it — otherwise the area-fill gradient never resolves and only the
+  // line shows (this was the difference from the artifact).
+  const uid = useId().replace(/:/g, "");
+  const regionId = `att-panel-${uid}`;
+  const gradId = `att-grad-${uid}`;
+  const W = 760, H = 200, pad = { l: 36, r: 16, t: 14, b: 26 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const data = monthRows.filter((m) => m.monthlyTarget > 0).map((m) => ({ i: m.month - 1, pct: m.overallPercent, label: MONTH_ABBR[m.month - 1] }));
+  const peak = Math.max(100, ...data.map((d) => d.pct), 0);
+  const maxY = Math.max(120, Math.ceil(peak / 20) * 20);
+  const X = (i) => pad.l + pw * (i / 11);
+  const Y = (v) => pad.t + ph * (1 - v / maxY);
+  const C = data.map((d) => ({ ...d, cx: +X(d.i).toFixed(1), cy: +Y(d.pct).toFixed(1) }));
+  const ticks = []; for (let v = 0; v <= maxY; v += maxY / 4) ticks.push(Math.round(v));
+  const base = Y(0).toFixed(1);
+  const line = C.length ? "M " + C.map((p) => `${p.cx} ${p.cy}`).join(" L ") : "";
+  const area = C.length ? `M ${C[0].cx} ${base} L ` + C.map((p) => `${p.cx} ${p.cy}`).join(" L ") + ` L ${C[C.length - 1].cx} ${base} Z` : "";
+
+  function move(e) {
+    const svg = svgRef.current;
+    if (!svg || !C.length) return;
+    const r = svg.getBoundingClientRect();
+    const mx = ((e.clientX - r.left) / r.width) * W;
+    let nearest = C[0];
+    for (const p of C) if (Math.abs(p.cx - mx) < Math.abs(nearest.cx - mx)) nearest = p;
+    setHover({ ...nearest, px: (nearest.cx / W) * r.width, py: (nearest.cy / H) * r.height });
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={regionId}
+        className="flex w-full items-start justify-between gap-3 px-[18px] py-[15px] text-left"
+      >
+        <span>
+          <span className="block text-[15px] font-semibold tracking-[-0.01em] text-slate-900">{title}</span>
+          <span className="mt-0.5 block text-[12px] font-medium text-slate-500">{sub}</span>
+        </span>
+        <span className="flex items-center gap-4">
+          <span className="hidden gap-4 text-[11.5px] font-semibold text-slate-500 sm:flex">
+            <span className="inline-flex items-center gap-1.5"><i className="inline-block h-[3px] w-[15px] rounded bg-brand-500" aria-hidden="true" />Attainment</span>
+            <span className="inline-flex items-center gap-1.5"><i className="inline-block w-[15px] border-t-2 border-dashed border-rose-500" aria-hidden="true" />Target 100%</span>
+          </span>
+          <ChevronDown size={18} aria-hidden="true" className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div id={regionId} className="px-[18px] pb-[18px] pt-0.5">
+          <div className="relative">
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${W} ${H}`}
+              className="block h-auto w-full overflow-visible"
+              role="img"
+              aria-label={`${title}. ${sub}. The same monthly figures are listed in the targets table.`}
+              onPointerMove={move}
+              onPointerLeave={() => setHover(null)}
+            >
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="rgb(var(--brand-500))" stopOpacity="0.3" />
+                  <stop offset="1" stopColor="rgb(var(--brand-500))" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {ticks.map((v) => (
+                <g key={v}>
+                  <line x1={pad.l} y1={Y(v)} x2={W - pad.r} y2={Y(v)} className="stroke-slate-100" strokeWidth="1" />
+                  <text x={pad.l - 8} y={Y(v) + 3} textAnchor="end" className="fill-slate-400" fontSize="10" fontWeight="600">{v}</text>
+                </g>
+              ))}
+              <line x1={pad.l} y1={Y(100)} x2={W - pad.r} y2={Y(100)} className="stroke-rose-500" strokeWidth="2" strokeDasharray="5 5" opacity="0.85" />
+              {C.length > 0 && (
+                <>
+                  <path d={area} fill={`url(#${gradId})`} />
+                  <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                </>
+              )}
+              {C.map((p) => (
+                <circle key={p.i} cx={p.cx} cy={p.cy} r="3.4" fill="#ffffff" stroke="rgb(var(--brand-600))" strokeWidth="2.2" />
+              ))}
+              {hover && (
+                <>
+                  <line x1={hover.cx} y1={pad.t} x2={hover.cx} y2={pad.t + ph} className="stroke-slate-300" strokeWidth="1.5" />
+                  <circle cx={hover.cx} cy={hover.cy} r="5" fill="rgb(var(--brand-600))" stroke="#ffffff" strokeWidth="2" />
+                </>
+              )}
+              {monthRows.map((m, i) => (
+                <text key={i} x={X(i)} y={H - 8} textAnchor="middle" className="fill-slate-400" fontSize="10" fontWeight="600">{MONTH_ABBR[i]}</text>
+              ))}
+            </svg>
+            {hover && (
+              <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[128%] rounded-lg bg-slate-900 px-2.5 py-1.5 text-[12px] font-bold text-white shadow-md"
+                style={{ left: hover.px, top: hover.py }}>
+                {hover.label} · {hover.pct}%
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
@@ -248,19 +537,6 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
     return { admins, managers, empByMgr, unassigned };
   }, [filteredRoster]);
 
-  /* ---- Derived: year average for the ring ------------------------ */
-  function yearAverage(monthRows) {
-    const vals = monthRows
-      .filter((m) => m.monthlyTarget > 0)
-      .map((m) => m.overallPercent);
-    if (!vals.length) return 0;
-    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-  }
-  function bestMonth(monthRows) {
-    const withT = monthRows.filter((m) => m.monthlyTarget > 0);
-    if (!withT.length) return null;
-    return [...withT].sort((a, b) => b.overallPercent - a.overallPercent)[0];
-  }
 
   /* ---- UI bits --------------------------------------------------- */
 
@@ -360,145 +636,6 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
       : monthRows.filter((m) => QUARTERS[quarter].includes(m.month));
   }
 
-  // Compact year summary: one ring + four business-useful KPI cards.
-  function AnalysisCard(monthRows, name) {
-    const avg = yearAverage(monthRows);
-    const best = bestMonth(monthRows);
-    const tracked = monthRows.filter((m) => m.monthlyTarget > 0).length;
-    const targetHit = monthRows.filter(
-      (m) => m.monthlyTarget > 0 && Number(m.overallPercent || 0) >= 100
-    ).length;
-    const targetHitRate = tracked > 0 ? Math.round((targetHit / tracked) * 100) : 0;
-    const performanceStatus =
-      tracked === 0
-        ? "No data"
-        : avg >= 100
-        ? "Ahead"
-        : avg >= 80
-        ? "On track"
-        : "Needs focus";
-
-    const circ = 326.7;
-    const shown = Math.min(100, avg);
-    const offset = circ - (circ * shown) / 100;
-
-    const cards = [
-      {
-        label: "Months tracked",
-        value: tracked,
-        note: "of 12 months",
-        icon: CalendarDays,
-      },
-      {
-        label: "Best month",
-        value: best ? `${MONTH_ABBR[best.month - 1]} · ${best.overallPercent}%` : "—",
-        note: best ? "Highest achievement" : "No target data yet",
-        icon: Trophy,
-      },
-      {
-        label: "Target hit",
-        value: `${targetHit} / ${tracked || 0}`,
-        note: tracked ? `${targetHitRate}% of tracked months` : "No tracked months",
-        icon: TargetIcon,
-      },
-      {
-        label: "Performance status",
-        value: performanceStatus,
-        note: "Based on year average",
-        icon: Gauge,
-      },
-    ];
-
-    return (
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-slate-900 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-slate-500">
-            {name ? `${name} · ` : ""}{year} year average
-          </div>
-          <div className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[12px] font-semibold text-slate-500">
-            Full year
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-[150px_minmax(0,1fr)] lg:items-center xl:grid-cols-[150px_minmax(0,1fr)_145px] native:mt-3 native:grid-cols-1 native:gap-3">
-          <div className="flex items-center justify-center">
-            <div className="relative h-28 w-28 flex-shrink-0 native:h-[84px] native:w-[84px]">
-              <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="52"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="14"
-                  className="text-brand-100"
-                />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="52"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="14"
-                  strokeLinecap="round"
-                  strokeDasharray={circ}
-                  strokeDashoffset={offset}
-                  className="text-brand-600"
-                  style={{ transition: "stroke-dashoffset 1s ease" }}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-[24px] font-extrabold leading-none tracking-tight native:text-[20px]">
-                  {avg}%
-                </div>
-                <div className="text-[11px] font-semibold text-slate-500">year avg</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid min-w-0 grid-cols-1 gap-2.5 sm:grid-cols-2 2xl:grid-cols-4 native:grid-cols-2 native:items-stretch native:auto-rows-fr">
-            {cards.map((card) => {
-              const Icon = card.icon;
-
-              return (
-                <div
-                  key={card.label}
-                  className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 native:h-full"
-                >
-                  <div className="flex items-center gap-2.5 native:gap-2">
-                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600 native:h-7 native:w-7">
-                      <Icon size={15} />
-                    </span>
-
-                    <div className="min-w-0">
-                      <div className="truncate text-[10px] font-bold uppercase tracking-[0.04em] text-slate-500 native:whitespace-normal native:leading-[1.1]">
-                        {card.label}
-                      </div>
-                      <div className="mt-0.5 truncate text-[16px] font-bold tracking-tight text-slate-900 native:whitespace-normal native:leading-[1.1]">
-                        {card.value}
-                      </div>
-                      <div className="mt-0.5 truncate text-[10px] font-medium text-slate-400 native:whitespace-normal native:leading-[1.15]">
-                        {card.note}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="hidden xl:flex items-end justify-center self-stretch">
-            <img
-              src={sharedGoalsIllustration}
-              alt=""
-              aria-hidden="true"
-              className="h-[118px] w-auto max-w-[140px] object-contain"
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // The premium table. mode: "achieved" | "target" | "none"
   function TargetTable(monthRows, mode, ownerId) {
@@ -830,13 +967,18 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           </div>
         ) : (
           <>
-            {AnalysisCard(months, null)}
+            <AttainmentKpis monthRows={months} year={year} />
             <div className="rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-2.5 text-[12px] font-semibold text-brand-700">
               Type what you achieved each week, then press Enter or click away to save. Targets and percentages are automatic.
             </div>
             {/* Quarter filter (Q1–Q4) + export */}
             <QuarterToolbar monthRows={applyQuarter(months)} ownerName={currentUser?.name} />
             {TargetTable(applyQuarter(months), "achieved", currentUser?.id)}
+            <AttainmentChart
+              monthRows={months}
+              title={`Monthly attainment · ${year}`}
+              sub="Your monthly attainment % against the 100% target"
+            />
           </>
         )
       )}
@@ -861,12 +1003,17 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
                 <div className="text-[13px] text-slate-500">{drill.owner?.jobTitle || drill.owner?.email}</div>
               </div>
             </div>
-            {AnalysisCard(drill.months, drill.owner?.name)}
+            <AttainmentKpis monthRows={drill.months} year={year} name={drill.owner?.name} />
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-700">
               Type each <b>Week Target</b> (numbers only). Monthly Target = sum of week targets. Achieved is entered by the employee.
             </div>
             <QuarterToolbar monthRows={applyQuarter(drill.months)} ownerName={drill.owner?.name} />
             {TargetTable(applyQuarter(drill.months), "target", drill.owner?.id)}
+            <AttainmentChart
+              monthRows={drill.months}
+              title={`Monthly attainment · ${year}`}
+              sub={`${drill.owner?.name || "This member"} · attainment % against the 100% target`}
+            />
           </>
         ) : teamLoading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
@@ -875,38 +1022,9 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
         ) : (
           <>
             <div className="text-[13px] font-medium text-slate-500">Company-wide performance overview</div>
-            <div className="grid gap-4 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Team average · {year}</div>
-                <div className="mt-1 text-[30px] font-bold text-slate-900 native:text-[22px]">{teamAverage}%</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Members</div>
-                <div className="mt-1 text-[30px] font-bold text-slate-900 native:text-[22px]">{roster.length}</div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm native:p-3">
-                <div className="text-[13px] font-semibold uppercase tracking-wide text-slate-400 native:break-words native:text-[11px]">Top performer</div>
-                <div className="mt-1 text-sm font-bold text-emerald-600 break-words">
-                  {roster.length
-                    ? `${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].name} — ${[...roster].sort((a,b)=>b.yearAveragePercent-a.yearAveragePercent)[0].yearAveragePercent}%`
-                    : "—"}
-                </div>
-              </div>
-            </div>
+            <TeamKpis roster={roster} teamAverage={teamAverage} year={year} />
 
-            {/* View all — full company breakdown */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowAll(true)}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white shadow-md shadow-indigo-600/25 ring-1 ring-indigo-500 transition hover:bg-indigo-700"
-              >
-                View all
-                <ChevronRight size={16} />
-              </button>
-            </div>
-
-            {/* Search + department filter */}
+            {/* Search + department filter (View all lives at the end of this row) */}
             <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm native:relative native:flex-nowrap native:max-w-full native:overflow-x-auto">
               <div className="relative min-w-[220px] flex-1 native:w-[200px] native:flex-none native:shrink-0">
                 <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1032,6 +1150,15 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
               <span className="ml-auto text-[13px] font-semibold text-slate-400 native:ml-1 native:shrink-0 native:self-center native:whitespace-nowrap">
                 {filteredRoster.length} of {roster.length}
               </span>
+
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+              >
+                View all
+                <ChevronRight size={15} />
+              </button>
             </div>
 
             {/* Grouped: Admin → Managers (with their employees) → Unassigned */}
