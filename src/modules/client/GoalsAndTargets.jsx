@@ -131,11 +131,15 @@ function DeltaChip({ value }) {
   );
 }
 
-// Clicking any My Targets / drill KPI card scrolls down to the target table.
+// Clicking any My Targets / drill KPI card scrolls down to the target table
+// and briefly highlights it so the jump is unmistakable.
 function scrollToTargetsTable() {
   if (typeof document === "undefined") return;
   const el = document.getElementById("targetsTable");
-  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.classList.add("ring-2", "ring-brand-300", "ring-offset-2");
+  window.setTimeout(() => el.classList.remove("ring-2", "ring-brand-300", "ring-offset-2"), 1300);
 }
 
 function AttainmentKpis({ monthRows, year, name = null }) {
