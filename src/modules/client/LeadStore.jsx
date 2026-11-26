@@ -669,6 +669,21 @@ function LeadStatusSelect({
     );
   }
 
+  // "Admission Done" is set by completing an admission in the Admissions module,
+  // so it's shown as a read-only chip (consistent height/colour with the status
+  // dropdowns, minus the picker) rather than an editable select.
+  if (currentStatus === "Admission Done") {
+    return (
+      <span
+        className={`inline-flex h-8 min-w-[145px] items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[12px] font-bold ${statusSelectClass(currentStatus)}`}
+        title="Set automatically when the admission is completed in the Admissions module"
+      >
+        <CheckCircle2 size={13} aria-hidden="true" />
+        Admission Done
+      </span>
+    );
+  }
+
   return (
     <select
       value={currentStatus}
@@ -6706,7 +6721,7 @@ export default function LeadStore({
                     return cloneElement(th, {
                       className: `${th.props.className} sticky z-[25] bg-slate-50${
                         fz.isLast
-                          ? " border-r-2 border-slate-900 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                          ? " border-r border-slate-400"
                           : ""
                       }`,
                       style: {
@@ -6805,7 +6820,7 @@ export default function LeadStore({
                                   : "bg-white group-hover:bg-slate-50"
                               }${
                                 fz.isLast
-                                  ? " border-r-2 border-slate-900 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                                  ? " border-r border-slate-400"
                                   : ""
                               }`,
                               style: {
