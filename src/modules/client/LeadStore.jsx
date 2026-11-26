@@ -61,6 +61,7 @@ import {
 } from "../../components/ui";
 import DetailModal from "../../components/DetailModal";
 import AssigneePicker from "../../components/AssigneePicker";
+import QuickCreateDrawer from "../../components/QuickCreateDrawer";
 
 import {
   apiRequest,
@@ -600,8 +601,10 @@ function LeadStatusSelect({
       return;
     }
 
+    // "Admission Done" is set automatically when an admission is completed in
+    // the Admissions module (which fills Joined College/Stream) — it is not
+    // picked manually here, so ignore a manual selection of it.
     if (value === "Admission Done") {
-      onAdmissionDone?.(lead);
       return;
     }
 
@@ -674,11 +677,18 @@ function LeadStatusSelect({
       className={`h-8 min-w-[145px] rounded-lg border px-2 text-[12px] font-bold outline-none transition disabled:opacity-60 ${statusSelectClass(currentStatus)}`}
       aria-label={`Status for ${lead.name}`}
     >
-      {options.map((status) => (
-        <option key={status} value={status}>
-          {status}
+      {currentStatus === "Admission Done" ? (
+        <option value="Admission Done" disabled>
+          Admission Done
         </option>
-      ))}
+      ) : null}
+      {options
+        .filter((status) => status !== "Admission Done")
+        .map((status) => (
+          <option key={status} value={status}>
+            {status}
+          </option>
+        ))}
       <option value="__OTHER__">Other</option>
     </select>
   );
@@ -3375,6 +3385,9 @@ export default function LeadStore({
     setBulkAssigning,
   ] = useState(false);
 
+  // Header "+" quick-create (task / meeting), same drawer as the app header.
+  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
   const [assigningLeadId, setAssigningLeadId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
@@ -5912,6 +5925,18 @@ export default function LeadStore({
             <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap native:flex-nowrap native:shrink-0">
               <button
                 type="button"
+                onClick={() => setQuickCreateOpen(true)}
+                className="h-9 px-3.5 rounded-lg bg-indigo-600 text-[13px] font-semibold text-white inline-flex items-center justify-center gap-2 transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:h-10"
+                aria-haspopup="dialog"
+                aria-expanded={quickCreateOpen}
+                title="Quick create task or meeting"
+              >
+                <Plus size={14} aria-hidden="true" />
+                Quick create
+              </button>
+
+              <button
+                type="button"
                 onClick={() => {
                   setViewOpen(false);
                   setFiltersOpen((current) => !current);
@@ -6681,7 +6706,7 @@ export default function LeadStore({
                     return cloneElement(th, {
                       className: `${th.props.className} sticky z-[25] bg-slate-50${
                         fz.isLast
-                          ? " border-r-2 border-indigo-300 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                          ? " border-r-2 border-slate-900 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
                           : ""
                       }`,
                       style: {
@@ -6780,7 +6805,7 @@ export default function LeadStore({
                                   : "bg-white group-hover:bg-slate-50"
                               }${
                                 fz.isLast
-                                  ? " border-r-2 border-indigo-300 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                                  ? " border-r-2 border-slate-900 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
                                   : ""
                               }`,
                               style: {
@@ -7632,6 +7657,11 @@ export default function LeadStore({
         open={Boolean(callLead)}
         onClose={() => setCallLead(null)}
         lead={callLead}
+      />
+
+      <QuickCreateDrawer
+        open={quickCreateOpen}
+        onClose={() => setQuickCreateOpen(false)}
       />
     </div>
   );
