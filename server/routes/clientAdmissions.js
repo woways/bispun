@@ -1463,6 +1463,7 @@ router.delete("/partners/:partnerId/attachments/:attachmentId", async (req, res)
     await deleteAdmissionPartnerAttachment({
       publicId: attachment.publicId,
       resourceType: attachment.resourceType,
+      companyId: req.clientUser.companyId,
     });
 
     await prisma.admissionPartnerAttachment.delete({ where: { id: attachment.id } });

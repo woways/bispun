@@ -28,6 +28,8 @@ import { pushBackInterceptor } from "../lib/backStack";
 const FOCUSABLE_SELECTOR =
   'a[href],area[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),button:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
+const PAGE_SIZE = 10;
+
 export default function DetailModal({
   open,
   title,
@@ -49,6 +51,10 @@ export default function DetailModal({
   const titleId = useId();
   const subtitleId = useId();
   const [padLeft, setPadLeft] = useState(0);
+  const [page, setPage] = useState(1);
+  const scrollBodyRef = useRef(null);
+  const pagerRef = useRef(null);
+  const currentPageBtnRef = useRef(null);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -85,11 +91,37 @@ export default function DetailModal({
     };
   }, [open, displayMode]);
 
-  if (!open) return null;
-
   const hasTable = Array.isArray(columns);
   const bodyRows = Array.isArray(rows) ? rows : [];
   const count = hasTable ? bodyRows.length : null;
+  const totalPages = Math.max(1, Math.ceil(bodyRows.length / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = hasTable
+    ? bodyRows.slice(pageStart, pageStart + PAGE_SIZE)
+    : bodyRows;
+  const rangeStart = bodyRows.length ? pageStart + 1 : 0;
+  const rangeEnd = Math.min(pageStart + PAGE_SIZE, bodyRows.length);
+
+  // Reset to page 1 whenever the dialog opens or the dataset changes.
+  useEffect(() => {
+    setPage(1);
+  }, [open, title, bodyRows.length]);
+
+  // On page change: scroll the records body to the top, and — if the control the
+  // user just clicked became disabled/removed (e.g. Next on the last page) — move
+  // focus to the always-present current-page button so focus never escapes the
+  // dialog and breaks the focus trap.
+  useEffect(() => {
+    if (!open) return;
+    if (scrollBodyRef.current) scrollBodyRef.current.scrollTop = 0;
+    const active = document.activeElement;
+    const focusLost =
+      !active || active === document.body || active.disabled === true;
+    if (focusLost) currentPageBtnRef.current?.focus?.();
+  }, [open, currentPage]);
+
+  if (!open) return null;
 
   const statusText = loading
     ? "Loading records…"
@@ -97,7 +129,9 @@ export default function DetailModal({
       ? "Couldn't load records"
       : hasTable
         ? bodyRows.length
-          ? `${bodyRows.length} records loaded`
+          ? totalPages > 1
+            ? `Showing ${rangeStart}–${rangeEnd} of ${bodyRows.length} records, page ${currentPage} of ${totalPages}`
+            : `${bodyRows.length} records loaded`
           : empty
         : "";
 
@@ -165,12 +199,12 @@ export default function DetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-end justify-center bg-slate-950/55 p-0 backdrop-blur-[3px] sm:items-center sm:p-4"
-      style={padLeft ? { paddingLeft: padLeft } : undefined}
+      className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/55 backdrop-blur-[3px]"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onCloseRef.current?.();
       }}
     >
+      <style>{"@keyframes cbDetailDrawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}"}</style>
       <div
         ref={panelRef}
         role="dialog"
@@ -179,7 +213,7 @@ export default function DetailModal({
         aria-describedby={subtitle ? subtitleId : undefined}
         tabIndex={-1}
         onKeyDown={onKeyDown}
-        className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:max-w-3xl sm:rounded-2xl"
+        className="relative ml-auto flex h-full w-full max-w-4xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl outline-none animate-[cbDetailDrawerIn_0.25s_ease-out] motion-reduce:animate-none"
       >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
           <div className="min-w-0">
@@ -203,6 +237,7 @@ export default function DetailModal({
         </div>
 
         <div
+          ref={scrollBodyRef}
           aria-busy={loading || undefined}
           className="min-h-0 flex-1 overflow-y-auto"
         >
@@ -243,7 +278,7 @@ export default function DetailModal({
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">{bodyRows}</tbody>
+                  <tbody className="divide-y divide-slate-100">{pageRows}</tbody>
                 </table>
               </div>
             ) : (
@@ -256,7 +291,7 @@ export default function DetailModal({
           )}
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
           <span className="text-[12px] font-semibold text-slate-500">
             {countLabel != null
               ? countLabel
@@ -264,6 +299,76 @@ export default function DetailModal({
                 ? `${count.toLocaleString("en-IN")} record${count === 1 ? "" : "s"}`
                 : ""}
           </span>
+
+          {hasTable && totalPages > 1 ? (
+            <nav
+              ref={pagerRef}
+              aria-label="Records pagination"
+              className="order-last flex w-full items-center justify-center gap-1 sm:order-none sm:w-auto"
+            >
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-40"
+              >
+                Previous
+              </button>
+
+              <ul className="flex items-center gap-1">
+                {(() => {
+                  const items = [];
+                  if (totalPages <= 7) {
+                    for (let p = 1; p <= totalPages; p += 1) items.push(p);
+                  } else {
+                    const left = Math.max(2, currentPage - 1);
+                    const right = Math.min(totalPages - 1, currentPage + 1);
+                    items.push(1);
+                    if (left > 2) items.push("ellipsis-left");
+                    for (let p = left; p <= right; p += 1) items.push(p);
+                    if (right < totalPages - 1) items.push("ellipsis-right");
+                    items.push(totalPages);
+                  }
+                  return items.map((item) =>
+                    typeof item === "string" ? (
+                      <li key={item} className="px-1">
+                        <span aria-hidden="true" className="text-[12px] text-slate-400">
+                          …
+                        </span>
+                      </li>
+                    ) : (
+                      <li key={item}>
+                        <button
+                          type="button"
+                          ref={item === currentPage ? currentPageBtnRef : undefined}
+                          onClick={() => setPage(item)}
+                          aria-label={`Page ${item}`}
+                          aria-current={item === currentPage ? "page" : undefined}
+                          className={
+                            item === currentPage
+                              ? "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-indigo-600 bg-indigo-600 px-2 text-[12px] font-bold text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                              : "inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-slate-200 bg-white px-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                          }
+                        >
+                          {item}
+                        </button>
+                      </li>
+                    )
+                  );
+                })()}
+              </ul>
+
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:opacity-40"
+              >
+                Next
+              </button>
+            </nav>
+          ) : null}
+
           <button
             type="button"
             onClick={() => onCloseRef.current?.()}

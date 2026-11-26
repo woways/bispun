@@ -196,6 +196,12 @@ function PlanCard({
 
         toDateInput(plan.offerEndsAt),
 
+      storageLimitMb:
+
+        plan.storageLimitMb !== null && plan.storageLimitMb !== undefined
+          ? String(plan.storageLimitMb)
+          : "",
+
 
 
       active:
@@ -232,7 +238,7 @@ function PlanCard({
 
   useEffect(() => {
 
-    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", offerPrice: plan.offerPrice !== null && plan.offerPrice !== undefined ? String(plan.offerPrice) : "", offerEndsAt: toDateInput(plan.offerEndsAt), active: plan.active });
+    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", offerPrice: plan.offerPrice !== null && plan.offerPrice !== undefined ? String(plan.offerPrice) : "", offerEndsAt: toDateInput(plan.offerEndsAt), storageLimitMb: plan.storageLimitMb !== null && plan.storageLimitMb !== undefined ? String(plan.storageLimitMb) : "", active: plan.active });
 
   }, [plan]);
 
@@ -303,6 +309,10 @@ function PlanCard({
               offerEndsAt:
 
                 form.offerEndsAt || null,
+
+              storageLimitMb:
+
+                form.storageLimitMb === "" ? null : Number(form.storageLimitMb),
 
 
 
@@ -768,6 +778,31 @@ function PlanCard({
 
           </div>
 
+        </div>
+
+        <div>
+          <label htmlFor="plan-storage-limit" className="block text-xs font-medium text-slate-600 mb-1">
+            Storage limit (MB) <span className="text-slate-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="plan-storage-limit"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={form.storageLimitMb}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                storageLimitMb: event.target.value.replace(/[^0-9]/g, ""),
+              }))
+            }
+            aria-describedby="plan-storage-limit-help"
+            placeholder="e.g. 5120"
+            className="min-w-0 w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+          />
+          <p id="plan-storage-limit-help" className="mt-1 text-[11px] text-slate-400">
+            Leave blank for unlimited. 1024 = 1 GB, 5120 = 5 GB.
+          </p>
         </div>
 
         {form.offerPrice && Number(form.offerPrice) > 0 && form.yearlyPrice && Number(form.offerPrice) >= Number(form.yearlyPrice) ? (

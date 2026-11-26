@@ -5,6 +5,7 @@ import { isIP } from "node:net";
 import prisma from "../lib/prisma.js";
 import { requireClientUser } from "../middleware/clientAuth.js";
 import { buildObjectKey, putObject, fileProxyUrl } from "../lib/s3Storage.js";
+import { getStorageStatus } from "../lib/storageLimits.js";
 
 const router = Router();
 
@@ -371,6 +372,17 @@ router.get("/usage", async (req, res) => {
   }
 });
 
+// GET /api/client/store/storage  → this company's total storage usage vs plan cap
+router.get("/storage", async (req, res) => {
+  try {
+    const status = await getStorageStatus(req.clientUser.companyId);
+    res.json({ success: true, ...status });
+  } catch (error) {
+    console.error("store/storage failed:", error?.message || error);
+    res.status(500).json({ success: false, message: "Unable to load storage usage" });
+  }
+});
+
 // GET /api/client/store/assets  → recently generated images for this company
 router.get("/assets", async (req, res) => {
   try {
@@ -471,7 +483,7 @@ async function callIdeogram(prompt, { companyId, occasionId, logoDataUri }) {
     ["store-assets", String(companyId || "unknown"), String(occasionId || "generic")],
     `generated-poster.${extension}`
   );
-  await putObject({ buffer: outputBuffer, key, contentType: outputContentType });
+  await putObject({ buffer: outputBuffer, key, contentType: outputContentType, companyId });
 
   // Stable, permanent proxy URL stored in the DB (never expires)
   return { disabled: false, url: fileProxyUrl(key), key };

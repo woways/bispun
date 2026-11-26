@@ -1,5 +1,16 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { X, Loader2, Plus, CheckCircle2, Video } from "lucide-react";
+import {
+  X,
+  Loader2,
+  Plus,
+  CheckCircle2,
+  Video,
+  Phone,
+  CalendarDays,
+  Clock,
+  MessageCircle,
+  IndianRupee,
+} from "lucide-react";
 import { apiRequest } from "../lib/api";
 import { useOverlayDismiss } from "../lib/useOverlayDismiss";
 import RichTextEditor from "./RichTextEditor";
@@ -7,14 +18,25 @@ import GuestPicker from "./GuestPicker";
 
 /* Quick-create drawer launched from the header "+" button. Two panels
    (Task / Meeting) switched with aria-pressed buttons — NOT tab roles, so
-   no arrow-key contract is implied (accessibility-lead option B). Both
-   create a CalendarEvent: meetings as type MEETING, tasks as type OTHER
-   (no Task table yet — see product decision). */
+   no arrow-key contract is implied (accessibility-lead option B).
+   The Task panel mirrors the Dashboard "New Task" form field-for-field and
+   posts to /api/client/tasks so the two entry points behave identically.
+   Meetings still create a CalendarEvent (type MEETING). */
 
-const STATUSES = [
-  ["SCHEDULED", "Scheduled"],
-  ["COMPLETED", "Completed"],
-  ["CANCELLED", "Cancelled"],
+// Mirror of the Dashboard task types/priorities so the "+" drawer and the
+// dashboard "New Task" offer the same options.
+const TASK_TYPES = [
+  { value: "CALL", label: "Call", icon: Phone },
+  { value: "MEETING", label: "Meeting", icon: CalendarDays },
+  { value: "FOLLOWUP", label: "Follow-up", icon: Clock },
+  { value: "COUNSELLING", label: "Counselling", icon: MessageCircle },
+  { value: "PAYMENT", label: "Payment", icon: IndianRupee },
+  { value: "GENERAL", label: "General", icon: CheckCircle2 },
+];
+const TASK_PRIORITIES = [
+  { value: "LOW", label: "Low" },
+  { value: "NORMAL", label: "Normal" },
+  { value: "HIGH", label: "High" },
 ];
 
 function todayStr() {
@@ -32,11 +54,14 @@ function toISO(dateStr, timeStr) {
 
 const emptyTask = () => ({
   title: "",
-  description: "",
-  date: todayStr(),
-  time: "09:00",
+  type: "GENERAL",
+  priority: "NORMAL",
+  leadId: "",
+  date: "",
+  time: "",
   assignedToUserId: "",
-  status: "SCHEDULED",
+  notes: "",
+  pinned: false,
 });
 
 const emptyMeeting = () => ({
@@ -101,30 +126,28 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
     setError("");
     if (!task.title.trim()) {
       setInvalid("title");
-      setError("Task name is required.");
+      setError("Task title is required.");
       focusField(`${uid}-task-title`);
-      return;
-    }
-    if (!task.date) {
-      setInvalid("date");
-      setError("Due date is required.");
-      focusField(`${uid}-task-date`);
       return;
     }
     setInvalid("");
     setSaving(true);
     try {
-      await apiRequest("/api/client/calendar", {
+      let dueAt = null;
+      if (task.date) {
+        const dt = new Date(`${task.date}T${task.time || "09:00"}`);
+        if (!Number.isNaN(dt.getTime())) dueAt = dt.toISOString();
+      }
+      await apiRequest("/api/client/tasks", {
         method: "POST",
         body: JSON.stringify({
           title: task.title.trim(),
-          description: task.description.trim() || null,
-          type: "OTHER",
-          status: task.status,
-          allDay: false,
-          startAt: toISO(task.date, task.time),
-          endAt: null,
+          type: task.type,
+          priority: task.priority,
+          dueAt,
           assignedToUserId: task.assignedToUserId || null,
+          notes: task.notes ? task.notes.trim() : null,
+          pinned: task.pinned,
         }),
       });
       finish("Task created.");
@@ -286,7 +309,7 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
               <form noValidate onSubmit={submitTask} className="space-y-3.5" aria-label="Create task">
                 <div>
                   <label htmlFor={`${uid}-task-title`} className={labelCls}>
-                    Task name <span className="text-rose-500">*</span>
+                    Task title <span className="text-rose-500">*</span>
                   </label>
                   <input
                     id={`${uid}-task-title`}
@@ -295,41 +318,69 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
                     onChange={(e) => setTask((c) => ({ ...c, title: e.target.value }))}
                     aria-required="true"
                     aria-invalid={invalid === "title" ? "true" : undefined}
-                    placeholder="e.g. Follow up with lead"
+                    placeholder="e.g. Call Ananya about B.Tech admission"
                     className={`${field} ${borderFor("title")}`}
                   />
                 </div>
 
-                <div>
-                  <span id={`${uid}-task-desc-label`} className={labelCls}>
-                    Description
+                <div role="group" aria-labelledby={`${uid}-task-type-label`}>
+                  <span id={`${uid}-task-type-label`} className={labelCls}>
+                    Type
                   </span>
-                  <RichTextEditor
-                    value={task.description}
-                    onChange={(html) => setTask((c) => ({ ...c, description: html }))}
-                    ariaLabelledby={`${uid}-task-desc-label`}
-                    placeholder="Optional details"
+                  <div className="grid grid-cols-3 gap-2">
+                    {TASK_TYPES.map((t) => {
+                      const TIcon = t.icon;
+                      const active = task.type === t.value;
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setTask((c) => ({ ...c, type: t.value }))}
+                          className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                            active
+                              ? "border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-500"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          <TIcon size={16} aria-hidden="true" />
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor={`${uid}-task-lead`} className={labelCls}>
+                    Linked lead{" "}
+                    <span className="font-semibold text-slate-400">(optional)</span>
+                  </label>
+                  <input
+                    id={`${uid}-task-lead`}
+                    value={task.leadId}
+                    onChange={(e) => setTask((c) => ({ ...c, leadId: e.target.value }))}
+                    placeholder="Lead name or id (optional)"
+                    className={`${field} border-slate-300`}
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor={`${uid}-task-date`} className={labelCls}>
-                      Due date <span className="text-rose-500">*</span>
+                      Due date
                     </label>
                     <input
                       id={`${uid}-task-date`}
                       type="date"
                       value={task.date}
                       onChange={(e) => setTask((c) => ({ ...c, date: e.target.value }))}
-                      aria-required="true"
-                      aria-invalid={invalid === "date" ? "true" : undefined}
-                      className={`${field} ${borderFor("date")}`}
+                      className={`${field} border-slate-300`}
                     />
                   </div>
                   <div>
                     <label htmlFor={`${uid}-task-time`} className={labelCls}>
-                      Due time
+                      Time
                     </label>
                     <input
                       id={`${uid}-task-time`}
@@ -341,45 +392,90 @@ export default function QuickCreateDrawer({ open, onClose, onCreated }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor={`${uid}-task-assignee`} className={labelCls}>
-                      Assigned to
-                    </label>
-                    <select
-                      id={`${uid}-task-assignee`}
-                      value={task.assignedToUserId}
-                      onChange={(e) => setTask((c) => ({ ...c, assignedToUserId: e.target.value }))}
-                      className={`${field} border-slate-300`}
-                    >
-                      <option value="">Unassigned</option>
-                      {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name || u.email || "User"}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor={`${uid}-task-status`} className={labelCls}>
-                      Status
-                    </label>
-                    <select
-                      id={`${uid}-task-status`}
-                      value={task.status}
-                      onChange={(e) => setTask((c) => ({ ...c, status: e.target.value }))}
-                      className={`${field} border-slate-300`}
-                    >
-                      {STATUSES.map(([v, l]) => (
-                        <option key={v} value={v}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
+                <div>
+                  <label htmlFor={`${uid}-task-assignee`} className={labelCls}>
+                    Assign to
+                  </label>
+                  <select
+                    id={`${uid}-task-assignee`}
+                    value={task.assignedToUserId}
+                    onChange={(e) => setTask((c) => ({ ...c, assignedToUserId: e.target.value }))}
+                    className={`${field} border-slate-300`}
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name || u.email || "User"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div role="group" aria-labelledby={`${uid}-task-priority-label`}>
+                  <span id={`${uid}-task-priority-label`} className={labelCls}>
+                    Priority
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {TASK_PRIORITIES.map((p) => {
+                      const active = task.priority === p.value;
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => setTask((c) => ({ ...c, priority: p.value }))}
+                          className={`rounded-lg border px-2 py-2 text-[12.5px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
+                            active
+                              ? "border-brand-500 bg-brand-50 text-brand-700 ring-1 ring-brand-500"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <SubmitBar saving={saving} label="Add task" />
+                <div>
+                  <label htmlFor={`${uid}-task-notes`} className={labelCls}>
+                    Notes
+                  </label>
+                  <textarea
+                    id={`${uid}-task-notes`}
+                    rows={3}
+                    value={task.notes}
+                    onChange={(e) => setTask((c) => ({ ...c, notes: e.target.value }))}
+                    placeholder="Context, next step, anything to remember"
+                    className={`${field} border-slate-300`}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                  <div>
+                    <div className="text-[13px] font-bold text-slate-900">Pin to top</div>
+                    <div className="text-[11px] text-slate-500">Keep this task above the list</div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={task.pinned}
+                    aria-label="Pin to top"
+                    onClick={() => setTask((c) => ({ ...c, pinned: !c.pinned }))}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+                      task.pinned ? "bg-brand-600" : "bg-slate-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                        task.pinned ? "left-[22px]" : "left-0.5"
+                      }`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+
+                <SubmitBar saving={saving} label="Create task" />
               </form>
             )}
 

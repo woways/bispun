@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   UserCheck,
-  DollarSign,
+  IndianRupee,
   Clock,
   Loader2,
   AlertCircle,
@@ -130,7 +130,7 @@ const DASH_TASK_TYPES = [
   { value: "MEETING", label: "Meeting", icon: CalendarDays, tone: "border-cyan-100 bg-cyan-50 text-cyan-600" },
   { value: "FOLLOWUP", label: "Follow-up", icon: Clock, tone: "border-amber-100 bg-amber-50 text-amber-600" },
   { value: "COUNSELLING", label: "Counselling", icon: MessageCircle, tone: "border-violet-100 bg-violet-50 text-violet-600" },
-  { value: "PAYMENT", label: "Payment", icon: DollarSign, tone: "border-emerald-100 bg-emerald-50 text-emerald-600" },
+  { value: "PAYMENT", label: "Payment", icon: IndianRupee, tone: "border-emerald-100 bg-emerald-50 text-emerald-600" },
   { value: "GENERAL", label: "General", icon: CheckCircle2, tone: "border-slate-200 bg-slate-50 text-slate-600" },
 ];
 const DASH_TASK_TYPE_MAP = Object.fromEntries(
@@ -1591,8 +1591,8 @@ export default function Dashboard({
                   className="flex h-[360px] flex-col overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
                 >
                   <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-hidden="true">
-                      <CheckCircle2 size={17} />
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-hidden="true">
+                      <CheckCircle2 size={15} />
                     </span>
                     <div className="min-w-0">
                       <h2 id="dash-tasks-title" className="text-[15px] font-bold text-slate-950">
@@ -1686,8 +1686,8 @@ export default function Dashboard({
                   className="flex h-[360px] flex-col overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
                 >
                   <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white" aria-hidden="true">
-                      <CalendarDays size={17} />
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white" aria-hidden="true">
+                      <CalendarDays size={15} />
                     </span>
                     <div className="min-w-0">
                       <h2 id="dash-meetings-title" className="text-[15px] font-bold text-slate-950">
@@ -2603,77 +2603,87 @@ export default function Dashboard({
 
             {data.teamPerformance
               .length > 0 ? (
-              <div role="list" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                {data.teamPerformance.map((member) => {
-                  const maxRev = Math.max(
-                    ...data.teamPerformance.map((m) => Number(m.revenue || 0)),
-                    1
-                  );
-                  const pct = Math.round((Number(member.revenue || 0) / maxRev) * 100);
-                  const inits = String(member.name || "—")
-                    .trim()
-                    .split(/\s+/)
-                    .map((w) => w[0])
-                    .slice(0, 2)
-                    .join("")
-                    .toUpperCase();
-                  return (
-                    <div
-                      key={member.name}
-                      role="listitem"
-                      className="rounded-xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-[0_10px_24px_-18px_rgba(15,23,42,0.25)] motion-reduce:transition-none"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[11px] font-extrabold text-indigo-700"
-                          aria-hidden="true"
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <caption className="sr-only">
+                    Team performance by member — leads, admissions and revenue
+                  </caption>
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th scope="col" className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                        Name
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                        Leads
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                        Admissions
+                      </th>
+                      <th scope="col" className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                        Revenue
+                      </th>
+                      <th scope="col" className="w-[140px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
+                        Revenue share
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.teamPerformance.map((member) => {
+                      const maxRev = Math.max(
+                        ...data.teamPerformance.map((m) => Number(m.revenue || 0)),
+                        1
+                      );
+                      const pct = Math.round((Number(member.revenue || 0) / maxRev) * 100);
+                      const inits = String(member.name || "—")
+                        .trim()
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase();
+                      return (
+                        <tr
+                          key={member.name}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
                         >
-                          {inits}
-                        </span>
-                        <div className="truncate text-[13.5px] font-bold text-slate-900">
-                          {member.name}
-                        </div>
-                      </div>
-
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        <div>
-                          <div className="text-[15px] font-extrabold tabular-nums text-slate-900">
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <span
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-[10px] font-extrabold text-indigo-700"
+                                aria-hidden="true"
+                              >
+                                {inits}
+                              </span>
+                              <span className="truncate font-semibold text-slate-900">
+                                {member.name}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
                             {member.leads}
-                          </div>
-                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
-                            Leads
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[15px] font-extrabold tabular-nums text-slate-900">
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
                             {member.admissions}
-                          </div>
-                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
-                            Adm
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[14px] font-extrabold tabular-nums text-slate-900">
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
                             {money(member.revenue)}
-                          </div>
-                          <div className="mt-0.5 text-[10px] font-bold uppercase tracking-[0.05em] text-slate-500">
-                            Rev
-                          </div>
-                        </div>
-                      </div>
-
-                      <div
-                        className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-100"
-                        aria-hidden="true"
-                      >
-                        <div
-                          className="h-full rounded-full bg-indigo-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div
+                              className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
+                              aria-hidden="true"
+                            >
+                              <div
+                                className="h-full rounded-full bg-indigo-500"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
               <div className="py-8 text-center text-sm text-slate-500">

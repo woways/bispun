@@ -208,9 +208,9 @@ function KpiDrawer({ config, onClose }) {
   const slice = config.rows.slice(pg * PAGE, (pg + 1) * PAGE);
   return (
     <>
-      <div onClick={onClose} className="fixed inset-0 z-[60] bg-slate-900/45" aria-hidden="true" />
+      <div onClick={onClose} className="fixed inset-0 z-[120] bg-slate-900/45" aria-hidden="true" />
       <aside role="dialog" aria-modal="true" aria-label={config.title}
-        className="fixed right-0 top-0 z-[61] flex h-full w-[min(430px,94vw)] flex-col bg-white shadow-[-24px_0_60px_-24px_rgba(15,23,42,.45)]">
+        className="fixed right-0 top-0 z-[121] flex h-full w-[min(430px,94vw)] flex-col bg-white shadow-[-24px_0_60px_-24px_rgba(15,23,42,.45)]">
         <div className="border-b border-slate-200 p-[18px]">
           <div className="flex items-start justify-between gap-2.5">
             <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-brand-600">{config.eyebrow}</span>

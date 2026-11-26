@@ -22,6 +22,7 @@ export async function uploadAdmissionPartnerAttachment(file, companyId, partnerI
     buffer: file.buffer,
     key,
     contentType: file.mimetype || "application/octet-stream",
+    companyId,
   });
 
   return {
@@ -34,7 +35,7 @@ export async function uploadAdmissionPartnerAttachment(file, companyId, partnerI
   };
 }
 
-export async function deleteAdmissionPartnerAttachment({ publicId }) {
+export async function deleteAdmissionPartnerAttachment({ publicId, companyId }) {
   if (!publicId) return;
-  await deleteObjectByKey(publicId);
+  await deleteObjectByKey(publicId, companyId);
 }

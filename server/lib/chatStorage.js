@@ -17,6 +17,7 @@ export async function uploadChatFile(file, companyId) {
     buffer: file.buffer,
     key,
     contentType: file.mimetype || "application/octet-stream",
+    companyId,
   });
 
   return {
@@ -29,7 +30,7 @@ export async function uploadChatFile(file, companyId) {
   };
 }
 
-export async function deleteChatFile({ publicId }) {
+export async function deleteChatFile({ publicId, companyId }) {
   if (!publicId) return;
-  await deleteObjectByKey(publicId);
+  await deleteObjectByKey(publicId, companyId);
 }

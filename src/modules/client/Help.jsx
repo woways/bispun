@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   Plus,
@@ -14,6 +15,7 @@ import {
   X,
   Loader2,
   RefreshCw,
+  History,
   Lock,
   Crown,
   LifeBuoy,
@@ -683,7 +685,7 @@ function NewTicketModal({
     }
   }
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[130] bg-slate-950/55 backdrop-blur-[2px] flex justify-end">
       <div
         ref={panelRef}
@@ -1121,7 +1123,8 @@ function NewTicketModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -1687,6 +1690,22 @@ export default function Help({
             <button
               type="button"
               onClick={() =>
+                openTicketDrill({
+                  title: "Ticket History",
+                  subtitle: "All support tickets, including resolved and closed",
+                  records: tickets,
+                  emptyText: "No tickets yet.",
+                })
+              }
+              className="h-9 px-3.5 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-[13px] font-semibold text-slate-700 inline-flex items-center gap-2 shadow-sm"
+            >
+              <History size={13} aria-hidden="true" />
+              History
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
                 createTicket()
               }
               className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
@@ -1718,85 +1737,76 @@ export default function Help({
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SupportMetric
-          label="Total Tickets"
-          value={
-            totalTickets
-          }
-          icon={
-            Ticket
-          }
-          detail="All support requests submitted"
-          tone="indigo"
-          onClick={() =>
-            openTicketDrill({
+        {[
+          {
+            label: "Total Tickets",
+            value: totalTickets,
+            Icon: Ticket,
+            tone: "bg-indigo-50 text-indigo-600",
+            drill: {
               title: "Total Tickets",
               subtitle: "All support requests submitted",
               records: tickets,
               emptyText: "No support tickets yet.",
-            })
-          }
-        />
-
-        <SupportMetric
-          label="Open"
-          value={
-            openTickets
-          }
-          icon={
-            LifeBuoy
-          }
-          detail="Requests requiring attention"
-          tone="amber"
-          onClick={() =>
-            openTicketDrill({
+            },
+          },
+          {
+            label: "Open",
+            value: openTickets,
+            Icon: LifeBuoy,
+            tone: "bg-amber-50 text-amber-600",
+            drill: {
               title: "Open Tickets",
               subtitle: "Requests requiring attention",
               records: openTicketList,
               emptyText: "No open tickets.",
-            })
-          }
-        />
-
-        <SupportMetric
-          label="In Progress"
-          value={
-            activeTickets
-          }
-          icon={
-            Clock3
-          }
-          detail="Tickets currently being worked on"
-          tone="indigo"
-          onClick={() =>
-            openTicketDrill({
+            },
+          },
+          {
+            label: "In Progress",
+            value: activeTickets,
+            Icon: Clock3,
+            tone: "bg-indigo-50 text-indigo-600",
+            drill: {
               title: "In Progress",
               subtitle: "Tickets currently being worked on",
               records: activeTicketList,
               emptyText: "No tickets in progress.",
-            })
-          }
-        />
-
-        <SupportMetric
-          label="Completed"
-          value={
-            completedTickets
-          }
-          icon={
-            CheckCircle2
-          }
-          detail="Resolved or closed support requests"
-          tone="emerald"
-          onClick={() =>
-            openTicketDrill({
+            },
+          },
+          {
+            label: "Completed",
+            value: completedTickets,
+            Icon: CheckCircle2,
+            tone: "bg-emerald-50 text-emerald-600",
+            drill: {
               title: "Completed",
               subtitle: "Resolved or closed support requests",
               records: completedTicketList,
               emptyText: "No completed tickets.",
-            })
-          }
-        />
+            },
+          },
+        ].map((metric) => (
+          <button
+            key={metric.label}
+            type="button"
+            onClick={() => openTicketDrill(metric.drill)}
+            aria-label={`${metric.label} — view tickets`}
+            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          >
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${metric.tone}`}>
+              <metric.Icon size={17} aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[18px] font-bold leading-tight text-slate-900">
+                {metric.value}
+              </span>
+              <span className="block truncate text-[12px] text-slate-500">
+                {metric.label}
+              </span>
+            </span>
+          </button>
+        ))}
       </div>
 
       {/* SUPPORT TYPES */}
@@ -1926,7 +1936,7 @@ export default function Help({
               )
             }
             placeholder="Search ticket number, title, description or response..."
-            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           />
         </div>
 

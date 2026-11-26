@@ -9,9 +9,15 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  assertCanUpload,
+  addStorageUsage,
+  subtractStorageUsage,
+} from "./storageLimits.js";
 
 /* ------------------------------------------------------------------ */
 /* Bispun S3 file storage                                              */
@@ -240,7 +246,10 @@ export function fileProxyUrl(key) {
 /* Core file operations                                                 */
 /* ------------------------------------------------------------------ */
 
-export async function putObject({ buffer, key, contentType }) {
+export async function putObject({ buffer, key, contentType, companyId }) {
+  // Enforce the company's plan storage cap before writing anything.
+  if (companyId) await assertCanUpload(companyId, buffer?.length || 0);
+
   if (!isS3Configured()) {
     if (!canUseLocalStorage()) {
       throw new Error("S3 file storage is not configured");
@@ -259,6 +268,7 @@ export async function putObject({ buffer, key, contentType }) {
       String(contentType || "application/octet-stream")
     );
 
+    if (companyId) await addStorageUsage(companyId, buffer?.length || 0);
     return key;
   }
 
@@ -274,11 +284,37 @@ export async function putObject({ buffer, key, contentType }) {
     })
   );
 
+  if (companyId) await addStorageUsage(companyId, buffer?.length || 0);
   return key;
 }
 
-export async function deleteObjectByKey(key) {
+// Returns the stored size (bytes) of an object, S3 or local.
+async function getObjectSize(key) {
+  if (!isS3Configured()) {
+    const stat = await fs.promises.stat(localPathForKey(key));
+    return stat.size;
+  }
+  const { bucket } = s3Config();
+  const head = await getClient().send(
+    new HeadObjectCommand({ Bucket: bucket, Key: key })
+  );
+  return Number(head?.ContentLength || 0);
+}
+
+export async function deleteObjectByKey(key, companyId) {
   if (!key) return;
+
+  // Best-effort: learn the object's size before deleting so we can decrement the
+  // company's usage counter. Any failure here just skips the decrement — the
+  // backfill script reconciles drift.
+  let freedBytes = 0;
+  if (companyId) {
+    try {
+      freedBytes = await getObjectSize(key);
+    } catch {
+      freedBytes = 0;
+    }
+  }
 
   if (!isS3Configured()) {
     if (!canUseLocalStorage()) {
@@ -294,6 +330,7 @@ export async function deleteObjectByKey(key) {
       { force: true }
     );
 
+    if (companyId && freedBytes) await subtractStorageUsage(companyId, freedBytes);
     return;
   }
 
@@ -305,6 +342,8 @@ export async function deleteObjectByKey(key) {
       Key: key,
     })
   );
+
+  if (companyId && freedBytes) await subtractStorageUsage(companyId, freedBytes);
 }
 
 /* ------------------------------------------------------------------ */

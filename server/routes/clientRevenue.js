@@ -771,6 +771,7 @@ router.post(
         buffer,
         key,
         contentType: String(mimeType),
+        companyId: req.clientUser.companyId,
       });
 
       return res.json({

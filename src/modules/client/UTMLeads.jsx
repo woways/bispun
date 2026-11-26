@@ -1839,7 +1839,7 @@ export default function UTMLeads({
                     </span>
                   </div>
 
-                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
                     <div
                       className="h-full rounded-full bg-indigo-500"
                       style={{ width: `${width}%` }}
@@ -2299,7 +2299,7 @@ export default function UTMLeads({
                 }
                 aria-label="Search saved links"
                 placeholder="Search campaign, influencer, source, medium, URL or latest lead..."
-                className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
+                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
               />
             </div>
 
@@ -2571,7 +2571,7 @@ export default function UTMLeads({
               }
               aria-label="Search UTM leads"
               placeholder="Search UTM lead by name, phone, campaign, source or stage..."
-              className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
+              className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:border-indigo-500"
             />
           </div>
         </div>

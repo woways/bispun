@@ -146,11 +146,16 @@ function ModuleFallback() {
 class ModuleErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { failed: false };
+    this.state = { failed: false, isChunk: false };
     this.headingRef = createRef();
   }
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error) {
+    const message = String(error?.message || error || "");
+    const isChunk =
+      /ChunkLoadError|Loading chunk .* failed|dynamically imported module|Importing a module script failed|error loading dynamically imported/i.test(
+        message
+      );
+    return { failed: true, isChunk };
   }
   componentDidUpdate(_prevProps, prevState) {
     if (this.state.failed && !prevState.failed) {
@@ -164,23 +169,38 @@ class ModuleErrorBoundary extends Component {
           role="alert"
           className="flex min-h-[320px] flex-col items-center justify-center gap-3 p-8 text-center"
         >
-          <h1
+          <h2
             ref={this.headingRef}
             tabIndex={-1}
             className="text-base font-bold text-slate-900 outline-none"
           >
-            Couldn&apos;t load this section
-          </h1>
+            {this.state.isChunk
+              ? "This section was updated"
+              : "Couldn't load this section"}
+          </h2>
           <p className="max-w-sm text-sm text-slate-500">
-            Check your connection and try again.
+            {this.state.isChunk
+              ? "Reload the page to load the latest version."
+              : "Check your connection and try again."}
           </p>
-          <button
-            type="button"
-            onClick={() => this.setState({ failed: false })}
-            className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-          >
-            Try again
-          </button>
+          {this.state.isChunk ? (
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              aria-label="Reload the page"
+              className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            >
+              Reload page
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => this.setState({ failed: false })}
+              className="mt-1 inline-flex items-center justify-center rounded-lg bg-sky-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            >
+              Try again
+            </button>
+          )}
         </div>
       );
     }
@@ -4144,7 +4164,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     if (moduleKey === "my-referrals") {
-      return <Referrals currentUser={user} />;
+      return <Referrals currentUser={user} selectedYear={selectedYear} />;
     }
 
     // My Store temporarily hidden (image-gen rework pending). Guarded so a saved
@@ -5943,7 +5963,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     ref={isActive ? activeModuleWrapperRef : null}
                     hidden={!isActive}
                     tabIndex={isActive ? -1 : undefined}
-                    className={isActive ? "cb-fade-in outline-none" : undefined}
+                    /* No entrance animation on this wrapper: a finishing
+                       opacity animation (fill: both) leaves a persistent
+                       stacking context that traps every module-nested drawer
+                       below the fixed header (z-40) / sidebar (z-70), making
+                       all right-drawers overlap the nav. Keep it plain so
+                       drawers paint above the chrome like the root-level ones. */
+                    className={isActive ? "outline-none" : undefined}
                   >
                     <ModuleErrorBoundary
                       key={`eb:${key}:${keepAliveEpochRef.current[key] || 0}`}
@@ -5961,7 +5987,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <div
                   ref={activeModuleWrapperRef}
                   tabIndex={-1}
-                  className="cb-fade-in outline-none"
+                  /* Plain wrapper (no opacity animation) so module-nested
+                     drawers are not trapped under the header/sidebar — see
+                     the keep-alive wrapper above. */
+                  className="outline-none"
                 >
                   <ModuleErrorBoundary key={module}>
                     <Suspense fallback={<ModuleFallback />}>

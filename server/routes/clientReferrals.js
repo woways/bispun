@@ -110,6 +110,19 @@ async function canViewTeam(req) {
   );
 }
 
+// Period (PERIOD dropdown) scoping — mirrors the helpers used across the other
+// client routes. Returns null for "all"/invalid so no year filter is applied.
+function parseYear(value) {
+  if (!value || value === "all") return null;
+  const year = Number(value);
+  return Number.isInteger(year) && year >= 2000 && year <= 2100 ? year : null;
+}
+
+function yearRange(year) {
+  if (!year) return null;
+  return { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) };
+}
+
 router.get("/me", async (req, res) => {
   try {
     const code = await ensureCode(req.clientUser.userId);
@@ -119,6 +132,9 @@ router.get("/me", async (req, res) => {
         where: {
           companyId: req.clientUser.companyId,
           referrerId: req.clientUser.userId,
+          ...(yearRange(parseYear(req.query.year))
+            ? { createdAt: yearRange(parseYear(req.query.year)) }
+            : {}),
         },
         include: { lead: true },
         orderBy: { createdAt: "desc" },

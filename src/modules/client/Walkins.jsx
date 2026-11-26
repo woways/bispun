@@ -521,7 +521,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
     : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <DetailModal
         open={!!detailData}
         title={detailData?.title}
@@ -555,7 +555,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4 native:grid-cols-2 native:gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 native:grid-cols-2 native:gap-2.5">
         <WalkinMetric
           label="Walk-ins"
           value={summary.total}
@@ -605,7 +605,7 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
             onChange={(event) => setSearch(event.target.value)}
             aria-label="Search walk-ins"
             placeholder="Search visitor, phone, purpose or counsellor..."
-            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           />
         </div>
 

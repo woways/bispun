@@ -2930,7 +2930,20 @@ export default function ChatPanel({
             </>
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.055),_transparent_30%)] text-slate-500 lg:text-slate-400">
-              <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm"><MessageSquare size={25} strokeWidth={1.5} /></span>
+              <svg viewBox="0 0 160 120" className="h-auto w-36" aria-hidden="true" focusable="false">
+                <rect x="72" y="18" width="72" height="46" rx="15" className="fill-brand-50" />
+                <rect x="72" y="18" width="72" height="46" rx="15" fill="none" className="stroke-brand-200" strokeWidth="2" />
+                <path d="M120 64 L120 78 L135 64 Z" className="fill-brand-50" />
+                <rect x="84" y="33" width="44" height="5" rx="2.5" className="fill-brand-300" />
+                <rect x="84" y="45" width="30" height="5" rx="2.5" className="fill-brand-200" />
+                <rect x="16" y="40" width="84" height="56" rx="18" className="fill-brand-100" />
+                <rect x="16" y="40" width="84" height="56" rx="18" fill="none" className="stroke-brand-300" strokeWidth="2" />
+                <path d="M36 96 L36 112 L54 96 Z" className="fill-brand-100" />
+                <path d="M36 96 L36 112 L54 96" fill="none" className="stroke-brand-300" strokeWidth="2" strokeLinejoin="round" />
+                <circle cx="44" cy="68" r="5" className="fill-brand-500" />
+                <circle cx="58" cy="68" r="5" className="fill-brand-500" />
+                <circle cx="72" cy="68" r="5" className="fill-brand-500" />
+              </svg>
               <div className="text-center"><div className="text-sm font-bold text-slate-600">Select a conversation</div><div className="mt-1 text-[13px]">Choose a chat from the left to start messaging.</div></div>
             </div>
           )}

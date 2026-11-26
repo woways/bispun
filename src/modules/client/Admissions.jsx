@@ -31,6 +31,7 @@ import {
   Paperclip,
   ExternalLink,
   ChevronRight,
+  ChevronDown,
   Folder,
   FolderPlus,
   Lock,
@@ -432,19 +433,23 @@ function Stat({
     <Component
       type={onClick ? "button" : undefined}
       onClick={onClick}
-      className={`w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${onClick ? "cursor-pointer transition hover:border-indigo-200 hover:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-100" : ""}`}
+      title={detail || undefined}
+      className={`w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${onClick ? "cursor-pointer transition hover:border-indigo-200 hover:bg-indigo-50/30 focus:outline-none focus:ring-2 focus:ring-indigo-100" : ""}`}
     >
-      <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-400">
-        {label}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
+          {label}
+        </span>
+        <span className="shrink-0 text-[18px] font-bold tracking-[-0.02em] text-slate-950 [font-variant-numeric:tabular-nums]">
+          {value}
+        </span>
       </div>
 
-      <div className="mt-1.5 text-2xl font-bold tracking-[-0.03em] text-slate-950">
-        {value}
-      </div>
-
-      <div className="mt-1 text-[13px] leading-5 text-slate-500">
-        {detail}
-      </div>
+      {detail ? (
+        <div className="mt-0.5 truncate text-[11px] leading-4 text-slate-400">
+          {detail}
+        </div>
+      ) : null}
     </Component>
   );
 }
@@ -1061,7 +1066,7 @@ function CollegeModal({
           <button
             type="submit"
             disabled={saving}
-            className="h-9 rounded-lg bg-slate-950 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="h-9 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {editing
               ? "Save"
@@ -1214,7 +1219,7 @@ function BranchModal({
           <button
             type="submit"
             disabled={saving}
-            className="h-9 rounded-lg bg-slate-950 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="h-9 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {editing
               ? "Save"
@@ -1459,7 +1464,7 @@ function CollegeAttachmentsModal({ partner, onClose, onChanged }) {
         {/* Search bar */}
         <div className="border-b border-slate-200 px-5 py-3">
           <div className="relative">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               aria-label="Search files and folders"
@@ -2440,7 +2445,7 @@ function AdmissionModal({
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {saving ? (
               <Loader2
@@ -2604,7 +2609,7 @@ function ImportModal({
               saving ||
               !file
             }
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {saving ? (
               <Loader2
@@ -3691,7 +3696,7 @@ function AdmissionsManager({
               )
             }
             disabled={!filteredAllAdmissions.length}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-bold text-white disabled:opacity-50"
           >
             <Download size={14} />
             Export Admissions
@@ -3728,7 +3733,7 @@ function AdmissionsManager({
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <div className="relative flex-1">
               <Search
-                size={15}
+                size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
               />
 
@@ -3739,7 +3744,7 @@ function AdmissionsManager({
                   setAllSearch(event.target.value)
                 }
                 placeholder="Search student, stream, college, branch, counsellor..."
-                className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] outline-none focus:border-slate-400"
+                className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] outline-none focus:border-slate-400"
               />
             </div>
 
@@ -3852,7 +3857,7 @@ function AdmissionsManager({
                   </td>
 
                   <td className="px-4 py-3">
-                    <div className="whitespace-nowrap text-[15px] font-semibold text-slate-900">
+                    <div className="whitespace-nowrap text-[13px] font-semibold text-slate-900">
                       {admission.name}
                     </div>
                     {(admission.studentLocation ||
@@ -3876,38 +3881,38 @@ function AdmissionsManager({
                     ) : null}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-700">
                     {admission.phone || "—"}
                   </td>
 
                   <td
-                    className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[15px] text-slate-700"
+                    className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[13px] text-slate-700"
                     title={admission.universityName || ""}
                   >
                     {admission.universityName || "—"}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-slate-700">
                     {admission.branch?.name ||
                       admission.course ||
                       "—"}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-800">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-slate-800">
                     {money(
                       admission.incentiveAmount ??
                         admission.total
                     )}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-emerald-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-emerald-700">
                     {money(
                       admission.receivedAmount ??
                         admission.paid
                     )}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-amber-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-amber-700">
                     {money(
                       admission.pendingAmount ??
                         admission.pending
@@ -3918,7 +3923,7 @@ function AdmissionsManager({
                     {formatDate(admission.admissionDate)}
                   </td>
 
-                  <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                  <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-700">
                     {admission.counsellor}
                   </td>
 
@@ -4093,35 +4098,77 @@ function AdmissionsManager({
             Loading streams...
           </div>
         ) : (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {streams.map((stream) => {
+          <div className="w-full overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+          <Table
+            caption="Streams — admissions, colleges and branches; open a stream to drill in"
+            empty="No streams yet. Add a stream to begin."
+            columns={[
+              "Stream",
+              "Admissions",
+              "Colleges",
+              "Branches",
+              "Description",
+              "Actions",
+            ]}
+            rows={streams.map((stream) => {
               const Icon = streamIcon(stream.name);
               const acc = accentForColor(
                 stream.color || recommendedStreamColor(stream.name)
               );
 
               return (
-                <div
-                  key={stream.id}
-                  className="group relative flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.05)] transition hover:-translate-y-1 hover:shadow-md motion-reduce:transform-none"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className={`grid h-11 w-11 place-items-center rounded-xl border ${acc.tile}`}>
-                      <Icon size={20} aria-hidden="true" focusable="false" />
+                <tr key={stream.id} className="hover:bg-slate-50/70">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${acc.tile}`}>
+                        <Icon size={15} aria-hidden="true" focusable="false" />
+                      </span>
+                      <span className="text-[13px] font-semibold text-slate-900">
+                        {stream.name}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-slate-900">
+                    {stream.totalAdmissions || 0}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] tabular-nums text-slate-700">
+                    {stream.totalColleges || 0}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] tabular-nums text-slate-700">
+                    {stream.totalBranches || 0}
+                  </td>
+                  <td className="px-4 py-3 text-[13px] text-slate-500">
+                    <span
+                      className="block max-w-[280px] truncate"
+                      title={stream.description || undefined}
+                    >
+                      {stream.description || "—"}
                     </span>
-
-                    <div className="flex gap-1.5">
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        type="button"
+                        aria-label={`Open ${stream.name}`}
+                        onClick={() => {
+                          detailTriggerRef.current = document.activeElement;
+                          setSelectedStream(stream);
+                          setSelectedPartner(null);
+                          setSelectedBranch(null);
+                        }}
+                        className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[13px] font-bold transition ${acc.open} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1`}
+                      >
+                        Open
+                        <ChevronRight size={14} aria-hidden="true" />
+                      </button>
                       <button
                         type="button"
                         aria-label={`Edit ${stream.name}`}
-                        onClick={() =>
-                          setStreamModal({ mode: "edit", stream })
-                        }
+                        onClick={() => setStreamModal({ mode: "edit", stream })}
                         className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
                         <Pencil size={14} aria-hidden="true" />
                       </button>
-
                       <button
                         type="button"
                         aria-label={`Delete ${stream.name}`}
@@ -4131,63 +4178,11 @@ function AdmissionsManager({
                         <Trash2 size={14} aria-hidden="true" />
                       </button>
                     </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
-                      {stream.name}
-                    </div>
-                    <div className={`mt-1 inline-flex items-center gap-1.5 text-[12.5px] font-semibold ${acc.text}`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${acc.dot}`} aria-hidden="true" />
-                      {stream.totalAdmissions || 0} Admissions
-                    </div>
-                  </div>
-
-                  {stream.description ? (
-                    <div className="min-h-[34px] text-[12.5px] leading-5 text-slate-500">
-                      {stream.description}
-                    </div>
-                  ) : (
-                    <div className="min-h-[34px]" />
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">
-                        Colleges
-                      </div>
-                      <div className="mt-1 text-[17px] font-bold text-slate-900 [font-variant-numeric:tabular-nums]">
-                        {stream.totalColleges || 0}
-                      </div>
-                    </div>
-
-                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                      <div className="text-[10px] font-bold uppercase tracking-[0.06em] text-slate-500">
-                        Branches
-                      </div>
-                      <div className="mt-1 text-[17px] font-bold text-slate-900 [font-variant-numeric:tabular-nums]">
-                        {stream.totalBranches || 0}
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    aria-label={`Open ${stream.name}`}
-                    onClick={() => {
-                      detailTriggerRef.current = document.activeElement;
-                      setSelectedStream(stream);
-                      setSelectedPartner(null);
-                      setSelectedBranch(null);
-                    }}
-                    className={`mt-auto flex h-10 w-full items-center justify-between rounded-xl border px-3.5 text-[13px] font-bold transition ${acc.open} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1`}
-                  >
-                    Open {stream.name}
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </button>
-                </div>
+                  </td>
+                </tr>
               );
             })}
+          />
           </div>
         )}
 
@@ -4238,7 +4233,7 @@ function AdmissionsManager({
             onClick={() =>
               setCollegeModal({ mode: "create" })
             }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-bold text-white"
           >
             <Plus size={14} />
             Add College
@@ -4273,70 +4268,101 @@ function AdmissionsManager({
 
         <PageMessage />
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {partners.map((partner, index) => (
-            <GradientCard
-              key={partner.id}
-              title={partner.name}
-              subtitle={`${partner.totalAdmissions || 0} Admissions`}
-              description={partner.description || ""}
-              icon={Building2}
-              index={index + 1}
-              color={selectedStream.color || "blue"}
-              openLabel={`Open ${partner.name}`}
-              onOpen={() => {
-                detailTriggerRef.current = document.activeElement;
-                setSelectedPartner(partner);
-                setSelectedBranch(null);
-              }}
-              onAttachments={canViewAttachments ? () => setAttachmentsPartner(partner) : null}
-              attachmentCount={canViewAttachments ? partner.attachmentCount || 0 : 0}
-              onEdit={() =>
-                setCollegeModal({
-                  mode: "edit",
-                  partner,
-                })
-              }
-              onDelete={() => deletePartner(partner)}
-              extra={
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Branches
-                    </div>
-                    <div className="mt-1 text-xl font-bold">
-                      {partner.totalBranches || 0}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Received Amount
-                    </div>
-                    <div className="mt-1 text-[15px] font-bold">
-                      {money(partner.received)}
-                    </div>
-                  </div>
-                </div>
-              }
-            />
-          ))}
-        </div>
-
-        {!loading && partners.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center">
-            <Building2
-              size={24}
-              className="mx-auto text-slate-300"
-            />
-            <div className="mt-3 text-[15px] font-bold text-slate-800">
-              No colleges yet
-            </div>
-            <div className="mt-1 text-[13px] text-slate-500">
-              Add the first college inside {selectedStream.name}.
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-16 text-[15px] text-slate-500">
+            <Loader2 size={16} className="animate-spin" />
+            Loading colleges...
           </div>
-        ) : null}
+        ) : (
+          <div className="w-full overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+          <Table
+            caption={`Colleges in ${selectedStream.name} — admissions, branches and received amount`}
+            empty={`No colleges yet. Add the first college inside ${selectedStream.name}.`}
+            columns={[
+              "College",
+              "Admissions",
+              "Branches",
+              "Received Amount",
+              "Description",
+              "Actions",
+            ]}
+            rows={partners.map((partner) => (
+              <tr key={partner.id} className="hover:bg-slate-50/70">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
+                      <Building2 size={15} aria-hidden="true" />
+                    </span>
+                    <span className="text-[13px] font-semibold text-slate-900">{partner.name}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-slate-900">
+                  {partner.totalAdmissions || 0}
+                </td>
+                <td className="px-4 py-3 text-[13px] tabular-nums text-slate-700">
+                  {partner.totalBranches || 0}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-slate-900">
+                  {money(partner.received)}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-500">
+                  <span className="block max-w-[260px] truncate" title={partner.description || undefined}>
+                    {partner.description || "—"}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Open ${partner.name}`}
+                      onClick={() => {
+                        detailTriggerRef.current = document.activeElement;
+                        setSelectedPartner(partner);
+                        setSelectedBranch(null);
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[13px] font-bold text-indigo-700 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      Open
+                      <ChevronRight size={14} aria-hidden="true" />
+                    </button>
+                    {canViewAttachments ? (
+                      <button
+                        type="button"
+                        aria-label={`Attachments for ${partner.name}${partner.attachmentCount ? ` (${partner.attachmentCount})` : ""}`}
+                        onClick={() => setAttachmentsPartner(partner)}
+                        className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                      >
+                        <Paperclip size={14} aria-hidden="true" />
+                        {partner.attachmentCount > 0 ? (
+                          <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-indigo-600 px-1 text-center text-[9px] font-black leading-4 text-white">
+                            {partner.attachmentCount > 99 ? "99+" : partner.attachmentCount}
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={`Edit ${partner.name}`}
+                      onClick={() => setCollegeModal({ mode: "edit", partner })}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      <Pencil size={14} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${partner.name}`}
+                      onClick={() => deletePartner(partner)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          />
+          </div>
+        )}
 
         {attachmentsPartner ? (
           <CollegeAttachmentsModal
@@ -4407,7 +4433,7 @@ function AdmissionsManager({
             onClick={() =>
               setBranchModal({ mode: "create" })
             }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-bold text-white"
           >
             <Plus size={14} />
             Add Branch
@@ -4442,70 +4468,88 @@ function AdmissionsManager({
 
         <PageMessage />
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {branches.map((branch, index) => (
-            <GradientCard
-              key={branch.id}
-              title={branch.name}
-              subtitle={`${branch.totalAdmissions || 0} Admissions`}
-              description={
-                branch.description ||
-                `${selectedPartner.name} · ${selectedStream.name}`
-              }
-              icon={BookOpen}
-              index={index + 2}
-              color={recommendedBranchColor(branch.name, index)}
-              openLabel={`Open ${branch.name}`}
-              onOpen={() => {
-                detailTriggerRef.current = document.activeElement;
-                setSelectedBranch(branch);
-              }}
-              onEdit={() =>
-                setBranchModal({
-                  mode: "edit",
-                  branch,
-                })
-              }
-              onDelete={() => deleteBranch(branch)}
-              extra={
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Received Amount
-                    </div>
-                    <div className="mt-1 text-[15px] font-bold">
-                      {money(branch.received)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-white/12 px-3 py-2.5">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-white/70">
-                      Pending Amount
-                    </div>
-                    <div className="mt-1 text-[15px] font-bold">
-                      {money(branch.pending)}
-                    </div>
-                  </div>
-                </div>
-              }
-            />
-          ))}
-        </div>
-
-        {!loading && branches.length === 0 ? (
-          <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center">
-            <BookOpen
-              size={24}
-              className="mx-auto text-slate-300"
-            />
-            <div className="mt-3 text-[15px] font-bold text-slate-800">
-              No branches yet
-            </div>
-            <div className="mt-1 text-[13px] text-slate-500">
-              For Medical, add MBBS, BDS, Pharmacy and Nursing separately.
-            </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white py-16 text-[15px] text-slate-500">
+            <Loader2 size={16} className="animate-spin" />
+            Loading branches...
           </div>
-        ) : null}
+        ) : (
+          <div className="w-full overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+          <Table
+            caption={`Branches in ${selectedPartner.name} — admissions, received and pending amount`}
+            empty="No branches yet. For Medical, add MBBS, BDS, Pharmacy and Nursing separately."
+            columns={[
+              "Branch",
+              "Admissions",
+              "Received Amount",
+              "Pending Amount",
+              "Description",
+              "Actions",
+            ]}
+            rows={branches.map((branch) => (
+              <tr key={branch.id} className="hover:bg-slate-50/70">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-brand-100 bg-brand-50 text-brand-600">
+                      <BookOpen size={15} aria-hidden="true" />
+                    </span>
+                    <span className="text-[13px] font-semibold text-slate-900">{branch.name}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-slate-900">
+                  {branch.totalAdmissions || 0}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-slate-900">
+                  {money(branch.received)}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-semibold tabular-nums text-amber-700">
+                  {money(branch.pending)}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-500">
+                  <span
+                    className="block max-w-[260px] truncate"
+                    title={branch.description || `${selectedPartner.name} · ${selectedStream.name}`}
+                  >
+                    {branch.description || `${selectedPartner.name} · ${selectedStream.name}`}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button
+                      type="button"
+                      aria-label={`Open ${branch.name}`}
+                      onClick={() => {
+                        detailTriggerRef.current = document.activeElement;
+                        setSelectedBranch(branch);
+                      }}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[13px] font-bold text-indigo-700 transition hover:bg-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      Open
+                      <ChevronRight size={14} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Edit ${branch.name}`}
+                      onClick={() => setBranchModal({ mode: "edit", branch })}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                    >
+                      <Pencil size={14} aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${branch.name}`}
+                      onClick={() => deleteBranch(branch)}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          />
+          </div>
+        )}
 
         {branchModal ? (
           <BranchModal
@@ -4584,7 +4628,7 @@ function AdmissionsManager({
             onClick={() =>
               setAdmissionModal({ mode: "create" })
             }
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-[13px] font-bold text-white"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 text-[13px] font-bold text-white"
           >
             <Plus size={14} />
             New Admission
@@ -4634,7 +4678,7 @@ function AdmissionsManager({
               setSearch(event.target.value)
             }
             placeholder={`Search ${selectedBranch.name} admissions...`}
-            className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-[15px] outline-none focus:border-slate-400"
+            className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] outline-none focus:border-slate-400"
           />
         </div>
 
@@ -4727,7 +4771,7 @@ function AdmissionsManager({
                 </td>
 
                 <td className="px-4 py-3">
-                  <div className="whitespace-nowrap text-[15px] font-semibold text-slate-900">
+                  <div className="whitespace-nowrap text-[13px] font-semibold text-slate-900">
                     {admission.name}
                   </div>
                   {(admission.studentLocation ||
@@ -4751,37 +4795,37 @@ function AdmissionsManager({
                   ) : null}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-700">
                   {admission.phone || "—"}
                 </td>
 
                 <td
-                  className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[15px] text-slate-700"
+                  className="max-w-[220px] truncate whitespace-nowrap px-4 py-3 text-[13px] text-slate-700"
                   title={admission.universityName || ""}
                 >
                   {admission.universityName || "—"}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-slate-700">
                   {admission.branch?.name ||
                     admission.course}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-slate-800">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-slate-800">
                   {money(
                     admission.incentiveAmount ??
                       admission.total
                   )}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-emerald-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-emerald-700">
                   {money(
                     admission.receivedAmount ??
                       admission.paid
                   )}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] font-semibold text-amber-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] font-semibold text-amber-700">
                   {money(
                     admission.pendingAmount ??
                       admission.pending
@@ -4792,7 +4836,7 @@ function AdmissionsManager({
                   {formatDate(admission.admissionDate)}
                 </td>
 
-                <td className="whitespace-nowrap px-4 py-3 text-[15px] text-slate-700">
+                <td className="whitespace-nowrap px-4 py-3 text-[13px] text-slate-700">
                   {admission.counsellor}
                 </td>
 
@@ -4914,6 +4958,128 @@ function AdmissionsManager({
   );
 }
 
+
+const ADM_MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Monthly admissions trend — collapsible area/line chart matching the Goals &
+// Targets "Monthly attainment" chart (gridlines, Y ticks, gradient fill, hover,
+// full Jan–Dec axis). role="img" + aria-label summary; the All Admissions table
+// above remains the accessible source of the underlying numbers.
+function AdmissionsTrendChart({ rows }) {
+  const [open, setOpen] = useState(true);
+  const [hover, setHover] = useState(null);
+  const svgRef = useRef(null);
+  const uid = useId().replace(/:/g, "");
+  const regionId = `adm-trend-${uid}`;
+  const gradId = `adm-trend-grad-${uid}`;
+
+  const monthly = useMemo(() => {
+    const counts = Array(12).fill(0);
+    (rows || []).forEach((admission) => {
+      const date = new Date(admission.admissionDate);
+      if (!Number.isNaN(date.getTime())) counts[date.getMonth()] += 1;
+    });
+    return counts.map((value, i) => ({ i, value, label: ADM_MONTH_ABBR[i] }));
+  }, [rows]);
+
+  const total = (rows || []).length;
+  const W = 760, H = 200, pad = { l: 36, r: 16, t: 14, b: 26 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const peak = Math.max(...monthly.map((m) => m.value), 0);
+  const maxY = Math.max(4, Math.ceil(peak / 4) * 4);
+  const X = (i) => pad.l + pw * (i / 11);
+  const Y = (v) => pad.t + ph * (1 - v / maxY);
+  const C = monthly.map((d) => ({ ...d, cx: +X(d.i).toFixed(1), cy: +Y(d.value).toFixed(1) }));
+  const ticks = [];
+  for (let v = 0; v <= maxY; v += maxY / 4) ticks.push(Math.round(v));
+  const baseY = Y(0).toFixed(1);
+  const line = "M " + C.map((p) => `${p.cx} ${p.cy}`).join(" L ");
+  const area = `M ${C[0].cx} ${baseY} L ` + C.map((p) => `${p.cx} ${p.cy}`).join(" L ") + ` L ${C[C.length - 1].cx} ${baseY} Z`;
+  const summary = `Admissions by month for the selected period: ${monthly.map((m) => `${m.label} ${m.value}`).join(", ")}. Total ${total}.`;
+
+  function move(e) {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const r = svg.getBoundingClientRect();
+    const mx = ((e.clientX - r.left) / r.width) * W;
+    let nearest = C[0];
+    for (const p of C) if (Math.abs(p.cx - mx) < Math.abs(nearest.cx - mx)) nearest = p;
+    setHover({ ...nearest, px: (nearest.cx / W) * r.width, py: (nearest.cy / H) * r.height });
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={regionId}
+        className="flex w-full items-start justify-between gap-3 px-[18px] py-[15px] text-left"
+      >
+        <span>
+          <span className="block text-[15px] font-semibold tracking-[-0.01em] text-slate-900">Admissions trend</span>
+          <span className="mt-0.5 block text-[12px] font-medium text-slate-500">Monthly admissions for the selected period · {total} total</span>
+        </span>
+        <span className="flex items-center gap-4">
+          <span className="hidden gap-4 text-[11.5px] font-semibold text-slate-500 sm:flex">
+            <span className="inline-flex items-center gap-1.5"><i className="inline-block h-[3px] w-[15px] rounded bg-brand-500" aria-hidden="true" />Admissions</span>
+          </span>
+          <ChevronDown size={18} aria-hidden="true" className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        </span>
+      </button>
+      {open && (
+        <div id={regionId} className="px-[18px] pb-[18px] pt-0.5">
+          <div className="relative">
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${W} ${H}`}
+              className="block h-auto w-full overflow-visible"
+              role="img"
+              aria-label={summary}
+              onPointerMove={move}
+              onPointerLeave={() => setHover(null)}
+            >
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="rgb(var(--brand-500))" stopOpacity="0.3" />
+                  <stop offset="1" stopColor="rgb(var(--brand-500))" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {ticks.map((v) => (
+                <g key={v}>
+                  <line x1={pad.l} y1={Y(v)} x2={W - pad.r} y2={Y(v)} className="stroke-slate-100" strokeWidth="1" />
+                  <text x={pad.l - 8} y={Y(v) + 3} textAnchor="end" className="fill-slate-400" fontSize="8.5" fontWeight="600">{v}</text>
+                </g>
+              ))}
+              <path d={area} fill={`url(#${gradId})`} />
+              <path d={line} fill="none" stroke="rgb(var(--brand-600))" strokeWidth="1.25" strokeLinejoin="round" strokeLinecap="round" />
+              {C.map((p) => (
+                <circle key={p.i} cx={p.cx} cy={p.cy} r="3.4" fill="#ffffff" stroke="rgb(var(--brand-600))" strokeWidth="2.2" />
+              ))}
+              {hover && (
+                <>
+                  <line x1={hover.cx} y1={pad.t} x2={hover.cx} y2={pad.t + ph} className="stroke-slate-300" strokeWidth="1.5" />
+                  <circle cx={hover.cx} cy={hover.cy} r="5" fill="rgb(var(--brand-600))" stroke="#ffffff" strokeWidth="2" />
+                </>
+              )}
+              {monthly.map((m, i) => (
+                <text key={i} x={X(i)} y={H - 8} textAnchor="middle" className="fill-slate-400" fontSize="8.5" fontWeight="600">{ADM_MONTH_ABBR[i]}</text>
+              ))}
+            </svg>
+            {hover && (
+              <div
+                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[128%] rounded-lg bg-slate-900 px-2.5 py-1.5 text-[12px] font-bold text-white shadow-md"
+                style={{ left: hover.px, top: hover.py }}
+              >
+                {hover.label} · {hover.value}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdmissionsOverall({ selectedYear = "all" }) {
   const [filter, setFilter] = useState("ALL");
@@ -5053,92 +5219,10 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           <p className="mt-1 text-[15px] text-slate-500">View all admissions across Domestic and International.</p>
         </div>
         <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm native:max-w-full native:overflow-x-auto">
-          {[['ALL','All'],['DOMESTIC','Domestic'],['INTERNATIONAL','International']].map(([value,label]) => (
-            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`h-9 rounded-lg px-4 text-[13px] font-semibold transition native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label}</button>
+          {[['ALL','All',data.all.length],['DOMESTIC','Domestic',data.domestic.length],['INTERNATIONAL','International',data.international.length]].map(([value,label,count]) => (
+            <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)} className={`h-9 rounded-lg px-4 text-[13px] font-semibold transition native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${filter === value ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-700'}`}>{label} <span className={`tabular-nums ${filter === value ? 'text-white/80' : 'text-slate-400'}`}>({count})</span></button>
           ))}
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
-        {showSkeleton ? (
-          [0, 1, 2].map((index) => (
-            <div
-              key={index}
-              aria-hidden="true"
-              className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] native:p-2.5"
-            >
-              <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-lg bg-slate-200" />
-              <div className="min-w-0 flex-1 space-y-2">
-                <div className="h-2.5 w-20 animate-pulse rounded bg-slate-200" />
-                <div className="h-5 w-10 animate-pulse rounded bg-slate-100" />
-              </div>
-            </div>
-          ))
-        ) : [
-          {
-            label: "Overall",
-            value: data.all.length,
-            detail: "Across Domestic & International",
-            filter: "ALL",
-            icon: GraduationCap,
-          },
-          {
-            label: "Domestic",
-            value: data.domestic.length,
-            detail: "All Domestic admissions",
-            filter: "DOMESTIC",
-            icon: Building2,
-          },
-          {
-            label: "International",
-            value: data.international.length,
-            detail: "All International admissions",
-            filter: "INTERNATIONAL",
-            icon: Globe2,
-          },
-        ].map((item) => {
-          const active = filter === item.filter;
-          const isIntl = item.filter === "INTERNATIONAL";
-          const Icon = item.icon;
-          return (
-            <button
-              type="button"
-              key={item.label}
-              title={item.detail}
-              aria-pressed={active}
-              onClick={() => {
-                setFilter(item.filter);
-                window.setTimeout(() => document.getElementById("admissions-records")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
-              }}
-              className={`flex items-center gap-3 rounded-xl border bg-white p-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:-translate-y-0.5 hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 native:focus-visible:ring-indigo-500 ${
-                active
-                  ? isIntl
-                    ? "border-cyan-500 bg-cyan-50/50"
-                    : "border-brand-500 bg-brand-50/60"
-                  : "border-slate-200 hover:border-brand-200"
-              }`}
-            >
-              <span
-                className={`grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg border ${
-                  isIntl
-                    ? "border-cyan-100 bg-cyan-50 text-cyan-600"
-                    : "border-brand-100 bg-brand-50 text-brand-600"
-                }`}
-              >
-                <Icon size={16} aria-hidden="true" focusable="false" />
-              </span>
-
-              <span className="min-w-0">
-                <span className="block truncate text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-500 native:text-[10px] native:leading-[1.15]">
-                  {item.label}
-                </span>
-                <span className="mt-1 block text-[22px] font-bold leading-none tracking-[-0.03em] text-slate-950 [font-variant-numeric:tabular-nums] native:text-[18px]">
-                  {item.value}
-                </span>
-              </span>
-            </button>
-          );
-        })}
       </div>
 
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div> : null}
@@ -5162,13 +5246,13 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto] native:relative native:flex native:flex-nowrap native:items-start native:gap-2 native:max-w-full native:overflow-x-auto">
           <label className="relative min-w-0 native:w-[210px] native:shrink-0">
             <span className="sr-only">Search by student name</span>
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="search"
               value={studentSearch}
               onChange={(event) => setStudentSearch(event.target.value)}
               placeholder="Search student name"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             />
           </label>
           <label className="min-w-0 native:w-[140px] native:shrink-0">
@@ -5222,7 +5306,13 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         ) : loading ? (
           <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500"><Loader2 size={16} className="animate-spin" />Loading admissions...</div>
         ) : filteredRows.length === 0 ? (
-          <div className="py-16 text-center text-sm text-slate-500">No admissions found.</div>
+          <div className="px-5 py-16 text-center">
+            <GraduationCap size={26} className="mx-auto text-slate-300" aria-hidden="true" />
+            <div className="mt-3 text-[14px] font-bold text-slate-800">No admissions yet</div>
+            <div className="mx-auto mt-1 max-w-sm text-[13px] text-slate-500">
+              Admissions appear here once a lead is marked “Admission Done” for this period. Try the All tab or a different year.
+            </div>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
@@ -5246,6 +5336,12 @@ function AdmissionsOverall({ selectedYear = "all" }) {
           </div>
         )}
       </div>
+
+      {showSkeleton ? (
+        <div aria-hidden="true" className="h-[240px] animate-pulse rounded-2xl border border-slate-200 bg-slate-50" />
+      ) : (
+        <AdmissionsTrendChart rows={filteredRows} />
+      )}
     </div>
   );
 }

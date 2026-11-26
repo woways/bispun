@@ -1243,7 +1243,7 @@ router.delete("/messages/:messageId", async (req, res) => {
         await Promise.allSettled(
           message.attachments
             .filter((attachment) => attachment.publicId)
-            .map((attachment) => deleteChatFile({ publicId: attachment.publicId, resourceType: attachment.resourceType }))
+            .map((attachment) => deleteChatFile({ publicId: attachment.publicId, resourceType: attachment.resourceType, companyId: req.clientUser.companyId }))
         );
         await prisma.$transaction([
           prisma.chatReaction.deleteMany({ where: { messageId } }),

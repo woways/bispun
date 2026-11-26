@@ -117,6 +117,7 @@ router.get("/plans", async (_req, res) => {
           yearlyPrice: p.yearlyPrice !== null ? Number(p.yearlyPrice) : null,
           offerPrice: p.offerPrice !== null && p.offerPrice !== undefined ? Number(p.offerPrice) : null,
           offerEndsAt: pricing.offerActive ? p.offerEndsAt : null,
+          storageLimitMb: p.storageLimitMb ?? null,
           breakdown: pricing,
         };
       }),

@@ -233,6 +233,8 @@ const INDIVIDUAL_COLUMN_OPTIONS = [
   { key: "assignedTo", label: "Assigned To" },
   { key: "temperature", label: "Lead Type" },
   { key: "status", label: "Status" },
+  { key: "admissionCollege", label: "Joined College" },
+  { key: "admissionStream", label: "Joined Stream" },
   { key: "dataset", label: "Dataset" },
   { key: "created", label: "Created" },
 ];
@@ -246,6 +248,8 @@ const DEFAULT_INDIVIDUAL_COLUMNS = {
   assignedTo: true,
   temperature: true,
   status: true,
+  admissionCollege: true,
+  admissionStream: true,
   dataset: true,
   created: false,
 };
@@ -261,6 +265,8 @@ const DEFAULT_INDIVIDUAL_COLUMN_ORDER = [
   "assignedTo",
   "temperature",
   "status",
+  "admissionCollege",
+  "admissionStream",
   "intelligence",
   "dataset",
   "created",
@@ -277,6 +283,8 @@ const INDIVIDUAL_COLUMN_LABELS = {
   assignedTo: "Assigned To",
   temperature: "Lead Type",
   status: "Status",
+  admissionCollege: "Joined College",
+  admissionStream: "Joined Stream",
   intelligence: "Lead Intelligence",
   dataset: "Dataset",
   created: "Created",
@@ -3250,6 +3258,9 @@ export default function LeadStore({
   const canReorderColumns = ["CLIENT_ADMIN", "MANAGER"].includes(
     String(currentUser?.role || "").toUpperCase()
   );
+  const canAssignLeads = ["CLIENT_ADMIN", "MANAGER"].includes(
+    String(currentUser?.role || "").toUpperCase()
+  );
 
   const [individualColumnOrder, setIndividualColumnOrder] = useState(
     DEFAULT_INDIVIDUAL_COLUMN_ORDER
@@ -3364,6 +3375,7 @@ export default function LeadStore({
   ] = useState(false);
 
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
+  const [assigningLeadId, setAssigningLeadId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
   const [leadStatusOptions, setLeadStatusOptions] = useState(FIXED_LEAD_STATUSES);
   const [admissionLead, setAdmissionLead] = useState(null);
@@ -4656,6 +4668,54 @@ export default function LeadStore({
     }
   }
 
+  // Inline "Assign to" from a KPI drill-down row. Reuses the bulk-assign API
+  // with a single id; keeps the <select> enabled (aria-busy) so a focused
+  // control is never removed from the tab order mid-request, and guards against
+  // re-entry while a request is in flight.
+  async function assignLead(leadId, assignedToUserId) {
+    if (!assignedToUserId || assigningLeadId) return;
+
+    const assignee = assignees.find((user) => user.id === assignedToUserId);
+    if (!assignee) {
+      setError("Selected team member is invalid.");
+      return;
+    }
+
+    setAssigningLeadId(leadId);
+    setError("");
+
+    try {
+      const data = await apiRequest(
+        "/api/client/lead-store/manual/bulk-assign",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            leadIds: [leadId],
+            assignedToUserId,
+          }),
+        }
+      );
+
+      setIndividualLeads((current) =>
+        current.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                assignedToUserId,
+                assignedToName: assignee.name,
+              }
+            : lead
+        )
+      );
+
+      setSuccessMessage(data?.message || `Lead assigned to ${assignee.name}.`);
+    } catch (error) {
+      setError(error?.data?.message || "Unable to assign lead");
+    } finally {
+      setAssigningLeadId("");
+    }
+  }
+
   // Inline save of the "Interested College" cell (saves on blur/Enter).
   async function updateLeadPreferredColleges(leadId, value) {
     const trimmed = String(value || "").trim();
@@ -5128,6 +5188,34 @@ export default function LeadStore({
       );
     }
 
+    if (columnKey === "admissionCollege") {
+      return (
+        <td key={columnKey} className={`min-w-[150px] max-w-[200px] px-3 ${individualCellPadding} text-[13px] text-slate-600`}>
+          {lead.admissionCollege ? (
+            <span className="block max-w-[190px] truncate" title={lead.admissionCollege}>
+              {lead.admissionCollege}
+            </span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </td>
+      );
+    }
+
+    if (columnKey === "admissionStream") {
+      return (
+        <td key={columnKey} className={`min-w-[130px] max-w-[180px] px-3 ${individualCellPadding} text-[13px] text-slate-600`}>
+          {lead.admissionStream ? (
+            <span className="block max-w-[170px] truncate" title={lead.admissionStream}>
+              {lead.admissionStream}
+            </span>
+          ) : (
+            <span className="text-slate-400">—</span>
+          )}
+        </td>
+      );
+    }
+
     if (columnKey === "intelligence") {
       return (
         <td key={columnKey} className={`min-w-[135px] px-3 ${individualCellPadding} whitespace-nowrap`}>
@@ -5407,7 +5495,33 @@ export default function LeadStore({
             <td className="px-4 py-3 text-slate-600">{lead.phone || "—"}</td>
             <td className="px-4 py-3 text-slate-600">{lead.email || "—"}</td>
             <td className="px-4 py-3 text-slate-600">
-              {lead.assignedToName || "Unassigned"}
+              {canAssignLeads ? (
+                <select
+                  aria-label={`Assign owner for ${lead.name || "lead"}`}
+                  aria-busy={assigningLeadId === lead.id}
+                  value={lead.assignedToUserId || ""}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value) assignLead(lead.id, value);
+                  }}
+                  className="h-9 max-w-[180px] rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                >
+                  <option value="">Unassigned</option>
+                  {lead.assignedToUserId &&
+                  !assignees.some((u) => u.id === lead.assignedToUserId) ? (
+                    <option value={lead.assignedToUserId}>
+                      {lead.assignedToName || "Current owner"}
+                    </option>
+                  ) : null}
+                  {assignees.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                lead.assignedToName || "Unassigned"
+              )}
             </td>
             <td className="px-4 py-3">
               <Badge tone={stageTone(lead.stage)}>{lead.stage || "—"}</Badge>
@@ -6373,7 +6487,12 @@ export default function LeadStore({
       </div>
 
       {successMessage && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[15px]">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-[15px]"
+        >
           <CheckCircle2
             size={15}
           />
@@ -6404,9 +6523,14 @@ export default function LeadStore({
       )}
 
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[15px]">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-center gap-2 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[15px]"
+        >
           <AlertCircle
             size={15}
+            aria-hidden="true"
           />
           {error}
         </div>
@@ -6500,8 +6624,8 @@ export default function LeadStore({
           Loading leads...
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-          <div className="relative overflow-x-auto">
+        <div className={`flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${totalPages > 1 ? "min-h-[calc(100vh-22rem)]" : ""}`}>
+          <div className="relative flex-1 overflow-auto">
             <style>{'table[data-wrap="true"] .truncate{white-space:normal;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;}'}</style>
             {columnMenu &&
               createPortal(
@@ -6822,6 +6946,7 @@ export default function LeadStore({
             </table>
           </div>
 
+          {totalPages > 1 && (
           <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div
               className="text-[12px] text-slate-500"
@@ -6955,6 +7080,7 @@ export default function LeadStore({
               </nav>
             </div>
           </div>
+          )}
 
           {sub !== "individual" && currentTypeDatasets.length > 0 && (
             <details className="border-t border-slate-200">

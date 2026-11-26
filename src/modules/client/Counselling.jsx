@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 
 import {
+  Table,
   Badge,
   statusTone,
 } from "../../components/ui";
@@ -637,7 +638,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
             onChange={(event) => setSearch(event.target.value)}
             aria-label="Search sessions"
             placeholder="Search student, course, counsellor or mode..."
-            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+            className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[14px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
           />
         </div>
 
@@ -680,86 +681,110 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
             </div>
           </div>
         ) : (
-          visibleSessions.map((session) => (
-            <div
-              key={session.id}
-              className="bg-white border border-slate-200 rounded-xl shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden"
-            >
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="text-[15px] font-bold text-slate-950">
-                        {session.student}
-                      </div>
-                      {session.leadDisplayId ? (
-                        <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
-                          {session.leadDisplayId}
-                        </span>
-                      ) : null}
-                      <Badge tone="slate">{session.course}</Badge>
-                      <Badge tone={statusTone(session.status)}>{session.status}</Badge>
-                      {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-x-5 gap-y-3.5 mt-4 native:grid-cols-2">
-                      <Info label="When" value={formatDateTime(session.scheduledAt)} />
-                      <Info label="Counsellor" value={session.counsellor} />
-                      <Info label="Mode" value={prettyMode(session.mode)} />
-                      <Info label="Came With" value={session.accompaniedBy} />
-                    </div>
-
-                    {session.meetingLink ? (
-                      <div className="mt-5 pt-4 border-t border-slate-100 flex items-center gap-2 flex-wrap">
-                        <div className="h-8 max-w-full inline-flex items-center gap-2 text-[13px] font-mono bg-indigo-50 border border-indigo-100 text-indigo-700 px-2.5 rounded-lg">
-                          <Video size={12} />
-                          <span className="truncate max-w-[min(360px,65vw)]">{session.meetingLink}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => copyLink(session)}
-                          className="h-8 px-2.5 text-[13px] font-semibold text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg inline-flex items-center gap-1.5"
-                        >
-                          {copiedId === session.id ? (
-                            <CheckCircle2 size={12} className="text-emerald-600" />
-                          ) : (
-                            <Copy size={12} />
-                          )}
-                          {copiedId === session.id ? "Copied" : "Copy"}
-                        </button>
-                        <a
-                          href={session.meetingLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="h-8 px-2.5 text-[13px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg inline-flex items-center gap-1.5"
-                        >
-                          <ExternalLink size={12} />
-                          Join
-                        </a>
-                      </div>
-                    ) : null}
-
-                    {(session.notes || session.remarks) !== "—" ? (
-                      <div className="mt-4 text-[13px] bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5">
-                        <span className="font-semibold text-slate-700">Notes:</span>{" "}
-                        <span className="text-slate-600">
-                          {session.notes || session.remarks}
-                        </span>
-                      </div>
-                    ) : null}
-
-                    {session.followUpAt ? (
-                      <div className="mt-3 text-[13px] font-medium text-slate-500 inline-flex items-center gap-1.5">
-                        <Clock size={12} />
-                        Follow-up:
-                        <span className="text-slate-700">
-                          {formatDateTime(session.followUpAt)}
-                        </span>
-                      </div>
-                    ) : null}
+          <div className="w-full overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+          <Table
+            caption="Counselling sessions — student, course, counsellor, mode, status, follow-up, notes and meeting link"
+            columns={[
+              "When",
+              "Lead ID",
+              "Student",
+              "Course",
+              "Counsellor",
+              "Mode",
+              "Came With",
+              "Status",
+              "Follow-up",
+              "Notes",
+              "Meeting",
+              "Actions",
+            ]}
+            rows={visibleSessions.map((session) => (
+              <tr key={session.id} className="hover:bg-slate-50/80 transition-colors">
+                <td className="px-4 py-3 text-[13px] text-slate-500 whitespace-nowrap">
+                  {formatDateTime(session.scheduledAt)}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {session.leadDisplayId ? (
+                    <span className="rounded-md border border-indigo-100 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                      {session.leadDisplayId}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-[13px] font-semibold text-slate-900">
+                    {session.student}
                   </div>
-
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600 whitespace-nowrap">
+                  {session.course}
+                </td>
+                <td className="px-4 py-3 text-[13px] font-medium text-slate-700 whitespace-nowrap">
+                  {session.counsellor}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600 whitespace-nowrap">
+                  {prettyMode(session.mode)}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600 whitespace-nowrap">
+                  {session.accompaniedBy}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone={statusTone(session.status)}>{session.status}</Badge>
+                    {session.converted ? <Badge tone="emerald">Converted</Badge> : null}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600 whitespace-nowrap">
+                  {session.followUpAt ? (
+                    formatDateTime(session.followUpAt)
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-[13px] text-slate-600">
+                  {(session.notes || session.remarks) !== "—" ? (
+                    <span
+                      className="block max-w-[220px] truncate"
+                      title={session.notes || session.remarks}
+                    >
+                      {session.notes || session.remarks}
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {session.meetingLink ? (
+                    <div className="flex items-center gap-1.5">
+                      <a
+                        href={session.meetingLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="h-8 px-2.5 text-[13px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg inline-flex items-center gap-1.5"
+                      >
+                        <ExternalLink size={12} aria-hidden="true" />
+                        Join
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => copyLink(session)}
+                        aria-label={`Copy meeting link for ${session.student}`}
+                        className="w-8 h-8 text-slate-600 border border-slate-200 hover:bg-slate-50 rounded-lg inline-flex items-center justify-center"
+                      >
+                        {copiedId === session.id ? (
+                          <CheckCircle2 size={12} className="text-emerald-600" aria-hidden="true" />
+                        ) : (
+                          <Copy size={12} aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-end gap-1">
                     <button
                       type="button"
                       title="Call student"
@@ -794,10 +819,11 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                       )}
                     </button>
                   </div>
-                </div>
-              </div>
-            </div>
-          ))
+                </td>
+              </tr>
+            ))}
+          />
+          </div>
         )}
       </div>
 

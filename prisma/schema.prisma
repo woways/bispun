@@ -210,6 +210,11 @@ model Company {
   primaryColor String?
   subdomain    String? @unique
 
+  // Running total of stored bytes (S3 + local uploads). Maintained on
+  // upload/delete and reconcilable from S3 via scripts/backfillStorageUsage.js.
+  // Enforced against the company's plan storageLimitMb.
+  storageBytesUsed BigInt @default(0)
+
   status CompanyStatus @default(TRIAL)
 
   createdAt DateTime @default(now())
@@ -406,6 +411,10 @@ model Plan {
   offerEndsAt DateTime?
 
   active Boolean @default(true)
+
+  // Storage cap (in MB) for companies on this plan; null = unlimited. Editable
+  // in Super Admin → Plans. Enforced on uploads via Company.storageBytesUsed.
+  storageLimitMb Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -2851,7 +2851,7 @@ router.get(
 
       const leadIds = leads.map((lead) => lead.id);
 
-      const [communicationGroups, counsellingRows] = leadIds.length
+      const [communicationGroups, counsellingRows, admissionRows] = leadIds.length
         ? await Promise.all([
             prisma.leadCommunication.groupBy({
               by: ["leadId"],
@@ -2874,8 +2874,31 @@ router.get(
                 followUpAt: true,
               },
             }),
+            // Admission a lead has joined (if any) — surfaces the college and
+            // stream on the lead row once its admission is done.
+            prisma.admission.findMany({
+              where: {
+                companyId,
+                leadId: { in: leadIds },
+              },
+              select: {
+                leadId: true,
+                college: true,
+                universityName: true,
+                course: true,
+                branch: { select: { name: true } },
+                partner: {
+                  select: {
+                    name: true,
+                    stream: { select: { name: true } },
+                  },
+                },
+                admissionDate: true,
+              },
+              orderBy: { admissionDate: "desc" },
+            }),
           ])
-        : [[], []];
+        : [[], [], []];
 
       const communicationByLead = new Map(
         communicationGroups
@@ -2899,6 +2922,15 @@ router.get(
         counsellingByLead.get(session.leadId).push(session);
       }
 
+      // Latest admission per lead (rows already ordered newest-first).
+      const admissionByLead = new Map();
+      for (const admission of admissionRows) {
+        if (!admission.leadId) continue;
+        if (!admissionByLead.has(admission.leadId)) {
+          admissionByLead.set(admission.leadId, admission);
+        }
+      }
+
 
 
       return res.json({
@@ -2919,6 +2951,19 @@ router.get(
           email: lead.email,
 
           course: lead.course,
+
+          // College + stream the lead joined, once their admission is done.
+          admissionCollege:
+            admissionByLead.get(lead.id)?.college ||
+            admissionByLead.get(lead.id)?.universityName ||
+            admissionByLead.get(lead.id)?.partner?.name ||
+            null,
+          admissionStream:
+            admissionByLead.get(lead.id)?.partner?.stream?.name || null,
+          admissionBranch:
+            admissionByLead.get(lead.id)?.branch?.name ||
+            admissionByLead.get(lead.id)?.course ||
+            null,
 
           preferredColleges: lead.preferredColleges,
 
