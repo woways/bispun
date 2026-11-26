@@ -36,6 +36,7 @@ import { formatUiDateTime } from "../../lib/uiPreferences";
 import CallCenterModal from "../../components/lead/CallCenterModal";
 import DetailModal from "../../components/DetailModal";
 import A11yDialog from "../../components/A11yDialog";
+import SearchableSelect from "../../components/SearchableSelect";
 
 const OTHER_OPTION = "__OTHER__";
 
@@ -174,6 +175,20 @@ function Field({ label, required, full, children }) {
       {children}
     </label>
   );
+}
+
+// Separated Date + Time inputs keep the combined "YYYY-MM-DDTHH:mm"
+// datetime-local string in form state as the single source of truth, so submit
+// logic stays unchanged.
+function datePart(value) {
+  return value && value.includes("T") ? value.split("T")[0] : value || "";
+}
+function timePart(value) {
+  return value && value.includes("T") ? value.split("T")[1] : "";
+}
+function combineDateTime(date, time) {
+  if (!date) return "";
+  return `${date}T${time || "00:00"}`;
 }
 
 export default function Counselling({ selectedYear = "all", market = "DOMESTIC" }) {
@@ -908,7 +923,10 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                 </Field>
                 <Field label="Course / Interest">
                   <div className="space-y-2">
-                    <select
+                    <SearchableSelect
+                      ariaLabel="Course / Interest stream"
+                      loading={optionsLoading}
+                      placeholder={optionsLoading ? "Loading streams..." : "Select stream"}
                       value={
                         form.course === OTHER_OPTION
                           ? OTHER_OPTION
@@ -920,8 +938,7 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                               ? OTHER_OPTION
                               : ""
                       }
-                      onChange={(event) => {
-                        const value = event.target.value;
+                      onChange={(value) => {
                         setForm((current) => ({
                           ...current,
                           course: value,
@@ -929,18 +946,14 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                             value === OTHER_OPTION ? current.courseOther : "",
                         }));
                       }}
-                      className="counselling-select w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
-                    >
-                      <option value="">
-                        {optionsLoading ? "Loading streams..." : "Select stream"}
-                      </option>
-                      {streamOptions.map((stream) => (
-                        <option key={stream.id} value={stream.name}>
-                          {stream.name}
-                        </option>
-                      ))}
-                      <option value={OTHER_OPTION}>Other</option>
-                    </select>
+                      options={[
+                        ...streamOptions.map((stream) => ({
+                          value: stream.name,
+                          label: stream.name,
+                        })),
+                        { value: OTHER_OPTION, label: "Other" },
+                      ]}
+                    />
 
                     {(form.course === OTHER_OPTION ||
                       (form.course &&
@@ -1009,14 +1022,36 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   </select>
                 </Field>
                 <Field label="Date & Time" required>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={form.scheduledAt}
-                    onChange={(event) => updateForm("scheduledAt", event.target.value)}
-                    onClick={(event) => event.currentTarget.showPicker?.()}
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      required
+                      aria-label="Scheduled date"
+                      value={datePart(form.scheduledAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "scheduledAt",
+                          combineDateTime(event.target.value, timePart(form.scheduledAt))
+                        )
+                      }
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
+                    />
+                    <input
+                      type="time"
+                      required
+                      aria-label="Scheduled time"
+                      value={timePart(form.scheduledAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "scheduledAt",
+                          combineDateTime(datePart(form.scheduledAt), event.target.value)
+                        )
+                      }
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
+                    />
+                  </div>
                 </Field>
                 <Field label="Status">
                   <select
@@ -1095,13 +1130,34 @@ export default function Counselling({ selectedYear = "all", market = "DOMESTIC" 
                   />
                 </Field>
                 <Field label="Follow-up Date & Time">
-                  <input
-                    type="datetime-local"
-                    value={form.followUpAt}
-                    onChange={(event) => updateForm("followUpAt", event.target.value)}
-                    onClick={(event) => event.currentTarget.showPicker?.()}
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
-                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      aria-label="Follow-up date"
+                      value={datePart(form.followUpAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "followUpAt",
+                          combineDateTime(event.target.value, timePart(form.followUpAt))
+                        )
+                      }
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
+                    />
+                    <input
+                      type="time"
+                      aria-label="Follow-up time"
+                      value={timePart(form.followUpAt)}
+                      onChange={(event) =>
+                        updateForm(
+                          "followUpAt",
+                          combineDateTime(datePart(form.followUpAt), event.target.value)
+                        )
+                      }
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] cursor-pointer"
+                    />
+                  </div>
                 </Field>
                 <Field label="Notes" full>
                   <textarea

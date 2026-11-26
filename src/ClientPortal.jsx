@@ -466,6 +466,24 @@ const PAGE_META = {
 
 const CLIENT_MODULE_KEYS = new Set(Object.keys(PAGE_META));
 
+// Compact "26 Nov, 5:17 pm" label for a notification's timestamp. Returns the
+// label plus the machine ISO value so the caller can wire a <time dateTime=…>.
+function formatNotifTime(value) {
+  if (!value) return { label: "", iso: "" };
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return { label: "", iso: "" };
+  return {
+    label: d.toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }),
+    iso: d.toISOString(),
+  };
+}
+
 function getClientModuleFromPath() {
   if (typeof window === "undefined") return "dashboard";
 
@@ -5229,26 +5247,41 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               No notifications yet.
             </div>
           ) : (
-            notifications.map((notification) => (
+            notifications.map((notification) => {
+              const t = formatNotifTime(notification.createdAt);
+              return (
               <button
                 key={notification.id}
                 type="button"
                 onClick={() => markNotificationRead(notification)}
                 className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${
-                  notification.read ? "bg-white" : "bg-indigo-50/30"
+                  notification.read ? "bg-white" : "bg-indigo-50/60"
                 }`}
               >
                 {!notification.read && (
                   <span className="sr-only">Unread. </span>
                 )}
-                <div className="text-xs font-bold text-slate-900">
-                  {notification.title}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    {!notification.read && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" aria-hidden="true" />
+                    )}
+                    <span className="truncate text-xs font-bold text-slate-900">
+                      {notification.title}
+                    </span>
+                  </div>
+                  {t.label && (
+                    <time dateTime={t.iso} className="shrink-0 text-[11px] font-semibold text-slate-500">
+                      {t.label}
+                    </time>
+                  )}
                 </div>
                 <div className="mt-1 text-[13px] leading-5 text-slate-500 break-words">
                   {notification.message}
                 </div>
               </button>
-            ))
+              );
+            })
           )}
         </div>
       </BottomSheet>
@@ -6034,26 +6067,42 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             No notifications yet.
                           </div>
                         ) : (
-                          notifications.map((notification) => (
+                          notifications.map((notification) => {
+                            const t = formatNotifTime(notification.createdAt);
+                            return (
                             <button
                               key={notification.id}
                               type="button"
                               onClick={() => markNotificationRead(notification)}
                               className={`w-full px-4 py-3 text-left border-b border-slate-100 last:border-0 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-inset ${
-                                notification.read
-                                  ? "bg-white"
-                                  : "bg-indigo-50/30"
+                                notification.read ? "bg-white" : "bg-indigo-50/60"
                               }`}
                             >
-                              <div className="text-xs font-bold text-slate-900">
-                                {notification.title}
+                              {!notification.read && (
+                                <span className="sr-only">Unread. </span>
+                              )}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-1.5">
+                                  {!notification.read && (
+                                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600" aria-hidden="true" />
+                                  )}
+                                  <span className="truncate text-xs font-bold text-slate-900">
+                                    {notification.title}
+                                  </span>
+                                </div>
+                                {t.label && (
+                                  <time dateTime={t.iso} className="shrink-0 text-[11px] font-semibold text-slate-500">
+                                    {t.label}
+                                  </time>
+                                )}
                               </div>
 
                               <div className="mt-1 text-[13px] leading-5 text-slate-500 break-words">
                                 {notification.message}
                               </div>
                             </button>
-                          ))
+                            );
+                          })
                         )}
                       </div>
                     </div>

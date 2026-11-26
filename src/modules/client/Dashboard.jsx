@@ -1383,7 +1383,7 @@ export default function Dashboard({
       key: "potential-revenue",
       label: "Potential Revenue",
       value: money(summary.potentialRevenue),
-      icon: CircleDollarSign,
+      icon: IndianRupee,
       detail: "Total admission revenue value",
       accent: "amber",
     },
@@ -1595,11 +1595,11 @@ export default function Dashboard({
                       <CheckCircle2 size={15} />
                     </span>
                     <div className="min-w-0">
-                      <h2 id="dash-tasks-title" className="text-[14px] font-bold text-slate-950">
+                      <h2 id="dash-tasks-title" className="text-[15px] font-bold text-slate-950">
                         Today&apos;s Tasks{" "}
                         <span className="font-semibold text-slate-500">({openDashTasks.length})</span>
                       </h2>
-                      <p className="text-[12px] text-slate-500">Pinned stay on top</p>
+                      <p className="text-[13px] text-slate-500">Pinned stay on top</p>
                     </div>
                     <button
                       ref={newTaskBtnRef}
@@ -1686,15 +1686,15 @@ export default function Dashboard({
                   className="flex h-[360px] flex-col overflow-hidden rounded-[14px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
                 >
                   <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3.5">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-white" aria-hidden="true">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white" aria-hidden="true">
                       <CalendarDays size={15} />
                     </span>
                     <div className="min-w-0">
-                      <h2 id="dash-meetings-title" className="text-[14px] font-bold text-slate-950">
+                      <h2 id="dash-meetings-title" className="text-[15px] font-bold text-slate-950">
                         Today&apos;s Meetings{" "}
                         <span className="font-semibold text-slate-500">({todayMeetings.length})</span>
                       </h2>
-                      <p className="text-[12px] text-slate-500">Calls, visits &amp; scheduled time</p>
+                      <p className="text-[13px] text-slate-500">Calls, visits &amp; scheduled time</p>
                     </div>
                     <button
                       type="button"
@@ -2622,18 +2622,10 @@ export default function Dashboard({
                       <th scope="col" className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
                         Revenue
                       </th>
-                      <th scope="col" className="w-[140px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 whitespace-nowrap">
-                        Revenue share
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.teamPerformance.map((member) => {
-                      const maxRev = Math.max(
-                        ...data.teamPerformance.map((m) => Number(m.revenue || 0)),
-                        1
-                      );
-                      const pct = Math.round((Number(member.revenue || 0) / maxRev) * 100);
                       const inits = String(member.name || "—")
                         .trim()
                         .split(/\s+/)
@@ -2667,17 +2659,6 @@ export default function Dashboard({
                           </td>
                           <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-slate-900">
                             {money(member.revenue)}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div
-                              className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100"
-                              aria-hidden="true"
-                            >
-                              <div
-                                className="h-full rounded-full bg-indigo-500"
-                                style={{ width: `${pct}%` }}
-                              />
-                            </div>
                           </td>
                         </tr>
                       );

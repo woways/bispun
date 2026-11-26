@@ -52,6 +52,7 @@ import {
   statusTone,
 } from "../../components/ui";
 import DetailModal from "../../components/DetailModal";
+import SearchableSelect from "../../components/SearchableSelect";
 
 import {
   apiRequest,
@@ -697,6 +698,12 @@ function StreamModal({
     event
   ) {
     event.preventDefault();
+
+    if (!name.trim()) {
+      setError("Please select or enter a stream name.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -758,11 +765,12 @@ function StreamModal({
           required
         >
           <div className="space-y-2">
-            <select
+            <SearchableSelect
+              ariaLabel="Stream Name"
               required
               value={streamPreset}
-              onChange={(event) => {
-                const value = event.target.value;
+              placeholder="Select stream"
+              onChange={(value) => {
                 setStreamPreset(value);
                 if (value === OTHER_STREAM_OPTION) {
                   if (BASIC_STREAM_OPTIONS.includes(name)) setName("");
@@ -770,14 +778,14 @@ function StreamModal({
                   setName(value);
                 }
               }}
-              className="sm-input"
-            >
-              <option value="">Select stream</option>
-              {BASIC_STREAM_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-              <option value={OTHER_STREAM_OPTION}>Other</option>
-            </select>
+              options={[
+                ...BASIC_STREAM_OPTIONS.map((option) => ({
+                  value: option,
+                  label: option,
+                })),
+                { value: OTHER_STREAM_OPTION, label: "Other" },
+              ]}
+            />
             {streamPreset === OTHER_STREAM_OPTION ? (
               <input
                 required
@@ -922,6 +930,11 @@ function CollegeModal({
   ) {
     event.preventDefault();
 
+    if (!streamId) {
+      setError("Please select a stream.");
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -980,40 +993,17 @@ function CollegeModal({
           label="Stream"
           required
         >
-          <select
+          <SearchableSelect
+            ariaLabel="Stream"
             required
             value={streamId}
-            onChange={(
-              event
-            ) =>
-              setStreamId(
-                event.target
-                  .value
-              )
-            }
-            className="sm-input"
-          >
-            <option value="">
-              Select stream
-            </option>
-
-            {streams.map(
-              (item) => (
-                <option
-                  key={
-                    item.id
-                  }
-                  value={
-                    item.id
-                  }
-                >
-                  {
-                    item.name
-                  }
-                </option>
-              )
-            )}
-          </select>
+            placeholder="Select stream"
+            onChange={(value) => setStreamId(value)}
+            options={streams.map((item) => ({
+              value: item.id,
+              label: item.name,
+            }))}
+          />
         </Field>
 
         <Field
@@ -2685,6 +2675,8 @@ function AdmissionsManager({
 
   const [search, setSearch] = useState("");
   const [allSearch, setAllSearch] = useState("");
+  const [streamSearch, setStreamSearch] = useState("");
+  const [collegeSearch, setCollegeSearch] = useState("");
   const [sortBy, setSortBy] = useState("date-desc");
   const [dateFilter, setDateFilter] = useState("all");
   const [customStartDate, setCustomStartDate] = useState("");
@@ -2706,6 +2698,8 @@ function AdmissionsManager({
     setShowAllAdmissions(false);
     setSearch("");
     setAllSearch("");
+    setStreamSearch("");
+    setCollegeSearch("");
     setDateFilter("all");
 
     // Do not carry success/error feedback from one admissions market to another.
@@ -3023,6 +3017,7 @@ function AdmissionsManager({
   }, [selectedYear, activeMarket]);
 
   useEffect(() => {
+    setCollegeSearch("");
     if (selectedStream?.id) {
       loadPartners(selectedStream.id);
     }
@@ -4083,13 +4078,30 @@ function AdmissionsManager({
 
         <PageMessage />
 
-        <div>
-          <h2 className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
-            Stream-wise Breakdown
-          </h2>
-          <p className="mt-0.5 text-[13px] text-slate-500">
-            Open a stream to view its colleges, branches and admissions.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
+              Stream-wise Breakdown
+            </h2>
+            <p className="mt-0.5 text-[13px] text-slate-500">
+              Open a stream to view its colleges, branches and admissions.
+            </p>
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              value={streamSearch}
+              onChange={(event) => setStreamSearch(event.target.value)}
+              aria-label="Search streams"
+              placeholder="Search streams…"
+              className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-8 pr-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
         </div>
 
         {loading ? (
@@ -4110,7 +4122,15 @@ function AdmissionsManager({
               "Description",
               "Actions",
             ]}
-            rows={streams.map((stream) => {
+            rows={streams
+              .filter(
+                (s) =>
+                  !streamSearch.trim() ||
+                  String(s.name || "")
+                    .toLowerCase()
+                    .includes(streamSearch.trim().toLowerCase())
+              )
+              .map((stream) => {
               const Icon = streamIcon(stream.name);
               const acc = accentForColor(
                 stream.color || recommendedStreamColor(stream.name)
@@ -4227,7 +4247,22 @@ function AdmissionsManager({
           ]}
         />
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-end">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:w-72">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              aria-hidden="true"
+            />
+            <input
+              type="text"
+              value={collegeSearch}
+              onChange={(event) => setCollegeSearch(event.target.value)}
+              aria-label="Search colleges"
+              placeholder="Search colleges…"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
           <button
             type="button"
             onClick={() =>
@@ -4286,7 +4321,15 @@ function AdmissionsManager({
               "Description",
               "Actions",
             ]}
-            rows={partners.map((partner) => (
+            rows={partners
+              .filter(
+                (partner) =>
+                  !collegeSearch.trim() ||
+                  String(partner.name || "")
+                    .toLowerCase()
+                    .includes(collegeSearch.trim().toLowerCase())
+              )
+              .map((partner) => (
               <tr key={partner.id} className="hover:bg-slate-50/70">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
