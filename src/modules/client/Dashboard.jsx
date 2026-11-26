@@ -1595,7 +1595,7 @@ export default function Dashboard({
                       <CheckCircle2 size={15} />
                     </span>
                     <div className="min-w-0">
-                      <h2 id="dash-tasks-title" className="text-[15px] font-bold text-slate-950">
+                      <h2 id="dash-tasks-title" className="text-[14px] font-bold text-slate-950">
                         Today&apos;s Tasks{" "}
                         <span className="font-semibold text-slate-500">({openDashTasks.length})</span>
                       </h2>
@@ -1690,7 +1690,7 @@ export default function Dashboard({
                       <CalendarDays size={15} />
                     </span>
                     <div className="min-w-0">
-                      <h2 id="dash-meetings-title" className="text-[15px] font-bold text-slate-950">
+                      <h2 id="dash-meetings-title" className="text-[14px] font-bold text-slate-950">
                         Today&apos;s Meetings{" "}
                         <span className="font-semibold text-slate-500">({todayMeetings.length})</span>
                       </h2>

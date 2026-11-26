@@ -324,6 +324,89 @@ function SubdomainPill({ value }) {
   );
 }
 
+function formatBytes(bytes) {
+  const n = Number(bytes || 0);
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GB`;
+  if (n >= 1024 ** 2) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  if (n >= 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${n} B`;
+}
+
+// Self-contained storage-usage card (own fetch) for the Company settings tab.
+function StorageUsageCard() {
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    apiRequest("/api/client/store/storage")
+      .then((data) => {
+        if (alive) setStatus(data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!status) return null;
+
+  const pct = Math.min(100, Number(status.usedPercent || 0));
+  const near = pct >= 90;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-brand-50 text-brand-600">
+            <Layers size={17} aria-hidden="true" />
+          </span>
+          <div>
+            <h3 className="text-[15px] font-bold text-slate-900">Storage</h3>
+            <p className="mt-0.5 text-[12.5px] text-slate-500">
+              Images and documents stored for this workspace.
+            </p>
+          </div>
+        </div>
+        <span className="text-[13px] font-semibold text-slate-700">
+          {status.unlimited
+            ? `${formatBytes(status.usedBytes)} used`
+            : `${formatBytes(status.usedBytes)} of ${formatBytes(status.limitBytes)}`}
+        </span>
+      </div>
+
+      {status.unlimited ? (
+        <p className="mt-3 text-[12.5px] text-slate-500">
+          Your plan includes unlimited storage.
+        </p>
+      ) : (
+        <div className="mt-4">
+          <div
+            className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Storage used"
+          >
+            <div
+              className={`h-full rounded-full transition-all ${near ? "bg-rose-500" : "bg-brand-600"}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p
+            className={`mt-2 text-[12px] ${near ? "font-semibold text-rose-600" : "text-slate-500"}`}
+          >
+            {pct}% used
+            {near
+              ? " — nearing your plan limit. Delete files or upgrade to add more."
+              : ""}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlaceholderPanel({
   title,
   description,
@@ -3446,6 +3529,8 @@ export default function SettingsView({
                 </div>
               </div>
 
+              <StorageUsageCard />
+
               <AccountDeletionSection />
             </div>
           )}
@@ -3589,11 +3674,11 @@ export default function SettingsView({
                         <table className="w-full text-[15px]">
                           <thead className="border-b border-slate-200 bg-slate-50">
                             <tr>
-                              <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">Employee ID</th>
-                              <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">User</th>
-                              <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">Role</th>
-                              <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">Department</th>
-                              <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">Status</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Employee ID</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">User</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
+                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
                               <th className="px-4 py-3 text-right text-[13px] font-semibold text-slate-500">Actions</th>
                             </tr>
                           </thead>
@@ -4032,19 +4117,19 @@ export default function SettingsView({
                     <table className="w-full text-[15px]">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Order
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Source
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Key
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Active
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Forms
                           </th>
                           <th className="px-4 py-3 text-right text-[13px] font-semibold text-slate-500">
@@ -4254,19 +4339,19 @@ export default function SettingsView({
                     <table className="w-full text-[15px]">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Field
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Type
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Required
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Forms
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Active
                           </th>
                           <th className="px-4 py-3 text-right text-[13px] font-semibold text-slate-500">
@@ -4990,16 +5075,16 @@ export default function SettingsView({
                     <table className="w-full text-[15px]">
                       <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Date & Time
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             User
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Action
                           </th>
-                          <th className="px-4 py-3 text-left text-[13px] font-semibold text-slate-500">
+                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Activity
                           </th>
                         </tr>

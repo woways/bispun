@@ -453,7 +453,7 @@ function TicketDrilldownModal({
         <div className="min-h-0 flex-1 overflow-auto">
           {rows.length ? (
             <table className="w-full border-collapse text-left text-[13px]">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 <tr>
                   {columns.map((c) => (
                     <th

@@ -318,7 +318,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
         <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
           <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+              <tr className="border-b border-slate-100 text-[10px] uppercase tracking-[0.08em] text-slate-500">
                 <th className="px-3 py-2 text-left font-semibold">College</th>
                 <th className="px-3 py-2 text-right font-semibold">Total Adm.</th>
                 <th className="px-3 py-2 text-right font-semibold">In Bucket</th>
@@ -477,7 +477,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
       <div className="mt-4 overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
         <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr className="border-b border-slate-100 text-[11px] uppercase tracking-wide text-slate-400">
+            <tr className="border-b border-slate-100 text-[10px] uppercase tracking-[0.08em] text-slate-500">
               <th className="px-3 py-2 text-left font-semibold">Employee</th>
               <th className="px-3 py-2 text-right font-semibold">Admissions</th>
               <th className="px-3 py-2 text-center font-semibold">Slab</th>

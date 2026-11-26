@@ -3261,9 +3261,15 @@ router.patch(
 
             companyId,
 
-            source:
-
-              "LEAD_STORE",
+            // Match exactly the leads the Lead Store list shows: native
+            // Lead Store leads AND admissions-origin leads (qualified/admitted
+            // leads synced from Admissions). Previously this was restricted to
+            // source "LEAD_STORE" only, so selecting admissions-origin leads
+            // and hitting "Assign selected" found nothing and failed.
+            OR: [
+              { source: "LEAD_STORE" },
+              { notes: { contains: "Admissions origin:" } },
+            ],
 
             id: {
 
@@ -3325,10 +3331,9 @@ router.patch(
 
             companyId,
 
-            source:
-
-              "LEAD_STORE",
-
+            // eligibleIds are already vetted above (correct source + the
+            // caller's visibility scope), so assign all of them — don't
+            // re-exclude admissions-origin leads by source here.
             id: {
 
               in: eligibleIds,

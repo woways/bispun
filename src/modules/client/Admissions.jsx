@@ -5214,9 +5214,9 @@ function AdmissionsOverall({ selectedYear = "all" }) {
     <div className="space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Admissions</div>
-          <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">Overall Admissions</h1>
-          <p className="mt-1 text-[15px] text-slate-500">View all admissions across Domestic and International.</p>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Admissions</div>
+          <h1 className="mt-1 text-[20px] font-bold tracking-[-0.02em] text-slate-950">Overall Admissions</h1>
+          <p className="mt-0.5 text-[13px] text-slate-500">View all admissions across Domestic and International.</p>
         </div>
         <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm native:max-w-full native:overflow-x-auto">
           {[['ALL','All',data.all.length],['DOMESTIC','Domestic',data.domestic.length],['INTERNATIONAL','International',data.international.length]].map(([value,label,count]) => (
@@ -5228,11 +5228,11 @@ function AdmissionsOverall({ selectedYear = "all" }) {
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">{error}</div> : null}
 
       <div id="admissions-records" className="scroll-mt-24 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <div>
-            <h2 className="text-[16px] font-bold text-slate-950">All Admissions</h2>
-            <p className="mt-0.5 text-[12px] text-slate-500">{filteredRows.length} admission{filteredRows.length === 1 ? '' : 's'} shown</p>
-          </div>
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+          <h2 className="text-[13px] font-bold text-slate-900">
+            All Admissions
+            <span className="ml-2 text-[12px] font-semibold text-slate-400">{filteredRows.length} shown</span>
+          </h2>
           <button
             type="button"
             onClick={exportAdmissions}
@@ -5243,7 +5243,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             Export
           </button>
         </div>
-        <div className="grid grid-cols-1 items-start gap-2 border-b border-slate-100 bg-slate-50/70 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_130px_130px_130px_auto] native:relative native:flex native:flex-nowrap native:items-start native:gap-2 native:max-w-full native:overflow-x-auto">
+        <div className="grid grid-cols-1 items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_140px_140px_130px_130px_130px_auto] native:relative native:flex native:flex-nowrap native:items-center native:gap-2 native:max-w-full native:overflow-x-auto">
           <label className="relative min-w-0 native:w-[210px] native:shrink-0">
             <span className="sr-only">Search by student name</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -5256,35 +5256,33 @@ function AdmissionsOverall({ selectedYear = "all" }) {
             />
           </label>
           <label className="min-w-0 native:w-[140px] native:shrink-0">
-            <input type="date" aria-label="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} min="2000-01-01" max={endDate || new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
-            <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">From date</span>
+            <input type="date" aria-label="From date" title="From date" value={startDate} onChange={(event) => setStartDate(event.target.value)} min="2000-01-01" max={endDate || new Date().toISOString().slice(0, 10)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
           </label>
           <label className="min-w-0 native:w-[140px] native:shrink-0">
-            <input type="date" aria-label="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || "2000-01-01"} max={new Date().toISOString().slice(0, 10)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
-            <span className="mt-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">To date</span>
+            <input type="date" aria-label="To date" title="To date" value={endDate} onChange={(event) => setEndDate(event.target.value)} min={startDate || "2000-01-01"} max={new Date().toISOString().slice(0, 10)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
           </label>
           <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Stream</span>
-            <select aria-label="Stream" value={streamFilter} onChange={(event) => setStreamFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
+            <select aria-label="Stream" value={streamFilter} onChange={(event) => setStreamFilter(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All streams</option>
               {filterOptions.streams.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">College</span>
-            <select aria-label="College" value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
+            <select aria-label="College" value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All colleges</option>
               {filterOptions.colleges.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
           <label className="native:w-[150px] native:shrink-0">
             <span className="sr-only">Branch</span>
-            <select aria-label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
+            <select aria-label="Branch" value={branchFilter} onChange={(event) => setBranchFilter(event.target.value)} className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
               <option value="">All branches</option>
               {filterOptions.branches.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </label>
-          <button type="button" onClick={clearFilters} className="h-10 px-1 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900 native:shrink-0 native:self-center native:whitespace-nowrap">Clear</button>
+          <button type="button" onClick={clearFilters} className="h-9 px-2 text-[13px] font-semibold text-indigo-700 transition hover:text-indigo-900 native:shrink-0 native:self-center native:whitespace-nowrap">Clear</button>
         </div>
         {showSkeleton ? (
           <>
@@ -5316,7 +5314,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left">
-              <thead className="bg-slate-50 text-[13px] font-semibold uppercase tracking-[0.06em] text-slate-500">
+              <thead className="bg-slate-50 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                 <tr><th className="px-5 py-3">Lead ID</th><th className="px-5 py-3">Student</th><th className="px-5 py-3">Type</th><th className="px-5 py-3">Stream</th><th className="px-5 py-3">College</th><th className="px-5 py-3">Branch</th><th className="px-5 py-3">Admission Date</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

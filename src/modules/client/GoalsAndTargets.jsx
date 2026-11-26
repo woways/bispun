@@ -722,18 +722,18 @@ export default function GoalsAndTargets({ currentUser, selectedYear }) {
           <table className="w-full border-collapse text-center text-[11px]">
             <thead>
               <tr className="text-slate-500">
-                <th className="bg-slate-50/80 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider" rowSpan={2}>
+                <th className="bg-slate-50/80 px-2 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em]" rowSpan={2}>
                   Month
                 </th>
-                <th className="bg-slate-50/80 px-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider" rowSpan={2}>
+                <th className="bg-slate-50/80 px-1.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em]" rowSpan={2}>
                   Mth<br />Tgt
                 </th>
                 {weekIdx.map((w) => (
-                  <th key={`w${w}`} className="border-l border-slate-100 bg-slate-50/80 px-1 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-600" colSpan={3}>
+                  <th key={`w${w}`} className="border-l border-slate-100 bg-slate-50/80 px-1 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600" colSpan={3}>
                     W{w}
                   </th>
                 ))}
-                <th className="border-l border-slate-100 bg-brand-50/70 px-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-600" rowSpan={2}>
+                <th className="border-l border-slate-100 bg-brand-50/70 px-1.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-600" rowSpan={2}>
                   Overall<br />Conv%
                 </th>
               </tr>

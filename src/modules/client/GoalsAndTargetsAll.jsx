@@ -329,14 +329,14 @@ export default function GoalsAndTargetsAll({ onBack }) {
             <table className="border-collapse text-center text-[13px]" style={{ minWidth: "max-content" }}>
               <thead>
                 <tr className="text-slate-500">
-                  <th className="sticky left-0 z-20 bg-slate-50 px-3 py-3 text-left text-[13px] font-semibold uppercase tracking-wide" style={{ width: NAME_W, minWidth: NAME_W }} rowSpan={2}>Employee</th>
-                  <th className="sticky z-20 bg-slate-50 px-3 py-3 text-left text-[13px] font-semibold uppercase tracking-wide" style={{ left: NAME_W, width: MONTH_W, minWidth: MONTH_W }} rowSpan={2}>Month</th>
-                  <th className="bg-slate-50 px-2 py-3 text-[13px] font-semibold uppercase tracking-wide" rowSpan={2}>Target</th>
+                  <th className="sticky left-0 z-20 bg-slate-50 px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ width: NAME_W, minWidth: NAME_W }} rowSpan={2}>Employee</th>
+                  <th className="sticky z-20 bg-slate-50 px-3 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ left: NAME_W, width: MONTH_W, minWidth: MONTH_W }} rowSpan={2}>Month</th>
+                  <th className="bg-slate-50 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.08em]" rowSpan={2}>Target</th>
                   {weekIdx.map((w) => (
-                    <th key={`w${w}`} className="border-l border-slate-200 bg-slate-50 px-2 py-2 text-[13px] font-semibold uppercase tracking-wide text-slate-600" colSpan={3}>Week {w}</th>
+                    <th key={`w${w}`} className="border-l border-slate-200 bg-slate-50 px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600" colSpan={3}>Week {w}</th>
                   ))}
-                  <th className="border-l border-slate-200 bg-slate-50 px-2 py-3 text-[13px] font-semibold uppercase tracking-wide" rowSpan={2}>Overall<br/>Achieved</th>
-                  <th className="border-l border-slate-200 bg-brand-50/70 px-2 py-3 text-[13px] font-semibold uppercase tracking-wide text-brand-600" rowSpan={2}>Overall<br/>%</th>
+                  <th className="border-l border-slate-200 bg-slate-50 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.08em]" rowSpan={2}>Overall<br/>Achieved</th>
+                  <th className="border-l border-slate-200 bg-brand-50/70 px-2 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-brand-600" rowSpan={2}>Overall<br/>%</th>
                 </tr>
                 <tr className="text-[13px] uppercase tracking-wide text-slate-400">
                   {weekIdx.map((w) => (

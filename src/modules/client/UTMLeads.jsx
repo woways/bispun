@@ -1799,7 +1799,7 @@ export default function UTMLeads({
     );
 
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-[15px] font-bold tracking-[-0.01em] text-slate-900">
             {title}
@@ -1809,7 +1809,7 @@ export default function UTMLeads({
           </span>
         </div>
 
-        <div className="mt-5 space-y-4">
+        <div className="mt-4 space-y-3">
           {visibleRows.map((row, index) => {
             const value = Number(row.leads || 0);
             const width =
@@ -2031,7 +2031,7 @@ export default function UTMLeads({
     })() : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <DetailModal
         open={!!detailData}
         title={detailData?.title}
@@ -2201,7 +2201,7 @@ export default function UTMLeads({
           tabIndex={0}
           className="space-y-4 focus-visible:outline-none"
         >
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-3 xl:grid-cols-3">
             <PerformanceCard
               title="Campaign Performance"
               rows={analytics.campaignPerformance || []}
@@ -2221,7 +2221,7 @@ export default function UTMLeads({
             />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             <MetricCard
               label="Top Campaign"
               value={summary.topCampaign || "—"}

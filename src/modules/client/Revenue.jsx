@@ -2754,28 +2754,28 @@ export default function Revenue({
                     </caption>
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Expense
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Category
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Vendor
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Amount
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Date
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Proof
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Status
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Actions
                         </th>
                       </tr>
@@ -3002,22 +3002,22 @@ export default function Revenue({
                   </caption>
                   <thead className="bg-slate-50/80">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Employee
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Title
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Amount
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Date
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Status
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Actions
                       </th>
                     </tr>

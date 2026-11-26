@@ -587,7 +587,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   <table className="w-full min-w-[600px]">
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th className="w-[36%] px-4 py-2 text-left text-[12px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[36%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Parameter
                         </th>
                         <th className="w-[32%] px-4 py-2 text-left text-[13px] font-bold text-slate-900">
@@ -1408,19 +1408,19 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               <table className="w-full text-[15px]">
                 <thead className="bg-slate-50/80">
                   <tr>
-                    <th className="px-5 py-3 text-left text-[13px] uppercase tracking-[0.08em] font-semibold text-slate-500">
+                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
                       Campaign
                     </th>
 
-                    <th className="px-5 py-3 text-left text-[13px] uppercase tracking-[0.08em] font-semibold text-slate-500">
+                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
                       Leads
                     </th>
 
-                    <th className="px-5 py-3 text-left text-[13px] uppercase tracking-[0.08em] font-semibold text-slate-500">
+                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
                       Admissions
                     </th>
 
-                    <th className="px-5 py-3 text-left text-[13px] uppercase tracking-[0.08em] font-semibold text-slate-500">
+                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
                       Conversion
                     </th>
                   </tr>

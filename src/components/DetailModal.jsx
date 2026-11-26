@@ -44,6 +44,7 @@ export default function DetailModal({
   countLabel,
   onClose,
   displayMode = "modal",
+  toolbar = null,
 }) {
   const panelRef = useRef(null);
   const restoreRef = useRef(null);
@@ -235,6 +236,12 @@ export default function DetailModal({
             <X size={18} aria-hidden="true" />
           </button>
         </div>
+
+        {toolbar ? (
+          <div className="flex-shrink-0 border-b border-slate-100 bg-slate-50/70 px-5 py-2.5">
+            {toolbar}
+          </div>
+        ) : null}
 
         <div
           ref={scrollBodyRef}

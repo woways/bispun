@@ -85,6 +85,7 @@ import {
   stageTone,
 } from "./components/ui";
 import DetailModal from "./components/DetailModal";
+import AssigneePicker from "./components/AssigneePicker";
 
 import {
   API_URL,
@@ -683,9 +684,28 @@ export default function ClientPortal({
     "current-profit": "Current Profit",
   };
 
+  // Lead-based KPIs whose detail drawer supports selecting rows and bulk-
+  // assigning them to a team member (reusing the Lead Store bulk-assign API).
+  const KPI_ASSIGNABLE_KEYS = new Set(["total-leads", "qualified-leads", "new-leads"]);
+  const [kpiSelectedIds, setKpiSelectedIds] = useState([]);
+  const [kpiAssignees, setKpiAssignees] = useState([]);
+  const [kpiAssigneeId, setKpiAssigneeId] = useState("");
+  const [kpiAssigning, setKpiAssigning] = useState(false);
+  const [kpiAssignMsg, setKpiAssignMsg] = useState("");
+
   async function openKpiModal(key, opts = {}) {
     const metric = String(key || "").trim();
     if (!metric) return;
+    // Fresh selection each time a KPI drawer opens; load the team list once for
+    // the assignable (lead) KPIs so the assign bar's searchable picker works.
+    setKpiSelectedIds([]);
+    setKpiAssigneeId("");
+    setKpiAssignMsg("");
+    if (KPI_ASSIGNABLE_KEYS.has(metric) && kpiAssignees.length === 0) {
+      apiRequest("/api/client/lead-store/meta/assignees")
+        .then((d) => setKpiAssignees(Array.isArray(d?.users) ? d.users : []))
+        .catch(() => {});
+    }
     const drillYear = Number(opts.year);
     const year =
       Number.isInteger(drillYear) && drillYear >= 2000 && drillYear <= 2100
@@ -725,6 +745,51 @@ export default function ClientPortal({
     }
   }
 
+  // Refetch the current KPI drawer's rows without disturbing selection/message
+  // (used right after a bulk-assign so the Owner column reflects the change).
+  async function reloadKpiItems() {
+    const metric = kpiModal?.key;
+    if (!metric) return;
+    try {
+      const result = await apiRequest(
+        `/api/client/analytics/dashboard/kpi/${encodeURIComponent(metric)}?year=${encodeURIComponent(selectedYear)}`
+      );
+      setKpiModal((m) =>
+        m && m.key === metric
+          ? { ...m, items: Array.isArray(result?.items) ? result.items : [] }
+          : m
+      );
+    } catch {
+      /* keep the existing list on a refresh failure */
+    }
+  }
+
+  async function assignKpiSelected() {
+    if (!kpiSelectedIds.length || !kpiAssigneeId || kpiAssigning) return;
+    setKpiAssigning(true);
+    setKpiAssignMsg("");
+    try {
+      const data = await apiRequest("/api/client/lead-store/manual/bulk-assign", {
+        method: "PATCH",
+        body: JSON.stringify({
+          leadIds: kpiSelectedIds,
+          assignedToUserId: kpiAssigneeId,
+        }),
+      });
+      const count = data?.assignedCount ?? kpiSelectedIds.length;
+      setKpiSelectedIds([]);
+      setKpiAssigneeId("");
+      setKpiAssignMsg(
+        data?.message || `${count} lead${count === 1 ? "" : "s"} assigned.`
+      );
+      await reloadKpiItems();
+    } catch (error) {
+      setKpiAssignMsg(error?.data?.message || "Unable to assign selected leads.");
+    } finally {
+      setKpiAssigning(false);
+    }
+  }
+
   function formatKpiDate(value) {
     if (!value) return "—";
     const parsed = new Date(value);
@@ -738,17 +803,53 @@ export default function ClientPortal({
   }
 
   const kpiModalIsRevenue = kpiModal ? KPI_REVENUE_KEYS.has(kpiModal.key) : false;
+  const kpiAssignable = !!kpiModal && KPI_ASSIGNABLE_KEYS.has(kpiModal.key);
+  const kpiItems = kpiModal?.items || [];
+  const kpiAllIds = kpiItems.map((it) => it.id);
+  const kpiAllSelected =
+    kpiAssignable && kpiAllIds.length > 0 && kpiAllIds.every((id) => kpiSelectedIds.includes(id));
+
+  const kpiSelectAllHeader = (
+    <input
+      type="checkbox"
+      aria-label="Select all leads"
+      checked={kpiAllSelected}
+      onChange={(e) => setKpiSelectedIds(e.target.checked ? kpiAllIds : [])}
+      className="h-4 w-4 cursor-pointer accent-indigo-600 align-middle"
+    />
+  );
+
+  const kpiBaseColumns = kpiModalIsRevenue
+    ? ["Lead ID", "Name", "Phone", "Email", "Owner", "Amount", "Source", "Date"]
+    : ["Lead ID", "Name", "Phone", "Email", "Owner", "Status", "Source", "Created"];
 
   const kpiModalColumns = !kpiModal
     ? []
-    : kpiModalIsRevenue
-      ? ["Lead ID", "Name", "Phone", "Email", "Owner", "Amount", "Source", "Date"]
-      : ["Lead ID", "Name", "Phone", "Email", "Owner", "Status", "Source", "Created"];
+    : kpiAssignable
+      ? [kpiSelectAllHeader, ...kpiBaseColumns]
+      : kpiBaseColumns;
 
   const kpiModalRows =
     kpiModal && !kpiModal.loading && !kpiModal.error
-      ? (kpiModal.items || []).map((item) => (
+      ? kpiItems.map((item) => (
           <tr key={item.id}>
+            {kpiAssignable ? (
+              <td className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${item.primary || "lead"}`}
+                  checked={kpiSelectedIds.includes(item.id)}
+                  onChange={(e) =>
+                    setKpiSelectedIds((prev) =>
+                      e.target.checked
+                        ? [...prev, item.id]
+                        : prev.filter((x) => x !== item.id)
+                    )
+                  }
+                  className="h-4 w-4 cursor-pointer accent-indigo-600"
+                />
+              </td>
+            ) : null}
             <td className="px-4 py-3 text-slate-500">{item.leadDisplayId || "—"}</td>
             <td className="px-4 py-3 font-semibold text-slate-800">
               {item.primary || "—"}
@@ -772,6 +873,59 @@ export default function ClientPortal({
           </tr>
         ))
       : [];
+
+  const kpiModalToolbar =
+    kpiAssignable && kpiItems.length > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className="text-[12px] font-semibold text-slate-600">
+          {kpiSelectedIds.length} selected
+        </span>
+        {kpiAllIds.length > 0 && kpiSelectedIds.length < kpiAllIds.length ? (
+          <button
+            type="button"
+            onClick={() => setKpiSelectedIds(kpiAllIds)}
+            className="text-[12px] font-semibold text-indigo-600 hover:text-indigo-800"
+          >
+            Select all {kpiAllIds.length}
+          </button>
+        ) : null}
+        {kpiSelectedIds.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setKpiSelectedIds([])}
+            className="text-[12px] font-semibold text-slate-500 hover:text-slate-700"
+          >
+            Clear
+          </button>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          <div className="w-52">
+            <AssigneePicker
+              assignees={kpiAssignees}
+              value={kpiAssigneeId}
+              onChange={setKpiAssigneeId}
+              placeholder="Assign to…"
+              ariaLabel="Assign selected leads to"
+              disabled={!kpiSelectedIds.length || kpiAssigning}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={assignKpiSelected}
+            disabled={!kpiSelectedIds.length || !kpiAssigneeId || kpiAssigning}
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {kpiAssigning ? <Loader2 size={14} className="animate-spin" aria-hidden="true" /> : null}
+            Assign selected
+          </button>
+        </div>
+        {kpiAssignMsg ? (
+          <span role="status" className="w-full text-[12px] font-semibold text-emerald-700">
+            {kpiAssignMsg}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
 
   const kpiModalSubtitle =
     kpiModal && kpiModalIsRevenue && kpiModal.displayValue
@@ -6784,7 +6938,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         caption={kpiModal?.label}
         loading={!!kpiModal?.loading}
         error={kpiModal?.error || ""}
-        onClose={() => setKpiModal(null)}
+        toolbar={kpiModalToolbar}
+        onClose={() => {
+          setKpiModal(null);
+          setKpiSelectedIds([]);
+          setKpiAssigneeId("");
+          setKpiAssignMsg("");
+        }}
       />
 
       {addYearOpen && (

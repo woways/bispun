@@ -1296,6 +1296,13 @@ export default function SignupPage() {
                                 {p.tagline && (
                                   <p className="mt-2 text-xs text-slate-500">{p.tagline}</p>
                                 )}
+                                <span className="mt-1.5 block text-[11px] font-semibold text-slate-600">
+                                  {p.storageLimitMb == null
+                                    ? "Unlimited storage"
+                                    : p.storageLimitMb >= 1024
+                                      ? `${(p.storageLimitMb / 1024).toFixed(p.storageLimitMb % 1024 === 0 ? 0 : 1)} GB storage`
+                                      : `${p.storageLimitMb} MB storage`}
+                                </span>
                                 <div className="mt-auto pt-3 text-[11px] text-slate-400">
                                   + {p.breakdown.gstRate}% GST
                                 </div>

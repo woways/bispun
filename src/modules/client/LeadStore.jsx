@@ -60,6 +60,7 @@ import {
   stageTone,
 } from "../../components/ui";
 import DetailModal from "../../components/DetailModal";
+import AssigneePicker from "../../components/AssigneePicker";
 
 import {
   apiRequest,
@@ -4456,7 +4457,7 @@ export default function LeadStore({
           return String(lead.assignedToName || "").toLowerCase();
         case "dataset":
           if (lead.datasetId)
-            return String(datasetNameById[lead.datasetId] || "").toLowerCase();
+            return String(lead.datasetName || datasetNameById[lead.datasetId] || "").toLowerCase();
           if (lead.campaign) return String(lead.campaign).toLowerCase();
           return lead.isManual ? "manual" : "~";
         default:
@@ -5243,7 +5244,7 @@ export default function LeadStore({
 
     if (columnKey === "dataset") {
       const datasetName = lead.datasetId
-        ? datasetNameById[lead.datasetId] || "Dataset"
+        ? lead.datasetName || datasetNameById[lead.datasetId] || "Dataset"
         : "";
       return (
         <td key={columnKey} className={`min-w-[150px] max-w-[200px] px-3 ${individualCellPadding}`}>
@@ -6572,30 +6573,15 @@ export default function LeadStore({
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={bulkAssigneeId}
-              onChange={(event) =>
-                setBulkAssigneeId(
-                  event.target.value
-                )
-              }
-              className="h-9 min-w-[210px] rounded-lg border border-indigo-200 bg-white px-3 text-[13px] font-semibold text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            >
-              <option value="">
-                Assign to team member...
-              </option>
-
-              {assignees.map(
-                (user) => (
-                  <option
-                    key={user.id}
-                    value={user.id}
-                  >
-                    {user.name}
-                  </option>
-                )
-              )}
-            </select>
+            <div className="min-w-[210px]">
+              <AssigneePicker
+                assignees={assignees}
+                value={bulkAssigneeId}
+                onChange={setBulkAssigneeId}
+                placeholder="Assign to team member…"
+                ariaLabel="Assign selected leads to"
+              />
+            </div>
 
             <button
               type="button"

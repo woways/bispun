@@ -2929,22 +2929,40 @@ export default function ChatPanel({
               </div>
             </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.055),_transparent_30%)] text-slate-500 lg:text-slate-400">
-              <svg viewBox="0 0 160 120" className="h-auto w-36" aria-hidden="true" focusable="false">
-                <rect x="72" y="18" width="72" height="46" rx="15" className="fill-brand-50" />
-                <rect x="72" y="18" width="72" height="46" rx="15" fill="none" className="stroke-brand-200" strokeWidth="2" />
-                <path d="M120 64 L120 78 L135 64 Z" className="fill-brand-50" />
-                <rect x="84" y="33" width="44" height="5" rx="2.5" className="fill-brand-300" />
-                <rect x="84" y="45" width="30" height="5" rx="2.5" className="fill-brand-200" />
-                <rect x="16" y="40" width="84" height="56" rx="18" className="fill-brand-100" />
-                <rect x="16" y="40" width="84" height="56" rx="18" fill="none" className="stroke-brand-300" strokeWidth="2" />
-                <path d="M36 96 L36 112 L54 96 Z" className="fill-brand-100" />
-                <path d="M36 96 L36 112 L54 96" fill="none" className="stroke-brand-300" strokeWidth="2" strokeLinejoin="round" />
-                <circle cx="44" cy="68" r="5" className="fill-brand-500" />
-                <circle cx="58" cy="68" r="5" className="fill-brand-500" />
-                <circle cx="72" cy="68" r="5" className="fill-brand-500" />
+            <div className="flex h-full flex-col items-center justify-center gap-5 bg-[radial-gradient(circle_at_center,_rgba(99,102,241,0.06),_transparent_32%)] px-6 text-center">
+              <svg viewBox="0 0 220 160" className="h-auto w-56" role="img" aria-label="No conversation selected yet">
+                <defs>
+                  <linearGradient id="cbChatGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="rgb(var(--brand-500))" />
+                    <stop offset="1" stopColor="rgb(var(--brand-600))" />
+                  </linearGradient>
+                  <filter id="cbChatShadow" x="-30%" y="-30%" width="160%" height="160%">
+                    <feDropShadow dx="0" dy="6" stdDeviation="7" floodColor="rgb(15 23 42)" floodOpacity="0.10" />
+                  </filter>
+                </defs>
+                <ellipse cx="110" cy="143" rx="72" ry="9" className="fill-slate-100" />
+                {/* Outgoing (brand) bubble */}
+                <g filter="url(#cbChatShadow)">
+                  <path d="M186 84 L186 104 L166 88 Z" fill="url(#cbChatGrad)" />
+                  <rect x="100" y="30" width="90" height="58" rx="18" fill="url(#cbChatGrad)" />
+                </g>
+                <rect x="114" y="48" width="58" height="7" rx="3.5" fill="#ffffff" opacity="0.92" />
+                <rect x="114" y="63" width="38" height="7" rx="3.5" fill="#ffffff" opacity="0.6" />
+                {/* Incoming (white) bubble with typing dots */}
+                <g filter="url(#cbChatShadow)">
+                  <path d="M50 110 L50 130 L30 114 Z" fill="#ffffff" />
+                  <rect x="30" y="54" width="92" height="58" rx="18" fill="#ffffff" />
+                </g>
+                <rect x="30" y="54" width="92" height="58" rx="18" fill="none" className="stroke-slate-200" strokeWidth="2" />
+                <circle cx="60" cy="83" r="5" className="fill-brand-400" />
+                <circle cx="76" cy="83" r="5" className="fill-brand-300" />
+                <circle cx="92" cy="83" r="5" className="fill-brand-200" />
+                <circle cx="109" cy="24" r="6.5" className="fill-brand-200" />
               </svg>
-              <div className="text-center"><div className="text-sm font-bold text-slate-600">Select a conversation</div><div className="mt-1 text-[13px]">Choose a chat from the left to start messaging.</div></div>
+              <div>
+                <div className="text-[15px] font-bold text-slate-700">Select a conversation</div>
+                <div className="mt-1 text-[13px] text-slate-400">Choose a chat from the left to start messaging.</div>
+              </div>
             </div>
           )}
         </div>
