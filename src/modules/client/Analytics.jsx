@@ -39,6 +39,7 @@ import {
   MoreVertical,
   Search,
   ChevronsUpDown,
+  Download,
 } from "lucide-react";
 
 import {
@@ -264,6 +265,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
   const menuRef = useRef(null);
   const menuTriggerRef = useRef(null);
   const refreshItemRef = useRef(null);
+  const firstMetricRef = useRef(null);
+  const selectAllRef = useRef(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -273,8 +276,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       }
     }
     document.addEventListener("mousedown", onDocPointer);
-    // Move focus into the menu when it opens.
-    refreshItemRef.current?.focus();
+    // Move focus into the popover when it opens (first drillable metric, else Refresh).
+    (firstMetricRef.current || refreshItemRef.current)?.focus();
     return () => document.removeEventListener("mousedown", onDocPointer);
   }, [menuOpen]);
 
@@ -290,6 +293,12 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
     key: "leads",
     dir: "desc",
   });
+
+  // Campaigns table row selection (by campaign name). Export acts on the
+  // selection, or on all shown rows when nothing is selected.
+  const [selectedCampaigns, setSelectedCampaigns] = useState(
+    () => new Set()
+  );
 
   function toggleCampaignSort(key) {
     setCampaignSort((current) =>
@@ -381,6 +390,49 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
     selectedYear && selectedYear !== "all" && Number.isFinite(Number(selectedYear))
       ? Number(selectedYear)
       : undefined;
+
+  // The headline KPIs now live inside the header "Key Metrics" popover (same
+  // values + drill-downs as the old body cards — nothing removed, just moved).
+  const metricTones = {
+    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    slate: "bg-slate-50 text-slate-600 border-slate-200",
+  };
+
+  const keyMetrics = [
+    {
+      label: "Total Leads",
+      value: Number(summary.totalLeads || 0).toLocaleString("en-IN"),
+      icon: Users,
+      toneClass: metricTones.indigo,
+      onClick: onDrill
+        ? () => onDrill("total-leads", { year: overviewDrillYear })
+        : null,
+    },
+    {
+      label: "Total Admissions",
+      value: Number(summary.totalAdmissions || 0).toLocaleString("en-IN"),
+      icon: UserCheck,
+      toneClass: metricTones.emerald,
+      onClick: onDrill
+        ? () => onDrill("admissions", { year: overviewDrillYear })
+        : null,
+    },
+    {
+      label: "Conversion Rate",
+      value: `${summary.conversionRate || 0}%`,
+      icon: Percent,
+      toneClass: metricTones.emerald,
+      onClick: null,
+    },
+    {
+      label: "Tracked Stages",
+      value: data.leadsByStage.length,
+      icon: Target,
+      toneClass: metricTones.slate,
+      onClick: null,
+    },
+  ];
 
   function percentChange(current, previous) {
     const currentValue = Number(current || 0);
@@ -479,6 +531,78 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
     { key: "conversion", label: "Conversion" },
     { key: "name", label: "Name" },
   ];
+
+  // Selection state over the currently shown rows.
+  const visibleCampaignKeys = sortedCampaigns.map((row) => row.campaign);
+  const selectedVisibleCount = visibleCampaignKeys.filter((key) =>
+    selectedCampaigns.has(key)
+  ).length;
+  const allVisibleSelected =
+    visibleCampaignKeys.length > 0 &&
+    selectedVisibleCount === visibleCampaignKeys.length;
+  const someVisibleSelected =
+    selectedVisibleCount > 0 && !allVisibleSelected;
+
+  // indeterminate is a DOM property, not an attribute — set it imperatively.
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected, selectedVisibleCount, visibleCampaignKeys.length]);
+
+  function toggleAllCampaigns() {
+    setSelectedCampaigns((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        visibleCampaignKeys.forEach((key) => next.delete(key));
+      } else {
+        visibleCampaignKeys.forEach((key) => next.add(key));
+      }
+      return next;
+    });
+  }
+
+  function toggleCampaign(key) {
+    setSelectedCampaigns((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  // Export the selection (or all shown rows when nothing is selected) to CSV.
+  function exportCampaignsCsv() {
+    const rows = selectedCampaigns.size
+      ? sortedCampaigns.filter((row) => selectedCampaigns.has(row.campaign))
+      : sortedCampaigns;
+
+    if (!rows.length) return;
+
+    const cell = (value) =>
+      `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+    const lines = [
+      ["Campaign", "Leads", "Admissions", "Conversion %"].join(","),
+      ...rows.map((row) =>
+        [row.campaign, row.leads, row.admissions, row.conversion]
+          .map(cell)
+          .join(",")
+      ),
+    ];
+
+    const blob = new Blob([lines.join("\r\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `campaigns-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
 
   // Accessible sort indicator for a column header: aria-sort value + a
   // non-color arrow glyph (hidden from AT since aria-sort already conveys it).
@@ -592,9 +716,9 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               onKeyDown={(event) => {
                 if (event.key === "Escape") setMenuOpen(false);
               }}
-              aria-haspopup="menu"
+              aria-haspopup="dialog"
               aria-expanded={menuOpen}
-              aria-label="More actions"
+              aria-label="Key metrics and more actions"
               className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.03)] focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <MoreVertical size={16} aria-hidden="true" />
@@ -602,26 +726,90 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             {menuOpen && (
               <div
-                role="menu"
-                aria-label="Analytics actions"
+                role="group"
+                aria-labelledby="analytics-keymetrics-label"
                 onKeyDown={(event) => {
                   if (event.key === "Escape") {
                     event.stopPropagation();
                     closeMenuAndRefocus();
                   }
                 }}
-                className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+                className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
               >
+                <p
+                  id="analytics-keymetrics-label"
+                  className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400"
+                >
+                  Key Metrics
+                </p>
+
+                {keyMetrics.map((metric, index) => {
+                  const Icon = metric.icon;
+                  const drillable = typeof metric.onClick === "function";
+
+                  const inner = (
+                    <>
+                      <span
+                        className={`h-8 w-8 shrink-0 rounded-lg border flex items-center justify-center ${metric.toneClass}`}
+                      >
+                        <Icon size={15} aria-hidden="true" />
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] font-semibold text-slate-500">
+                          {metric.label}
+                        </span>
+                        <span className="block text-[15px] font-bold tabular-nums text-slate-950">
+                          {metric.value}
+                        </span>
+                      </span>
+
+                      {drillable && (
+                        <span
+                          aria-hidden="true"
+                          className="shrink-0 text-slate-400"
+                        >
+                          &rarr;
+                        </span>
+                      )}
+                    </>
+                  );
+
+                  return drillable ? (
+                    <button
+                      key={metric.label}
+                      type="button"
+                      ref={index === 0 ? firstMetricRef : null}
+                      onClick={() => {
+                        metric.onClick();
+                        closeMenuAndRefocus();
+                      }}
+                      title={`View ${metric.label} records`}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-indigo-50/70 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      {inner}
+                    </button>
+                  ) : (
+                    <div
+                      key={metric.label}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2"
+                    >
+                      {inner}
+                    </div>
+                  );
+                })}
+
+                <hr className="my-1.5 border-slate-100" />
+
                 <button
                   type="button"
-                  role="menuitem"
                   ref={refreshItemRef}
                   disabled={loading}
                   onClick={() => {
                     loadAnalytics();
                     closeMenuAndRefocus();
                   }}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 >
                   <RefreshCw
                     size={14}
@@ -661,77 +849,6 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
         </div>
       ) : (
         <>
-
-          {analyticsTab === "overview" && (
-            <>
-          {/* KPI CARDS */}
-
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <AnalyticsMetric
-              label="Total Leads"
-              value={
-                summary
-                  .totalLeads ||
-                0
-              }
-              icon={
-                Users
-              }
-              detail={onDrill ? "View these leads" : "All leads recorded in the CRM"}
-              tone="indigo"
-              onClick={
-                onDrill
-                  ? () => onDrill("total-leads", { year: overviewDrillYear })
-                  : null
-              }
-            />
-
-            <AnalyticsMetric
-              label="Total Admissions"
-              value={
-                summary
-                  .totalAdmissions ||
-                0
-              }
-              icon={
-                UserCheck
-              }
-              detail={onDrill ? "View these admissions" : "Successful admissions recorded"}
-              tone="emerald"
-              onClick={
-                onDrill
-                  ? () => onDrill("admissions", { year: overviewDrillYear })
-                  : null
-              }
-            />
-
-            <AnalyticsMetric
-              label="Conversion Rate"
-              value={`${summary.conversionRate || 0}%`}
-              icon={
-                Percent
-              }
-              detail="Overall lead-to-admission conversion"
-              tone="emerald"
-            />
-
-            <AnalyticsMetric
-              label="Tracked Stages"
-              value={
-                data
-                  .leadsByStage
-                  .length
-              }
-              icon={
-                Target
-              }
-              detail={`${totalStageLeads} leads distributed across stages`}
-              tone="slate"
-            />
-          </div>
-
-            </>
-          )}
 
           {analyticsTab === "comparison" && (
             <>
@@ -1623,28 +1740,43 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
             <div className="px-5 py-4 border-b border-slate-200">
-              <div className="flex items-center gap-2">
-                <BarChart3
-                  size={15}
-                  className="text-indigo-600"
-                  aria-hidden="true"
-                />
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <BarChart3
+                      size={15}
+                      className="text-indigo-600"
+                      aria-hidden="true"
+                    />
 
-                <h3 className="text-[15px] font-bold text-slate-900">
-                  All Campaigns
-                </h3>
+                    <h3 className="text-[15px] font-bold text-slate-900">
+                      All Campaigns
+                    </h3>
 
-                <span
-                  aria-live="polite"
-                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                    <span
+                      aria-live="polite"
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                    >
+                      {sortedCampaigns.length} shown
+                    </span>
+                  </div>
+
+                  <p className="text-[13px] text-slate-500 mt-1">
+                    Ranked by lead and admission performance &middot; click a header to sort.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={exportCampaignsCsv}
+                  disabled={!sortedCampaigns.length}
+                  aria-label="Export campaigns to CSV"
+                  className="shrink-0 inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-indigo-600 text-white text-[13px] font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 >
-                  {sortedCampaigns.length} shown
-                </span>
+                  <Download size={14} aria-hidden="true" />
+                  Export
+                </button>
               </div>
-
-              <p className="text-[13px] text-slate-500 mt-1">
-                Ranked by lead and admission performance &middot; click a header to sort.
-              </p>
 
               {/* Controls: wide search (left) + Sort (far right) */}
               <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1697,6 +1829,18 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               <table className="w-full text-[13px]">
                 <thead className="border-b border-slate-200 bg-slate-50/95">
                   <tr>
+                    <th scope="col" className="px-3 py-2.5 w-10">
+                      <input
+                        type="checkbox"
+                        ref={selectAllRef}
+                        checked={allVisibleSelected}
+                        onChange={toggleAllCampaigns}
+                        disabled={!sortedCampaigns.length}
+                        aria-label="Select all campaigns"
+                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-400 disabled:opacity-50"
+                      />
+                    </th>
+
                     <th
                       scope="col"
                       className="px-3 py-2.5 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
@@ -1721,8 +1865,22 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                         key={
                           campaign.campaign
                         }
-                        className="group transition-colors hover:bg-slate-50/80"
+                        className={`group transition-colors ${
+                          selectedCampaigns.has(campaign.campaign)
+                            ? "bg-indigo-50/50"
+                            : "hover:bg-slate-50/80"
+                        }`}
                       >
+                        <td className="px-3 py-2.5">
+                          <input
+                            type="checkbox"
+                            checked={selectedCampaigns.has(campaign.campaign)}
+                            onChange={() => toggleCampaign(campaign.campaign)}
+                            aria-label={`Select ${campaign.campaign}`}
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-2 focus:ring-indigo-400"
+                          />
+                        </td>
+
                         <td className="px-3 py-2.5">
                           <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[12px] font-bold text-indigo-600 tabular-nums">
                             {index + 1}
@@ -1782,7 +1940,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   {!campaignRows.length && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-5 py-12 text-center text-[15px] text-slate-500"
                       >
                         No campaign data
@@ -1794,7 +1952,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   {campaignRows.length > 0 && !sortedCampaigns.length && (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-5 py-12 text-center text-[15px] text-slate-500"
                       >
                         No campaigns match &ldquo;{campaignQuery.trim()}&rdquo;.
@@ -1807,8 +1965,18 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             {sortedCampaigns.length > 0 && (
               <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/60 flex items-center justify-between gap-3 text-[13px]">
-                <span className="text-slate-500">
-                  {sortedCampaigns.length} of {campaignRows.length} campaigns
+                <span
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="text-slate-500"
+                >
+                  <span className="font-semibold text-slate-700 tabular-nums">
+                    {selectedCampaigns.size} selected
+                  </span>
+                  <span className="text-slate-400">
+                    {" "}
+                    &middot; {sortedCampaigns.length} of {campaignRows.length} campaigns
+                  </span>
                 </span>
                 <span className="font-semibold text-slate-600 tabular-nums">
                   &Sigma; {campaignTotals.leads} leads &middot; {campaignTotals.admissions} admissions
