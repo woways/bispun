@@ -308,12 +308,6 @@ export default function QuickAddPopover({
         style={style}
         className="fixed overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_30px_80px_-12px_rgba(15,23,42,0.34)] animate-[drawerSlideIn_0.18s_ease-out] motion-reduce:animate-none"
       >
-        {/* Decorative top accent */}
-        <div
-          aria-hidden="true"
-          className="h-[3px] bg-gradient-to-r from-brand-600 to-indigo-400"
-        />
-
         {/* Polite live region for the meeting time / priority value / saving */}
         <span className="sr-only" aria-live="polite">
           {liveMsg}
@@ -410,7 +404,7 @@ export default function QuickAddPopover({
                     ? "e.g. Follow up with Ananya about B.Tech admission"
                     : "e.g. Demo call with Ananya"
                 }
-                className="w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-[14px] font-medium leading-relaxed text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500"
+                className="w-full resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-[14px] font-medium leading-relaxed text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:bg-white"
               />
               <p id={`${uid}-hint`} className="mt-1 text-[11px] text-slate-400">
                 Press Enter to add · Shift + Enter for a new line
