@@ -366,6 +366,7 @@ export default function ChatPanel({
   onUnreadCountChange,
   initialConversationId,
   onTargetConversationHandled,
+  selectedYear = "all",
 }) {
   const myId = currentUser?.id;
   const canDeleteChats =
@@ -885,7 +886,9 @@ export default function ChatPanel({
     setLoadingList(true);
     setError("");
     try {
-      const data = await apiRequest("/api/client/chat");
+      const data = await apiRequest(
+        `/api/client/chat?year=${encodeURIComponent(selectedYear)}`
+      );
       setConversations(Array.isArray(data.conversations) ? data.conversations : []);
     } catch (err) {
       setError(err?.data?.message || "Unable to load chats");
@@ -899,7 +902,9 @@ export default function ChatPanel({
     setError("");
     setOthersReadAt(null);
     try {
-      const data = await apiRequest(`/api/client/chat/${conversationId}/messages`);
+      const data = await apiRequest(
+        `/api/client/chat/${conversationId}/messages?year=${encodeURIComponent(selectedYear)}`
+      );
       setMessages(Array.isArray(data.messages) ? data.messages : []);
       setOthersReadAt(data.readReceiptAt || null);
     } catch (err) {
@@ -1092,6 +1097,20 @@ export default function ChatPanel({
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the CRM year workspace changes, re-scope the chat to that year.
+  // Drop the open thread since it may have no messages in the new year.
+  const didMountYearRef = useRef(false);
+  useEffect(() => {
+    if (!didMountYearRef.current) {
+      didMountYearRef.current = true;
+      return;
+    }
+    setActiveId(null);
+    setMessages([]);
+    loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedYear]);
 
   useEffect(() => {
     const unread = conversations.reduce((total, conversation) => {
@@ -2930,24 +2949,49 @@ export default function ChatPanel({
               </div>
             </>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-5 px-6 text-center">
-              <img
-                src={conversationIllustration}
-                alt=""
-                aria-hidden="true"
-                className="h-auto w-72 max-w-full"
-              />
-              <div>
-                <div className="text-[15px] font-bold text-slate-700">Select a conversation</div>
-                <div className="mt-1 text-[13px] text-slate-400">Choose a chat from the left to start messaging.</div>
-                <a
-                  href="https://storyset.com/communication"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-2 inline-block text-[10px] text-slate-300 transition hover:text-slate-400"
-                >
-                  Illustration by Storyset
-                </a>
+            <div
+              className="relative isolate flex h-full w-full items-center justify-center overflow-hidden px-6 text-center [background:radial-gradient(ellipse_at_50%_45%,#f1edff_0%,#faf9ff_35%,#ffffff_70%)]"
+            >
+              <style>{`@keyframes chatFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}`}</style>
+
+              {/* Decorative concentric rings */}
+              <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[43%] -z-10 aspect-square w-[clamp(220px,35%,340px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600/[0.07]" />
+              <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[43%] -z-10 aspect-square w-[clamp(280px,44%,440px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600/[0.07]" />
+              <div aria-hidden="true" className="pointer-events-none absolute left-1/2 top-[43%] -z-10 aspect-square w-[clamp(340px,53%,540px)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-indigo-600/[0.07]" />
+
+              {/* Floating chat-bubble icons */}
+              <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" className="pointer-events-none absolute left-[20%] top-[31%] w-[42px] text-violet-300/70 motion-safe:[animation:chatFloat_5s_ease-in-out_infinite] max-[640px]:w-[26px]">
+                <path d="M40 22C40 12 32 6 22 6S4 12 4 22s8 16 18 16h8l10 5-3-10c2-3 3-7 3-11Z" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="14" cy="22" r="2" fill="currentColor" />
+                <circle cx="22" cy="22" r="2" fill="currentColor" />
+                <circle cx="30" cy="22" r="2" fill="currentColor" />
+              </svg>
+              <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" className="pointer-events-none absolute right-[18%] top-[48%] w-[42px] text-violet-300/70 motion-safe:[animation:chatFloat_5s_ease-in-out_infinite] motion-safe:[animation-delay:-2s] max-[640px]:w-[26px]">
+                <path d="M40 22C40 12 32 6 22 6S4 12 4 22s8 16 18 16h8l10 5-3-10c2-3 3-7 3-11Z" stroke="currentColor" strokeWidth="1.5" />
+                <circle cx="14" cy="22" r="2" fill="currentColor" />
+                <circle cx="22" cy="22" r="2" fill="currentColor" />
+                <circle cx="30" cy="22" r="2" fill="currentColor" />
+              </svg>
+
+              {/* Dot patterns */}
+              <div aria-hidden="true" className="pointer-events-none absolute left-[12%] top-[22%] h-20 w-20 opacity-30 [background-image:radial-gradient(#a78bfa_1.5px,transparent_1.5px)] [background-size:15px_15px] max-[640px]:hidden" />
+              <div aria-hidden="true" className="pointer-events-none absolute bottom-[20%] right-[12%] h-20 w-20 opacity-30 [background-image:radial-gradient(#a78bfa_1.5px,transparent_1.5px)] [background-size:15px_15px] max-[640px]:hidden" />
+
+              {/* Soft bottom corner glows */}
+              <div aria-hidden="true" className="pointer-events-none absolute -bottom-[190px] -left-[170px] -z-10 h-[320px] w-[420px] rounded-full bg-indigo-600/[0.035]" />
+              <div aria-hidden="true" className="pointer-events-none absolute -bottom-[190px] -right-[170px] -z-10 h-[320px] w-[420px] rounded-full bg-indigo-600/[0.035]" />
+
+              {/* Mascot + copy */}
+              <div className="relative z-[2] flex flex-col items-center gap-0">
+                <img
+                  src={conversationIllustration}
+                  alt=""
+                  aria-hidden="true"
+                  className="mb-6 h-auto w-[min(350px,70vw)] max-w-full max-[640px]:w-[220px]"
+                />
+                <h2 className="text-[21px] font-bold text-slate-800 max-[640px]:text-[18px]">Select a conversation</h2>
+                <div className="mt-2.5 text-[14px] text-slate-600">Choose a chat from the left to start messaging.</div>
+                <div className="mt-3.5 text-[11px] text-slate-600">Stay connected with your team.</div>
               </div>
             </div>
           )}

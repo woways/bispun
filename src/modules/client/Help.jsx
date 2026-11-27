@@ -11,7 +11,7 @@ import {
   Plus,
   AlertCircle,
   Sliders,
-  DollarSign,
+  IndianRupee,
   X,
   Loader2,
   RefreshCw,
@@ -26,10 +26,10 @@ import {
   Eye,
   MessageSquareText,
   PhoneCall,
+  MoreVertical,
 } from "lucide-react";
 
 import {
-  Table,
   Badge,
 } from "../../components/ui";
 
@@ -76,7 +76,7 @@ const TYPES = [
       "bg-slate-50 text-slate-600 border-slate-200",
 
     icon:
-      DollarSign,
+      IndianRupee,
 
     advancedOnly:
       false,
@@ -1555,6 +1555,83 @@ export default function Help({
   const [ticketDrill, setTicketDrill] = useState(null);
   const openTicketDrill = (config) => setTicketDrill(config);
 
+  // Row selection for the LeadStore-style tickets grid.
+  const [selectedTicketIds, setSelectedTicketIds] = useState([]);
+  const selectAllRef = useRef(null);
+  const toggleTicketRow = (id) =>
+    setSelectedTicketIds((current) =>
+      current.includes(id)
+        ? current.filter((x) => x !== id)
+        : [...current, id]
+    );
+
+  // Ticket-type picker (⋮ menu beside New Ticket).
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const typeMenuRef = useRef(null);
+  const typeTriggerRef = useRef(null);
+
+  const chooseTicketType = (type) => {
+    if (type.advancedOnly && !isAdvanced) return;
+    setTypeMenuOpen(false);
+    createTicket(type.key);
+  };
+
+  useEffect(() => {
+    if (!typeMenuOpen) return;
+
+    const firstItem =
+      typeMenuRef.current?.querySelector('[role="menuitem"]');
+    firstItem?.focus();
+
+    const onPointerDown = (event) => {
+      if (
+        typeMenuRef.current?.contains(event.target) ||
+        typeTriggerRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setTypeMenuOpen(false);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        setTypeMenuOpen(false);
+        typeTriggerRef.current?.focus();
+        return;
+      }
+      if (event.key === "Tab") {
+        setTypeMenuOpen(false);
+        return;
+      }
+      const items = Array.from(
+        typeMenuRef.current?.querySelectorAll('[role="menuitem"]') || []
+      );
+      if (!items.length) return;
+      const index = items.indexOf(document.activeElement);
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        items[(index + 1 + items.length) % items.length]?.focus();
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        items[(index - 1 + items.length) % items.length]?.focus();
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        items[0]?.focus();
+      } else if (event.key === "End") {
+        event.preventDefault();
+        items[items.length - 1]?.focus();
+      }
+    };
+
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [typeMenuOpen]);
+
   const filteredTickets =
     useMemo(
       () => {
@@ -1634,6 +1711,31 @@ export default function Help({
         priorityFilter,
       ]
     );
+
+  // Select-all operates on the currently visible (filtered) tickets.
+  const allVisibleSelected =
+    filteredTickets.length > 0 &&
+    filteredTickets.every((t) =>
+      selectedTicketIds.includes(t.id)
+    );
+
+  const toggleSelectAllTickets = () =>
+    setSelectedTicketIds(
+      allVisibleSelected
+        ? []
+        : filteredTickets.map((t) => t.id)
+    );
+
+  // Mixed-state select-all (LeadStore omits this — a11y requirement).
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    const selectedVisible = filteredTickets.filter((t) =>
+      selectedTicketIds.includes(t.id)
+    ).length;
+    selectAllRef.current.indeterminate =
+      selectedVisible > 0 &&
+      selectedVisible < filteredTickets.length;
+  }, [selectedTicketIds, filteredTickets]);
 
   return (
     <div className="space-y-4">
@@ -1716,6 +1818,97 @@ export default function Help({
 
               New Ticket
             </button>
+
+            <div className="relative" ref={typeMenuRef}>
+              <button
+                ref={typeTriggerRef}
+                type="button"
+                onClick={() =>
+                  setTypeMenuOpen((open) => !open)
+                }
+                onKeyDown={(event) => {
+                  if (
+                    !typeMenuOpen &&
+                    (event.key === "ArrowDown" ||
+                      event.key === "ArrowUp")
+                  ) {
+                    event.preventDefault();
+                    setTypeMenuOpen(true);
+                  }
+                }}
+                aria-haspopup="menu"
+                aria-expanded={typeMenuOpen}
+                aria-controls="help-ticket-type-menu"
+                aria-label="Choose a support ticket type"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              >
+                <MoreVertical size={16} aria-hidden="true" />
+              </button>
+
+              {typeMenuOpen && (
+                <div
+                  id="help-ticket-type-menu"
+                  role="menu"
+                  aria-label="Support ticket types"
+                  className="absolute right-0 z-[60] mt-1.5 w-[320px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.18)]"
+                >
+                  <div className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    Create a ticket
+                  </div>
+
+                  {TYPES.map((type) => {
+                    const Icon = type.icon;
+                    const locked =
+                      type.advancedOnly && !isAdvanced;
+
+                    return (
+                      <button
+                        key={type.key}
+                        type="button"
+                        role="menuitem"
+                        aria-disabled={locked || undefined}
+                        aria-label={
+                          locked
+                            ? `${type.label} — available on the Advanced plan`
+                            : undefined
+                        }
+                        onClick={() => chooseTicketType(type)}
+                        className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
+                          locked
+                            ? "cursor-not-allowed opacity-60"
+                            : "hover:bg-slate-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${type.color}`}
+                        >
+                          <Icon size={16} aria-hidden="true" />
+                        </span>
+
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-[13px] font-bold text-slate-900">
+                              {type.label}
+                            </span>
+
+                            {locked && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                <Lock size={9} aria-hidden="true" />
+                                Advanced
+                              </span>
+                            )}
+                          </span>
+
+                          <span className="mt-0.5 block text-[12px] leading-snug text-slate-500">
+                            {type.description}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1736,7 +1929,7 @@ export default function Help({
         onClose={() => setTicketDrill(null)}
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
         {[
           {
             label: "Total Tickets",
@@ -1791,14 +1984,14 @@ export default function Help({
             key={metric.label}
             type="button"
             onClick={() => openTicketDrill(metric.drill)}
-            aria-label={`${metric.label} — view tickets`}
-            className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            aria-label={`${metric.label}, ${metric.value} tickets — view`}
+            className="group flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${metric.tone}`}>
               <metric.Icon size={17} aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block text-[18px] font-bold leading-tight text-slate-900">
+              <span className="block text-[18px] font-bold leading-tight text-slate-900 tabular-nums">
                 {metric.value}
               </span>
               <span className="block truncate text-[12px] text-slate-500">
@@ -1807,92 +2000,6 @@ export default function Help({
             </span>
           </button>
         ))}
-      </div>
-
-      {/* SUPPORT TYPES */}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 native:grid-cols-2 native:gap-2.5">
-        {TYPES.map(
-          (
-            type
-          ) => {
-            const Icon =
-              type.icon;
-
-            const locked =
-              type.advancedOnly &&
-              !isAdvanced;
-
-            return (
-              <button
-                key={
-                  type.key
-                }
-                type="button"
-                disabled={
-                  locked
-                }
-                onClick={() =>
-                  createTicket(
-                    type.key
-                  )
-                }
-                className={`relative bg-white border rounded-xl p-4 text-left transition-all shadow-[0_1px_2px_rgba(15,23,42,0.03)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
-                  locked
-                    ? "border-slate-200 cursor-not-allowed"
-                    : "border-slate-200 hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
-                }`}
-              >
-                {locked && (
-                  <div className="absolute right-4 top-4 inline-flex items-center gap-1 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-1">
-                    <Lock
-                      size={10}
-                      aria-hidden="true"
-                    />
-
-                    Advanced
-                  </div>
-                )}
-
-                <div
-                  className={`w-9 h-9 rounded-lg border flex items-center justify-center mb-3 ${type.color}`}
-                >
-                  <Icon
-                    size={15}
-                    aria-hidden="true"
-                  />
-                </div>
-
-                <div className="text-sm font-bold text-slate-900">
-                  {
-                    type.label
-                  }
-                </div>
-
-                <div
-                  className="text-[12px] text-slate-500 mt-1 leading-snug pr-3 line-clamp-2"
-                  title={type.description}
-                >
-                  {
-                    type.description
-                  }
-                </div>
-
-                {type.advancedOnly &&
-                  isAdvanced && (
-                    <div className="inline-flex items-center gap-1.5 mt-3 text-[13px] text-amber-700 font-semibold">
-                      <Crown
-                        size={10}
-                        aria-hidden="true"
-                      />
-
-                      Advanced capability
-                    </div>
-                  )}
-              </button>
-            );
-          }
-        )}
       </div>
 
       {/* ERROR */}
@@ -2098,20 +2205,17 @@ export default function Help({
       ) : (
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
 
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-            <div>
-              <h3 className="text-[15px] font-bold text-slate-900">
-                Support Tickets
-              </h3>
+          <div className="px-4 py-2.5 border-b border-slate-200 flex items-center justify-between gap-3">
+            <h3 className="text-[13px] font-bold text-slate-900 inline-flex items-center gap-2">
+              <Ticket
+                size={14}
+                className="text-indigo-500"
+                aria-hidden="true"
+              />
+              Support Tickets
+            </h3>
 
-              <p className="text-[13px] text-slate-500 mt-1">
-                Track all requests and
-                their current support
-                status.
-              </p>
-            </div>
-
-            <div className="text-[13px] text-slate-500">
+            <div className="text-[12px] font-semibold text-slate-500 tabular-nums">
               {
                 filteredTickets.length
               }{" "}
@@ -2119,117 +2223,165 @@ export default function Help({
             </div>
           </div>
 
-          {/* Desktop (sm+): full table. Mobile: stacked cards so the 8
-              columns never clip in the narrow WebView. Same data + states. */}
+          {/* Desktop (sm+): LeadStore-style Excel grid — horizontal scroll,
+              sticky select + frozen Ticket column + sticky Actions. Mobile keeps
+              the stacked card list below. Same data + states. */}
           <div className="hidden sm:block">
-          <Table
-            columns={[
-              "Ticket",
-              "Title",
-              "Type",
-              "Department",
-              "Priority",
-              "Status",
-              "Created",
-              "",
-            ]}
-            empty="No support tickets yet"
-            rows={filteredTickets.map(
-              (
-                ticket
-              ) => (
-                <tr
-                  key={
-                    ticket.id
-                  }
-                  className="hover:bg-slate-50/80 transition-colors"
-                >
-                  <td className="px-4 py-3 text-[15px] font-mono font-medium text-slate-600 whitespace-nowrap">
-                    {
-                      ticket.ticketNumber
-                    }
-                  </td>
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Support tickets, scrollable"
+              className="relative overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500"
+            >
+              <table className="w-max min-w-full text-[13px]">
+                <caption className="sr-only">
+                  Support tickets
+                </caption>
 
-                  <td className="px-4 py-3">
-                    <div className="text-[15px] font-semibold text-slate-900">
-                      {
-                        ticket.title
-                      }
-                    </div>
-
-                    <div className="text-[13px] text-slate-500 mt-1 max-w-md truncate">
-                      {
-                        ticket.description
-                      }
-                    </div>
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <Badge
-                      tone="slate"
+                <thead className="border-b border-slate-200 bg-slate-50">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="sticky left-0 z-30 w-10 min-w-10 border-r border-slate-200 bg-slate-50 px-2.5 py-2.5 text-center"
                     >
-                      {
-                        ticket.typeLabel
-                      }
-                    </Badge>
-                  </td>
-
-                  <td className="px-4 py-3 text-[13px] text-slate-600">
-                    {ticket.type === "CALL_TO_RM"
-                      ? "Relationship Manager"
-                      : ticket.department || "—"}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <Badge
-                      tone={priorityTone(
-                        ticket.priority
-                      )}
-                    >
-                      {
-                        ticket.priorityLabel
-                      }
-                    </Badge>
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <Badge
-                      tone={ticketStatusTone(
-                        ticket.status
-                      )}
-                    >
-                      {
-                        ticket.statusLabel
-                      }
-                    </Badge>
-                  </td>
-
-                  <td className="px-4 py-3 text-[13px] text-slate-500 whitespace-nowrap">
-                    {formatDate(
-                      ticket.createdAt
-                    )}
-                  </td>
-
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedTicket(
-                          ticket
-                        )
-                      }
-                      className="h-8 px-2.5 rounded-lg inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100"
-                    >
-                      <Eye
-                        size={12}
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllTickets}
+                        aria-label="Select all tickets on this page"
+                        className="h-4 w-4 align-middle rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                       />
-                      View
-                    </button>
-                  </td>
-                </tr>
-              )
-            )}
-          />
+                    </th>
+
+                    <th
+                      scope="col"
+                      className="sticky left-10 z-[25] min-w-[120px] border-r-2 border-slate-900 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                    >
+                      Ticket
+                    </th>
+
+                    <th scope="col" className="min-w-[260px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Title
+                    </th>
+                    <th scope="col" className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Type
+                    </th>
+                    <th scope="col" className="min-w-[150px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Department
+                    </th>
+                    <th scope="col" className="min-w-[110px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Priority
+                    </th>
+                    <th scope="col" className="min-w-[140px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Status
+                    </th>
+                    <th scope="col" className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                      Created
+                    </th>
+
+                    <th
+                      scope="col"
+                      className="sticky right-0 z-20 min-w-[92px] border-l border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTickets.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="px-4 py-12 text-center text-sm text-slate-500"
+                      >
+                        No support tickets yet
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTickets.map((ticket) => {
+                      const selected = selectedTicketIds.includes(
+                        ticket.id
+                      );
+                      const stickyBg = selected
+                        ? "bg-indigo-50"
+                        : "bg-white group-hover:bg-slate-50";
+
+                      return (
+                        <tr
+                          key={ticket.id}
+                          className={`group ${selected ? "bg-indigo-50/60" : ""}`}
+                        >
+                          <td className={`sticky left-0 z-20 w-10 min-w-10 border-r border-slate-100 px-2.5 py-2.5 text-center transition-colors ${stickyBg}`}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleTicketRow(ticket.id)}
+                              aria-label={`Select ticket ${ticket.ticketNumber}`}
+                              className="h-4 w-4 align-middle rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                          </td>
+
+                          <td className={`sticky left-10 z-[15] min-w-[120px] border-r-2 border-slate-900 px-3 py-2.5 font-mono font-medium text-slate-700 whitespace-nowrap transition-colors shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)] ${stickyBg}`}>
+                            {ticket.ticketNumber}
+                          </td>
+
+                          <td className="min-w-[260px] border-r border-slate-100 px-3 py-2.5">
+                            <div className="font-semibold text-slate-900">
+                              {ticket.title}
+                            </div>
+                            <div className="text-[12px] text-slate-500 mt-0.5 max-w-md truncate">
+                              {ticket.description}
+                            </div>
+                          </td>
+
+                          <td className="min-w-[160px] border-r border-slate-100 px-3 py-2.5">
+                            <Badge tone="slate">
+                              {ticket.typeLabel}
+                            </Badge>
+                          </td>
+
+                          <td className="min-w-[150px] border-r border-slate-100 px-3 py-2.5 text-slate-600">
+                            {ticket.type === "CALL_TO_RM"
+                              ? "Relationship Manager"
+                              : ticket.department || "—"}
+                          </td>
+
+                          <td className="min-w-[110px] border-r border-slate-100 px-3 py-2.5">
+                            <Badge tone={priorityTone(ticket.priority)}>
+                              {ticket.priorityLabel}
+                            </Badge>
+                          </td>
+
+                          <td className="min-w-[140px] border-r border-slate-100 px-3 py-2.5">
+                            <Badge tone={ticketStatusTone(ticket.status)}>
+                              {ticket.statusLabel}
+                            </Badge>
+                          </td>
+
+                          <td className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-slate-500 whitespace-nowrap tabular-nums">
+                            {formatDate(ticket.createdAt)}
+                          </td>
+
+                          <td className={`sticky right-0 z-10 min-w-[92px] border-l border-slate-100 px-2 py-2.5 transition-colors ${stickyBg}`}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedTicket(ticket)}
+                              aria-label={`View ticket ${ticket.ticketNumber}`}
+                              className="h-8 px-2.5 rounded-lg inline-flex items-center gap-1.5 text-[13px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                            >
+                              <Eye size={12} aria-hidden="true" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Mobile (below sm): card list. role="list" restores the list

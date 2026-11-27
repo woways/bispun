@@ -16,7 +16,7 @@ import {
   CreditCard,
   Puzzle,
   Activity,
-  DollarSign,
+  IndianRupee,
   Ticket,
   BarChart3,
   Settings,
@@ -109,7 +109,7 @@ const MENU = [
   {
     key: "billing",
     label: "Billing",
-    icon: DollarSign,
+    icon: IndianRupee,
   },
   {
     key: "support",

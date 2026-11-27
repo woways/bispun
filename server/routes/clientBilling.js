@@ -175,6 +175,10 @@ router.get("/", async (req, res) => {
                   subscription.plan.key,
                 name:
                   subscription.plan.name,
+                maxUsers:
+                  subscription.plan.maxUsers ?? null,
+                storageLimitMb:
+                  subscription.plan.storageLimitMb ?? null,
               },
             }
           : null,
@@ -196,6 +200,8 @@ router.get("/", async (req, res) => {
               ? Number(plan.offerPrice)
               : null,
           offerEndsAt: pricing.offerActive ? plan.offerEndsAt : null,
+          storageLimitMb: plan.storageLimitMb ?? null,
+          maxUsers: plan.maxUsers ?? null,
           breakdown: pricing,
         };
       }),

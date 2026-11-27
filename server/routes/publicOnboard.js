@@ -118,6 +118,7 @@ router.get("/plans", async (_req, res) => {
           offerPrice: p.offerPrice !== null && p.offerPrice !== undefined ? Number(p.offerPrice) : null,
           offerEndsAt: pricing.offerActive ? p.offerEndsAt : null,
           storageLimitMb: p.storageLimitMb ?? null,
+          maxUsers: p.maxUsers ?? null,
           breakdown: pricing,
         };
       }),

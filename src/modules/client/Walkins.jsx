@@ -532,25 +532,13 @@ export default function Walkins({ selectedYear = "all", market = "DOMESTIC" }) {
         caption={detailData?.title}
         onClose={() => setDetailView(null)}
       />
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-            Leads / Offline engagement
-          </div>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">
-            {market === "INTERNATIONAL" ? "International Walk-ins" : "Domestic Walk-ins"}
-          </h1>
-          <p className="mt-1 text-[15px] text-slate-500">
-            Track office visitors, counsellor interactions and conversion outcomes.
-          </p>
-        </div>
-
+      <div className="flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={openCreate}
           className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold rounded-lg inline-flex items-center justify-center gap-2 shadow-sm"
         >
-          <Plus size={14} />
+          <Plus size={14} aria-hidden="true" />
           Log Walk-in
         </button>
       </div>

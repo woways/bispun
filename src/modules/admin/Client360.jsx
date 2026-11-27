@@ -10,7 +10,7 @@ import {
   Users,
   TrendingUp,
   CheckCircle2,
-  DollarSign,
+  IndianRupee,
   LayoutDashboard,
   Link2,
   UserCheck,
@@ -54,7 +54,7 @@ const MODULE_ICONS = {
   LayoutDashboard,
   Link2,
   UserCheck,
-  DollarSign,
+  DollarSign: IndianRupee,
   Database,
   UserPlus,
   Video,
@@ -176,7 +176,7 @@ function OverviewTab({ client, setClient }) {
           value={formatMoney(
             client.yearlyPrice
           )}
-          icon={DollarSign}
+          icon={IndianRupee}
           tone="indigo"
         />
       </div>
@@ -2509,7 +2509,7 @@ function BillingTab({
         <StatCard
           label="Subscription Amount"
           value={formatMoney(billing.amount)}
-          icon={DollarSign}
+          icon={IndianRupee}
           tone="indigo"
         />
         <StatCard

@@ -7,7 +7,7 @@ import {
   BarChart3,
   Building2,
   Users,
-  DollarSign,
+  IndianRupee,
   CheckCircle2,
   RefreshCw,
   Loader2,
@@ -204,7 +204,7 @@ export default function Analytics() {
           value={formatMoney(
             summary.annualRecurringValue
           )}
-          icon={DollarSign}
+          icon={IndianRupee}
           tone="emerald"
         />
       </div>

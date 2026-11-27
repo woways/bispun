@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Users,
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   ArrowUpRight,
   Ticket,
   Activity,
@@ -387,7 +387,7 @@ export default function AdminDashboard({
           value={money(
             totals.arr
           )}
-          icon={DollarSign}
+          icon={IndianRupee}
           detail="Active SaaS subscription value"
           featured
         />

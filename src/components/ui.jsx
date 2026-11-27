@@ -3,6 +3,7 @@ import {
   ArrowDownRight,
   Lock,
   Crown,
+  Search,
 } from "lucide-react";
 
 import {
@@ -48,25 +49,23 @@ export const StatCard = ({
   tone = "indigo",
 }) => (
   <div className="cb-fade-in bg-white border border-slate-200 rounded-xl p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition-[border-color,box-shadow] duration-200">
-    <div className="flex flex-row-reverse items-start justify-end gap-3">
-      <div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-400">
-          {label}
-        </div>
-
-        <div className="mt-2 text-[22px] leading-none font-bold tracking-tight text-slate-950">
-          {value}
-        </div>
+    <div className="flex items-center justify-between gap-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500">
+        {label}
       </div>
 
       <div
-        className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
+        className={`h-9 w-9 flex-shrink-0 rounded-xl border flex items-center justify-center ${
           STAT_TONES[tone] ||
           STAT_TONES.indigo
         }`}
       >
-        <Icon size={17} />
+        <Icon size={18} strokeWidth={2} aria-hidden="true" />
       </div>
+    </div>
+
+    <div className="mt-2.5 text-[22px] leading-none font-bold tracking-tight text-slate-950 tabular-nums">
+      {value}
     </div>
 
     {delta && (
@@ -431,5 +430,51 @@ export const Table = ({
         </tbody>
       </table>
     </div>
+  </div>
+);
+
+/**
+ * Shared "lead-store" table style tokens. Apply these to any inline
+ * <table> so every Excel-like grid reads the same across the portal.
+ * Usage:
+ *   <thead className={tableClasses.thead}>
+ *     <th scope="col" className={tableClasses.th}>Name</th>
+ *   <tbody className={tableClasses.tbody}>
+ */
+export const tableClasses = {
+  wrap: "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]",
+  table: "w-full text-[13px]",
+  thead: "border-b border-slate-200 bg-slate-50/95",
+  th: "px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500",
+  tbody: "divide-y divide-slate-100",
+  td: "px-3 py-2.5 text-slate-700 align-middle",
+};
+
+/**
+ * Lead-store search field: h-9 rounded pill with a leading search icon and
+ * indigo focus ring. Always labelled for screen readers.
+ */
+export const SearchInput = ({
+  value,
+  onChange,
+  placeholder = "Search…",
+  label = "Search",
+  className = "",
+}) => (
+  <div className={`relative min-w-0 ${className}`}>
+    <Search
+      size={14}
+      aria-hidden="true"
+      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+    />
+
+    <input
+      type="search"
+      value={value}
+      onChange={onChange}
+      aria-label={label}
+      placeholder={placeholder}
+      className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] text-slate-900 transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+    />
   </div>
 );

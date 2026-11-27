@@ -202,6 +202,12 @@ function PlanCard({
           ? String(plan.storageLimitMb)
           : "",
 
+      maxUsers:
+
+        plan.maxUsers !== null && plan.maxUsers !== undefined
+          ? String(plan.maxUsers)
+          : "",
+
 
 
       active:
@@ -238,7 +244,7 @@ function PlanCard({
 
   useEffect(() => {
 
-    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", offerPrice: plan.offerPrice !== null && plan.offerPrice !== undefined ? String(plan.offerPrice) : "", offerEndsAt: toDateInput(plan.offerEndsAt), storageLimitMb: plan.storageLimitMb !== null && plan.storageLimitMb !== undefined ? String(plan.storageLimitMb) : "", active: plan.active });
+    setForm({ name: plan.name, tagline: plan.tagline || "", description: plan.description || "", yearlyPrice: plan.yearlyPrice !== null ? String(plan.yearlyPrice) : "", offerPrice: plan.offerPrice !== null && plan.offerPrice !== undefined ? String(plan.offerPrice) : "", offerEndsAt: toDateInput(plan.offerEndsAt), storageLimitMb: plan.storageLimitMb !== null && plan.storageLimitMb !== undefined ? String(plan.storageLimitMb) : "", maxUsers: plan.maxUsers !== null && plan.maxUsers !== undefined ? String(plan.maxUsers) : "", active: plan.active });
 
   }, [plan]);
 
@@ -313,6 +319,10 @@ function PlanCard({
               storageLimitMb:
 
                 form.storageLimitMb === "" ? null : Number(form.storageLimitMb),
+
+              maxUsers:
+
+                form.maxUsers === "" ? null : Number(form.maxUsers),
 
 
 
@@ -802,6 +812,31 @@ function PlanCard({
           />
           <p id="plan-storage-limit-help" className="mt-1 text-[11px] text-slate-400">
             Leave blank for unlimited. 1024 = 1 GB, 5120 = 5 GB.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="plan-max-users" className="block text-xs font-medium text-slate-600 mb-1">
+            Max users <span className="text-slate-500 font-normal">(optional)</span>
+          </label>
+          <input
+            id="plan-max-users"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={form.maxUsers}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                maxUsers: event.target.value.replace(/[^0-9]/g, ""),
+              }))
+            }
+            aria-describedby="plan-max-users-help"
+            placeholder="e.g. 2"
+            className="min-w-0 w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+          />
+          <p id="plan-max-users-help" className="mt-1 text-[11px] text-slate-500">
+            Max team members allowed on this plan. Leave blank for unlimited.
           </p>
         </div>
 
@@ -1359,7 +1394,7 @@ export default function Plans() {
 
       ) : (
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-4 gap-5">
 
           {plans.map(
 

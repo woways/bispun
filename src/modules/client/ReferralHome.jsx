@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ChevronDown,
   Lock,
+  Search,
 } from "lucide-react";
 
 import { buildReferralSignupUrl } from "../../lib/referralLink";
@@ -66,6 +67,7 @@ const CARD = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
 export default function ReferralHome({ currentUser, code, rewardProgram }) {
   const [active, setActive] = useState("link");
+  const [refSearch, setRefSearch] = useState("");
   const [copied, setCopied] = useState("");
   // Always-mounted live region for clipboard feedback (WCAG 4.1.3).
   const [copiedMsg, setCopiedMsg] = useState("");
@@ -82,6 +84,13 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
   const expect = rewardProgram?.creditExpectationDays || { min: 5, max: 8 };
 
   const referred = rewardProgram?.referrals || [];
+  const refQ = refSearch.trim().toLowerCase();
+  const shownReferred = referred.filter((item) => {
+    if (!refQ) return true;
+    const name = item.company?.name || item.referredName || "";
+    const plan = item.company?.planName || "";
+    return [name, plan].some((v) => String(v || "").toLowerCase().includes(refQ));
+  });
   const creditedHistory = (rewardProgram?.payouts || []).filter((p) => p.status === "PAID");
 
   // Configurable base (never hard-coded to prod); empty when there's no code so
@@ -157,12 +166,12 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total earned</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
-              <Award size={18} />
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:h-8 native:w-8" aria-hidden="true">
+              <Award size={18} strokeWidth={2} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700 native:text-[20px]">{money(earned)}</div>
-          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(earned)}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">
             From {successful} successful referral{successful === 1 ? "" : "s"}
           </div>
         </div>
@@ -170,23 +179,23 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Awaiting credit</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
-              <Clock3 size={18} />
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 native:h-8 native:w-8" aria-hidden="true">
+              <Clock3 size={18} strokeWidth={2} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(pendingCredit)}</div>
-          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Expected in {expect.min}–{expect.max} days</div>
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(pendingCredit)}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Expected in {expect.min}–{expect.max} days</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Credited to you</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
-              <CheckCircle2 size={18} />
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 native:h-8 native:w-8" aria-hidden="true">
+              <CheckCircle2 size={18} strokeWidth={2} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(credited)}</div>
-          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(credited)}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">
             {creditedHistory.length} payment{creditedHistory.length === 1 ? "" : "s"} received
           </div>
         </div>
@@ -336,13 +345,36 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         hidden={active !== "referred"}
         className={`${CARD} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500`}
       >
-        <h2 className="text-[17px] font-semibold text-slate-950">
-          Referred <span className="text-[14px] font-medium text-slate-500">({referred.length})</span>
-        </h2>
-        <p className="mt-1 text-[13px] text-slate-500">
-          <span className="font-semibold text-slate-700">Referred</span> = signed up with your link ·{" "}
-          <span className="font-semibold text-slate-700">Earned</span> = activated, so a reward is yours.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[17px] font-semibold text-slate-950">
+              Referred <span className="text-[14px] font-medium text-slate-500">({referred.length})</span>
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500">
+              <span className="font-semibold text-slate-700">Referred</span> = signed up with your link ·{" "}
+              <span className="font-semibold text-slate-700">Earned</span> = activated, so a reward is yours.
+            </p>
+          </div>
+          {referred.length > 0 && (
+            <div className="relative w-full sm:w-auto">
+              <label htmlFor="referred-search" className="sr-only">Search referred businesses</label>
+              <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                id="referred-search"
+                type="search"
+                value={refSearch}
+                onChange={(e) => setRefSearch(e.target.value)}
+                placeholder="Search businesses"
+                className="h-9 w-full rounded-lg border border-slate-300 bg-slate-50 pl-9 pr-3 text-[13px] outline-none transition focus:border-brand-400 focus:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:w-56"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Always-mounted polite live region: result count */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {`${shownReferred.length} referred ${shownReferred.length === 1 ? "business" : "businesses"} shown`}
+        </span>
 
         {referred.length === 0 ? (
           <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center">
@@ -354,38 +386,62 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
               Share your referral link — businesses that sign up with it will appear here.
             </p>
           </div>
+        ) : shownReferred.length === 0 ? (
+          <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center text-[13px] text-slate-500">
+            No businesses match your search.
+          </div>
         ) : (
-          <ul className="mt-3 divide-y divide-slate-100">
-            {referred.map((item) => {
-              const isEarned = item.status === "EARNED";
-              const displayName = item.company?.name || item.referredName || "New signup";
-              const sub = isEarned
-                ? `${item.company?.planName || "CRM plan"} · Joined ${formatDate(item.qualifiedAt || item.createdAt)}`
-                : `Signed up · ${formatDate(item.createdAt)} · not activated yet`;
-              return (
-                <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[12px] font-semibold text-brand-700">
-                      {initialsOf(displayName)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-[14px] font-semibold text-slate-900">{displayName}</div>
-                      <div className="mt-0.5 text-[12px] text-slate-500">{sub}</div>
-                    </div>
-                  </div>
-                  {isEarned ? (
-                    <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1 text-[11px] font-bold text-white">
-                      <CheckCircle2 size={12} aria-hidden="true" /> Earned
-                    </span>
-                  ) : (
-                    <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-bold text-slate-600">
-                      <Clock3 size={12} aria-hidden="true" /> Referred
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <div
+            className="mt-3 overflow-x-auto rounded-xl border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            tabIndex={0}
+            role="group"
+            aria-label="Referred businesses (scrollable)"
+          >
+            <table className="w-full min-w-[560px] text-[13px]">
+              <caption className="sr-only">Referred businesses: name, plan, joined date and status</caption>
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Business</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Plan</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Joined</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {shownReferred.map((item) => {
+                  const isEarned = item.status === "EARNED";
+                  const displayName = item.company?.name || item.referredName || "New signup";
+                  const plan = isEarned ? (item.company?.planName || "CRM plan") : "—";
+                  const joined = formatDate(isEarned ? (item.qualifiedAt || item.createdAt) : item.createdAt);
+                  return (
+                    <tr key={item.id} className="group transition-colors hover:bg-slate-50/80">
+                      <th scope="row" className="px-4 py-3 text-left font-normal">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[11px] font-semibold text-brand-700">
+                            {initialsOf(displayName)}
+                          </span>
+                          <span className="font-semibold text-slate-900">{displayName}</span>
+                        </div>
+                      </th>
+                      <td className={`px-4 py-3 ${plan === "—" ? "text-slate-300" : "text-slate-600"}`}>{plan}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-500">{joined}</td>
+                      <td className="px-4 py-3">
+                        {isEarned ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                            <CheckCircle2 size={12} aria-hidden="true" /> Earned
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[11px] font-bold text-slate-600">
+                            <Clock3 size={12} aria-hidden="true" /> Referred
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
@@ -504,21 +560,21 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
               role="group"
               aria-label="Credit history (scrollable)"
             >
-              <table className="min-w-full text-left text-xs">
+              <table className="min-w-full text-left text-[13px]">
                 <caption className="sr-only">Credit history: date credited, amount and reference</caption>
-                <thead className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <thead className="border-b border-slate-200 bg-slate-50">
                   <tr>
-                    <th scope="col" className="px-3 py-2.5">Credited on</th>
-                    <th scope="col" className="px-3 py-2.5">Amount</th>
-                    <th scope="col" className="px-3 py-2.5">Reference</th>
+                    <th scope="col" className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Credited on</th>
+                    <th scope="col" className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Amount</th>
+                    <th scope="col" className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Reference</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {creditedHistory.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2.5 text-slate-600">{formatDate(item.paidAt || item.processedAt)}</td>
-                      <td className="px-3 py-2.5 font-semibold text-slate-900">{money(item.amount)}</td>
-                      <td className="px-3 py-2.5 text-slate-500">{item.paymentReference || item.adminNote || "—"}</td>
+                    <tr key={item.id} className="transition-colors hover:bg-slate-50/80">
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600 tabular-nums">{formatDate(item.paidAt || item.processedAt)}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-900 tabular-nums">{money(item.amount)}</td>
+                      <td className="px-4 py-3 text-slate-500">{item.paymentReference || item.adminNote || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

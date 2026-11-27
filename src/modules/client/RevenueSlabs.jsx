@@ -307,12 +307,14 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
   /* ---------------- College Revenue ---------------- */
   if (view === "college") {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        <div className="mb-1 text-[15px] font-semibold text-slate-900">
-          College Revenue
-        </div>
-        <div className="mb-4 text-[13px] text-slate-500">
-          Admissions multiplied by the applicable slab rate.
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="border-b border-slate-100 px-4 py-2.5">
+          <div className="text-[13px] font-bold text-slate-900">
+            College Revenue
+          </div>
+          <div className="text-[12px] text-slate-500">
+            Admissions multiplied by the applicable slab rate.
+          </div>
         </div>
 
         <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
@@ -454,13 +456,13 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
 
   /* ---------------- Employee Incentives ---------------- */
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div className="mb-1 flex items-center justify-between">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
         <div>
-          <div className="text-[15px] font-semibold text-slate-900">
+          <div className="text-[13px] font-bold text-slate-900">
             Employee Incentives
           </div>
-          <div className="text-[13px] text-slate-500">
+          <div className="text-[12px] text-slate-500">
             Each employee's admissions multiplied by their slab rate.
           </div>
         </div>
@@ -474,7 +476,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
         </div>
       </div>
 
-      <div className="mt-4 overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
+      <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-slate-100 text-[10px] uppercase tracking-[0.08em] text-slate-500">

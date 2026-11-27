@@ -266,7 +266,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
                 <th
                   rowSpan={2}
                   scope="col"
-                  className="sticky left-0 z-20 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[11px] font-bold uppercase tracking-wide text-slate-500"
+                  className="sticky left-0 z-20 border-b border-slate-200 bg-slate-50 px-4 py-3 text-[13px] font-bold uppercase tracking-wide text-slate-500"
                   style={{ minWidth: 230 }}
                 >
                   Module / Object
@@ -274,14 +274,14 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
                 <th
                   colSpan={CORE.length}
                   scope="colgroup"
-                  className="bg-slate-50 px-2 pb-1 pt-3 text-center text-[10.5px] font-bold uppercase tracking-wider text-brand-600"
+                  className="bg-slate-50 px-2 pb-1 pt-3 text-center text-[13px] font-bold uppercase tracking-wider text-brand-600"
                 >
                   Core Access
                 </th>
                 <th
                   colSpan={EXT.length}
                   scope="colgroup"
-                  className="border-l-2 border-slate-200 bg-slate-50 px-2 pb-1 pt-3 text-center text-[10.5px] font-bold uppercase tracking-wider text-slate-500"
+                  className="border-l-2 border-slate-200 bg-slate-50 px-2 pb-1 pt-3 text-center text-[13px] font-bold uppercase tracking-wider text-slate-500"
                 >
                   Extended Access
                 </th>
@@ -291,7 +291,7 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
                   <th
                     key={c}
                     scope="col"
-                    className={`border-b border-slate-200 bg-slate-50 px-2 pb-3 text-center text-[11.5px] font-semibold text-slate-600 ${
+                    className={`border-b border-slate-200 bg-slate-50 px-2 pb-3 text-center text-[13px] font-semibold text-slate-600 ${
                       c === EXT[0] ? "border-l-2" : ""
                     }`}
                   >
@@ -332,17 +332,6 @@ export default function AccessTab({ levels = [], admissionsTree, canEdit = true,
           <span className="inline-flex items-center gap-2"><span className="text-[11px] font-bold text-slate-300">NA</span> Not applicable</span>
         </div>
       </section>
-
-      {/* admissions college scope (kept; not in the artifact) */}
-      {streams.length > 0 && (
-        <StreamScope
-          streams={streams}
-          perms={perms}
-          editable={editable}
-          onToggleCollege={toggleCollege}
-          onToggleStreamAll={toggleStreamAll}
-        />
-      )}
 
       {/* save bar */}
       {editable && (
@@ -418,7 +407,7 @@ function ModuleRows({
               <Icon size={15} aria-hidden="true" />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[13.5px] font-bold text-slate-800">{page.name}</span>
+              <span className="block truncate text-[13px] font-bold text-slate-800">{page.name}</span>
               <span className="block text-[11px] font-normal text-slate-400">
                 {page.comps.length} object{page.comps.length > 1 ? "s" : ""}
               </span>

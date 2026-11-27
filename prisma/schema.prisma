@@ -416,6 +416,10 @@ model Plan {
   // in Super Admin → Plans. Enforced on uploads via Company.storageBytesUsed.
   storageLimitMb Int?
 
+  // Seat cap: max active users a company on this plan may have; null = unlimited.
+  // Editable in Super Admin → Plans. Enforced when a client user is created.
+  maxUsers Int?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

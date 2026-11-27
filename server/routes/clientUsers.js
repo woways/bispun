@@ -863,6 +863,30 @@ router.post("/", async (req, res) => {
 
     if (!actor) return;
 
+    // Seat cap: block adding a user beyond the company's plan limit (e.g. the
+    // Startup plan allows 2 users). null maxUsers = unlimited. Counts active
+    // users only, so deactivating a user frees a seat.
+    const seatCompanyId = req.clientUser.companyId;
+    const seatSub = await prisma.subscription.findFirst({
+      where: { companyId: seatCompanyId },
+      orderBy: { createdAt: "desc" },
+      include: { plan: { select: { maxUsers: true, name: true } } },
+    });
+    const seatCap = seatSub?.plan?.maxUsers ?? null;
+    if (seatCap != null) {
+      const activeUsers = await prisma.user.count({
+        where: { companyId: seatCompanyId, active: true },
+      });
+      if (activeUsers >= seatCap) {
+        return res.status(403).json({
+          success: false,
+          message: `Your ${seatSub.plan.name} plan allows up to ${seatCap} user${
+            seatCap === 1 ? "" : "s"
+          }. Upgrade your plan to add more team members.`,
+        });
+      }
+    }
+
     const name = String(
       req.body?.name || ""
     ).trim();

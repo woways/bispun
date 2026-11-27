@@ -5,7 +5,7 @@ import {
 } from "react";
 
 import {
-  DollarSign,
+  IndianRupee,
   CreditCard,
   CheckCircle2,
   Clock,
@@ -251,7 +251,7 @@ export default function Billing() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <DollarSign size={18} className="text-indigo-600" />
+            <IndianRupee size={18} className="text-indigo-600" />
             <h1 className="text-2xl font-bold tracking-tight text-slate-950">Billing</h1>
           </div>
           <p className="mt-1 text-sm text-slate-500">
@@ -301,7 +301,7 @@ export default function Billing() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <StatCard label="Annual Recurring Value" value={formatMoney(totals.annualRecurringValue)} icon={DollarSign} tone="indigo" />
+            <StatCard label="Annual Recurring Value" value={formatMoney(totals.annualRecurringValue)} icon={IndianRupee} tone="indigo" />
             <StatCard label="Current Subscription Value" value={formatMoney(totals.totalSubscriptionValue)} icon={CreditCard} tone="emerald" />
           </div>
 

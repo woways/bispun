@@ -22,7 +22,6 @@ import {
   AlertCircle,
   Search,
   WalletCards,
-  CircleDollarSign,
   Pencil,
   Trash2,
   Building2,
@@ -3499,18 +3498,22 @@ function AdmissionsManager({
   }
 
   function OverviewStrip() {
-    const visibleStreams = streams.slice(0, 4);
+    const visibleStreams = streams;
 
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+        <div
+          className="flex gap-2.5 overflow-x-auto scroll-pl-[160px]"
+          role="group"
+          aria-label="Admissions by stream"
+        >
           <button
             type="button"
             onClick={() => {
               detailTriggerRef.current = document.activeElement;
               setShowAllAdmissions(true);
             }}
-            className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+            className="sticky left-0 z-10 flex w-[150px] flex-shrink-0 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-[6px_0_10px_-6px_rgba(15,23,42,0.18)] transition hover:border-slate-300 hover:shadow-[6px_0_12px_-6px_rgba(15,23,42,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
           >
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-brand-600" aria-hidden="true" />
@@ -3539,7 +3542,7 @@ function AdmissionsManager({
                   detailTriggerRef.current = document.activeElement;
                   setSelectedStream(stream);
                 }}
-                className="flex flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
+                className="flex w-[150px] flex-shrink-0 flex-col gap-1 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md motion-reduce:transform-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
               >
                 <span className="flex items-center gap-1.5">
                   <span className={`h-2 w-2 rounded-full ${acc.dot}`} aria-hidden="true" />
@@ -3759,7 +3762,7 @@ function AdmissionsManager({
                   onClick={() => setDateFilter(key)}
                   className={`h-9 rounded-xl px-3 text-[13px] font-bold native:shrink-0 native:whitespace-nowrap native:focus-visible:outline-none native:focus-visible:ring-2 native:focus-visible:ring-indigo-500 native:focus-visible:ring-offset-1 ${
                     dateFilter === key
-                      ? "bg-slate-950 text-white"
+                      ? "bg-indigo-600 text-white"
                       : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                   }`}
                 >
@@ -4023,55 +4026,41 @@ function AdmissionsManager({
         `}</style>
         {sharedStyle}
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-              Admissions
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
+                Admissions Overview
+              </h2>
+              <p className="mt-0.5 text-[13px] text-slate-500">
+                Overall admissions and stream-level counts.
+              </p>
             </div>
 
-            <h1 className="mt-2 text-[30px] font-bold tracking-[-0.04em] text-slate-950">
-              {activeMarket === "INTERNATIONAL" ? "International" : "Domestic"} Admissions Done
-            </h1>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  detailTriggerRef.current = document.activeElement;
+                  setShowAllAdmissions(true);
+                }}
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <UserCheck size={14} aria-hidden="true" />
+                View All Admissions
+              </button>
 
-            <p className="mt-1 text-[15px] text-slate-500">
-              Manage streams, colleges, branches and completed admissions.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                detailTriggerRef.current = document.activeElement;
-                setShowAllAdmissions(true);
-              }}
-              className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <UserCheck size={14} />
-              View All Admissions
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setStreamModal({ mode: "create" })
-              }
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-indigo-700"
-            >
-              <Plus size={14} />
-              Add Stream
-            </button>
-          </div>
-        </div>
-
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-[17px] font-bold tracking-[-0.02em] text-slate-900">
-              Admissions Overview
-            </h2>
-            <p className="mt-0.5 text-[13px] text-slate-500">
-              Overall admissions and stream-level counts.
-            </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setStreamModal({ mode: "create" })
+                }
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-bold text-white shadow-sm transition hover:bg-indigo-700"
+              >
+                <Plus size={14} aria-hidden="true" />
+                Add Stream
+              </button>
+            </div>
           </div>
           <OverviewStrip />
         </section>
@@ -4087,7 +4076,7 @@ function AdmissionsManager({
               Open a stream to view its colleges, branches and admissions.
             </p>
           </div>
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full sm:w-80">
             <Search
               size={14}
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -4136,8 +4125,24 @@ function AdmissionsManager({
                 stream.color || recommendedStreamColor(stream.name)
               );
 
+              const openStream = () => {
+                detailTriggerRef.current = document.activeElement;
+                setSelectedStream(stream);
+                setSelectedPartner(null);
+                setSelectedBranch(null);
+              };
+
               return (
-                <tr key={stream.id} className="hover:bg-slate-50/70">
+                <tr
+                  key={stream.id}
+                  onClick={() => {
+                    // Mouse convenience: clicking anywhere on the row opens the
+                    // stream. Ignore it when the user was selecting text.
+                    if (window.getSelection && String(window.getSelection())) return;
+                    openStream();
+                  }}
+                  className="cursor-pointer hover:bg-slate-50/70"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${acc.tile}`}>
@@ -4170,13 +4175,11 @@ function AdmissionsManager({
                       <button
                         type="button"
                         aria-label={`Open ${stream.name}`}
-                        onClick={() => {
-                          detailTriggerRef.current = document.activeElement;
-                          setSelectedStream(stream);
-                          setSelectedPartner(null);
-                          setSelectedBranch(null);
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openStream();
                         }}
-                        className={`inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-[13px] font-bold transition ${acc.open} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1`}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-300 bg-indigo-50 px-2.5 text-[13px] font-bold text-indigo-700 transition hover:border-indigo-600 hover:bg-indigo-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1"
                       >
                         Open
                         <ChevronRight size={14} aria-hidden="true" />
@@ -4184,7 +4187,10 @@ function AdmissionsManager({
                       <button
                         type="button"
                         aria-label={`Edit ${stream.name}`}
-                        onClick={() => setStreamModal({ mode: "edit", stream })}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setStreamModal({ mode: "edit", stream });
+                        }}
                         className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
                       >
                         <Pencil size={14} aria-hidden="true" />
@@ -4192,7 +4198,10 @@ function AdmissionsManager({
                       <button
                         type="button"
                         aria-label={`Delete ${stream.name}`}
-                        onClick={() => deleteStream(stream)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteStream(stream);
+                        }}
                         className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
                       >
                         <Trash2 size={14} aria-hidden="true" />

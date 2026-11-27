@@ -842,7 +842,7 @@ function MetricCard({
   onClick,
   active = false,
 }) {
-  const className = `w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${
+  const className = `group w-full bg-white border rounded-xl p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition ${
     onClick
       ? "cursor-pointer hover:border-indigo-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-100"
       : ""
@@ -874,7 +874,7 @@ function MetricCard({
       <div className="mt-1.5 text-[12px] leading-5 text-slate-500">
         {detail}
         {onClick ? (
-          <span className="ml-1 font-semibold text-indigo-600">
+          <span className="ml-1 font-semibold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
             View details
           </span>
         ) : null}
@@ -914,35 +914,36 @@ function KpiStat({
       type="button"
       onClick={onClick}
       aria-haspopup="dialog"
-      className={`flex flex-col gap-2 rounded-xl border bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
+      className={`group flex items-start gap-3 rounded-xl border bg-white p-3.5 text-left shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition hover:border-indigo-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600 focus-visible:ring-offset-2 ${
         active
           ? "border-indigo-300 ring-2 ring-indigo-50"
           : "border-slate-200"
       }`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+        <Icon size={16} aria-hidden="true" />
+      </span>
+
+      <div className="flex min-w-0 flex-col gap-1">
         <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">
           {label}
         </span>
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-          <Icon size={14} aria-hidden="true" />
+
+        <span className="text-[20px] font-bold leading-tight tracking-[-0.03em] text-slate-950 break-words">
+          {value}
+        </span>
+
+        {caption ? (
+          <span className="text-[11px] leading-4 text-slate-500">{caption}</span>
+        ) : null}
+
+        <span
+          className="text-[11px] font-semibold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden="true"
+        >
+          View details
         </span>
       </div>
-
-      <div className="text-[22px] font-bold leading-none tracking-[-0.03em] text-slate-950">
-        {value}
-      </div>
-
-      {caption ? (
-        <span className="text-[11px] leading-4 text-slate-500">{caption}</span>
-      ) : null}
-
-      <span
-        className="text-[11px] font-semibold text-indigo-600"
-        aria-hidden="true"
-      >
-        View details
-      </span>
     </button>
   );
 }

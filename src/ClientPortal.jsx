@@ -65,7 +65,7 @@ import {
   Home,
   GitFork,
   ShoppingBag,
-  CircleDollarSign,
+  IndianRupee,
   Wallet,
   BarChart3,
   Activity,
@@ -102,6 +102,7 @@ import { hydrateFromServer as hydrateNotifSoundPrefs } from "./lib/notificationP
 
 import CalendarModal from "./modules/client/CalendarModal";
 import QuickCreateDrawer from "./components/QuickCreateDrawer";
+import QuickAddPopover from "./components/QuickAddPopover";
 
 // Route-level client modules are code-split (React.lazy) so the authenticated
 // shell (header + bottom nav) paints immediately and each module's JS downloads
@@ -381,7 +382,7 @@ const NAV_GROUPS = [
   {
     key: "finance",
     label: "Finance",
-    icon: Wallet,
+    icon: IndianRupee,
     items: ["revenue"],
   },
 
@@ -504,13 +505,28 @@ function getClientModulePath(moduleKey) {
 }
 
 const MODULE_ICON_OVERRIDES = {
-  revenue: CircleDollarSign,
+  revenue: IndianRupee,
   analytics: Activity,
 };
 
 function getModuleIcon(key, fallbackIcon) {
   return MODULE_ICON_OVERRIDES[key] || fallbackIcon;
 }
+
+// Optical sizing for the collapsed rail: visually fuller glyphs (bag, cap,
+// gear, message, home) read larger than airy ones at the same px, so nudge
+// those down a step so every icon looks the same size. Others default to 20.
+const COMPACT_ICON_SIZE = {
+  dashboard: 18,
+  "lead-store": 18,
+  chats: 18,
+  "goals-and-targets": 18,
+  admissions: 18,
+  finance: 18,
+  insights: 18,
+  settings: 18,
+};
+const compactIconSize = (key) => COMPACT_ICON_SIZE[key] ?? 20;
 
 const MODULE_PERMISSION_MAP = {
   dashboard:
@@ -1703,10 +1719,20 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }
 
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Header "+" opens a compact quick-add popover; its "Additional details"
+  // opens the full QuickCreateDrawer (right side), already in its detailed form
+  // and seeded with whatever was typed via quickCreateInitial.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const quickAddAnchorRef = useRef(null);
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
+  const [quickCreateInitial, setQuickCreateInitial] = useState(null);
   // Bumped whenever a task/meeting is created from the header "+", so the
-  // dashboard re-fetches its calendar and shows the new item.
+  // dashboard re-fetches its calendar and task list and shows the new item.
   const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
+
+  // Collapsed-sidebar hover/focus flyout: { key, top } of the open group.
+  const [sidebarFlyout, setSidebarFlyout] = useState(null);
+  const sidebarFlyoutTimer = useRef(null);
 
   // Global CRM year workspace shared by all operational modules.
   const currentYear = new Date().getFullYear();
@@ -1991,7 +2017,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     { key: "dashboard", label: "Dashboard", icon: Home },
     { key: "lead-store", label: "Leads", icon: ShoppingBag },
     { key: "admissions", label: "Admissions", icon: GraduationCap },
-    { key: "revenue", label: "Finance", icon: CircleDollarSign },
+    { key: "revenue", label: "Finance", icon: IndianRupee },
   ].filter((item) => hasModulePermission(item.key));
 
   const bottomNavActiveKey =
@@ -3032,6 +3058,32 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     );
   }
 
+  // Collapsed-sidebar flyout helpers. Opening clears any pending close so moving
+  // between the trigger and the (fixed-position descendant) panel doesn't flash
+  // it shut; closing is deferred slightly to tolerate the hover gap.
+  function openSidebarFlyout(key, el) {
+    if (sidebarFlyoutTimer.current) {
+      clearTimeout(sidebarFlyoutTimer.current);
+      sidebarFlyoutTimer.current = null;
+    }
+    const rect =
+      el && typeof el.getBoundingClientRect === "function"
+        ? el.getBoundingClientRect()
+        : null;
+    const top = rect
+      ? Math.max(8, Math.min(rect.top, window.innerHeight - 340))
+      : 72;
+    setSidebarFlyout({ key, top });
+  }
+
+  function closeSidebarFlyout() {
+    if (sidebarFlyoutTimer.current) clearTimeout(sidebarFlyoutTimer.current);
+    sidebarFlyoutTimer.current = setTimeout(() => {
+      setSidebarFlyout(null);
+      sidebarFlyoutTimer.current = null;
+    }, 120);
+  }
+
   function handleWorkspaceUpdated(
     workspace
   ) {
@@ -3296,20 +3348,21 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     return (
       <div className="space-y-5">
         <div>
-          <h1 className="text-[22px] font-black tracking-[-0.035em] text-indigo-900">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
             My Profile
           </h1>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-[15px] text-slate-500">
             Update your personal information and account settings.
           </p>
         </div>
 
-        <section className="overflow-hidden rounded-[22px] border border-indigo-700 bg-gradient-to-r from-indigo-950 via-indigo-900 to-indigo-800 shadow-[0_14px_36px_rgba(2,8,23,0.16)]">
+        <section className="relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-transparent" />
+          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.12),transparent_70%)]" />
           <div className="relative px-5 py-6 sm:px-7">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_10%,rgba(255,255,255,0.08),transparent_35%)]" />
-            <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
               <div className="relative flex-shrink-0">
-                <div className="flex h-[92px] w-[92px] items-center justify-center overflow-hidden rounded-full border-[3px] border-white/80 bg-indigo-700 text-2xl font-black text-white shadow-lg">
+                <div className="flex h-[92px] w-[92px] items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-2xl font-bold text-white shadow-[0_10px_24px_rgba(79,70,229,0.28)] ring-4 ring-white">
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
@@ -3324,7 +3377,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <button
                   type="button"
                   onClick={() => profilePhotoInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-[3px] border-indigo-900 bg-white text-indigo-900 shadow-md hover:bg-slate-100"
+                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-white shadow-md transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   aria-label="Change profile photo"
                 >
                   <Camera size={14} />
@@ -3339,35 +3392,33 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 />
               </div>
 
-              <div className="min-w-0 flex-1 text-white">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <h2 className="truncate text-[25px] font-black tracking-[-0.04em]">
+                  <h2 className="truncate text-[22px] font-bold tracking-tight text-slate-950">
                     {displayName}
                   </h2>
-                  <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[12px] font-bold text-slate-200">
+                  <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2.5 py-1 text-[12px] font-bold text-indigo-700">
                     {formatRole(user.role)}
                   </span>
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-slate-300">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Mail size={13} />
+                <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[12px] font-medium text-slate-600">
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-inset ring-slate-100">
+                    <Mail size={13} className="text-indigo-500" />
                     {displayEmail}
                   </span>
-                  <span className="hidden h-3 w-px bg-white/20 sm:block" />
-                  <span className="inline-flex items-center gap-1.5">
-                    <Phone size={13} />
+                  <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-inset ring-slate-100">
+                    <Phone size={13} className="text-indigo-500" />
                     {displayPhone}
                   </span>
                 </div>
-
               </div>
             </div>
           </div>
         </section>
 
         <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_5px_18px_rgba(15,23,42,0.04)]">
-          <div className="grid grid-cols-4 border-b border-slate-100 px-2 sm:px-5">
+          <div className="grid grid-cols-2 gap-1.5 border-b border-slate-100 p-2 sm:grid-cols-4 sm:gap-2 sm:p-3">
             {tabs.map((tab) => {
               const TabIcon = tab.icon;
               const active = profileTab === tab.key;
@@ -3377,25 +3428,23 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   key={tab.key}
                   type="button"
                   onClick={() => setProfileTab(tab.key)}
-                  className={`relative flex min-h-[76px] flex-col items-center justify-center gap-1.5 px-1 text-[12px] font-bold transition-colors sm:text-xs ${
+                  aria-pressed={active}
+                  className={`group relative flex items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-[12px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 sm:text-xs ${
                     active
-                      ? "text-indigo-900"
-                      : "text-slate-400 hover:text-slate-700"
+                      ? "bg-indigo-600 text-white shadow-[0_6px_16px_rgba(79,70,229,0.22)]"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                   }`}
                 >
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-full ${
+                    className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
                       active
-                        ? "bg-indigo-600 text-white"
-                        : "bg-slate-100 text-slate-500"
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-500 group-hover:bg-white"
                     }`}
                   >
                     <TabIcon size={15} />
                   </span>
                   {tab.label}
-                  {active && (
-                    <span className="absolute bottom-0 h-[2px] w-14 rounded-full bg-indigo-600" />
-                  )}
                 </button>
               );
             })}
@@ -3408,7 +3457,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 className="rounded-2xl border border-slate-200 p-5"
               >
                 <div>
-                  <h3 className="text-sm font-black text-indigo-900">
+                  <h3 className="text-[15px] font-bold text-slate-900">
                     Personal Information
                   </h3>
                   <p className="mt-1 text-[13px] text-slate-500">
@@ -3429,7 +3478,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           name: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-indigo-900 outline-none focus:border-slate-400"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900 outline-none transition-colors focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-200"
                     />
                   </label>
 
@@ -3446,7 +3495,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           email: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-indigo-900 outline-none focus:border-slate-400"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900 outline-none transition-colors focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-200"
                     />
                   </label>
 
@@ -3462,7 +3511,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           phone: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-indigo-900 outline-none focus:border-slate-400"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-900 outline-none transition-colors focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-200"
                     />
                   </label>
 
@@ -3473,7 +3522,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     <input
                       value={formatRole(user.role)}
                       readOnly
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-500 outline-none"
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-[13px] font-semibold text-slate-500 outline-none"
                     />
                   </label>
                 </div>
@@ -3487,7 +3536,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                   <button
                     type="submit"
-                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   >
                     {profileSaved ? (
                       <CheckCircle2 size={14} />
@@ -3501,7 +3550,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
               <div className="space-y-5">
                 <div className="rounded-2xl border border-slate-200 p-5">
-                  <h3 className="text-sm font-black text-indigo-900">
+                  <h3 className="text-[15px] font-bold text-slate-900">
                     Quick Actions
                   </h3>
 
@@ -3511,11 +3560,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-                  <div className="text-[12px] font-black uppercase tracking-[0.12em] text-slate-400">
+                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">
                     Profile Preview
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-xs font-black text-white">
+                    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-xs font-bold text-white">
                       {profilePhoto ? (
                         <img
                           src={profilePhoto}
@@ -3527,7 +3576,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-black text-indigo-900">
+                      <div className="truncate text-[15px] font-bold text-slate-900">
                         {displayName}
                       </div>
                       <div className="truncate text-[13px] text-slate-500">
@@ -3548,7 +3597,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     <ShieldCheck size={18} />
                   </span>
                   <div>
-                    <h3 className="text-sm font-black text-indigo-900">
+                    <h3 className="text-[15px] font-bold text-slate-900">
                       Security Overview
                     </h3>
                     <p className="mt-0.5 text-[13px] text-slate-500">
@@ -3560,7 +3609,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <button
                   type="button"
                   onClick={openChangePassword}
-                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700"
+                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                 >
                   <KeyRound size={14} />
                   Change Password
@@ -3568,19 +3617,19 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               </div>
 
               <div className="rounded-2xl border border-slate-200 p-5">
-                <div className="text-xs font-black text-indigo-900">
+                <div className="text-[13px] font-bold text-slate-900">
                   Account Access
                 </div>
                 <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3 text-[13px]">
                     <span className="text-slate-500">Account role</span>
-                    <span className="font-bold text-indigo-900">
+                    <span className="font-bold text-slate-900">
                       {formatRole(user.role)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-[13px]">
                     <span className="text-slate-500">Password</span>
-                    <span className="font-bold text-emerald-600">Configured</span>
+                    <span className="font-bold text-emerald-700">Configured</span>
                   </div>
                 </div>
               </div>
@@ -3590,7 +3639,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           {profileTab === "preferences" && (
             <div className="p-5 lg:p-6">
               <div className="mb-5">
-                <h3 className="text-sm font-black text-indigo-900">
+                <h3 className="text-[15px] font-bold text-slate-900">
                   UI Preferences
                 </h3>
                 <p className="mt-1 text-[13px] leading-5 text-slate-500">
@@ -3607,10 +3656,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </span>
 
                     <div>
-                      <div className="text-xs font-black text-indigo-900">
+                      <div className="text-[13px] font-bold text-slate-900">
                         Appearance
                       </div>
-                      <div className="mt-1 text-[12px] leading-4 text-slate-500">
+                      <div className="mt-1 text-[13px] leading-5 text-slate-500">
                         Choose the visual theme you prefer.
                       </div>
                     </div>
@@ -3650,10 +3699,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </span>
 
                     <div>
-                      <div className="text-xs font-black text-indigo-900">
+                      <div className="text-[13px] font-bold text-slate-900">
                         Dashboard View
                       </div>
-                      <div className="mt-1 text-[12px] leading-4 text-slate-500">
+                      <div className="mt-1 text-[13px] leading-5 text-slate-500">
                         Choose the dashboard that best matches how you work.
                       </div>
                     </div>
@@ -3681,14 +3730,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             : "border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50/40"
                         }`}
                       >
-                        <span className="block text-[12px] font-black">
+                        <span className="block text-[13px] font-bold">
                           {label}
                         </span>
                         <span
                           className={`mt-1 block text-[10px] leading-[14px] ${
                             uiPreferences.dashboardView === value
                               ? "text-indigo-100"
-                              : "text-slate-400"
+                              : "text-slate-500"
                           }`}
                         >
                           {description}
@@ -3697,7 +3746,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     ))}
                   </div>
 
-                  <div className="mt-3 text-[10px] font-semibold text-slate-400">
+                  <div className="mt-3 text-[11px] font-semibold text-slate-500">
                     Default for {formatRole(user.role)}:{" "}
                     {defaultDashboardView === "business"
                       ? "Business Summary"
@@ -3715,10 +3764,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </span>
 
                     <div>
-                      <div className="text-xs font-black text-indigo-900">
+                      <div className="text-[13px] font-bold text-slate-900">
                         Dashboard Elements
                       </div>
-                      <div className="mt-1 text-[12px] leading-4 text-slate-500">
+                      <div className="mt-1 text-[13px] leading-5 text-slate-500">
                         Choose which optional elements should be visible.
                       </div>
                     </div>
@@ -3734,10 +3783,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
                       >
                         <div>
-                          <div className="text-[13px] font-bold text-slate-800">
+                          <div
+                            id={`pref-${key}-label`}
+                            className="text-[13px] font-bold text-slate-800"
+                          >
                             {label}
                           </div>
-                          <div className="mt-0.5 text-[13px] text-slate-400">
+                          <div className="mt-0.5 text-[13px] text-slate-500">
                             {description}
                           </div>
                         </div>
@@ -3746,15 +3798,16 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           type="button"
                           role="switch"
                           aria-checked={Boolean(uiPreferences[key])}
+                          aria-labelledby={`pref-${key}-label`}
                           onClick={() =>
                             updateUiPreference(
                               key,
                               !uiPreferences[key]
                             )
                           }
-                          className={`relative inline-flex h-[28px] w-[52px] flex-shrink-0 items-center rounded-full border p-[3px] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-100 ${
+                          className={`relative inline-flex h-[28px] w-[52px] flex-shrink-0 items-center rounded-full border p-[3px] transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                             uiPreferences[key]
-                              ? "border-[#17375e] bg-[#0b223d] shadow-inner"
+                              ? "border-indigo-600 bg-indigo-600 shadow-inner"
                               : "border-slate-300 bg-slate-200"
                           }`}
                         >
@@ -3779,10 +3832,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     </span>
 
                     <div>
-                      <div className="text-xs font-black text-indigo-900">
+                      <div className="text-[13px] font-bold text-slate-900">
                         Date & Time
                       </div>
-                      <div className="mt-1 text-[12px] leading-4 text-slate-500">
+                      <div className="mt-1 text-[13px] leading-5 text-slate-500">
                         Set how dates and time are displayed.
                       </div>
                     </div>
@@ -3801,7 +3854,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             event.target.value
                           )
                         }
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none focus:border-slate-400"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none transition-colors focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-200"
                       >
                         <option value="DD/MM/YYYY">DD/MM/YYYY</option>
                         <option value="MM/DD/YYYY">MM/DD/YYYY</option>
@@ -3821,7 +3874,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             event.target.value
                           )
                         }
-                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none focus:border-slate-400"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none transition-colors focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-200"
                       >
                         <option value="12H">12 Hour (AM/PM)</option>
                         <option value="24H">24 Hour</option>
@@ -3836,7 +3889,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   <div className="text-[13px] font-bold text-slate-800">
                     Personal UI preferences
                   </div>
-                  <div className="mt-0.5 text-[13px] text-slate-400">
+                  <div className="mt-0.5 text-[13px] text-slate-500">
                     These choices are stored for this browser.
                   </div>
                 </div>
@@ -3844,7 +3897,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <button
                   type="button"
                   onClick={saveUiPreferences}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-xs font-bold text-white transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                 >
                   {uiPreferencesSaved ? (
                     <CheckCircle2 size={14} />
@@ -3863,7 +3916,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             <div className="p-5 lg:p-6">
               <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <h3 className="text-sm font-black text-indigo-900">
+                  <h3 className="text-[15px] font-bold text-slate-900">
                     Active Sessions
                   </h3>
                   <p className="mt-1 text-[13px] leading-5 text-slate-500">
@@ -3879,7 +3932,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                     type="button"
                     onClick={revokeOtherProfileSessions}
                     disabled={Boolean(profileSessionAction)}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 disabled:opacity-50"
                   >
                     {profileSessionAction === "others" ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -3966,12 +4019,12 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <div className="text-sm font-black text-indigo-900">
+                                  <div className="text-[15px] font-bold text-slate-900">
                                     {session.deviceName || "Unknown device"}
                                   </div>
 
                                   {session.current && (
-                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[13px] font-black uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 ring-1 ring-inset ring-emerald-200">
                                       This device
                                     </span>
                                   )}
@@ -3984,7 +4037,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                                 <div className="mt-3 grid gap-2 text-[12px] text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
                                   <div>
-                                    <div className="font-bold uppercase tracking-wide text-slate-400">
+                                    <div className="font-bold uppercase tracking-wide text-slate-500">
                                       Last active
                                     </div>
                                     <div
@@ -3999,7 +4052,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
 
                                   <div>
-                                    <div className="font-bold uppercase tracking-wide text-slate-400">
+                                    <div className="font-bold uppercase tracking-wide text-slate-500">
                                       Signed in
                                     </div>
                                     <div className="mt-1 font-semibold text-slate-700">
@@ -4008,7 +4061,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
 
                                   <div>
-                                    <div className="font-bold uppercase tracking-wide text-slate-400">
+                                    <div className="font-bold uppercase tracking-wide text-slate-500">
                                       IP address
                                     </div>
                                     <div className="mt-1 font-semibold text-slate-700">
@@ -4017,7 +4070,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                   </div>
 
                                   <div>
-                                    <div className="font-bold uppercase tracking-wide text-slate-400">
+                                    <div className="font-bold uppercase tracking-wide text-slate-500">
                                       Approx. location
                                     </div>
                                     <div className="mt-1 font-semibold text-slate-700">
@@ -4031,10 +4084,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                 type="button"
                                 onClick={() => revokeProfileSession(session)}
                                 disabled={Boolean(profileSessionAction)}
-                                className={`inline-flex h-9 flex-shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-[13px] font-bold disabled:opacity-50 ${
+                                className={`inline-flex h-9 flex-shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-[13px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 ${
                                   session.current
-                                    ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                                    : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                    ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-400"
+                                    : "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 focus-visible:ring-rose-400"
                                 }`}
                               >
                                 {profileSessionAction === session.id ? (
@@ -4056,7 +4109,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           size={24}
                           className="mx-auto text-slate-300"
                         />
-                        <div className="mt-3 text-sm font-black text-indigo-900">
+                        <div className="mt-3 text-[15px] font-bold text-slate-900">
                           No active sessions found
                         </div>
                       </div>
@@ -4066,7 +4119,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   <div className="mt-7">
                     <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                       <div>
-                        <h3 className="text-sm font-black text-indigo-900">
+                        <h3 className="text-[15px] font-bold text-slate-900">
                           Session History
                         </h3>
                         <p className="mt-1 text-[13px] text-slate-500">
@@ -4079,7 +4132,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                           type="button"
                           onClick={clearProfileSessionHistory}
                           disabled={profileHistoryClearing}
-                          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-[13px] font-bold text-slate-600 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 disabled:opacity-50"
                         >
                           {profileHistoryClearing ? (
                             <Loader2
@@ -4153,10 +4206,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                                 <div className="min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-2">
-                                    <div className="text-xs font-black text-indigo-900">
+                                    <div className="text-[13px] font-bold text-slate-900">
                                       {session.deviceName || "Unknown device"}
                                     </div>
-                                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-slate-500">
+                                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-600">
                                       {reasonMap[session.historyStatus] ||
                                         session.historyStatus ||
                                         "Ended"}
@@ -4169,7 +4222,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                     {location ? ` · ${location}` : ""}
                                   </div>
 
-                                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-slate-400">
+                                  <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-slate-500">
                                     <span>
                                       Last active:{" "}
                                       <strong className="font-semibold text-slate-600">
@@ -4244,26 +4297,33 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       },
     ];
 
+    const activeTabLabel =
+      tabs.find((tab) => tab.key === activeModule)?.label || "";
+
     return (
       <div className="space-y-5">
         <section className="border-b border-slate-200 bg-white/70 px-1 pt-1">
-          <div className="px-1 pb-4">
-            <div className="text-[13px] font-semibold text-slate-500">
-              Admissions
+          <div className="flex flex-col gap-3 px-1 lg:flex-row lg:items-end lg:justify-between">
+            <div className="pb-3 lg:pb-4">
+              <div className="text-[13px] font-semibold text-slate-500">
+                Admissions
+              </div>
+
+              <h1 className="mt-1 text-[28px] font-bold tracking-[-0.04em] text-slate-950">
+                {marketLabel}
+                {activeTabLabel ? (
+                  <span className="sr-only"> {activeTabLabel}</span>
+                ) : null}
+              </h1>
+
+              <p className="mt-1 text-[13px] text-slate-500">
+                {isInternational
+                  ? "Manage international walk-ins, counselling and completed admissions."
+                  : "Manage domestic walk-ins, counselling and completed admissions."}
+              </p>
             </div>
 
-            <h1 className="mt-1 text-[28px] font-bold tracking-[-0.04em] text-slate-950">
-              {marketLabel}
-            </h1>
-
-            <p className="mt-1 text-[13px] text-slate-500">
-              {isInternational
-                ? "Manage international walk-ins, counselling and completed admissions."
-                : "Manage domestic walk-ins, counselling and completed admissions."}
-            </p>
-          </div>
-
-          <div className="flex min-w-0 gap-7 overflow-x-auto px-1">
+            <div className="flex min-w-0 gap-6 overflow-x-auto" role="group" aria-label="Admissions sections">
             {tabs.map((tab) => {
               if (!hasModulePermission(tab.key)) return null;
 
@@ -4280,6 +4340,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <button
                   key={tab.key}
                   type="button"
+                  aria-current={active ? "page" : undefined}
                   onClick={() => setModule(tab.key)}
                   className={`relative flex h-12 flex-shrink-0 items-center gap-2 px-1 text-[13px] font-semibold transition-colors ${
                     active
@@ -4311,6 +4372,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </button>
               );
             })}
+            </div>
           </div>
         </section>
 
@@ -4328,7 +4390,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     if (moduleKey === "chats") {
-      return <ChatPanel currentUser={user} />;
+      return <ChatPanel currentUser={user} selectedYear={selectedYear} />;
     }
 
     if (moduleKey === "goals-and-targets") {
@@ -4414,7 +4476,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       moduleKey
     ) {
       case "chats":
-        return <ChatPanel currentUser={user} />;
+        return <ChatPanel currentUser={user} selectedYear={selectedYear} />;
 
       case "dashboard":
         return (
@@ -5017,11 +5079,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
             <button
               type="button"
-              onClick={() => setQuickCreateOpen(true)}
+              onClick={(e) => {
+                quickAddAnchorRef.current = e.currentTarget;
+                setQuickAddOpen(true);
+              }}
               aria-label="Quick create"
               aria-haspopup="dialog"
-              aria-expanded={quickCreateOpen}
-              className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              aria-expanded={quickAddOpen}
+              className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:bg-slate-100 focus-visible:text-slate-950"
             >
               <Plus size={19} aria-hidden="true" />
             </button>
@@ -5519,6 +5584,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         onDrop={() => handleNavDrop(navIndex)}
                         onDragEnd={handleNavDragEnd}
                         title={sidebarCompact ? group.label : undefined}
+                        aria-label={
+                          sidebarCompact
+                            ? key === "chats" && unreadChatCount > 0
+                              ? `${group.label}, ${unreadChatCount} unread`
+                              : group.label
+                            : undefined
+                        }
                         aria-current={active ? "page" : undefined}
                         onClick={() => {
                           setModule(key);
@@ -5528,16 +5600,26 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             ? "h-11 rounded-xl flex items-center justify-center"
                             : "rounded-xl px-3 py-2.5 flex items-center gap-3"
                         } ${
-                          active
+                          sidebarCompact
+                            ? active
+                              ? "bg-white/[0.08] text-white"
+                              : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                            : active
                             ? "bg-brand-600 text-white shadow-brand-sm"
                             : "text-slate-400 hover:bg-slate-800 hover:text-white"
                         }`}
                       >
+                        {sidebarCompact && active && (
+                          <span
+                            className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-indigo-400"
+                            aria-hidden="true"
+                          />
+                        )}
                         {sidebarCompact ? (
                           <span className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center">
-                            <Icon size={20} strokeWidth={2} />
+                            <Icon size={compactIconSize(group.key)} strokeWidth={2} aria-hidden="true" />
                             {key === "chats" && unreadChatCount > 0 ? (
-                              <span className="absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
+                              <span aria-hidden="true" className="absolute right-0 top-0 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-black text-white">
                                 {unreadChatCount > 9 ? "9+" : unreadChatCount}
                               </span>
                             ) : null}
@@ -5577,20 +5659,53 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   const open = Boolean(openGroups[group.key]);
 
                   if (sidebarCompact) {
+                    // Collapsed rail: the group icon is a disclosure that reveals
+                    // a hover/focus flyout of its children (not an inline push-
+                    // down). The panel is a fixed-position descendant so it
+                    // escapes the rail's overflow while staying in Tab order and
+                    // keeping the pointer "inside" when moving onto it.
+                    const flyoutOpen = sidebarFlyout?.key === group.key;
                     return (
-                      <div key={group.key} className="mb-1">
+                      <div
+                        key={group.key}
+                        className="mb-1"
+                        onMouseEnter={(e) =>
+                          openSidebarFlyout(group.key, e.currentTarget)
+                        }
+                        onMouseLeave={closeSidebarFlyout}
+                        onFocus={(e) =>
+                          openSidebarFlyout(group.key, e.currentTarget)
+                        }
+                        onBlur={(e) => {
+                          if (!e.currentTarget.contains(e.relatedTarget)) {
+                            closeSidebarFlyout();
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            closeSidebarFlyout();
+                            e.currentTarget
+                              .querySelector("button[data-flyout-trigger]")
+                              ?.focus();
+                          }
+                        }}
+                      >
                         <button
                           type="button"
-                          title={group.label}
-                          onClick={() =>
-                            setOpenGroups((current) => ({
-                              ...current,
-                              [group.key]: !current[group.key],
-                            }))
+                          data-flyout-trigger
+                          aria-label={group.label}
+                          aria-expanded={flyoutOpen}
+                          aria-controls={
+                            flyoutOpen ? `flyout-${group.key}` : undefined
                           }
-                          className={`relative h-11 w-full rounded-lg flex items-center justify-center transition-all duration-300 ${
-                            groupActive
-                              ? "bg-white/10 text-white"
+                          onClick={(e) =>
+                            flyoutOpen
+                              ? closeSidebarFlyout()
+                              : openSidebarFlyout(group.key, e.currentTarget)
+                          }
+                          className={`relative h-11 w-full rounded-xl flex items-center justify-center transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
+                            groupActive || flyoutOpen
+                              ? "bg-white/[0.08] text-white"
                               : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                           }`}
                         >
@@ -5598,12 +5713,21 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-indigo-400" />
                           )}
                           <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
-                            <Icon size={24} strokeWidth={2} />
+                            <Icon size={compactIconSize(group.key)} strokeWidth={2} aria-hidden="true" />
                           </span>
                         </button>
 
-                        {open && (
-                          <div className="mt-1 space-y-1">
+                        {flyoutOpen && (
+                          <div
+                            id={`flyout-${group.key}`}
+                            role="group"
+                            aria-label={group.label}
+                            style={{ top: sidebarFlyout.top }}
+                            className="fixed left-[72px] z-[90] ml-1 w-56 rounded-xl border border-white/10 bg-[#0f172a] p-1.5 shadow-[0_18px_44px_rgba(2,8,23,0.5)]"
+                          >
+                            <div className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                              {group.label}
+                            </div>
                             {group.items.map((key) => {
                               const meta = MODULE_META[key];
                               if (!meta || !hasModulePermission(key)) return null;
@@ -5615,23 +5739,29 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                 <button
                                   key={key}
                                   type="button"
-                                  title={meta.label}
-                                  onClick={() => setModule(key)}
-                                  className={`relative mx-auto flex h-9 w-10 items-center justify-center rounded-lg transition-all duration-200 ${
+                                  aria-current={active ? "page" : undefined}
+                                  onClick={() => {
+                                    setModule(key);
+                                    closeSidebarFlyout();
+                                    focusMainContentSoon();
+                                  }}
+                                  className={`relative flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 ${
                                     active
-                                      ? "bg-indigo-500/20 text-indigo-200"
-                                      : "text-slate-500 hover:bg-white/[0.06] hover:text-white"
+                                      ? "bg-indigo-500/20 text-indigo-100"
+                                      : "text-slate-300 hover:bg-white/[0.06] hover:text-white"
                                   }`}
                                 >
                                   {active && (
-                                    <span className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-indigo-400" />
+                                    <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-indigo-400" />
                                   )}
-                                  <ChildIcon size={18} strokeWidth={2} />
-
-                                  {(key.includes("walkins") || key.includes("counselling")) && (
-                                    <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
-                                  )}
-
+                                  <ChildIcon
+                                    size={16}
+                                    strokeWidth={2}
+                                    className={
+                                      active ? "text-indigo-300" : "text-slate-400"
+                                    }
+                                  />
+                                  {meta.label}
                                 </button>
                               );
                             })}
@@ -5977,11 +6107,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 {/* QUICK CREATE */}
                 <button
                   type="button"
-                  onClick={() => setQuickCreateOpen(true)}
+                  onClick={(e) => {
+                    quickAddAnchorRef.current = e.currentTarget;
+                    setQuickAddOpen(true);
+                  }}
                   className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label="Quick create"
                   aria-haspopup="dialog"
-                  aria-expanded={quickCreateOpen}
+                  aria-expanded={quickAddOpen}
                   title="Create task or meeting"
                 >
                   <Plus size={19} />
@@ -6405,6 +6538,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
                       {billingData.subscription && (
                         <>
+                          {billingData.subscription.plan?.maxUsers != null && (
+                            <div className="text-xs font-semibold text-slate-500 mt-1">
+                              {billingData.subscription.plan.maxUsers === 1
+                                ? "1 user included"
+                                : `${billingData.subscription.plan.maxUsers} users included`}
+                            </div>
+                          )}
                           <div className="text-xs text-slate-500 mt-1">
                             Annual · Manual renewal · Due{" "}
                             {billingData.subscription.renewalDate
@@ -6495,7 +6635,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       </div>
                     </div>
 
-                    <div className="mt-7 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       {billingData.plans.map((billingPlan) => {
                         const isCurrent =
                           billingData.subscription?.plan?.key === billingPlan.key;
@@ -6574,6 +6714,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                             : null;
 
                         const planDescriptions = {
+                          startup:
+                            "Essential CRM tools for a small 2-person team getting started.",
                           basic:
                             "Essential CRM tools for teams getting started.",
                           pro:
@@ -6583,6 +6725,15 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         };
 
                         const featureMap = {
+                          startup: [
+                            "Up to 2 users",
+                            "Dashboard & core analytics",
+                            "UTM Leads & Lead Store",
+                            "Admissions management",
+                            "Revenue tracking",
+                            "In-app notifications",
+                            "Standard support",
+                          ],
                           basic: [
                             "Dashboard & core analytics",
                             "UTM Leads & Lead Store",
@@ -6969,9 +7120,24 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         onFocusConsumed={() => setCalendarFocusEventId(null)}
       />
 
+      <QuickAddPopover
+        open={quickAddOpen}
+        anchorRef={quickAddAnchorRef}
+        onClose={() => setQuickAddOpen(false)}
+        onOpenFull={(initial) => {
+          setQuickCreateInitial(initial);
+          setQuickCreateOpen(true);
+        }}
+        onCreated={() => setCalendarRefreshToken((n) => n + 1)}
+      />
+
       <QuickCreateDrawer
         open={quickCreateOpen}
-        onClose={() => setQuickCreateOpen(false)}
+        initial={quickCreateInitial}
+        onClose={() => {
+          setQuickCreateOpen(false);
+          setQuickCreateInitial(null);
+        }}
         onCreated={() => setCalendarRefreshToken((n) => n + 1)}
       />
 

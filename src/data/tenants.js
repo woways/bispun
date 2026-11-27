@@ -2,7 +2,7 @@ import {
   LayoutDashboard,
   Link2,
   UserCheck,
-  DollarSign,
+  IndianRupee,
   Database,
   UserPlus,
   Video,
@@ -199,7 +199,7 @@ export const MODULE_META = {
 
   revenue: {
     label: "Revenue",
-    icon: DollarSign,
+    icon: IndianRupee,
   },
 
   "lead-store": {

@@ -61,7 +61,6 @@ import {
 } from "../../components/ui";
 import DetailModal from "../../components/DetailModal";
 import AssigneePicker from "../../components/AssigneePicker";
-import QuickCreateDrawer from "../../components/QuickCreateDrawer";
 
 import {
   apiRequest,
@@ -3400,9 +3399,6 @@ export default function LeadStore({
     setBulkAssigning,
   ] = useState(false);
 
-  // Header "+" quick-create (task / meeting), same drawer as the app header.
-  const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-
   const [temperatureUpdatingId, setTemperatureUpdatingId] = useState("");
   const [assigningLeadId, setAssigningLeadId] = useState("");
   const [statusUpdatingId, setStatusUpdatingId] = useState("");
@@ -5940,18 +5936,6 @@ export default function LeadStore({
             <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap native:flex-nowrap native:shrink-0">
               <button
                 type="button"
-                onClick={() => setQuickCreateOpen(true)}
-                className="h-9 px-3.5 rounded-lg bg-indigo-600 text-[13px] font-semibold text-white inline-flex items-center justify-center gap-2 transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 native:h-10"
-                aria-haspopup="dialog"
-                aria-expanded={quickCreateOpen}
-                title="Quick create task or meeting"
-              >
-                <Plus size={14} aria-hidden="true" />
-                Quick create
-              </button>
-
-              <button
-                type="button"
                 onClick={() => {
                   setViewOpen(false);
                   setFiltersOpen((current) => !current);
@@ -7672,11 +7656,6 @@ export default function LeadStore({
         open={Boolean(callLead)}
         onClose={() => setCallLead(null)}
         lead={callLead}
-      />
-
-      <QuickCreateDrawer
-        open={quickCreateOpen}
-        onClose={() => setQuickCreateOpen(false)}
       />
     </div>
   );

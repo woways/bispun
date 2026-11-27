@@ -8,7 +8,6 @@ import {
   AlertCircle,
   RefreshCw,
   Target,
-  CircleDollarSign,
   Wallet,
   Users,
   Activity,
@@ -156,31 +155,178 @@ function stripHtml(value) {
     .trim();
 }
 
+const ACCENT_HEX = {
+  indigo: "#4f46e5",
+  emerald: "#059669",
+  amber: "#d97706",
+  rose: "#e11d48",
+  slate: "#475569",
+  violet: "#7c3aed",
+};
+
+// Exact decorative sparkline shapes from the approved artifact (viewBox 0 0 64 34),
+// drawn aria-hidden. Ornamental accents — the real metric is the big number.
+const SPARK_AREAS = {
+  total: "M1,25 C8,24 11,18 16,19 C22,20 25,13 31,14 C37,15 40,9 46,11 C52,13 56,4 63,3",
+  new: "M1,21 C7,22 10,14 16,15 C22,16 25,10 31,13 C37,16 40,9 46,11 C52,13 56,6 63,8",
+  potential: "M1,26 C8,25 11,19 16,20 C22,21 25,14 31,15 C37,16 40,10 46,9 C52,8 56,4 63,2",
+  pending: "M1,8 C8,9 11,14 16,13 C22,12 25,18 31,18 C37,18 40,23 46,24 C52,25 56,22 63,28",
+};
+const SPARK_BARS = {
+  qualified: [[20, 14], [16, 18], [22, 12], [12, 22], [17, 17], [8, 26], [3, 31]],
+  received: [[23, 11], [18, 16], [21, 13], [13, 21], [16, 18], [9, 25], [5, 29]],
+};
+
+// Renders an exact decorative artifact shape (area or bars) at 64x34. aria-hidden by caller.
+function MiniSpark({ shape, kind = "area", color }) {
+  if (kind === "bars") {
+    const bars = SPARK_BARS[shape] || [];
+    return (
+      <svg
+        viewBox="0 0 64 34"
+        focusable="false"
+        preserveAspectRatio="none"
+        width="100%"
+        height="100%"
+      >
+        {bars.map(([y, h], i) => (
+          <rect
+            key={i}
+            x={2 + i * 9}
+            y={y}
+            width="6"
+            height={h}
+            rx="1.5"
+            fill={color}
+            opacity={bars.length > 1 ? 0.42 + 0.58 * (i / (bars.length - 1)) : 1}
+          />
+        ))}
+      </svg>
+    );
+  }
+
+  const d = SPARK_AREAS[shape] || SPARK_AREAS.total;
+
+  if (kind === "line") {
+    const end = d.match(/([\d.]+),([\d.]+)$/);
+    return (
+      <svg
+        viewBox="0 0 69 34"
+        focusable="false"
+        preserveAspectRatio="none"
+        width="100%"
+        height="100%"
+        style={{ overflow: "visible" }}
+      >
+        <path
+          d={d}
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {end ? <circle cx={end[1]} cy={end[2]} r="2.6" fill={color} /> : null}
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      viewBox="0 0 64 34"
+      focusable="false"
+      preserveAspectRatio="none"
+      width="100%"
+      height="100%"
+    >
+      <path d={`${d} L63,34 L1,34 Z`} fill={color} fillOpacity="0.16" />
+      <path
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// Decorative half-circle gauge filled to a percentage. Caller marks it aria-hidden; the
+// % is also stated in the card's aria-label so screen readers get it from the button name.
+function MiniGauge({ pct, color }) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  const LEN = 81.68; // pi x r(26)
+  const dash = (p / 100) * LEN;
+  return (
+    <svg viewBox="0 0 64 50" focusable="false" width="100%" height="100%">
+      <path
+        d="M6,42 A26,26 0 0 1 58,42"
+        fill="none"
+        stroke="#e7ebf3"
+        strokeWidth="7"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6,42 A26,26 0 0 1 58,42"
+        fill="none"
+        stroke={color}
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={`${dash.toFixed(1)} ${LEN.toFixed(1)}`}
+      />
+      <text
+        x="32"
+        y="39"
+        textAnchor="middle"
+        fontSize={p >= 100 ? 10.5 : 12}
+        fontWeight="800"
+        letterSpacing={p >= 100 ? "-0.3" : "0"}
+        fill="#0f172a"
+      >
+        {p}%
+      </text>
+    </svg>
+  );
+}
+
 function MetricCard({
   label,
   value,
   icon: Icon,
   detail,
   accent = "indigo",
+  ratio,
+  graph,
   onClick,
 }) {
-  const tones = {
-    indigo: "bg-indigo-500",
-    emerald: "bg-emerald-500",
-    amber: "bg-amber-500",
-    rose: "bg-rose-500",
-    slate: "bg-slate-500",
+  // Darker 600->700 gradient keeps the white glyph >=3:1 across the whole tile.
+  const gradTones = {
+    indigo: "bg-gradient-to-br from-indigo-600 to-indigo-700",
+    emerald: "bg-gradient-to-br from-emerald-600 to-emerald-700",
+    amber: "bg-gradient-to-br from-amber-600 to-amber-700",
+    rose: "bg-gradient-to-br from-rose-600 to-rose-700",
+    slate: "bg-gradient-to-br from-slate-600 to-slate-700",
   };
-  const bar = tones[accent] || tones.indigo;
+  const bar = gradTones[accent] || gradTones.indigo;
+
+  // Chip colors meet WCAG AA (>=4.5:1) for small text on the white card.
+  const chipTones = {
+    pos: "text-emerald-700",
+    warn: "text-amber-700",
+    neutral: "text-slate-600",
+  };
+  const chipTone = chipTones[ratio?.tone] || chipTones.neutral;
+  const graphColor = ACCENT_HEX[accent] || ACCENT_HEX.indigo;
 
   const content = (
     <>
       <div className="flex items-center gap-2.5 sm:gap-3">
         <div
-          className={`flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl text-white ${bar}`}
+          className={`flex h-9 w-9 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-xl text-white shadow-sm ${bar}`}
         >
-          <Icon size={18} className="sm:hidden" />
-          <Icon size={20} className="hidden sm:block" />
+          <Icon size={18} className="sm:hidden" aria-hidden="true" />
+          <Icon size={20} className="hidden sm:block" aria-hidden="true" />
         </div>
 
         <div className="min-w-0 text-[14px] sm:text-[16px] font-bold text-slate-800 break-words">
@@ -188,8 +334,22 @@ function MetricCard({
         </div>
       </div>
 
-      <div className="mt-2.5 sm:mt-3 text-[18px] sm:text-[22px] leading-none font-extrabold tracking-tight tabular-nums text-slate-900 break-words">
-        {value}
+      <div className="mt-2.5 sm:mt-3 flex items-end justify-between gap-2.5">
+        <div className="min-w-0 text-[18px] sm:text-[22px] leading-none font-extrabold tracking-tight tabular-nums text-slate-900 break-words">
+          {value}
+        </div>
+        {graph ? (
+          <div
+            className="flex h-[44px] w-[78px] flex-shrink-0 items-end"
+            aria-hidden="true"
+          >
+            {graph.kind === "gauge" ? (
+              <MiniGauge pct={graph.pct} color={graphColor} />
+            ) : (
+              <MiniSpark shape={graph.shape} kind={graph.kind} color={graphColor} />
+            )}
+          </div>
+        ) : null}
       </div>
 
       {detail ? (
@@ -198,9 +358,9 @@ function MetricCard({
         </div>
       ) : null}
       {onClick ? (
-        <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
+        <div className="pointer-events-none absolute bottom-3 right-3 sm:bottom-4 sm:right-4 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
           View details
-          <ArrowUpRight size={12} />
+          <ArrowUpRight size={12} aria-hidden="true" />
         </div>
       ) : null}
     </>
@@ -215,7 +375,7 @@ function MetricCard({
         type="button"
         onClick={onClick}
         className={`${className} w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2`}
-        aria-label={`Open ${label} details`}
+        aria-label={`${label}: ${value}${detail ? `, ${detail}` : ""}${ratio ? `, ${ratio.text}` : ""}. Open details.`}
       >
         {content}
       </button>
@@ -677,7 +837,9 @@ export default function Dashboard({
 
   useEffect(() => {
     loadDashTasks();
-  }, []);
+    // calendarRefreshToken is bumped by the header quick-add, so a task created
+    // there shows up in the dashboard list immediately (not just on reload).
+  }, [calendarRefreshToken]);
 
   function setTaskField(field, value) {
     setTaskForm((prev) => ({ ...prev, [field]: value }));
@@ -1325,7 +1487,7 @@ export default function Dashboard({
   const actionIconByKey = {
     "hot-leads": Users,
     "overdue-followups": Clock,
-    "pending-payments": CircleDollarSign,
+    "pending-payments": IndianRupee,
     "whatsapp-replies": MessageCircle,
     "revenue-risk": AlertCircle,
   };
@@ -1336,6 +1498,28 @@ export default function Dashboard({
     indigo: "border-indigo-100 bg-indigo-50/60 text-indigo-700",
     slate: "border-slate-200 bg-slate-50 text-slate-700",
   };
+
+  // Real composition ratios from current totals.
+  const pctOf = (part, whole) =>
+    whole > 0 ? Math.round(((Number(part) || 0) / whole) * 100) : null;
+  const qualifiedPct = pctOf(summary.qualifiedLeads, summary.totalLeads);
+  const newPct = pctOf(summary.newLeads, summary.totalLeads);
+  const admissionsPct = pctOf(summary.totalAdmissions, summary.qualifiedLeads);
+  const receivedPct = pctOf(summary.receivedAmount, summary.potentialRevenue);
+  const pendingPct = pctOf(summary.pendingAmount, summary.potentialRevenue);
+
+  const marginPct =
+    Number(summary.receivedAmount) > 0
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              ((Number(summary.currentProfit) || 0) / summary.receivedAmount) * 100
+            )
+          )
+        )
+      : null;
 
   const pulseMetrics = [
     {
@@ -1348,6 +1532,7 @@ export default function Dashboard({
           ? "All CRM leads"
           : `CRM leads in ${selectedYear}`,
       accent: "indigo",
+      graph: { kind: "area", shape: "total" },
     },
     {
       key: "qualified-leads",
@@ -1356,6 +1541,11 @@ export default function Dashboard({
       icon: Target,
       detail: "Qualified opportunities",
       accent: "emerald",
+      ratio:
+        qualifiedPct != null
+          ? { text: `${qualifiedPct}% of leads`, tone: "neutral" }
+          : undefined,
+      graph: { kind: "bars", shape: "qualified" },
     },
     {
       key: "new-leads",
@@ -1367,6 +1557,11 @@ export default function Dashboard({
           ? "New CRM leads"
           : `New leads in ${selectedYear}`,
       accent: "slate",
+      ratio:
+        newPct != null
+          ? { text: `${newPct}% of leads`, tone: "neutral" }
+          : undefined,
+      graph: { kind: "line", shape: "new" },
     },
     {
       key: "admissions",
@@ -1378,6 +1573,11 @@ export default function Dashboard({
           ? "Recorded admissions"
           : `Admissions in ${selectedYear}`,
       accent: "indigo",
+      ratio:
+        admissionsPct != null
+          ? { text: `${admissionsPct}% of qualified`, tone: "neutral" }
+          : undefined,
+      graph: { kind: "gauge", pct: admissionsPct ?? 0 },
     },
     {
       key: "potential-revenue",
@@ -1386,6 +1586,7 @@ export default function Dashboard({
       icon: IndianRupee,
       detail: "Total admission revenue value",
       accent: "amber",
+      graph: { kind: "area", shape: "potential" },
     },
     {
       key: "received-revenue",
@@ -1394,6 +1595,11 @@ export default function Dashboard({
       icon: CheckCircle2,
       detail: "Revenue received",
       accent: "emerald",
+      ratio:
+        receivedPct != null
+          ? { text: `${receivedPct}% collected`, tone: "pos" }
+          : undefined,
+      graph: { kind: "bars", shape: "received" },
     },
     {
       key: "pending-revenue",
@@ -1402,6 +1608,11 @@ export default function Dashboard({
       icon: Clock,
       detail: "Revenue pending collection",
       accent: "amber",
+      ratio:
+        pendingPct != null
+          ? { text: `${pendingPct}% outstanding`, tone: "warn" }
+          : undefined,
+      graph: { kind: "line", shape: "pending" },
     },
     {
       key: "current-profit",
@@ -1416,6 +1627,9 @@ export default function Dashboard({
         summary.currentProfit >= 0
           ? "emerald"
           : "rose",
+      ratio:
+        marginPct != null ? { text: `${marginPct}% margin`, tone: "pos" } : undefined,
+      graph: { kind: "gauge", pct: marginPct ?? 0 },
     },
   ];
 
@@ -2743,7 +2957,7 @@ export default function Dashboard({
                     value={taskForm.title}
                     onChange={(e) => setTaskField("title", e.target.value)}
                     placeholder="e.g. Call Ananya about B.Tech admission"
-                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 outline-none focus:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1"
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13.5px] text-slate-900 caret-indigo-600 outline-none focus:border-slate-500"
                   />
                   {taskFormError ? (
                     <p id="task-title-error" className="mt-1 text-[11.5px] font-semibold text-rose-600">

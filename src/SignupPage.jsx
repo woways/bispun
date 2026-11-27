@@ -1255,7 +1255,7 @@ export default function SignupPage() {
                           Loading plans…
                         </p>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div role="radiogroup" aria-label="Choose a plan" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           {plans.map((p) => {
                             const selected = planKey === p.key;
                             return (
@@ -1303,6 +1303,11 @@ export default function SignupPage() {
                                       ? `${(p.storageLimitMb / 1024).toFixed(p.storageLimitMb % 1024 === 0 ? 0 : 1)} GB storage`
                                       : `${p.storageLimitMb} MB storage`}
                                 </span>
+                                {p.maxUsers != null && (
+                                  <span className="mt-1 block text-[11px] font-semibold text-slate-600">
+                                    {p.maxUsers === 1 ? "Up to 1 user" : `Up to ${p.maxUsers} users`}
+                                  </span>
+                                )}
                                 <div className="mt-auto pt-3 text-[11px] text-slate-400">
                                   + {p.breakdown.gstRate}% GST
                                 </div>

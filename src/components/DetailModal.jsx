@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, X } from "lucide-react";
 import { pushBackInterceptor } from "../lib/backStack";
 
@@ -198,7 +199,7 @@ export default function DetailModal({
     );
   }
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[9999] flex justify-end bg-slate-950/55 backdrop-blur-[3px]"
       onMouseDown={(event) => {
@@ -385,6 +386,7 @@ export default function DetailModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

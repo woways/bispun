@@ -16,6 +16,7 @@ import {
   UserPlus,
   Mail,
   Share2,
+  PhoneCall,
 } from "lucide-react";
 
 import { apiRequest } from "../../lib/api";
@@ -40,6 +41,10 @@ function qrUrl(text) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(text)}`;
 }
 
+function telHref(phone) {
+  return `tel:${String(phone || "").replace(/[^0-9+]/g, "")}`;
+}
+
 const CARD = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm";
 
 export default function MyReferrals({ currentUser }) {
@@ -58,6 +63,7 @@ export default function MyReferrals({ currentUser }) {
   const [referrerId, setReferrerId] = useState("");
   const [tagging, setTagging] = useState("");
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   const copyTimer = useRef(0);
   const tagBtnRef = useRef(null);
@@ -215,7 +221,15 @@ export default function MyReferrals({ currentUser }) {
     admitted: referrals.filter((r) => catOf(r) === "admitted").length,
     lost: referrals.filter((r) => catOf(r) === "lost").length,
   };
-  const shownReferrals = referrals.filter((r) => filter === "all" || catOf(r) === filter);
+  const q = search.trim().toLowerCase();
+  const shownReferrals = referrals.filter(
+    (r) =>
+      (filter === "all" || catOf(r) === filter) &&
+      (!q ||
+        [r.lead.name, r.lead.phone, r.lead.course].some((v) =>
+          String(v || "").toLowerCase().includes(q)
+        ))
+  );
 
   // ── FUTURE: per-referral "Send reminder" action ────────────────────────────
   // Intentionally NOT shipped. There is no backend endpoint to send a referral
@@ -289,42 +303,36 @@ export default function MyReferrals({ currentUser }) {
       {/* SUMMARY TILES */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total referrals</span>
-              <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-brand-700 native:text-[20px]">{stats.total}</div>
-              <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">{convRate}% reached Admitted</div>
-            </div>
-            <div className="relative h-14 w-14 flex-shrink-0 native:hidden" aria-hidden="true">
-              <svg viewBox="0 0 36 36" className="h-full w-full -rotate-90">
-                <circle cx="18" cy="18" r="15.9" fill="none" className="text-slate-200" stroke="currentColor" strokeWidth="4" />
-                <circle cx="18" cy="18" r="15.9" fill="none" className="text-brand-600" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeDasharray="100" strokeDashoffset={100 - convRate} />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center text-[11.5px] font-bold tabular-nums text-brand-700">{convRate}%</div>
-            </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total referrals</span>
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:h-8 native:w-8" aria-hidden="true">
+              <Users size={18} strokeWidth={2} />
+            </span>
           </div>
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.total}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">{convRate}% reached Admitted</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">In progress</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
-              <Clock3 size={18} />
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 native:h-8 native:w-8" aria-hidden="true">
+              <Clock3 size={18} strokeWidth={2} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.inProgress}</div>
-          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Still moving through stages</div>
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.inProgress}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Still moving through stages</div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Admitted</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:hidden" aria-hidden="true">
-              <CheckCircle2 size={18} />
+            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 native:h-8 native:w-8" aria-hidden="true">
+              <CheckCircle2 size={18} strokeWidth={2} />
             </span>
           </div>
-          <div className="mt-2 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.admitted}</div>
-          <div className="mt-1 text-[12px] text-slate-500 native:mt-0.5 native:text-[10px] native:leading-tight">Reached the final stage</div>
+          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.admitted}</div>
+          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Reached the final stage</div>
         </div>
       </div>
 
@@ -410,47 +418,46 @@ export default function MyReferrals({ currentUser }) {
       </div>
 
       {/* YOUR REFERRALS */}
-      <div className={CARD}>
-        <h2 className="text-[17px] font-semibold text-slate-950">Your referrals</h2>
-        <p className="mt-1 text-[13px] text-slate-500">
-          Each person moves through 5 stages. The bar fills as they progress — the fuller the bar, the closer to Admitted.
-        </p>
-
-        {/* numbered pipeline legend */}
-        <ol className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
-          {STAGE_ORDER.map((st, i) => (
-            <li key={st} className="flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700">
-                <span className="grid h-[19px] w-[19px] place-items-center rounded-full bg-brand-50 text-[10px] font-bold text-brand-700">{i + 1}</span>
-                {STAGE_LABELS[st]}
-              </span>
-              {i < STAGE_ORDER.length - 1 && <span className="px-0.5 text-slate-300" aria-hidden="true">→</span>}
-            </li>
-          ))}
-        </ol>
-
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
-            <Loader2 size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> Loading…
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[17px] font-semibold text-slate-950">Your referrals</h2>
+              <p className="mt-1 text-[13px] text-slate-500">
+                Each person moves through 5 stages. The bar fills as they progress — the fuller the bar, the closer to Admitted.
+              </p>
+            </div>
+            {referrals.length > 0 && (
+              <div className="relative w-full sm:w-auto">
+                <label htmlFor="your-ref-search" className="sr-only">Search your referrals by name, phone or course</label>
+                <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  id="your-ref-search"
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search referrals"
+                  className="h-9 w-full rounded-lg border border-slate-300 bg-slate-50 pl-9 pr-3 text-[13px] outline-none transition focus:border-brand-400 focus:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 sm:w-56"
+                />
+              </div>
+            )}
           </div>
-        ) : referrals.length === 0 ? (
-          <div className="mt-4 flex flex-col items-center rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-10 text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-              <Users size={22} aria-hidden="true" />
-            </span>
-            <div className="mt-3 text-[14px] font-semibold text-slate-800">No referrals tagged yet</div>
-            <p className="mt-1 max-w-xs text-[12.5px] text-slate-500">Tag a lead you referred and watch it move through the stages here.</p>
-            <button
-              type="button"
-              onClick={openTag}
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
-            >
-              <Plus size={15} aria-hidden="true" /> Tag a referral
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* filter chips */}
+
+          {/* numbered pipeline legend */}
+          <ol className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-3">
+            {STAGE_ORDER.map((st, i) => (
+              <li key={st} className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-700">
+                  <span className="grid h-[19px] w-[19px] place-items-center rounded-full bg-brand-50 text-[10px] font-bold text-brand-700">{i + 1}</span>
+                  {STAGE_LABELS[st]}
+                </span>
+                {i < STAGE_ORDER.length - 1 && <span className="px-0.5 text-slate-300" aria-hidden="true">→</span>}
+              </li>
+            ))}
+          </ol>
+
+          {/* filter chips */}
+          {referrals.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Filter referrals by stage">
               {[
                 ["all", "All"],
@@ -473,13 +480,54 @@ export default function MyReferrals({ currentUser }) {
                 </button>
               ))}
             </div>
+          )}
+        </div>
 
-            {shownReferrals.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-center text-[13px] text-slate-500">
-                No referrals match this filter.
-              </div>
-            ) : (
-              <ul className="mt-4 space-y-3">
+        {/* Always-mounted polite live region: result count */}
+        <span role="status" aria-live="polite" className="sr-only">
+          {loading ? "Loading referrals" : `${shownReferrals.length} referral${shownReferrals.length === 1 ? "" : "s"} shown`}
+        </span>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+            <Loader2 size={16} aria-hidden="true" className="animate-spin motion-reduce:animate-none" /> Loading…
+          </div>
+        ) : referrals.length === 0 ? (
+          <div className="flex flex-col items-center px-4 py-10 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+              <Users size={22} aria-hidden="true" />
+            </span>
+            <div className="mt-3 text-[14px] font-semibold text-slate-800">No referrals tagged yet</div>
+            <p className="mt-1 max-w-xs text-[12.5px] text-slate-500">Tag a lead you referred and watch it move through the stages here.</p>
+            <button
+              type="button"
+              onClick={openTag}
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            >
+              <Plus size={15} aria-hidden="true" /> Tag a referral
+            </button>
+          </div>
+        ) : shownReferrals.length === 0 ? (
+          <div className="px-4 py-10 text-center text-[13px] text-slate-500">
+            No referrals match your search or filter.
+          </div>
+        ) : (
+          <div className="overflow-x-auto" tabIndex={0} role="group" aria-label="Your referrals (scrollable)">
+            <table className="w-full min-w-[840px] text-[13px]">
+              <caption className="sr-only">Your referrals: name, phone, course, current stage, progress and actions</caption>
+              <thead className="border-b border-slate-200 bg-slate-50">
+                <tr>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Referral</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Phone</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Course</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Stage</th>
+                  <th scope="col" className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Progress</th>
+                  <th scope="col" className="px-4 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
                 {shownReferrals.map((r) => {
                   const idx = Number.isInteger(r.lead.stageIndex) ? r.lead.stageIndex : STAGE_ORDER.indexOf(r.lead.stage);
                   const safeIdx = idx < 0 ? 0 : idx;
@@ -493,56 +541,78 @@ export default function MyReferrals({ currentUser }) {
                     ? "Completed — reached Admitted"
                     : `Stage ${safeIdx + 1} of 5 · ${stageName}`;
                   return (
-                    <li key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-50 text-[12px] font-semibold text-brand-700">
-                          {initialsOf(r.lead.name)}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[14.5px] font-semibold text-slate-900">{r.lead.name}</div>
-                          <div className="truncate text-[12.5px] text-slate-500">
-                            {r.lead.phone}
-                            {r.lead.course ? ` · ${r.lead.course}` : ""}
-                          </div>
+                    <tr key={r.id} className="group transition-colors hover:bg-slate-50/80">
+                      <th scope="row" className="px-4 py-3 text-left font-normal">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[11px] font-semibold text-brand-700">
+                            {initialsOf(r.lead.name)}
+                          </span>
+                          <span className="font-semibold text-slate-900">{r.lead.name}</span>
                         </div>
+                      </th>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">{r.lead.phone || "—"}</td>
+                      <td className="px-4 py-3 text-slate-600">{r.lead.course || "—"}</td>
+                      <td className="px-4 py-3">
                         {isLost ? (
-                          <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11.5px] font-bold text-slate-600">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-[11px] font-bold text-slate-600">
                             <XCircle size={12} aria-hidden="true" /> Lost
                           </span>
                         ) : isAdmitted ? (
-                          <span className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-full bg-brand-600 px-3 py-1 text-[11.5px] font-bold text-white">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
                             <CheckCircle2 size={12} aria-hidden="true" /> Admitted
                           </span>
                         ) : (
-                          <span className="inline-flex flex-shrink-0 items-center rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-[11.5px] font-bold text-brand-700">
+                          <span className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-[11px] font-bold text-brand-700">
                             {stageName}
                           </span>
                         )}
-                      </div>
-                      {/* decorative progress bar; meaning is carried by the caption text below */}
-                      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-                        <div
-                          className={`h-full rounded-full transition-all motion-reduce:transition-none ${isLost ? "bg-slate-300" : "bg-brand-600"}`}
-                          style={{ width: `${isLost ? pct : isAdmitted ? 100 : pct}%` }}
-                        />
-                      </div>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <div className={`text-[12px] ${isLost ? "text-slate-500" : "text-slate-600"}`}>{caption}</div>
-                        <span className="flex-shrink-0 text-[11.5px] tabular-nums text-slate-600">{isAdmitted ? "100%" : `${pct}%`}</span>
-                      </div>
-                    </li>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {/* decorative bar; meaning carried by the caption text below */}
+                          <div className="h-2 w-28 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                            <div
+                              className={`h-full rounded-full ${isLost ? "bg-slate-300" : "bg-brand-600"}`}
+                              style={{ width: `${isLost ? pct : isAdmitted ? 100 : pct}%` }}
+                            />
+                          </div>
+                          <span className="flex-shrink-0 text-[11.5px] tabular-nums text-slate-600">{isAdmitted ? "100%" : `${pct}%`}</span>
+                        </div>
+                        <div className={`mt-1 text-[12px] ${isLost ? "text-slate-500" : "text-slate-600"}`}>{caption}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end">
+                          {r.lead.phone ? (
+                            <a
+                              href={telHref(r.lead.phone)}
+                              aria-label={`Call ${r.lead.name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                            >
+                              <PhoneCall size={14} aria-hidden="true" />
+                            </a>
+                          ) : (
+                            <span
+                              aria-label={`No phone number for ${r.lead.name}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-300"
+                            >
+                              <PhoneCall size={14} aria-hidden="true" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
                   );
                 })}
-              </ul>
-            )}
-          </>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Tag a referral modal */}
       {tagOpen && (
         <div
-          className="fixed inset-0 z-[130] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[130] flex justify-end bg-slate-950/50"
           onClick={() => setTagOpen(false)}
         >
           <div
@@ -552,7 +622,7 @@ export default function MyReferrals({ currentUser }) {
             aria-labelledby="tag-dialog-title"
             onKeyDown={onDialogKeyDown}
             onClick={(e) => e.stopPropagation()}
-            className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:rounded-2xl"
+            className="flex h-full w-full max-w-md flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none"
           >
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
               <div id="tag-dialog-title" className="text-sm font-bold text-slate-950">Tag a lead as referred</div>

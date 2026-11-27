@@ -8,7 +8,7 @@ import {
 
 import {
   TrendingUp,
-  DollarSign,
+  IndianRupee,
   Clock,
   ArrowUpRight,
   Receipt,
@@ -28,9 +28,7 @@ import {
   FileText,
   Building2,
   CreditCard,
-  Filter,
   CalendarDays,
-  CircleDollarSign,
   CheckCircle2,
   XCircle,
   Upload,
@@ -40,7 +38,8 @@ import {
 } from "lucide-react";
 
 import {
-  LineChart,
+  ComposedChart,
+  Area,
   Line,
   XAxis,
   YAxis,
@@ -1226,7 +1225,6 @@ function RevenueMetric({
   icon: Icon,
   detail,
   tone = "indigo",
-  featured = false,
   onClick,
 }) {
   const tones = {
@@ -1245,69 +1243,74 @@ function RevenueMetric({
       type={clickable ? "button" : undefined}
       onClick={clickable ? onClick : undefined}
       aria-label={clickable ? `${label} — view details` : undefined}
-      className={`group block w-full text-left border rounded-xl p-4 transition-all ${
-        featured
-          ? "bg-indigo-600 border-indigo-600 shadow-[0_10px_30px_rgba(79,70,229,0.16)]"
-          : "bg-white border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] hover:border-slate-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)]"
-      } ${
+      className={`group flex w-full flex-col text-left border rounded-xl bg-white border-slate-200 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_26px_-16px_rgba(15,23,42,0.4)] motion-reduce:transform-none ${
         clickable
           ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 focus-visible:ring-offset-2"
           : ""
       }`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div
-            className={`text-[13px] font-semibold uppercase tracking-[0.09em] ${
-              featured ? "text-indigo-100" : "text-slate-500"
-            }`}
-          >
-            {label}
-          </div>
-
-          <div
-            className={`mt-2 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight break-words tabular-nums ${
-              featured ? "text-white" : "text-slate-950"
-            }`}
-          >
-            {value}
-          </div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[11px] font-bold uppercase tracking-[0.07em] leading-tight text-slate-500">
+          {label}
         </div>
 
         <div
-          className={`w-9 h-9 rounded-lg border flex items-center justify-center ${
-            featured
-              ? "bg-white/15 border-white/20 text-white"
-              : tones[tone] || tones.indigo
+          className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] border ${
+            tones[tone] || tones.indigo
           }`}
         >
-          <Icon size={17} aria-hidden="true" />
+          <Icon size={15} aria-hidden="true" />
         </div>
       </div>
 
-      <div
-        className={`mt-3 pt-3 border-t text-[13px] leading-5 flex items-center justify-between gap-2 ${
-          featured
-            ? "border-white/20 text-indigo-100"
-            : "border-slate-100 text-slate-500"
-        }`}
-      >
+      <div className="mt-2.5 font-display text-[19px] font-bold tracking-tight break-words tabular-nums text-slate-950">
+        {value}
+      </div>
+
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5 text-[11.5px] leading-5 text-slate-400">
         <span className="min-w-0">{detail}</span>
         {clickable ? (
-          <span
-            className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-bold ${
-              featured ? "text-indigo-100" : "text-indigo-600"
-            }`}
-          >
+          <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100">
             View
-            <ArrowUpRight
-              size={12}
-              className="transition-transform group-hover:translate-x-0.5"
-            />
+            <ArrowUpRight size={12} aria-hidden="true" />
           </span>
         ) : null}
       </div>
     </Wrapper>
+  );
+}
+
+// Compact stat tile (artifact ".stat" style) for the Expenses summary row:
+// smaller than RevenueMetric, label + small tinted icon + value, no footer.
+function StatCard({ label, value, icon: Icon, tone = "slate" }) {
+  const tones = {
+    indigo: "bg-indigo-50 text-indigo-600 border-indigo-100",
+    emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+    amber: "bg-amber-50 text-amber-600 border-amber-100",
+    rose: "bg-rose-50 text-rose-600 border-rose-100",
+    slate: "bg-slate-50 text-slate-600 border-slate-200",
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-slate-500">
+          {label}
+        </div>
+
+        <div
+          className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg border ${
+            tones[tone] || tones.slate
+          }`}
+        >
+          <Icon size={13} aria-hidden="true" />
+        </div>
+      </div>
+
+      <div className="mt-2 font-display text-[18px] font-bold tracking-tight tabular-nums text-slate-950">
+        {value}
+      </div>
+    </div>
   );
 }
 
@@ -1484,13 +1487,13 @@ function LeakageRadarView({ radar, onOpenDetail }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-4 native:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4 native:grid-cols-2">
           {categories.map(({ key, title, subtitle, data, tone, icon: Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => openRisk({ key, title, subtitle, data })}
-              className="group bg-white p-4 text-left w-full transition-colors hover:bg-slate-50/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-inset"
+              className="group flex h-full w-full flex-col rounded-xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_12px_24px_-16px_rgba(15,23,42,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -1515,7 +1518,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
                 ) : null}
               </div>
 
-              <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="mt-auto pt-3 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
                 View all records
                 <ArrowUpRight size={12} />
               </div>
@@ -2319,6 +2322,14 @@ export default function Revenue({
         <>
           <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 native:grid-cols-2">
             <RevenueMetric
+              label="Current Profit"
+              value={money(summary.currentProfit)}
+              icon={ArrowUpRight}
+              detail="Received less approved expenses and incentives"
+              onClick={() => openDetail("current-profit")}
+            />
+
+            <RevenueMetric
               label="Total Admissions"
               value={Number(summary.totalAdmissions || 0).toLocaleString("en-IN")}
               icon={UserCheck}
@@ -2339,7 +2350,7 @@ export default function Revenue({
             <RevenueMetric
               label="In Bucket Revenue"
               value={money(summary.inBucketRevenue)}
-              icon={CircleDollarSign}
+              icon={IndianRupee}
               detail="Admission value currently in bucket"
               tone="emerald"
               onClick={() => openDetail("in-bucket")}
@@ -2375,7 +2386,7 @@ export default function Revenue({
             <RevenueMetric
               label="Received Amount"
               value={money(summary.receivedAmount)}
-              icon={DollarSign}
+              icon={IndianRupee}
               detail="Collections received"
               tone="emerald"
               onClick={() => openDetail("received-revenue")}
@@ -2388,15 +2399,6 @@ export default function Revenue({
               detail="Outstanding collections"
               tone="amber"
               onClick={() => openDetail("pending-revenue")}
-            />
-
-            <RevenueMetric
-              label="Current Profit"
-              value={money(summary.currentProfit)}
-              icon={ArrowUpRight}
-              detail="Received less approved expenses and incentives"
-              featured
-              onClick={() => openDetail("current-profit")}
             />
           </div>
 
@@ -2461,12 +2463,20 @@ export default function Revenue({
                     width="100%"
                     height={280}
                   >
-                    <LineChart
+                    <ComposedChart
                       accessibilityLayer
                       data={
                         data.monthlyRevenue
                       }
+                      margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                     >
+                      <defs>
+                        <linearGradient id="revReceivedFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity={0.22} />
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+
                       <CartesianGrid
                         strokeDasharray="3 3"
                         vertical={false}
@@ -2501,17 +2511,23 @@ export default function Revenue({
                         type="monotone"
                         dataKey="potential"
                         name="Potential"
-                        stroke="#64748b"
+                        stroke="#94a3b8"
+                        strokeWidth={1.75}
                         strokeDasharray="5 5"
+                        dot={false}
                       />
 
-                      <Line
+                      <Area
                         type="monotone"
                         dataKey="received"
                         name="Received"
                         stroke="#6366f1"
+                        strokeWidth={2.5}
+                        fill="url(#revReceivedFill)"
+                        dot={false}
+                        activeDot={{ r: 4 }}
                       />
-                    </LineChart>
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
 
@@ -2571,14 +2587,13 @@ export default function Revenue({
                     )}
                   />
 
-                  <div className="border-t pt-3">
-                    <Row
-                      label="Current Profit"
-                      value={money(
-                        summary.currentProfit
-                      )}
-                      bold
-                    />
+                  <div className="mt-1 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                    <span className="font-semibold text-slate-900">
+                      Current Profit
+                    </span>
+                    <span className="font-display text-[20px] font-bold tabular-nums text-emerald-600">
+                      {money(summary.currentProfit)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2588,167 +2603,120 @@ export default function Revenue({
           {tab ===
             "expenses" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-3 native:grid-cols-2">
-                <RevenueMetric
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 native:grid-cols-2">
+                <StatCard
                   label="Total Expenses"
                   value={money(expenseStats.total)}
                   icon={Receipt}
-                  detail="All expense claims in the selected period"
                   tone="slate"
                 />
 
-                <RevenueMetric
+                <StatCard
                   label="Pending Approval"
                   value={money(expenseStats.pending)}
                   icon={Clock}
-                  detail="Awaiting Client Admin review"
                   tone="amber"
                 />
 
-                <RevenueMetric
+                <StatCard
                   label="Approved"
                   value={money(expenseStats.approved)}
                   icon={CheckCircle2}
-                  detail="Included in current profit"
                   tone="emerald"
                 />
 
-                <RevenueMetric
+                <StatCard
                   label="Rejected"
                   value={money(expenseStats.rejected)}
                   icon={XCircle}
-                  detail="Rejected expense value"
                   tone="rose"
                 />
 
-                <RevenueMetric
+                <StatCard
                   label="This Month"
                   value={money(expenseStats.thisMonth)}
                   icon={CalendarDays}
-                  detail="Expenses dated this month"
                   tone="indigo"
                 />
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col xl:flex-row xl:items-center gap-2 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <div className="relative flex-1 max-w-lg">
-                  <Search
-                    size={14}
-                    aria-hidden="true"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  />
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+                  <h3 className="text-[13px] font-bold text-slate-900">
+                    Expense Claims
+                    <span className="ml-2 text-[12px] font-semibold text-slate-400">
+                      {filteredExpenses.length} shown
+                    </span>
+                  </h3>
 
-                  <input
-                    type="search"
-                    aria-label="Search expenses"
-                    value={expenseSearch}
-                    onChange={(event) =>
-                      setExpenseSearch(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Search expense, vendor, invoice, employee..."
-                    className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-xl text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
-                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={exportExpenses}
+                      disabled={!filteredExpenses.length}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Download size={14} aria-hidden="true" />
+                      Export
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowExpense(true)}
+                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-[13px] font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      Add Expense
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2 xl:ml-auto native:flex-nowrap native:max-w-full native:relative native:overflow-x-auto native:pb-1">
-                  <div className="relative native:shrink-0">
-                    <Filter
-                      size={13}
-                      aria-hidden="true"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                <div className="grid grid-cols-1 items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 py-2.5 sm:grid-cols-[minmax(180px,1fr)_160px_170px] native:relative native:flex native:flex-nowrap native:items-center native:gap-2 native:max-w-full native:overflow-x-auto">
+                  <label className="relative min-w-0 native:w-[220px] native:shrink-0">
+                    <span className="sr-only">Search expenses</span>
+                    <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="search"
+                      value={expenseSearch}
+                      onChange={(event) => setExpenseSearch(event.target.value)}
+                      placeholder="Search expense, vendor, invoice, employee..."
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[14px] text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                     />
+                  </label>
 
+                  <label className="min-w-0 native:w-[150px] native:shrink-0">
+                    <span className="sr-only">Filter by status</span>
                     <select
-                      aria-label="Filter by status"
                       value={expenseStatusFilter}
-                      onChange={(event) =>
-                        setExpenseStatusFilter(
-                          event.target.value
-                        )
-                      }
-                      className="h-9 pl-8 pr-8 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700"
+                      onChange={(event) => setExpenseStatusFilter(event.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                     >
-                      <option value="ALL">
-                        All Status
-                      </option>
-                      <option value="PENDING">
-                        Pending
-                      </option>
-                      <option value="APPROVED">
-                        Approved
-                      </option>
-                      <option value="REJECTED">
-                        Rejected
-                      </option>
+                      <option value="ALL">All Status</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="APPROVED">Approved</option>
+                      <option value="REJECTED">Rejected</option>
                     </select>
-                  </div>
+                  </label>
 
-                  <select
-                    aria-label="Filter by category"
-                    value={expenseCategoryFilter}
-                    onChange={(event) =>
-                      setExpenseCategoryFilter(
-                        event.target.value
-                      )
-                    }
-                    className="h-9 px-3 border border-slate-200 bg-white rounded-xl text-[13px] font-semibold text-slate-700 native:shrink-0"
-                  >
-                    <option value="ALL">
-                      All Categories
-                    </option>
-
-                    {expenseCategories.map(
-                      (category) => (
-                        <option
-                          key={category}
-                          value={category}
-                        >
+                  <label className="min-w-0 native:w-[160px] native:shrink-0">
+                    <span className="sr-only">Filter by category</span>
+                    <select
+                      value={expenseCategoryFilter}
+                      onChange={(event) => setExpenseCategoryFilter(event.target.value)}
+                      className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="ALL">All Categories</option>
+                      {expenseCategories.map((category) => (
+                        <option key={category} value={category}>
                           {category}
                         </option>
-                      )
-                    )}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={exportExpenses}
-                    disabled={!filteredExpenses.length}
-                    className="h-9 px-3 border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 rounded-xl text-[13px] font-semibold text-slate-700 inline-flex items-center gap-2"
-                  >
-                    <Download size={13} aria-hidden="true" />
-                    Export
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowExpense(true)
-                    }
-                    className="h-9 px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[13px] font-semibold inline-flex items-center gap-2 shadow-sm"
-                  >
-                    <Plus size={14} aria-hidden="true" />
-                    Add Expense
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[15px] font-bold text-slate-900">
-                      Expense Claims
-                    </div>
-
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      {filteredExpenses.length} visible · click any row to view complete details and proof
-                    </div>
-                  </div>
+                      ))}
+                    </select>
+                  </label>
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-[15px]">
+                  <table className="w-full text-[13px]">
                     <caption className="sr-only">
                       Expense claims
                     </caption>
@@ -2996,7 +2964,7 @@ export default function Revenue({
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl overflow-x-auto shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <table className="w-full text-[15px]">
+                <table className="w-full text-[13px]">
                   <caption className="sr-only">
                     Employee incentives
                   </caption>
@@ -3243,7 +3211,7 @@ function Row({
         {label}
       </span>
 
-      <span>{value}</span>
+      <span className="font-display tabular-nums">{value}</span>
     </div>
   );
 }

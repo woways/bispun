@@ -40,6 +40,16 @@ function requireChatDelete(req, res, next) {
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+// Build a createdAt range filter for a selected CRM year workspace.
+// Returns null for "all"/missing/invalid, so chat stays unfiltered.
+function yearRange(yearParam) {
+  const raw = String(yearParam ?? "").trim();
+  if (!raw || raw === "all") return null;
+  const y = Number(raw);
+  if (!Number.isInteger(y) || y < 2000 || y > 2100) return null;
+  return { gte: new Date(y, 0, 1), lt: new Date(y + 1, 0, 1) };
+}
+
 function userMini(user) {
   return user
     ? {
@@ -133,12 +143,25 @@ router.get("/users", async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
+    const range = yearRange(req.query.year);
     const conversations = await prisma.conversation.findMany({
       where: {
         companyId: req.clientUser.companyId,
         members: {
           some: { userId: req.clientUser.userId, hiddenAt: null },
         },
+        // When a past/other year workspace is selected, only show chats that
+        // actually have messages dated within that year.
+        ...(range
+          ? {
+              messages: {
+                some: {
+                  createdAt: range,
+                  deletions: { none: { userId: req.clientUser.userId } },
+                },
+              },
+            }
+          : {}),
       },
       include: {
         members: {
@@ -149,6 +172,7 @@ router.get("/", async (req, res) => {
         messages: {
           where: {
             deletions: { none: { userId: req.clientUser.userId } },
+            ...(range ? { createdAt: range } : {}),
           },
           orderBy: { createdAt: "desc" },
           take: 25,
@@ -173,7 +197,14 @@ router.get("/", async (req, res) => {
             senderId: { not: me },
             deletedForEveryoneAt: null,
             deletions: { none: { userId: me } },
-            ...(lastReadAt ? { createdAt: { gt: lastReadAt } } : {}),
+            ...(range || lastReadAt
+              ? {
+                  createdAt: {
+                    ...(range || {}),
+                    ...(lastReadAt ? { gt: lastReadAt } : {}),
+                  },
+                }
+              : {}),
           },
         });
 
@@ -418,15 +449,22 @@ router.get("/:id/messages", async (req, res) => {
     const before = req.query.before
       ? new Date(String(req.query.before))
       : null;
+    const range = yearRange(req.query.year);
+    // The "before" cursor and the year's upper bound both constrain the top of
+    // the range — keep whichever is earlier so paging never crosses the year.
+    const upperBound = [before, range?.lt]
+      .filter(Boolean)
+      .sort((a, b) => a.getTime() - b.getTime())[0] || null;
 
     const messages = await prisma.chatMessage.findMany({
       where: {
         conversationId,
         deletions: { none: { userId: req.clientUser.userId } },
-        ...((member.clearedAt || before) ? {
+        ...((member.clearedAt || upperBound || range) ? {
           createdAt: {
+            ...(range ? { gte: range.gte } : {}),
             ...(member.clearedAt ? { gt: member.clearedAt } : {}),
-            ...(before ? { lt: before } : {}),
+            ...(upperBound ? { lt: upperBound } : {}),
           },
         } : {}),
       },

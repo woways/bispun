@@ -42,6 +42,7 @@ import {
   Eye,
   EyeOff,
   Play,
+  Volume2,
   PhoneCall,
   Sparkles,
   ArrowRight,
@@ -94,6 +95,164 @@ const QUICK_BRAND_COLOR_KEYS = [
 const QUICK_BRAND_COLORS = BRAND_COLORS.filter((color) =>
   QUICK_BRAND_COLOR_KEYS.includes(color.key)
 );
+
+// Pick a readable foreground (near-black or white) for a given background hex,
+// using WCAG relative luminance. Guarantees ~4.5:1 text on any tenant brand hue.
+function readableOn(hex) {
+  const raw = String(hex || "").trim().replace("#", "");
+  const full =
+    raw.length === 3
+      ? raw.split("").map((c) => c + c).join("")
+      : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return "#ffffff";
+  const toLin = (channel) => {
+    const value = parseInt(channel, 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * toLin(full.slice(0, 2)) +
+    0.7152 * toLin(full.slice(2, 4)) +
+    0.0722 * toLin(full.slice(4, 6));
+  // Contrast vs white vs vs near-black; choose the better.
+  const contrastWhite = 1.05 / (luminance + 0.05);
+  const contrastBlack = (luminance + 0.05) / 0.05;
+  return contrastBlack >= contrastWhite ? "#141019" : "#ffffff";
+}
+
+// Scoped "premium" design-token styling for the Company + Integrations panes.
+// Everything is namespaced under `.st-v2` so it never leaks into the rest of the
+// Settings page (which stays on Tailwind). The accent variables read the live
+// tenant brand ramp (--brand-*, written by applyBrandTheme) with safe fallbacks,
+// so multi-tenant branding drives the look instead of a hardcoded hue.
+const SETTINGS_V2_CSS = `
+.st-v2{
+  --canvas:#f1f0f6; --surface:#fff; --surface-2:#f6f5fa;
+  --line:#e7e4f0; --line-2:#efedf5;
+  --ink:#1b1726; --ink-2:#574f6a; --ink-3:#655d7d;
+  --accent:rgb(var(--brand-600,79 70 229)); --accent-2:rgb(var(--brand-500,99 102 241));
+  --accent-weak:rgb(var(--brand-50,238 242 255)); --accent-ink:rgb(var(--brand-700,67 56 202));
+  --on-accent:#fff;
+  --ok:#0f7a59; --ok-weak:#e2f6ee; --warn:#9a6508; --warn-weak:#fcf1d9;
+  --danger:#c62d41; --danger-weak:#fde9ec; --info:#2f6ad8; --info-weak:#e7eefc;
+  --viol:#6d28d9; --viol-weak:#f0e9ff;
+  --sh-sm:0 1px 2px rgba(27,23,38,.05);
+  --sh-md:0 2px 8px rgba(27,23,38,.06),0 12px 28px -18px rgba(27,23,38,.3);
+  --r:14px; --r-lg:18px;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --display:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  background:transparent; color:var(--ink); font-family:var(--body); font-size:13px; line-height:1.5;
+  font-variant-numeric:tabular-nums; border-radius:0; padding:0 18px;
+  display:flex; flex-direction:column; gap:18px;
+}
+.st-v2 *{ box-sizing:border-box; }
+.st-v2 svg{ display:block; }
+.st-v2 h2,.st-v2 h3,.st-v2 h4{ margin:0; font-family:var(--display); letter-spacing:-.01em; }
+.st-v2 button{ font-family:inherit; cursor:pointer; }
+.st-v2 :focus-visible{ outline:2px solid var(--accent-ink); outline-offset:2px; border-radius:6px; }
+.st-v2 .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+.st-v2 .phead{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.st-v2 .phead h2{ font-size:18px; font-weight:700; }
+.st-v2 .phead p{ font-size:13px; color:var(--ink-2); margin-top:3px; max-width:66ch; }
+.st-v2 .btn,.st-v2 .ghost,.st-v2 .mini{ display:inline-flex; align-items:center; gap:8px; border-radius:11px; font-size:13px; font-weight:600; transition:.15s; text-decoration:none; }
+.st-v2 .btn{ background:var(--accent); color:var(--on-accent); border:1px solid transparent; padding:9px 15px; box-shadow:0 10px 22px -12px var(--accent); }
+.st-v2 .btn:hover{ background:var(--accent-ink); color:#fff; }
+.st-v2 .ghost{ background:var(--surface); color:var(--ink-2); border:1px solid var(--line); padding:9px 14px; }
+.st-v2 .ghost:hover{ border-color:var(--accent); color:var(--accent-ink); }
+.st-v2 .mini{ background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line); padding:7px 11px; font-size:12.5px; }
+.st-v2 .mini:hover{ color:var(--accent-ink); border-color:var(--accent); }
+.st-v2 .mini[aria-pressed="true"]{ color:var(--accent-ink); border-color:var(--accent); background:var(--accent-weak); }
+.st-v2 .btn:disabled,.st-v2 .ghost:disabled,.st-v2 .mini:disabled{ opacity:.5; cursor:not-allowed; }
+.st-v2 .btn svg,.st-v2 .ghost svg,.st-v2 .mini svg{ width:16px; height:16px; }
+.st-v2 .card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh-sm); }
+.st-v2 .ch{ display:flex; align-items:center; gap:13px; padding:16px 18px; }
+.st-v2 .ch.bd{ border-bottom:1px solid var(--line-2); }
+.st-v2 .ch .ic{ width:36px; height:36px; border-radius:11px; background:var(--accent-weak); color:var(--accent-ink); display:grid; place-items:center; flex:none; }
+.st-v2 .ch .ic svg{ width:18px; height:18px; }
+.st-v2 .ch h3{ font-size:15px; font-weight:650; font-family:var(--display); }
+.st-v2 .ch p{ font-size:12.5px; color:var(--ink-3); margin-top:2px; }
+.st-v2 .ch .sp{ margin-left:auto; }
+.st-v2 .cc{ padding:18px; }
+.st-v2 .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+.st-v2 .badge{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:650; padding:4px 10px; border-radius:999px; }
+.st-v2 .badge .d{ width:6px; height:6px; border-radius:50%; }
+.st-v2 .badge.ok{ background:var(--ok-weak); color:var(--ok); } .st-v2 .badge.ok .d{ background:var(--ok); }
+.st-v2 .badge.off{ background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line); } .st-v2 .badge.off .d{ background:var(--ink-3); }
+.st-v2 .badge.warn{ background:var(--warn-weak); color:var(--warn); } .st-v2 .badge.warn .d{ background:var(--warn); }
+.st-v2 .note{ font-size:12px; color:var(--ink-2); display:inline-flex; align-items:flex-start; gap:7px; line-height:1.5; }
+.st-v2 .note svg{ width:14px; height:14px; flex:none; margin-top:1px; }
+/* Company */
+.st-v2 .hero{ border-radius:var(--r); padding:20px; border:1px solid var(--line); background:radial-gradient(120% 140% at 0% 0%,var(--accent-weak),transparent 55%),var(--surface); display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+.st-v2 .hero-l{ display:flex; align-items:center; gap:15px; min-width:0; }
+.st-v2 .hlogo{ width:56px; height:56px; border-radius:16px; overflow:hidden; background:linear-gradient(145deg,var(--accent),var(--accent-2)); color:#fff; display:grid; place-items:center; font-family:var(--display); font-weight:700; font-size:18px; flex:none; box-shadow:0 12px 26px -12px var(--accent); }
+.st-v2 .hlogo img{ width:100%; height:100%; object-fit:cover; }
+.st-v2 .hnm{ font-family:var(--display); font-size:18px; font-weight:700; }
+.st-v2 .hurl{ font-size:12.5px; color:var(--ink-2); display:inline-flex; align-items:center; gap:6px; margin-top:4px; }
+.st-v2 .hurl svg{ width:13px; height:13px; color:var(--ink-3); }
+.st-v2 .hmeta{ display:flex; flex-wrap:wrap; gap:8px 14px; font-size:12.5px; color:var(--ink-2); font-weight:600; }
+.st-v2 .hmeta span{ display:inline-flex; align-items:center; gap:6px; } .st-v2 .hmeta svg{ width:14px; height:14px; color:var(--ink-3); }
+.st-v2 .leg{ font-size:10.5px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-3); margin-bottom:11px; }
+.st-v2 .fields{ display:grid; gap:13px; }
+.st-v2 .fl{ display:block; font-size:13px; font-weight:600; color:var(--ink-2); margin-bottom:6px; }
+.st-v2 .inp{ display:flex; align-items:center; gap:9px; border:1px solid var(--line); background:var(--surface-2); border-radius:11px; padding:10px 12px; color:var(--ink-3); transition:.14s; }
+.st-v2 .inp:focus-within{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-weak); }
+.st-v2 .inp.err{ border-color:var(--danger); background:var(--danger-weak); }
+.st-v2 .inp svg{ width:16px; height:16px; flex:none; }
+.st-v2 .inp input,.st-v2 .inp select{ border:0; background:transparent; outline:none; color:var(--ink); font-size:13px; width:100%; font-family:inherit; min-width:0; }
+.st-v2 .inp input::placeholder{ color:var(--ink-3); }
+.st-v2 .suffix{ font-size:12.5px; color:var(--ink-2); white-space:nowrap; }
+.st-v2 .swatches{ display:flex; gap:10px; flex-wrap:wrap; }
+.st-v2 .swt{ width:34px; height:34px; border-radius:10px; border:2px solid transparent; position:relative; display:grid; place-items:center; }
+.st-v2 .swt[aria-pressed="true"]{ border-color:var(--ink); box-shadow:0 0 0 3px var(--surface),0 0 0 4px var(--ink); }
+.st-v2 .swt svg{ width:15px; height:15px; }
+.st-v2 .hint{ font-size:11.5px; color:var(--ink-2); margin-top:7px; display:flex; gap:6px; }
+.st-v2 .hint svg{ width:13px; height:13px; flex:none; margin-top:1px; }
+.st-v2 .err-text{ font-size:11.5px; color:var(--danger); font-weight:600; margin-top:6px; }
+.st-v2 .ta{ width:100%; resize:vertical; border:1px solid var(--line); background:var(--surface-2); border-radius:11px; padding:9px 12px; color:var(--ink); font-size:13px; font-family:inherit; outline:none; line-height:1.5; }
+.st-v2 .ta:focus{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-weak); }
+/* Integrations */
+.st-v2 .intg-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.st-v2 .icard{ position:relative; overflow:hidden; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); box-shadow:var(--sh-sm); display:flex; flex-direction:column; transition:.18s; }
+.st-v2 .icard:hover{ box-shadow:var(--sh-md); transform:translateY(-2px); }
+.st-v2 .icard .wash{ position:absolute; inset:0 0 auto; height:92px; opacity:.5; pointer-events:none; }
+.st-v2 .icard-in{ position:relative; padding:18px; display:flex; flex-direction:column; gap:14px; flex:1; }
+.st-v2 .icard-top{ display:flex; align-items:flex-start; gap:13px; }
+.st-v2 .ilogo{ width:52px; height:52px; border-radius:14px; display:grid; place-items:center; flex:none; background:var(--surface); border:1px solid var(--line); box-shadow:var(--sh-sm); }
+.st-v2 .icard-top .meta{ min-width:0; flex:1; }
+.st-v2 .icard-top h4,.st-v2 .meta h4{ font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.st-v2 .icard-top p,.st-v2 .meta p{ font-size:13px; color:var(--ink-2); margin-top:4px; line-height:1.5; }
+.st-v2 .conn{ display:flex; align-items:center; gap:10px; border:1px solid var(--line-2); background:var(--surface-2); border-radius:12px; padding:11px 13px; }
+.st-v2 .conn .dotwrap{ width:30px; height:30px; border-radius:8px; display:grid; place-items:center; flex:none; }
+.st-v2 .conn .ct{ font-size:12.5px; font-weight:650; }
+.st-v2 .conn .cs{ font-size:12px; color:var(--ink-3); margin-top:1px; }
+.st-v2 .conn .right{ margin-left:auto; }
+.st-v2 .tok{ background:var(--ok-weak); color:var(--ok); } .st-v2 .tw{ background:var(--warn-weak); color:var(--warn); }
+.st-v2 .tv{ background:var(--viol-weak); color:var(--viol); } .st-v2 .tb{ background:var(--accent-weak); color:var(--accent-ink); }
+.st-v2 .ti{ background:var(--info-weak); color:var(--info); }
+.st-v2 .ifields{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.st-v2 .ifld{ min-width:0; } .st-v2 .ifld label{ font-size:12px; font-weight:600; color:var(--ink-2); margin-bottom:5px; display:block; }
+.st-v2 .icard-foot{ display:flex; gap:9px; flex-wrap:wrap; margin-top:auto; padding-top:2px; }
+.st-v2 .seg{ display:inline-flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; flex-wrap:wrap; }
+.st-v2 .seg button{ border:0; background:var(--surface); color:var(--ink-2); font-size:12px; font-weight:600; padding:9px 12px; display:flex; flex-direction:column; gap:2px; align-items:flex-start; min-width:150px; text-align:left; }
+.st-v2 .seg button+button{ border-left:1px solid var(--line); }
+.st-v2 .seg button[aria-pressed="true"]{ background:var(--accent-weak); color:var(--accent-ink); }
+.st-v2 .seg button span{ font-size:11.5px; color:var(--ink-3); font-weight:500; }
+.st-v2 .srow{ display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--line); border-radius:12px; background:var(--surface); padding:12px 14px; }
+.st-v2 .srow .st{ font-size:13px; font-weight:600; color:var(--ink); }
+.st-v2 .sw{ position:relative; width:42px; height:24px; border-radius:999px; border:0; background:var(--line); transition:.18s; flex:none; padding:0; }
+.st-v2 .sw::after{ content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.35); transition:.18s; }
+.st-v2 .sw[aria-checked="true"]{ background:var(--accent); } .st-v2 .sw[aria-checked="true"]::after{ transform:translateX(18px); }
+.st-v2 .infonote{ border:1px solid var(--line); background:var(--surface-2); border-radius:12px; padding:12px 14px; font-size:12px; color:var(--ink-2); line-height:1.5; }
+.st-v2 .warnnote{ border:1px solid var(--warn-weak); background:var(--warn-weak); border-radius:12px; padding:12px 14px; font-size:12px; color:var(--warn); line-height:1.5; }
+@media (max-width:860px){
+  .st-v2 .grid2{ grid-template-columns:1fr; }
+  .st-v2 .intg-grid{ grid-template-columns:1fr; }
+  .st-v2 .ifields{ grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce){
+  .st-v2 .icard,.st-v2 .icard:hover,.st-v2 .btn,.st-v2 .ghost,.st-v2 .mini,
+  .st-v2 .inp,.st-v2 .sw,.st-v2 .sw::after{ transition:none!important; transform:none!important; }
+}
+`;
 
 const TABS = [
   {
@@ -980,6 +1139,47 @@ export default function SettingsView({
     emailEnabled: true,
     smsEnabled: false,
   });
+
+  // Notification sound preferences (tone + volume). Preview plays locally via Web Audio.
+  const [soundPref, setSoundPref] = useState({
+    enabled: true,
+    tone: "chime",
+    volume: 70,
+  });
+
+  function previewNotificationTone() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const now = ctx.currentTime;
+      const vol =
+        Math.max(0, Math.min(1, (soundPref.volume || 0) / 100)) * 0.5;
+      const freqs = {
+        chime: [880, 1320],
+        ping: [1200],
+        bell: [660, 990, 1320],
+        pop: [520],
+      };
+      const seq = freqs[soundPref.tone] || [880];
+      seq.forEach((f, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = soundPref.tone === "pop" ? "triangle" : "sine";
+        osc.frequency.value = f;
+        const start = now + i * 0.14;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.24);
+      });
+      window.setTimeout(() => ctx.close(), 1200);
+    } catch {
+      /* audio preview unavailable */
+    }
+  }
 
   const [
     notificationPreferencesLoading,
@@ -2636,7 +2836,7 @@ export default function SettingsView({
 
         {/* HORIZONTAL TAB NAV */}
 
-        <nav aria-label="Settings sections" className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <nav aria-label="Settings sections" className="border-b border-slate-200">
           <div className="flex gap-1 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
             {visibleTabs.map((item) => {
               const Icon = item.i;
@@ -2646,17 +2846,18 @@ export default function SettingsView({
                 <button
                   key={item.k}
                   type="button"
-                  aria-current={active ? "true" : undefined}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => setTab(item.k)}
-                  className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-[13px] font-medium transition-all shrink-0 ${
+                  className={`flex items-center gap-1.5 whitespace-nowrap -mb-px border-b-2 px-3.5 py-3 text-[13px] font-semibold transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 ${
                     active
-                      ? "bg-white text-indigo-700 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/60"
-                      : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
+                      ? "border-brand-600 text-brand-700"
+                      : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                   }`}
                 >
                   <Icon
-                    size={14}
-                    className={active ? "text-indigo-600" : "text-slate-400"}
+                    size={15}
+                    aria-hidden="true"
+                    className={active ? "text-brand-600" : "text-slate-400"}
                   />
 
                   <span>{item.l}</span>
@@ -2700,534 +2901,510 @@ export default function SettingsView({
           {tab ===
             "company" && (
             <div>
-              <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch">
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                  <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-brand-50 text-brand-600">
-                      <Building size={17} aria-hidden="true" />
-                    </span>
-                    <div>
-                      <h3 className="text-[15px] font-bold text-slate-900">
-                        Profile
-                      </h3>
-                      <p className="mt-0.5 text-[12.5px] text-slate-500">
-                        Core workspace identity shown throughout the CRM.
-                      </p>
+              <div className="st-v2">
+                <style dangerouslySetInnerHTML={{ __html: SETTINGS_V2_CSS }} />
+
+                {/* Live region: announces brand-accent + save state to screen readers */}
+                <div className="sr-only" role="status" aria-live="polite">
+                  {workspaceSettingsSaving
+                    ? "Saving brand settings…"
+                    : `Brand accent set to ${brandHex(selectedColor)}`}
+                </div>
+
+                {/* HERO / identity */}
+                <div className="hero">
+                  <div className="hero-l">
+                    <div className="hlogo" aria-hidden="true">
+                      {logoPreview ? (
+                        <img src={logoPreview} alt="" />
+                      ) : (
+                        tenant?.short || "CB"
+                      )}
                     </div>
-                  </div>
-
-                  <div className="flex flex-1 flex-col gap-6 p-5">
-
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-brand-50/70 to-slate-50/40 px-4 py-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex min-w-0 items-center gap-3.5">
-                    <div className="relative flex-shrink-0" aria-hidden="true">
-                      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-brand-600 text-[16px] font-bold text-white shadow-[0_6px_18px_-8px_rgba(79,70,229,0.9)]">
-                        {logoPreview ? (
-                          <img
-                            src={logoPreview}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          tenant?.short || "CB"
-                        )}
-                      </div>
-
-                      <span className="absolute -bottom-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 shadow-sm">
-                        <Pencil size={11} />
-                      </span>
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="truncate text-[17px] font-bold text-slate-950">
+                    <div style={{ minWidth: 0 }}>
+                      <div className="hnm">
                         {form.companyName ||
                           tenant?.name ||
                           tenant?.brandName ||
                           "CRM Workspace"}
                       </div>
-
-                      <SubdomainPill
-                        value={
-                          form.subdomain || tenant?.subdomain || ""
-                        }
-                      />
+                      <div className="hurl">
+                        <Globe2 aria-hidden="true" />
+                        {form.subdomain ||
+                          tenant?.subdomain ||
+                          "your-workspace"}
+                      </div>
                     </div>
                   </div>
-
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
-                      <span
-                        className="h-1.5 w-1.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100"
-                        aria-hidden="true"
-                      />
+                  <div className="hmeta">
+                    <span className="badge ok">
+                      <span className="d" aria-hidden="true" />
                       Active
                     </span>
-
-                    <div className="inline-flex items-center gap-2 text-slate-600">
-                      <Briefcase size={14} aria-hidden="true" className="text-slate-400" />
-                      <span className="font-semibold">
-                        {form.businessType ||
-                          tenant?.business ||
-                          "Business not set"}
-                      </span>
-                    </div>
-
-                    <div className="inline-flex items-center gap-2 text-slate-600">
-                      <MapPin size={14} aria-hidden="true" className="text-slate-400" />
-                      <span className="font-semibold">
-                        {form.city || tenant?.city || "City not set"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-5">
-                <fieldset className="m-0 min-w-0 border-0 p-0">
-                  <legend className="mb-2.5 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                    Identity
-                  </legend>
-
-                  <div className="space-y-3.5">
-                    <Field
-                      label="Company Name"
-                      icon={Building}
-                      className="max-w-[460px]"
-                      placeholder="e.g. Bright Future Academy"
-                      value={form.companyName}
-                      onChange={(value) => update("companyName", value)}
-                    />
-
-                    <Field
-                      label="Business Type"
-                      icon={Briefcase}
-                      className="max-w-[460px]"
-                      placeholder="e.g. Education Consultancy"
-                      value={form.businessType}
-                      onChange={(value) => update("businessType", value)}
-                    />
-                  </div>
-                </fieldset>
-
-                <fieldset className="m-0 min-w-0 border-0 p-0">
-                  <legend className="mb-2.5 p-0 text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                    Location &amp; web address
-                  </legend>
-
-                  <div className="space-y-3.5">
-                    <Field
-                      label="City"
-                      icon={MapPin}
-                      className="max-w-[460px]"
-                      placeholder="e.g. Hyderabad"
-                      value={form.city}
-                      onChange={(value) => update("city", value)}
-                    />
-
-                    <Field
-                      label="Subdomain"
-                      icon={Globe2}
-                      mono
-                      className="max-w-[460px]"
-                      placeholder="e.g. brightfuture.bispun.com"
-                      value={form.subdomain}
-                      onChange={(value) => update("subdomain", value)}
-                      note="Auto-generated from the company name — e.g. friend.bispun.com. Override only if you need a different address."
-                    />
-                  </div>
-                </fieldset>
-              </div>
-
-              <div className="mt-auto rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 flex items-start gap-3">
-                <Globe2
-                  size={16}
-                  className="text-slate-500 mt-0.5"
-                />
-
-                <div>
-                  <div className="text-[13px] font-semibold text-slate-800">
-                    Workspace identity
-                  </div>
-
-                  <div className="text-[13px] text-slate-500 mt-1">
-                    Company profile changes are saved to this tenant and reflected across the client portal after save.
-                  </div>
-                </div>
-              </div>
+                    <span>
+                      <Briefcase aria-hidden="true" />
+                      {form.businessType ||
+                        tenant?.business ||
+                        "Business not set"}
+                    </span>
+                    <span>
+                      <MapPin aria-hidden="true" />
+                      {form.city || tenant?.city || "City not set"}
+                    </span>
                   </div>
                 </div>
 
-                {/* RIGHT COLUMN: Brand Appearance + Logo */}
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                  <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
-                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-brand-50 text-brand-600">
-                      <Palette size={17} aria-hidden="true" />
+                {/* PROFILE */}
+                <div className="card">
+                  <div className="ch bd">
+                    <span className="ic" aria-hidden="true">
+                      <Building />
                     </span>
                     <div>
-                      <h3 className="text-[15px] font-bold text-slate-900">
-                        Brand Appearance
-                      </h3>
-                      <p className="mt-0.5 text-[12.5px] text-slate-500">
-                        Configure the visual identity used inside the client portal.
-                      </p>
+                      <h3>Profile</h3>
+                      <p>Core workspace identity shown throughout the CRM.</p>
                     </div>
                   </div>
-
-                  <div className="flex flex-1 flex-col gap-7 p-5">
-
-              <div>
-                <label className="block text-[13px] font-semibold text-slate-600 mb-3">
-                  Primary Color
-                </label>
-
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="cc grid2">
                     <div>
-                      <div className="text-[15px] font-bold text-slate-900">
-                        System Colors
-                      </div>
-                      <div className="mt-1 text-[13px] text-slate-500">
-                        Choose a quick brand color or customize the full theme palette.
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5">
-                      <span
-                        className="h-5 w-5 rounded-full border border-black/10"
-                        style={{ backgroundColor: brandHex(selectedColor) }}
-                      />
-                      <span className="font-mono text-[12px] font-semibold uppercase text-slate-600">
-                        {brandHex(selectedColor)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap items-start gap-4">
-                    {QUICK_BRAND_COLORS.map((color) => {
-                      const selected =
-                        brandHex(selectedColor) === color.hex.toLowerCase();
-
-                      return (
-                        <button
-                          key={color.key}
-                          type="button"
-                          title={color.label}
-                          aria-label={`Use ${color.label} as the primary brand color`}
-                          onClick={() => {
-                            setSelectedColor(color.key);
-                            setCustomColor(color.hex);
-                            applyBrandTheme(color.key);
-                          }}
-                          className="group flex w-[58px] flex-col items-center gap-2 text-center"
-                        >
-                          <span
-                            style={{ backgroundColor: color.hex }}
-                            className={`relative flex h-11 w-11 items-center justify-center rounded-full border border-black/10 ring-offset-2 transition-all group-hover:-translate-y-0.5 ${
-                              selected
-                                ? "ring-2 ring-brand-600 shadow-[0_6px_14px_rgba(79,70,229,0.18)]"
-                                : "ring-2 ring-transparent group-hover:ring-slate-300"
-                            }`}
-                          >
-                            {selected && (
-                              <Check
-                                size={16}
-                                strokeWidth={3}
-                                className="text-white drop-shadow-sm"
-                              />
-                            )}
-                          </span>
-
-                          <span
-                            className={`text-[12px] font-semibold ${
-                              selected ? "text-brand-700" : "text-slate-600"
-                            }`}
-                          >
-                            {color.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 flex justify-center">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustomPaletteOpen((current) => !current)
-                        }
-                        className={`group inline-flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-[13px] font-semibold shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-                          customPaletteOpen
-                            ? "border-brand-300 bg-brand-50 text-brand-700"
-                            : "border-slate-200 bg-white text-slate-700 hover:-translate-y-0.5 hover:border-brand-300 hover:text-brand-700 hover:shadow-md"
-                        }`}
-                      >
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
-                          <Plus size={13} aria-hidden="true" />
-                        </span>
-                        Customize color
-                      </button>
-
-                      {customPaletteOpen && (
-                        <>
-                          <button
-                            type="button"
-                            className="fixed inset-0 z-[79] cursor-default bg-transparent"
-                            aria-label="Close custom color palette"
-                            onClick={() => setCustomPaletteOpen(false)}
-                          />
-
-                          <div className="fixed inset-x-3 bottom-3 z-[80] max-h-[80vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-1/2 sm:w-[360px] sm:max-w-[calc(100vw-48px)] sm:-translate-y-1/2">
-                            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
-                              <div>
-                                <div className="text-[14px] font-bold text-slate-900">
-                                  Custom Colors
-                                </div>
-                                <div className="mt-0.5 text-[11px] text-slate-500">
-                                  Choose from the full palette or enter an exact HEX color.
-                                </div>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => setCustomPaletteOpen(false)}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                                aria-label="Close custom colors"
-                              >
-                                <X size={15} />
-                              </button>
-                            </div>
-
-                            <div className="max-h-[calc(100vh-180px)] overflow-y-auto overscroll-contain p-4">
-                              <div className="grid grid-cols-10 gap-2 native:grid-cols-6">
-                                {BRAND_PALETTE.map((hex) => {
-                                  const selected =
-                                    brandHex(selectedColor) === hex.toLowerCase();
-
-                                  return (
-                                    <button
-                                      key={hex}
-                                      type="button"
-                                      title={hex.toUpperCase()}
-                                      aria-label={`Use ${hex} as the primary brand color`}
-                                      onClick={() => {
-                                        const normalized = hex.toLowerCase();
-                                        setSelectedColor(normalized);
-                                        setCustomColor(normalized);
-                                        applyBrandTheme(normalized);
-                                      }}
-                                      style={{ backgroundColor: hex }}
-                                      className={`relative h-6 w-6 justify-self-center rounded-md border border-black/10 ring-offset-1 transition hover:scale-110 ${
-                                        selected
-                                          ? "ring-2 ring-slate-900 shadow-sm"
-                                          : "ring-1 ring-transparent hover:ring-slate-300"
-                                      }`}
-                                    >
-                                      {selected && (
-                                        <Check
-                                          size={10}
-                                          strokeWidth={3}
-                                          className="absolute inset-0 m-auto text-white drop-shadow"
-                                        />
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-
-                              <div className="mt-4 border-t border-slate-100 pt-4">
-                                <div className="text-[12px] font-semibold text-slate-800">
-                                  Exact HEX
-                                </div>
-
-                                <div className="mt-2 flex items-center gap-2">
-                                  <label
-                                    className="relative flex h-10 w-10 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
-                                    title="Open system color picker"
-                                  >
-                                    <span
-                                      className="h-6 w-6 rounded-md border border-black/10"
-                                      style={{ backgroundColor: customColor }}
-                                    />
-                                    <input
-                                      type="color"
-                                      value={/^#[0-9a-fA-F]{6}$/.test(customColor) ? customColor : "#4f46e5"}
-                                      onChange={(event) => {
-                                        const value = event.target.value.toLowerCase();
-                                        setCustomColor(value);
-                                        setSelectedColor(value);
-                                        applyBrandTheme(value);
-                                      }}
-                                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                      aria-label="Choose a custom brand color"
-                                    />
-                                  </label>
-
-                                  <input
-                                    value={customColor}
-                                    onChange={(event) => {
-                                      const value = event.target.value.trim();
-                                      setCustomColor(value);
-
-                                      if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-                                        const normalized = value.toLowerCase();
-                                        setSelectedColor(normalized);
-                                        applyBrandTheme(normalized);
-                                      }
-                                    }}
-                                    placeholder="#4F46E5"
-                                    maxLength={7}
-                                    className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 font-mono text-[13px] font-semibold uppercase text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                                  />
-                                </div>
-
-                                <button
-                                  type="button"
-                                  disabled={!/^#[0-9a-fA-F]{6}$/.test(customColor)}
-                                  onClick={() => {
-                                    const normalized = customColor.toLowerCase();
-                                    setSelectedColor(normalized);
-                                    applyBrandTheme(normalized);
-                                  }}
-                                  className="mt-3 h-10 w-full rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                >
-                                  Apply Color
-                                </button>
-                              </div>
-                            </div>
+                      <div className="leg">Identity</div>
+                      <div className="fields">
+                        <div>
+                          <label className="fl" htmlFor="st-company-name">
+                            Company Name
+                          </label>
+                          <div className="inp">
+                            <Building aria-hidden="true" />
+                            <input
+                              id="st-company-name"
+                              value={form.companyName}
+                              onChange={(e) => update("companyName", e.target.value)}
+                              placeholder="e.g. Bright Future Academy"
+                            />
                           </div>
-                        </>
+                        </div>
+                        <div>
+                          <label className="fl" htmlFor="st-business-type">
+                            Business Type
+                          </label>
+                          <div className="inp">
+                            <Briefcase aria-hidden="true" />
+                            <input
+                              id="st-business-type"
+                              value={form.businessType}
+                              onChange={(e) => update("businessType", e.target.value)}
+                              placeholder="e.g. Education Consultancy"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="leg">Location &amp; web address</div>
+                      <div className="fields">
+                        <div>
+                          <label className="fl" htmlFor="st-city">
+                            City
+                          </label>
+                          <div className="inp">
+                            <MapPin aria-hidden="true" />
+                            <input
+                              id="st-city"
+                              value={form.city}
+                              onChange={(e) => update("city", e.target.value)}
+                              placeholder="e.g. Hyderabad"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="fl" htmlFor="st-subdomain">
+                            Subdomain
+                          </label>
+                          <div className="inp">
+                            <Globe2 aria-hidden="true" />
+                            <input
+                              id="st-subdomain"
+                              value={form.subdomain}
+                              onChange={(e) => update("subdomain", e.target.value)}
+                              placeholder="e.g. brightfuture.bispun.com"
+                              aria-describedby="st-subdomain-hint"
+                            />
+                          </div>
+                          <div className="hint" id="st-subdomain-hint">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M12 16v-4M12 8h.01" />
+                            </svg>
+                            Auto-generated from the company name. Override only if you need a different address.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="cc" style={{ paddingTop: 0 }}>
+                    <div className="note">
+                      <Globe2 aria-hidden="true" />
+                      Company profile changes are saved to this tenant and reflected across the client portal after save.
+                    </div>
+                  </div>
+                </div>
+
+                {/* BRANDING */}
+                <div className="card">
+                  <div className="ch bd">
+                    <span className="ic" aria-hidden="true">
+                      <Palette />
+                    </span>
+                    <div>
+                      <h3>Branding</h3>
+                      <p>Logo and accent applied portal-wide.</p>
+                    </div>
+                  </div>
+                  <div className="cc grid2">
+                    {/* Logo */}
+                    <div>
+                      <span className="fl" id="st-logo-label">Company Logo</span>
+                      {logoPreview ? (
+                        <div
+                          style={{
+                            height: 96,
+                            borderRadius: 12,
+                            background: "var(--surface-2)",
+                            border: "1px solid var(--line)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <img
+                            src={logoPreview}
+                            alt={`${form.companyName || tenant?.name || "Company"} logo`}
+                            onError={() => {
+                              setLogoPreview("");
+                              setLogoUrlError("Unable to load an image from this logo URL.");
+                            }}
+                            style={{ maxHeight: 80, maxWidth: 220, objectFit: "contain" }}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            height: 96,
+                            borderRadius: 12,
+                            background: "var(--surface-2)",
+                            border: "1px dashed var(--line)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--ink-3)",
+                            fontSize: 13,
+                          }}
+                        >
+                          No logo uploaded
+                        </div>
+                      )}
+                      <div style={{ marginTop: 11, display: "flex", gap: 9, flexWrap: "wrap" }}>
+                        <div className={`inp${logoUrlError ? " err" : ""}`} style={{ flex: 1, minWidth: 180 }}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="9" cy="9" r="2" />
+                            <path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+                          </svg>
+                          <input
+                            id="st-logo-url"
+                            aria-labelledby="st-logo-label"
+                            type="url"
+                            value={form.logoUrl}
+                            aria-invalid={!!logoUrlError}
+                            aria-describedby={logoUrlError ? "st-logo-error" : "st-logo-hint"}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              const validationError = validateLogoValue(value);
+                              update("logoUrl", value);
+                              setLogoUrlError(validationError);
+                              if (!value.trim()) {
+                                setLogoPreview("");
+                              } else if (!validationError) {
+                                setLogoPreview(value.trim());
+                              } else {
+                                setLogoPreview("");
+                              }
+                            }}
+                            placeholder="https://example.com/logo.png"
+                          />
+                        </div>
+                        <label className="ghost" style={{ cursor: "pointer" }}>
+                          <Upload aria-hidden="true" />
+                          Upload
+                          <input
+                            type="file"
+                            accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
+                            onChange={handleLogoUpload}
+                            className="sr-only"
+                            aria-label="Upload a logo image file"
+                          />
+                        </label>
+                      </div>
+                      {logoUrlError ? (
+                        <div className="err-text" id="st-logo-error">
+                          {logoUrlError}
+                        </div>
+                      ) : (
+                        <div className="hint" id="st-logo-hint">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M12 16v-4M12 8h.01" />
+                          </svg>
+                          PNG, JPG, WEBP or SVG. Square works best. Maximum 500 KB for local storage.
+                        </div>
+                      )}
+                      {logoPreview && (
+                        <button
+                          type="button"
+                          className="mini"
+                          style={{ marginTop: 10 }}
+                          onClick={removeLogo}
+                          aria-label="Remove company logo"
+                        >
+                          <X aria-hidden="true" width={14} height={14} />
+                          Remove logo
+                        </button>
                       )}
                     </div>
-                  </div>
-                </div>
 
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={saveWorkspaceSettings}
-                    disabled={
-                      workspaceSettingsSaving ||
-                      workspaceSettingsLoading
-                    }
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {workspaceSettingsSaving ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Save size={14} />
-                    )}
-                    {workspaceSettingsSaving ? "Saving..." : "Save Brand Color"}
-                  </button>
+                    {/* Accent */}
+                    <div>
+                      <span className="fl" id="st-accent-label">Brand Accent</span>
+                      <div className="swatches" role="group" aria-labelledby="st-accent-label">
+                        {QUICK_BRAND_COLORS.map((color) => {
+                          const selected =
+                            brandHex(selectedColor) === color.hex.toLowerCase();
+                          return (
+                            <button
+                              key={color.key}
+                              type="button"
+                              className="swt"
+                              aria-pressed={selected}
+                              title={color.label}
+                              aria-label={`Use ${color.label} as the primary brand color`}
+                              style={{ background: color.hex, color: readableOn(color.hex) }}
+                              onClick={() => {
+                                setSelectedColor(color.key);
+                                setCustomColor(color.hex);
+                                applyBrandTheme(color.key);
+                              }}
+                            >
+                              {selected && (
+                                <Check strokeWidth={3} aria-hidden="true" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="hint">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" />
+                          <path d="M12 16v-4M12 8h.01" />
+                        </svg>
+                        Buttons, highlights and active states use this hue.
+                      </div>
 
-                  <div className="text-[13px] text-slate-500">
-                    Preview is instant. Save to keep this color after refresh.
+                      <div style={{ marginTop: 13, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", position: "relative" }}>
+                        <button
+                          type="button"
+                          className="mini"
+                          aria-pressed={customPaletteOpen}
+                          aria-expanded={customPaletteOpen}
+                          onClick={() => setCustomPaletteOpen((current) => !current)}
+                        >
+                          <Plus aria-hidden="true" width={14} height={14} />
+                          Customize color
+                        </button>
+
+                        <span
+                          className="note"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 7,
+                            padding: "5px 9px",
+                            border: "1px solid var(--line)",
+                            borderRadius: 9,
+                            background: "var(--surface-2)",
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              height: 16,
+                              width: 16,
+                              borderRadius: 5,
+                              border: "1px solid rgba(0,0,0,.12)",
+                              background: brandHex(selectedColor),
+                            }}
+                          />
+                          <span style={{ fontFamily: "ui-monospace,monospace", fontWeight: 600, textTransform: "uppercase" }}>
+                            {brandHex(selectedColor)}
+                          </span>
+                        </span>
+
+                        {customPaletteOpen && (
+                          <>
+                            <button
+                              type="button"
+                              className="fixed inset-0 z-[79] cursor-default bg-transparent"
+                              aria-label="Close custom color palette"
+                              onClick={() => setCustomPaletteOpen(false)}
+                            />
+
+                            <div
+                              role="dialog"
+                              aria-label="Custom brand colors"
+                              className="fixed inset-x-3 bottom-3 z-[80] max-h-[80vh] overflow-auto rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_rgba(15,23,42,0.22)] sm:inset-x-auto sm:bottom-auto sm:right-6 sm:top-1/2 sm:w-[360px] sm:max-w-[calc(100vw-48px)] sm:-translate-y-1/2"
+                            >
+                              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
+                                <div>
+                                  <div className="text-[14px] font-bold text-slate-900">
+                                    Custom Colors
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] text-slate-500">
+                                    Choose from the full palette or enter an exact HEX color.
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setCustomPaletteOpen(false)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                  aria-label="Close custom colors"
+                                >
+                                  <X size={15} />
+                                </button>
+                              </div>
+
+                              <div className="max-h-[calc(100vh-180px)] overflow-y-auto overscroll-contain p-4">
+                                <div className="grid grid-cols-10 gap-2 native:grid-cols-6">
+                                  {BRAND_PALETTE.map((hex) => {
+                                    const selected =
+                                      brandHex(selectedColor) === hex.toLowerCase();
+                                    return (
+                                      <button
+                                        key={hex}
+                                        type="button"
+                                        title={hex.toUpperCase()}
+                                        aria-label={`Use ${hex} as the primary brand color`}
+                                        aria-pressed={selected}
+                                        onClick={() => {
+                                          const normalized = hex.toLowerCase();
+                                          setSelectedColor(normalized);
+                                          setCustomColor(normalized);
+                                          applyBrandTheme(normalized);
+                                        }}
+                                        style={{ backgroundColor: hex }}
+                                        className={`relative h-6 w-6 justify-self-center rounded-md border border-black/10 ring-offset-1 transition hover:scale-110 ${
+                                          selected
+                                            ? "ring-2 ring-slate-900 shadow-sm"
+                                            : "ring-1 ring-transparent hover:ring-slate-300"
+                                        }`}
+                                      >
+                                        {selected && (
+                                          <Check
+                                            size={10}
+                                            strokeWidth={3}
+                                            className="absolute inset-0 m-auto text-white drop-shadow"
+                                          />
+                                        )}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                <div className="mt-4 border-t border-slate-100 pt-4">
+                                  <div className="text-[12px] font-semibold text-slate-800">
+                                    Exact HEX
+                                  </div>
+                                  <div className="mt-2 flex items-center gap-2">
+                                    <label
+                                      className="relative flex h-10 w-10 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
+                                      title="Open system color picker"
+                                    >
+                                      <span
+                                        className="h-6 w-6 rounded-md border border-black/10"
+                                        style={{ backgroundColor: customColor }}
+                                      />
+                                      <input
+                                        type="color"
+                                        value={/^#[0-9a-fA-F]{6}$/.test(customColor) ? customColor : "#4f46e5"}
+                                        onChange={(event) => {
+                                          const value = event.target.value.toLowerCase();
+                                          setCustomColor(value);
+                                          setSelectedColor(value);
+                                          applyBrandTheme(value);
+                                        }}
+                                        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                        aria-label="Choose a custom brand color"
+                                      />
+                                    </label>
+                                    <input
+                                      aria-label="Brand color HEX value"
+                                      value={customColor}
+                                      onChange={(event) => {
+                                        const value = event.target.value.trim();
+                                        setCustomColor(value);
+                                        if (/^#[0-9a-fA-F]{6}$/.test(value)) {
+                                          const normalized = value.toLowerCase();
+                                          setSelectedColor(normalized);
+                                          applyBrandTheme(normalized);
+                                        }
+                                      }}
+                                      placeholder="#4F46E5"
+                                      maxLength={7}
+                                      className="h-10 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 font-mono text-[13px] font-semibold uppercase text-slate-800 outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    disabled={!/^#[0-9a-fA-F]{6}$/.test(customColor)}
+                                    onClick={() => {
+                                      const normalized = customColor.toLowerCase();
+                                      setSelectedColor(normalized);
+                                      applyBrandTheme(normalized);
+                                    }}
+                                    className="mt-3 h-10 w-full rounded-lg bg-brand-600 px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                  >
+                                    Apply Color
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={saveWorkspaceSettings}
+                          disabled={workspaceSettingsSaving || workspaceSettingsLoading}
+                        >
+                          {workspaceSettingsSaving ? (
+                            <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Save size={14} aria-hidden="true" />
+                          )}
+                          {workspaceSettingsSaving ? "Saving..." : "Save Brand Color"}
+                        </button>
+                        <span className="note">
+                          Preview is instant. Save to keep this color after refresh.
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-[13px] font-semibold text-slate-600 mb-2">
-                  Company Logo
-                </label>
-
-                <div className="border border-slate-200 rounded-xl p-4 space-y-4">
-                  {logoPreview ? (
-                    <div className="h-24 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center overflow-hidden">
-                      <img
-                        src={logoPreview}
-                        alt="Company logo preview"
-                        onError={() => {
-                          setLogoPreview("");
-                          setLogoUrlError("Unable to load an image from this logo URL.");
-                        }}
-                        className="max-h-20 max-w-[220px] object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div className="h-24 rounded-xl bg-slate-50 border border-dashed border-slate-300 flex items-center justify-center text-[13px] text-slate-400">
-                      No logo uploaded
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
-                    <input
-                      value={
-                        form.logoUrl
-                      }
-                      type="url"
-                      onChange={(
-                        event
-                      ) => {
-                        const value = event.target.value;
-                        const validationError = validateLogoValue(value);
-
-                        update("logoUrl", value);
-                        setLogoUrlError(validationError);
-
-                        if (!value.trim()) {
-                          setLogoPreview("");
-                        } else if (!validationError) {
-                          setLogoPreview(value.trim());
-                        } else {
-                          setLogoPreview("");
-                        }
-                      }}
-                      placeholder="https://example.com/logo.png"
-                      aria-invalid={!!logoUrlError}
-                      className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
-                        logoUrlError
-                          ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
-                          : "border-slate-200 focus:border-indigo-400 focus:ring-indigo-100"
-                      }`}
-                    />
-
-                    <label className="h-10 px-4 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2 cursor-pointer">
-                      <Upload size={14} />
-                      Upload Logo
-
-                      <input
-                        type="file"
-                        accept=".png,.jpg,.jpeg,.webp,.svg,image/png,image/jpeg,image/webp,image/svg+xml"
-                        onChange={
-                          handleLogoUpload
-                        }
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-
-                  {logoUrlError && (
-                    <div className="text-[12px] font-medium text-rose-600">
-                      {logoUrlError}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-[13px] text-slate-400">
-                      PNG, JPG, WEBP or SVG. Maximum 500 KB for local storage.
-                    </div>
-
-                    {logoPreview && (
-                      <button
-                        type="button"
-                        onClick={
-                          removeLogo
-                        }
-                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                      >
-                        Remove logo
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-                  </div>
-                </div>
-              </div>
-
-              <StorageUsageCard />
+<StorageUsageCard />
 
               <AccountDeletionSection />
             </div>
@@ -3250,7 +3427,7 @@ export default function SettingsView({
 
               <nav
                 aria-label="User management sections"
-                className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50/80 p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                className="border-b border-slate-200"
               >
                 <div
                   className="flex gap-1 overflow-x-auto"
@@ -3270,18 +3447,18 @@ export default function SettingsView({
                       <button
                         key={key}
                         type="button"
-                        aria-current={active ? "true" : undefined}
+                        aria-current={active ? "page" : undefined}
                         onClick={() => setUsersManagementTab(key)}
-                        className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-2.5 text-[13px] font-medium transition-all shrink-0 ${
+                        className={`flex items-center gap-1.5 whitespace-nowrap -mb-px border-b-2 px-3.5 py-3 text-[13px] font-semibold transition-all shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 ${
                           active
-                            ? "bg-white text-indigo-700 shadow-[0_1px_3px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/60"
-                            : "text-slate-500 hover:text-slate-700 hover:bg-white/60"
+                            ? "border-brand-600 text-brand-700"
+                            : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
                         }`}
                       >
                         <Icon
-                          size={14}
+                          size={15}
                           aria-hidden="true"
-                          className={active ? "text-indigo-600" : "text-slate-400"}
+                          className={active ? "text-brand-600" : "text-slate-400"}
                         />
 
                         <span>{label}</span>
@@ -3289,8 +3466,8 @@ export default function SettingsView({
                         <span
                           className={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${
                             active
-                              ? "bg-indigo-50 text-indigo-600"
-                              : "bg-slate-200/70 text-slate-500"
+                              ? "bg-brand-50 text-brand-600"
+                              : "bg-slate-100 text-slate-500"
                           }`}
                         >
                           {count}
@@ -3326,6 +3503,28 @@ export default function SettingsView({
 
               {usersManagementTab === "users" && (
                 <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {[
+                      { label: "Total users", value: users.length, Icon: Users, tint: "bg-brand-50 text-brand-600" },
+                      { label: "Active", value: users.filter((member) => member.active).length, Icon: Check, tint: "bg-emerald-50 text-emerald-600" },
+                      { label: "Levels", value: organization.levels.length, Icon: Layers, tint: "bg-indigo-50 text-indigo-600" },
+                      { label: "Departments", value: organization.departments.length, Icon: Building, tint: "bg-amber-50 text-amber-600" },
+                    ].map((kpi) => (
+                      <div
+                        key={kpi.label}
+                        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                      >
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpi.tint}`}>
+                          <kpi.Icon size={16} aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-[18px] font-bold leading-none text-slate-900 tabular-nums">{kpi.value}</div>
+                          <div className="mt-1 truncate text-[11.5px] font-medium text-slate-500">{kpi.label}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <div className="text-[14px] font-bold text-slate-900">
@@ -3369,15 +3568,15 @@ export default function SettingsView({
                   ) : (
                     <div className="overflow-hidden rounded-xl border border-slate-200">
                       <div className="overflow-x-auto">
-                        <table className="w-full text-[15px]">
+                        <table className="w-full text-[13px]">
                           <thead className="border-b border-slate-200 bg-slate-50">
                             <tr>
-                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Employee ID</th>
-                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">User</th>
-                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</th>
-                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
-                              <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
-                              <th className="px-4 py-3 text-right text-[13px] font-semibold text-slate-500">Actions</th>
+                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Employee ID</th>
+                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">User</th>
+                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</th>
+                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
+                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
                             </tr>
                           </thead>
 
@@ -3726,12 +3925,6 @@ export default function SettingsView({
                                 </div>
                                 <div className="mt-1 text-[12px] text-slate-500">Scope: {scopeLbl} · {memberCount} user{memberCount === 1 ? "" : "s"}</div>
                               </div>
-                              <div className="w-full sm:w-44">
-                                <div role="progressbar" aria-label={`Permission coverage for ${item.name}`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-valuetext={admin ? "Full access" : `${pct}% of permissions`} className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                  <span className="block h-full rounded-full bg-indigo-500" style={{ width: `${pct}%` }} />
-                                </div>
-                                <div className="mt-1 text-[11px] text-slate-400">{admin ? "Full access" : `${pct}% of permissions`}</div>
-                              </div>
                               {currentUser?.role === "CLIENT_ADMIN" && (
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <button type="button" onClick={openCreateUser} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Plus size={13} aria-hidden="true" /> Add user</button>
@@ -3795,6 +3988,28 @@ export default function SettingsView({
                 </button>
               </div>
 
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { label: "Total sources", value: leadSources.length, Icon: Layers, tint: "bg-brand-50 text-brand-600" },
+                  { label: "Active", value: leadSources.filter((source) => source.active).length, Icon: Check, tint: "bg-emerald-50 text-emerald-600" },
+                  { label: "Inactive", value: leadSources.filter((source) => !source.active).length, Icon: EyeOff, tint: "bg-slate-100 text-slate-500" },
+                  { label: "Default sources", value: leadSources.filter((source) => source.system).length, Icon: Sparkles, tint: "bg-indigo-50 text-indigo-600" },
+                ].map((kpi) => (
+                  <div
+                    key={kpi.label}
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                  >
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${kpi.tint}`}>
+                      <kpi.Icon size={16} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="text-[18px] font-bold leading-none text-slate-900 tabular-nums">{kpi.value}</div>
+                      <div className="mt-1 truncate text-[11.5px] font-medium text-slate-500">{kpi.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {sourcesError && !sourceModalOpen && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-lg p-3 text-[13px]">
                   {sourcesError}
@@ -3812,25 +4027,25 @@ export default function SettingsView({
               ) : (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[15px]">
-                      <thead className="bg-slate-50 border-b border-slate-200">
+                    <table className="w-full text-[13px]">
+                      <thead className="border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Order
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Source
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Key
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Active
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Forms
                           </th>
-                          <th className="px-4 py-3 text-right text-[13px] font-semibold text-slate-500">
+                          <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Actions
                           </th>
                         </tr>
@@ -4406,7 +4621,79 @@ export default function SettingsView({
                     </div>
                   </div>
 
-                  
+                  <div className="rounded-2xl border border-slate-200 p-5">
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                        <Volume2 size={15} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[14px] font-bold text-slate-900">Notification Sound</div>
+                        <div className="text-[12px] text-slate-500">Play a tone when a new alert arrives.</div>
+                      </div>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
+                      <div className="p-4 flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-[15px] font-semibold text-slate-900">Enable sound</div>
+                          <div className="text-[13px] text-slate-500 mt-1">Turn notification sounds on or off for this account.</div>
+                        </div>
+                        <PermissionSwitch
+                          checked={soundPref.enabled}
+                          onChange={(value) => setSoundPref((state) => ({ ...state, enabled: value }))}
+                          label="Enable notification sound"
+                        />
+                      </div>
+
+                      <div className="p-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                          <label htmlFor="notif-tone" className="block text-[13px] font-semibold text-slate-700 mb-1.5">
+                            Tone
+                          </label>
+                          <select
+                            id="notif-tone"
+                            value={soundPref.tone}
+                            disabled={!soundPref.enabled}
+                            onChange={(event) => setSoundPref((state) => ({ ...state, tone: event.target.value }))}
+                            className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[14px] text-slate-700 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 disabled:opacity-50"
+                          >
+                            <option value="chime">Chime</option>
+                            <option value="ping">Ping</option>
+                            <option value="bell">Bell</option>
+                            <option value="pop">Pop</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label htmlFor="notif-volume" className="block text-[13px] font-semibold text-slate-700 mb-1.5">
+                            Volume <span className="font-normal text-slate-400">({soundPref.volume}%)</span>
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <input
+                              id="notif-volume"
+                              type="range"
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={soundPref.volume}
+                              disabled={!soundPref.enabled}
+                              aria-valuetext={`${soundPref.volume} percent`}
+                              onChange={(event) => setSoundPref((state) => ({ ...state, volume: Number(event.target.value) }))}
+                              className="h-2 flex-1 cursor-pointer accent-indigo-600 disabled:opacity-50"
+                            />
+                            <button
+                              type="button"
+                              onClick={previewNotificationTone}
+                              disabled={!soundPref.enabled}
+                              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                            >
+                              <Play size={13} aria-hidden="true" /> Preview
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -4546,19 +4833,19 @@ export default function SettingsView({
               ) : (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-[15px]">
-                      <thead className="bg-slate-50 border-b border-slate-200">
+                    <table className="w-full text-[13px]">
+                      <thead className="border-b border-slate-200">
                         <tr>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Date & Time
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             User
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Action
                           </th>
-                          <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Activity
                           </th>
                         </tr>
@@ -4644,220 +4931,318 @@ export default function SettingsView({
           )}
 
           {tab === "integrations" && (
-            <div className="p-6 space-y-5">
-              <div>
-                <h3 className="text-[15px] font-bold text-slate-900">Communication Integrations</h3>
-                <p className="text-[13px] text-slate-500 mt-1">
-                  Connect your own communication accounts. Gmail and SMS are available now; WhatsApp is prepared for the next phase.
-                </p>
+            <div className="st-v2">
+              <style dangerouslySetInnerHTML={{ __html: SETTINGS_V2_CSS }} />
+
+              <div className="phead">
+                <div>
+                  <h2>Communication Integrations</h2>
+                  <p>Connect your own communication accounts. Gmail and SMS are available now; WhatsApp is prepared for the next phase.</p>
+                </div>
               </div>
 
               {googleNotice && (
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] font-semibold text-indigo-700">
+                <div
+                  role="status"
+                  className="infonote"
+                  style={{ borderColor: "var(--accent-weak)", background: "var(--accent-weak)", color: "var(--accent-ink)", fontWeight: 600 }}
+                >
                   {googleNotice}
                 </div>
               )}
 
-              <div className="grid gap-4 xl:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-1">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200">
-                        <Mail size={20} />
+              <div className="intg-grid">
+                {/* GMAIL (featured, full width) */}
+                <div className="icard" style={{ gridColumn: "1 / -1" }}>
+                  <div className="wash" style={{ background: "radial-gradient(120% 160% at 100% 0%, rgba(234,67,53,.18), transparent 60%)" }} />
+                  <div className="icard-in" style={{ flexDirection: "row", flexWrap: "wrap", gap: 20, alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flex: 1, minWidth: 260 }}>
+                      <span className="ilogo" style={{ width: 58, height: 58 }} aria-hidden="true">
+                        <svg viewBox="0 0 48 48" style={{ width: 30, height: 30 }}>
+                          <path fill="#4285F4" d="M6 38V14l18 13L42 14v24a2 2 0 0 1-2 2h-6V22l-10 7.3L14 22v18H8a2 2 0 0 1-2-2z" />
+                          <path fill="#34A853" d="M6 14v24a2 2 0 0 0 2 2h6V22z" />
+                          <path fill="#FBBC04" d="M34 40h6a2 2 0 0 0 2-2V14L34 22z" />
+                          <path fill="#EA4335" d="M6 14l18 13L42 14v-.5A3.5 3.5 0 0 0 38.5 10h-29A3.5 3.5 0 0 0 6 13.5z" />
+                        </svg>
                       </span>
-                      <div className="min-w-0">
-                        <div className="text-[15px] font-bold text-slate-900">Gmail</div>
-                        <div className="mt-1 text-[13px] leading-5 text-slate-500">
-                          Send one-to-one or bulk emails to leads directly from Lead Store using your connected Google account.
-                        </div>
+                      <div className="meta">
+                        <h4>
+                          Gmail
+                          {googleStatus.connected && googleStatus.gmailEnabled ? (
+                            <span className="badge ok"><span className="d" aria-hidden="true" />Connected</span>
+                          ) : (
+                            <span className="badge off"><span className="d" aria-hidden="true" />Not connected</span>
+                          )}
+                        </h4>
+                        <p>Send one-to-one or bulk emails to leads directly from Lead Store using your connected Google account.</p>
                       </div>
                     </div>
-                    <span className={`shrink-0 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${googleStatus.connected && googleStatus.gmailEnabled ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>
-                      {googleStatus.connected && googleStatus.gmailEnabled ? "Connected" : "Not connected"}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 rounded-xl bg-slate-50 px-3 py-3 text-[12px] text-slate-600">
-                    {googleStatus.connected ? (
-                      <>
-                        <div className="font-semibold text-emerald-700">Connected · {googleStatus.email || "Google account"}</div>
-                        <div className="mt-1">Gmail sending: {googleStatus.gmailEnabled ? "Ready" : "Reconnect required"}</div>
-                      </>
-                    ) : (
-                      <div>Connect Google once to enable Gmail and Google Meet.</div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {googleStatusLoading ? (
-                      <span className="inline-flex h-10 items-center gap-2 text-[12px] font-semibold text-slate-500">
-                        <Loader2 size={14} className="animate-spin" /> Checking...
-                      </span>
-                    ) : googleStatusError ? (
-                      <span className="text-[12px] font-semibold text-rose-600">{googleStatusError}</span>
-                    ) : !googleStatus.configured ? (
-                      <span className="text-[12px] font-semibold text-amber-600">Not set up on the server yet</span>
-                    ) : !googleStatus.connected || !googleStatus.gmailEnabled ? (
-                      <button type="button" onClick={connectGoogle} disabled={googleBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
-                        <Globe2 size={15} /> {googleBusy ? "Opening Google..." : googleStatus.connected ? "Reconnect Google" : "Connect Google"}
-                      </button>
-                    ) : (
-                      <>
-                        <button type="button" onClick={sendGoogleTestEmail} disabled={googleBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-4 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
-                          <Send size={14} /> {googleBusy ? "Sending..." : "Send test email"}
-                        </button>
-                        <button type="button" onClick={disconnectGoogle} disabled={googleBusy} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Disconnect</button>
-                      </>
-                    )}
+                    <div style={{ flex: 1, minWidth: 260, display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div className="conn">
+                        <span className={`dotwrap ${googleStatus.connected ? "tok" : "tb"}`} aria-hidden="true">
+                          {googleStatus.connected ? <Check size={16} strokeWidth={2.4} /> : <Mail size={15} />}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="ct">{googleStatus.connected ? (googleStatus.email || "Google account") : "Not connected"}</div>
+                          <div className="cs">
+                            {googleStatus.connected
+                              ? `Gmail sending · ${googleStatus.gmailEnabled ? "Ready" : "Reconnect required"}`
+                              : "Connect Google once to enable Gmail and Google Meet."}
+                          </div>
+                        </div>
+                        {googleStatus.connected && googleStatus.gmailEnabled && (
+                          <span className="right badge ok"><span className="d" aria-hidden="true" />Live</span>
+                        )}
+                      </div>
+                      <div className="icard-foot">
+                        {googleStatusLoading ? (
+                          <span className="note"><Loader2 size={14} className="animate-spin" aria-hidden="true" /> Checking…</span>
+                        ) : googleStatusError ? (
+                          <span className="err-text">{googleStatusError}</span>
+                        ) : googleStatus.connected && googleStatus.gmailEnabled ? (
+                          <>
+                            <button type="button" className="btn" onClick={sendGoogleTestEmail} disabled={googleBusy}>
+                              <Send size={14} aria-hidden="true" /> {googleBusy ? "Sending…" : "Send test email"}
+                            </button>
+                            <button type="button" className="ghost" onClick={disconnectGoogle} disabled={googleBusy}>Disconnect</button>
+                          </>
+                        ) : (
+                          <>
+                            <button type="button" className="btn" onClick={connectGoogle} disabled={googleBusy}>
+                              <Globe2 size={15} aria-hidden="true" /> {googleBusy ? "Opening Google…" : googleStatus.connected ? "Reconnect Google" : "Connect Google"}
+                            </button>
+                            {!googleStatus.configured && (
+                              <span className="badge warn"><span className="d" aria-hidden="true" />Server setup pending</span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200"><MessageCircle size={20} /></span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="text-[15px] font-bold text-slate-900">WhatsApp</div>
-                        {waStatus.connected && (
-                          <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">Connected</span>
+                {/* WHATSAPP */}
+                <div className="icard">
+                  <div className="wash" style={{ background: "radial-gradient(120% 160% at 100% 0%, rgba(37,211,102,.16), transparent 60%)" }} />
+                  <div className="icard-in">
+                    <div className="icard-top">
+                      <span className="ilogo" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" style={{ width: 26, height: 26 }}>
+                          <path fill="#25D366" d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2z" />
+                          <path fill="#fff" d="M17 14.3c-.3-.1-1.7-.8-1.9-.9s-.4-.1-.6.1-.7.9-.8 1-.3.2-.6.1a8 8 0 0 1-2.4-1.5 9 9 0 0 1-1.6-2c-.2-.3 0-.4.1-.6l.4-.5c.1-.2.1-.3.2-.5s0-.3 0-.5-.6-1.5-.8-2-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3A3 3 0 0 0 5.5 9c0 1.3.9 2.5 1 2.7s1.9 2.9 4.6 4c1.8.8 2.5.8 3.4.7a2.8 2.8 0 0 0 1.9-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.3-.2-.6-.3z" />
+                        </svg>
+                      </span>
+                      <div className="meta">
+                        <h4>
+                          WhatsApp
+                          {waStatus.connected && (
+                            <span className="badge ok"><span className="d" aria-hidden="true" />Connected</span>
+                          )}
+                        </h4>
+                        <p>Connect your own WhatsApp Business number to message leads. You pay Meta directly for messages; Bispun adds no charge.</p>
+                        {waStatus.connected && waStatus.displayNumber && (
+                          <p style={{ marginTop: 4 }}>{waStatus.verifiedName ? `${waStatus.verifiedName} · ` : ""}{waStatus.displayNumber}</p>
                         )}
                       </div>
-                      <p className="mt-1 text-[13px] leading-5 text-slate-500">
-                        Connect your own WhatsApp Business number to message leads. You pay Meta directly for messages; Bispun adds no charge.
-                      </p>
-                      {waStatus.connected && waStatus.displayNumber && (
-                        <p className="mt-1 text-[12px] text-slate-600">
-                          {waStatus.verifiedName ? `${waStatus.verifiedName} · ` : ""}{waStatus.displayNumber}
-                        </p>
+                    </div>
+
+                    <div className="conn">
+                      <span className={`dotwrap ${waStatus.connected ? "tok" : "tw"}`} aria-hidden="true">
+                        {waStatus.connected ? <Check size={15} strokeWidth={2.4} /> : <MessageCircle size={15} />}
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="ct">{waStatus.connected ? (waStatus.displayNumber || "Connected") : "Setup pending"}</div>
+                        <div className="cs">{waStatus.connected ? "WhatsApp Business · Ready" : "Available once Bispun finishes WhatsApp setup"}</div>
+                      </div>
+                    </div>
+
+                    {waNotice && <div role="status" className="infonote">{waNotice}</div>}
+
+                    <div className="icard-foot">
+                      {waLoading ? (
+                        <span className="note">Checking status…</span>
+                      ) : !waStatus.configured ? (
+                        <span className="badge warn"><span className="d" aria-hidden="true" />Setup pending</span>
+                      ) : waStatus.connected ? (
+                        <button type="button" className="ghost" onClick={disconnectWhatsApp} disabled={waBusy}>
+                          {waBusy ? "Working…" : "Disconnect"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ background: "#25D366", boxShadow: "0 10px 22px -12px #25D366", color: "#fff" }}
+                          onClick={connectWhatsApp}
+                          disabled={waBusy}
+                        >
+                          <MessageCircle size={15} aria-hidden="true" /> {waBusy ? "Opening…" : "Connect WhatsApp"}
+                        </button>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  {waNotice && (
-                    <div className="mt-3 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-[12px] text-slate-600">{waNotice}</div>
-                  )}
+                {/* SMS */}
+                <div className="icard">
+                  <div className="wash" style={{ background: "radial-gradient(120% 160% at 100% 0%, rgba(109,74,255,.16), transparent 60%)" }} />
+                  <div className="icard-in">
+                    <div className="icard-top">
+                      <span className="ilogo" style={{ color: "var(--accent-ink)" }} aria-hidden="true"><Smartphone size={24} /></span>
+                      <div className="meta">
+                        <h4>
+                          SMS
+                          {smsConfig.enabled && smsConfig.hasApiKey ? (
+                            <span className="badge ok"><span className="d" aria-hidden="true" />Connected</span>
+                          ) : (
+                            <span className="badge off"><span className="d" aria-hidden="true" />Not connected</span>
+                          )}
+                        </h4>
+                        <p>Connect your company&apos;s own SMS provider (e.g. MSG91) with DLT-approved templates. Everyone in your company can then send template SMS to leads from Lead Store.</p>
+                      </div>
+                    </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {waLoading ? (
-                      <span className="text-[13px] text-slate-400">Checking status…</span>
-                    ) : !waStatus.configured ? (
-                      <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 ring-1 ring-amber-200">Setup pending — available once Bispun finishes WhatsApp setup</span>
-                    ) : waStatus.connected ? (
-                      <button type="button" onClick={disconnectWhatsApp} disabled={waBusy} className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                        {waBusy ? "Working…" : "Disconnect"}
-                      </button>
-                    ) : (
-                      <button type="button" onClick={connectWhatsApp} disabled={waBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-emerald-600 px-4 text-[13px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
-                        <MessageCircle size={15} /> {waBusy ? "Opening…" : "Connect WhatsApp"}
-                      </button>
-                    )}
+                    <>
+                      {!smsCanManage && (
+                        <div className="infonote">Only a Client Admin can save or connect SMS for the company.</div>
+                      )}
+                      <>
+                        <div className="ifields">
+                          <div className="ifld">
+                            <label htmlFor="st-sms-provider">Provider</label>
+                            <div className="inp"><input id="st-sms-provider" value={smsConfig.provider} onChange={(e) => setSmsConfig((c) => ({ ...c, provider: e.target.value }))} placeholder="MSG91" /></div>
+                          </div>
+                          <div className="ifld">
+                            <label htmlFor="st-sms-sender">Sender ID (DLT header)</label>
+                            <div className="inp"><input id="st-sms-sender" value={smsConfig.senderId} onChange={(e) => setSmsConfig((c) => ({ ...c, senderId: e.target.value }))} placeholder="BISPUN" /></div>
+                          </div>
+                        </div>
+                        <div className="ifld">
+                          <label htmlFor="st-sms-key">API Key</label>
+                          <div className="inp">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                            <input id="st-sms-key" type="password" value={smsApiKeyInput} onChange={(e) => setSmsApiKeyInput(e.target.value)} placeholder={smsConfig.hasApiKey ? (smsConfig.apiKeyMasked || "••••••") : "Paste provider auth key"} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
+                            <span className="fl" style={{ margin: 0 }}>DLT-approved templates</span>
+                            <button type="button" className="mini" onClick={addSmsTemplate}><Plus size={13} aria-hidden="true" /> Add template</button>
+                          </div>
+                          {(smsConfig.templates || []).length === 0 ? (
+                            <div className="infonote" style={{ borderStyle: "dashed", textAlign: "center" }}>No templates yet. Add your DLT-approved templates so your team can pick them when sending.</div>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                              {(smsConfig.templates || []).map((t, index) => (
+                                <div key={t.id || index} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12, background: "var(--surface)" }}>
+                                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                    <div className="inp" style={{ flex: 1 }}><input value={t.name} onChange={(e) => updateSmsTemplate(index, "name", e.target.value)} placeholder="Template name (e.g. Follow-up)" aria-label="Template name" /></div>
+                                    <div className="inp" style={{ flex: 1 }}><input value={t.templateId} onChange={(e) => updateSmsTemplate(index, "templateId", e.target.value)} placeholder="Provider template ID" aria-label="Provider template ID" /></div>
+                                    <button type="button" className="mini" onClick={() => removeSmsTemplate(index)} aria-label="Remove template"><X size={15} aria-hidden="true" /></button>
+                                  </div>
+                                  <textarea className="ta" style={{ marginTop: 8 }} value={t.body} onChange={(e) => updateSmsTemplate(index, "body", e.target.value)} rows={2} placeholder="Approved template content (for preview). Put the lead's name where the name variable goes." aria-label="Template content" />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="srow">
+                          <span className="st">Enable SMS sending for this company</span>
+                          <button type="button" role="switch" aria-checked={smsConfig.enabled} aria-label="Enable SMS sending for this company" className="sw" onClick={() => setSmsConfig((c) => ({ ...c, enabled: !c.enabled }))} />
+                        </div>
+
+                        {smsNotice && <div role="status" className="infonote" style={{ borderColor: "var(--accent-weak)", background: "var(--accent-weak)", color: "var(--accent-ink)", fontWeight: 600 }}>{smsNotice}</div>}
+
+                        <div className="icard-foot" style={{ justifyContent: "flex-end" }}>
+                          <button type="button" className="btn" onClick={saveSmsConfig} disabled={smsBusy || !smsCanManage}>{smsBusy ? "Saving…" : "Connect SMS"}</button>
+                        </div>
+
+                        <div className="warnnote">India DLT note: SMS content must match your provider&apos;s DLT-approved templates exactly, and each template&apos;s name variable must be set so the lead&apos;s name fills correctly.</div>
+                      </>
+                    </>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200"><Smartphone size={20} /></span>
-                      <div>
-                        <div className="text-[15px] font-bold text-slate-900">SMS</div>
-                        <p className="mt-1 text-[13px] leading-5 text-slate-500">Connect your company&apos;s own SMS provider (e.g. MSG91) with DLT-approved templates. Everyone in your company can then send template SMS to leads from Lead Store.</p>
+                {/* VOICE (full width) */}
+                <div className="icard" style={{ gridColumn: "1 / -1" }}>
+                  <div className="wash" style={{ background: "radial-gradient(120% 160% at 100% 0%, rgba(124,58,237,.16), transparent 60%)" }} />
+                  <div className="icard-in">
+                    <div className="icard-top">
+                      <span className="ilogo" style={{ color: "var(--viol)" }} aria-hidden="true"><PhoneCall size={24} /></span>
+                      <div className="meta">
+                        <h4>
+                          Voice Calling &amp; Recording
+                          {callingConfig.enabled ? (
+                            <span className="badge ok"><span className="d" aria-hidden="true" />Enabled</span>
+                          ) : (
+                            <span className="badge off"><span className="d" aria-hidden="true" />Device dial</span>
+                          )}
+                        </h4>
+                        <p>Choose who provides the MSG91 number. After setup, users call directly from Lead Store; call history and provider recordings stay linked to the lead.</p>
                       </div>
                     </div>
-                    <span className={`shrink-0 inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${smsConfig.enabled && smsConfig.hasApiKey ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>{smsConfig.enabled && smsConfig.hasApiKey ? "Connected" : "Not connected"}</span>
-                  </div>
 
-                  {!smsCanManage ? (
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can connect SMS for the company.</div>
-                  ) : (
-                    <div className="mt-4 space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Provider</label>
-                          <input value={smsConfig.provider} onChange={(e) => setSmsConfig((c) => ({ ...c, provider: e.target.value }))} placeholder="MSG91" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
+                    <>
+                      {!callingCanManage && (
+                        <div className="infonote">Only a Client Admin can save the company calling connection.</div>
+                      )}
+                      <>
+                        <div className="seg" role="group" aria-label="Number provider">
+                          {[
+                            ["BISPUN_MANAGED", "Bispun-managed", "We provide the number"],
+                            ["OWN_MSG91", "Bring your own", "Use your MSG91 number"],
+                          ].map(([mode, title, desc]) => (
+                            <button key={mode} type="button" aria-pressed={callingConfig.mode === mode} onClick={() => setCallingConfig((c) => ({ ...c, mode, enabled: true }))}>
+                              {title}
+                              <span>{desc}</span>
+                            </button>
+                          ))}
                         </div>
-                        <div>
-                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Sender ID (DLT header)</label>
-                          <input value={smsConfig.senderId} onChange={(e) => setSmsConfig((c) => ({ ...c, senderId: e.target.value }))} placeholder="BISPUN" className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
-                        </div>
-                        <div>
-                          <label className="mb-1.5 block text-[12px] font-semibold text-slate-600">Auth key</label>
-                          <input type="password" value={smsApiKeyInput} onChange={(e) => setSmsApiKeyInput(e.target.value)} placeholder={smsConfig.hasApiKey ? (smsConfig.apiKeyMasked || "••••••") : "Paste provider auth key"} className="h-10 w-full rounded-xl border border-slate-200 px-3 text-[13px]" />
-                        </div>
-                      </div>
 
-                      <div>
-                        <div className="mb-2 flex items-center justify-between">
-                          <label className="text-[12px] font-semibold text-slate-600">DLT-approved templates</label>
-                          <button type="button" onClick={addSmsTemplate} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 hover:border-indigo-300 hover:text-indigo-700"><Plus size={13} /> Add template</button>
-                        </div>
-                        {(smsConfig.templates || []).length === 0 ? (
-                          <div className="rounded-xl border border-dashed border-slate-200 px-4 py-4 text-center text-[12px] text-slate-400">No templates yet. Add your DLT-approved templates so your team can pick them when sending.</div>
-                        ) : (
-                          <div className="space-y-3">
-                            {(smsConfig.templates || []).map((t, index) => (
-                              <div key={t.id || index} className="rounded-xl border border-slate-200 bg-white p-3">
-                                <div className="flex items-center gap-2">
-                                  <input value={t.name} onChange={(e) => updateSmsTemplate(index, "name", e.target.value)} placeholder="Template name (e.g. Follow-up)" className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-[13px]" />
-                                  <input value={t.templateId} onChange={(e) => updateSmsTemplate(index, "templateId", e.target.value)} placeholder="Provider template ID" className="h-9 flex-1 rounded-lg border border-slate-200 px-3 text-[13px] font-mono" />
-                                  <button type="button" onClick={() => removeSmsTemplate(index)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"><X size={15} /></button>
-                                </div>
-                                <textarea value={t.body} onChange={(e) => updateSmsTemplate(index, "body", e.target.value)} rows={2} placeholder="Approved template content (for preview). Put the lead's name where the name variable goes." className="mt-2 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-[12px] leading-5" />
-                              </div>
-                            ))}
+                        {callingConfig.mode === "OWN_MSG91" && (
+                          <div className="ifields">
+                            <div className="ifld">
+                              <label htmlFor="st-call-cid">MSG91 Caller ID / DID</label>
+                              <div className="inp"><input id="st-call-cid" value={callingConfig.callerId || ""} onChange={(e) => setCallingConfig((c) => ({ ...c, callerId: e.target.value }))} placeholder="Approved caller ID" /></div>
+                            </div>
+                            <div className="ifld">
+                              <label htmlFor="st-call-key">MSG91 Auth Key</label>
+                              <div className="inp"><input id="st-call-key" type="password" value={callingAuthKey} onChange={(e) => setCallingAuthKey(e.target.value)} placeholder={callingConfig.hasAuthKey ? (callingConfig.authKeyMasked || "••••••••") : "Paste Auth Key"} /></div>
+                            </div>
                           </div>
                         )}
-                      </div>
 
-                      <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <span className="text-[13px] font-semibold text-slate-700">Enable SMS sending for this company</span>
-                        <input type="checkbox" checked={smsConfig.enabled} onChange={(e) => setSmsConfig((c) => ({ ...c, enabled: e.target.checked }))} />
-                      </label>
+                        {callingConfig.mode === "BISPUN_MANAGED" && (
+                          <div className="warnnote">Selection saved now; cloud calling activates after Bispun receives MSG91 approval and assigns your company caller ID. Until then, Lead Store safely falls back to device dial.</div>
+                        )}
 
-                      {smsNotice && <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-800">{smsNotice}</div>}
+                        <label className="srow" style={{ cursor: "pointer" }}>
+                          <span style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                            <input type="checkbox" style={{ marginTop: 3 }} checked={callingConfig.consentConfirmed} onChange={(e) => setCallingConfig((c) => ({ ...c, consentConfirmed: e.target.checked }))} />
+                            <span className="note" style={{ color: "var(--ink-2)" }}>We will call only consented leads and comply with applicable DND/TCC, recording disclosure and telecom rules.</span>
+                          </span>
+                        </label>
 
-                      <div className="flex justify-end">
-                        <button type="button" onClick={saveSmsConfig} disabled={smsBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{smsBusy ? "Saving…" : "Save SMS integration"}</button>
-                      </div>
+                        <div className="srow">
+                          <span className="st">Enable calling for this company</span>
+                          <PermissionSwitch checked={callingConfig.enabled} onChange={(enabled) => setCallingConfig((c) => ({ ...c, enabled }))} label="Enable company calling" />
+                        </div>
 
-                      <div className="rounded-xl border border-amber-100 bg-amber-50/60 px-4 py-3 text-[12px] leading-5 text-amber-800">India DLT note: SMS content must match your provider&apos;s DLT-approved templates exactly, and each template&apos;s name variable must be set so the lead&apos;s name fills correctly.</div>
-                    </div>
-                  )}
+                        {callingNotice && <div role="status" className="infonote" style={{ borderColor: "var(--accent-weak)", background: "var(--accent-weak)", color: "var(--accent-ink)", fontWeight: 600 }}>{callingNotice}</div>}
+
+                        <div className="icard-foot" style={{ justifyContent: "flex-end" }}>
+                          <button type="button" className="btn" onClick={saveCallingConfig} disabled={callingBusy || !callingCanManage}>{callingBusy ? "Saving…" : "Enable calling"}</button>
+                        </div>
+                      </>
+                    </>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200"><PhoneCall size={20} /></span>
-                    <div><div className="text-[15px] font-bold text-slate-900">Voice Calling & Recording</div><p className="mt-1 text-[13px] leading-5 text-slate-500">Choose who provides the MSG91 number. After setup, users call directly from Lead Store; call history and provider recordings stay linked to the lead.</p></div>
-                  </div>
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${callingConfig.enabled ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-100 text-slate-600 ring-slate-200"}`}>{callingConfig.enabled ? "Enabled" : "Device dial"}</span>
-                </div>
-                {!callingCanManage ? (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can change the company calling connection.</div>
-                ) : (
-                  <div className="mt-4 space-y-4">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {[["BISPUN_MANAGED", "Continue with Bispun", "Fast managed setup. Bispun assigns the approved caller ID after MSG91 activation."], ["OWN_MSG91", "Connect My MSG91 Account", "Use your company caller ID, MSG91 wallet and billing."]].map(([mode, title, description]) => (
-                        <button key={mode} type="button" onClick={() => setCallingConfig((c) => ({ ...c, mode, enabled: true }))} className={`rounded-xl border p-4 text-left transition ${callingConfig.mode === mode ? "border-indigo-400 bg-indigo-50 ring-2 ring-indigo-100" : "border-slate-200 bg-white hover:border-indigo-200"}`}><div className="text-[13px] font-bold text-slate-900">{title}</div><div className="mt-1 text-[12px] leading-5 text-slate-500">{description}</div></button>
-                      ))}
-                    </div>
-                    {callingConfig.mode === "OWN_MSG91" && (
-                      <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
-                        <label><span className="mb-1.5 block text-[12px] font-semibold text-slate-600">MSG91 Caller ID / DID</span><input value={callingConfig.callerId || ""} onChange={(e) => setCallingConfig((c) => ({ ...c, callerId: e.target.value }))} placeholder="Approved caller ID" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px]" /></label>
-                        <label><span className="mb-1.5 block text-[12px] font-semibold text-slate-600">MSG91 Auth Key</span><input type="password" value={callingAuthKey} onChange={(e) => setCallingAuthKey(e.target.value)} placeholder={callingConfig.hasAuthKey ? callingConfig.authKeyMasked || "••••••••" : "Paste Auth Key"} className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-[13px]" /></label>
-                      </div>
-                    )}
-                    {callingConfig.mode === "BISPUN_MANAGED" && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[12px] leading-5 text-amber-800">Selection saved now; cloud calling activates after Bispun receives MSG91 approval and assigns your company caller ID. Until then, Lead Store safely falls back to device dial.</div>}
-                    <label className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3"><input type="checkbox" className="mt-1" checked={callingConfig.consentConfirmed} onChange={(e) => setCallingConfig((c) => ({ ...c, consentConfirmed: e.target.checked }))} /><span className="text-[12px] leading-5 text-slate-600">We will call only consented leads and comply with applicable DND/TCC, recording disclosure and telecom rules.</span></label>
-                    <label className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3"><span className="text-[13px] font-semibold text-slate-700">Enable calling for this company</span><PermissionSwitch checked={callingConfig.enabled} onChange={(enabled) => setCallingConfig((c) => ({ ...c, enabled }))} label="Enable company calling" /></label>
-                    {callingNotice && <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-[12px] font-semibold text-indigo-800">{callingNotice}</div>}
-                    <div className="flex justify-end"><button type="button" onClick={saveCallingConfig} disabled={callingBusy} className="inline-flex h-10 items-center gap-2 rounded-xl bg-indigo-600 px-5 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">{callingBusy ? "Saving…" : "Save calling integration"}</button></div>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
+              <div className="infonote">
                 Gmail uses the connected user&apos;s own Google account and Google&apos;s sending rules. Bispun records sent/failed communication history, but Google controls the actual daily sending limit.
               </div>
             </div>
