@@ -618,7 +618,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       <th
         scope="col"
         aria-sort={state}
-        className={`px-3 py-2.5 text-[10px] uppercase tracking-[0.08em] font-semibold whitespace-nowrap ${
+        className={`px-3 py-2.5 text-[11px] uppercase tracking-[0.08em] font-semibold whitespace-nowrap ${
           align === "right" ? "text-right" : "text-left"
         }`}
       >
@@ -1826,7 +1826,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-[13px]">
+              <table className="w-full text-[15px]">
                 <thead className="border-b border-slate-200 bg-slate-50/95">
                   <tr>
                     <th scope="col" className="px-3 py-2.5 w-10">
@@ -1843,7 +1843,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
                     <th
                       scope="col"
-                      className="px-3 py-2.5 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
+                      className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
                     >
                       #
                     </th>
@@ -1882,7 +1882,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                         </td>
 
                         <td className="px-3 py-2.5">
-                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[12px] font-bold text-indigo-600 tabular-nums">
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[13px] font-bold text-indigo-600 tabular-nums">
                             {index + 1}
                           </span>
                         </td>
@@ -1925,7 +1925,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                               />
                             </div>
 
-                            <span className="text-[13px] font-semibold text-slate-700 tabular-nums">
+                            <span className="text-[14px] font-semibold text-slate-700 tabular-nums">
                               {
                                 campaign.conversion
                               }
