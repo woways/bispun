@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -16,6 +17,9 @@ import {
   Cell,
   LineChart,
   Line,
+  AreaChart,
+  Area,
+  LabelList,
 } from "recharts";
 
 import {
@@ -32,6 +36,9 @@ import {
   ArrowDown,
   Minus,
   GitCompareArrows,
+  MoreVertical,
+  Search,
+  ChevronsUpDown,
 } from "lucide-react";
 
 import {
@@ -52,7 +59,7 @@ const COLORS = [
   "#6366f1",
   "#10b981",
   "#f59e0b",
-  "#ec4899",
+  "#ef4444",
   "#8b5cf6",
   "#14b8a6",
 ];
@@ -155,25 +162,59 @@ function AnalyticsMetric({
 function ChartCard({
   title,
   subtitle,
+  badge,
+  legend,
   children,
 }) {
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-      <div>
-        <h3 className="text-[15px] font-bold text-slate-900">
-          {title}
-        </h3>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-bold text-slate-900">
+            {title}
+          </h3>
 
-        {subtitle && (
-          <p className="text-[13px] text-slate-500 mt-1">
-            {subtitle}
-          </p>
+          {subtitle && (
+            <p className="text-[13px] text-slate-500 mt-1">
+              {subtitle}
+            </p>
+          )}
+        </div>
+
+        {badge != null && (
+          <span className="shrink-0 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+            {badge}
+          </span>
         )}
       </div>
 
-      <div className="mt-5">
+      {legend && <div className="mt-4">{legend}</div>}
+
+      <div className={legend ? "mt-2" : "mt-5"}>
         {children}
       </div>
+    </div>
+  );
+}
+
+// Small colored-dot + label legend row. Dots are decorative (color is backed by
+// the text label beside them), so they are hidden from assistive tech.
+function ChartLegend({ items }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      {items.map((item) => (
+        <span
+          key={item.label}
+          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-600"
+        >
+          <span
+            aria-hidden="true"
+            className="h-2.5 w-2.5 rounded-sm"
+            style={{ backgroundColor: item.color }}
+          />
+          {item.label}
+        </span>
+      ))}
     </div>
   );
 }
@@ -217,6 +258,46 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
   ] = useState(baseYear - 1);
 
   const [analyticsTab, setAnalyticsTab] = useState("overview");
+
+  // Header overflow ("⋮") menu holding the Refresh action.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const menuTriggerRef = useRef(null);
+  const refreshItemRef = useRef(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocPointer(event) {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocPointer);
+    // Move focus into the menu when it opens.
+    refreshItemRef.current?.focus();
+    return () => document.removeEventListener("mousedown", onDocPointer);
+  }, [menuOpen]);
+
+  function closeMenuAndRefocus() {
+    setMenuOpen(false);
+    menuTriggerRef.current?.focus();
+  }
+
+  // Campaigns table: client-side search + sortable columns (restyle only — the
+  // underlying topCampaigns payload is unchanged).
+  const [campaignQuery, setCampaignQuery] = useState("");
+  const [campaignSort, setCampaignSort] = useState({
+    key: "leads",
+    dir: "desc",
+  });
+
+  function toggleCampaignSort(key) {
+    setCampaignSort((current) =>
+      current.key === key
+        ? { key, dir: current.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "name" ? "asc" : "desc" }
+    );
+  }
 
   // Redirect off a section the viewer is no longer permitted to open.
   useEffect(() => {
@@ -357,6 +438,92 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
   }
 
 
+  // Derived campaign rows for the restyled "All Campaigns" table.
+  const campaignRows = data.topCampaigns || [];
+  const campaignFilter = campaignQuery.trim().toLowerCase();
+
+  const filteredCampaigns = campaignFilter
+    ? campaignRows.filter((row) =>
+        String(row.campaign || "")
+          .toLowerCase()
+          .includes(campaignFilter)
+      )
+    : campaignRows;
+
+  const sortedCampaigns = [...filteredCampaigns].sort((a, b) => {
+    const { key, dir } = campaignSort;
+
+    if (key === "name") {
+      const result = String(a.campaign || "").localeCompare(
+        String(b.campaign || "")
+      );
+      return dir === "asc" ? result : -result;
+    }
+
+    const aValue = Number(a[key] || 0);
+    const bValue = Number(b[key] || 0);
+    return dir === "asc" ? aValue - bValue : bValue - aValue;
+  });
+
+  const campaignTotals = filteredCampaigns.reduce(
+    (totals, row) => ({
+      leads: totals.leads + Number(row.leads || 0),
+      admissions: totals.admissions + Number(row.admissions || 0),
+    }),
+    { leads: 0, admissions: 0 }
+  );
+
+  const campaignSortOptions = [
+    { key: "leads", label: "Leads" },
+    { key: "admissions", label: "Admissions" },
+    { key: "conversion", label: "Conversion" },
+    { key: "name", label: "Name" },
+  ];
+
+  // Accessible sort indicator for a column header: aria-sort value + a
+  // non-color arrow glyph (hidden from AT since aria-sort already conveys it).
+  function columnSortState(key) {
+    if (campaignSort.key !== key) return "none";
+    return campaignSort.dir === "asc" ? "ascending" : "descending";
+  }
+
+  function SortHeader({ label, columnKey, align = "left", numeric = false }) {
+    const state = columnSortState(columnKey);
+    const active = state !== "none";
+    return (
+      <th
+        scope="col"
+        aria-sort={state}
+        className={`px-3 py-2.5 text-[10px] uppercase tracking-[0.08em] font-semibold whitespace-nowrap ${
+          align === "right" ? "text-right" : "text-left"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => toggleCampaignSort(columnKey)}
+          className={`inline-flex items-center gap-1 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+            align === "right" ? "flex-row-reverse" : ""
+          } ${active ? "text-indigo-700" : "text-slate-500 hover:text-slate-700"}`}
+        >
+          <span>{label}</span>
+          {active ? (
+            campaignSort.dir === "asc" ? (
+              <ArrowUp size={12} aria-hidden="true" />
+            ) : (
+              <ArrowDown size={12} aria-hidden="true" />
+            )
+          ) : (
+            <ChevronsUpDown
+              size={12}
+              aria-hidden="true"
+              className="text-slate-300"
+            />
+          )}
+        </button>
+      </th>
+    );
+  }
+
   return (
     <div className="space-y-4">
 
@@ -365,7 +532,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-            Insights / Business Analytics
+            Insights &middot; Business Analytics
           </div>
 
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">
@@ -380,27 +547,93 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={
-            loadAnalytics
-          }
-          disabled={
-            loading
-          }
-          className="h-9 px-3.5 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg text-[13px] font-semibold text-slate-700 inline-flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
-        >
-          <RefreshCw
-            size={13}
-            className={
-              loading
-                ? "animate-spin"
-                : ""
-            }
-          />
+        <div className="flex items-center gap-2">
+          {/* Segmented view switch (toggle-button model: aria-pressed) */}
+          <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+            {(!data.allowedSections || data.allowedSections.overview) && (
+              <button
+                type="button"
+                onClick={() => setAnalyticsTab("overview")}
+                aria-pressed={analyticsTab === "overview"}
+                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[13px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                  analyticsTab === "overview"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                }`}
+              >
+                <TrendingUp size={14} aria-hidden="true" />
+                Overview
+              </button>
+            )}
 
-          Refresh data
-        </button>
+            {(!data.allowedSections || data.allowedSections.comparison) && (
+              <button
+                type="button"
+                onClick={() => setAnalyticsTab("comparison")}
+                aria-pressed={analyticsTab === "comparison"}
+                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[13px] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+                  analyticsTab === "comparison"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
+                }`}
+              >
+                <GitCompareArrows size={14} aria-hidden="true" />
+                Year Comparison
+              </button>
+            )}
+          </div>
+
+          {/* Overflow menu — holds the Refresh action */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              ref={menuTriggerRef}
+              onClick={() => setMenuOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setMenuOpen(false);
+              }}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="More actions"
+              className="h-10 w-10 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.03)] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <MoreVertical size={16} aria-hidden="true" />
+            </button>
+
+            {menuOpen && (
+              <div
+                role="menu"
+                aria-label="Analytics actions"
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.stopPropagation();
+                    closeMenuAndRefocus();
+                  }
+                }}
+                className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_12px_32px_rgba(15,23,42,0.12)]"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  ref={refreshItemRef}
+                  disabled={loading}
+                  onClick={() => {
+                    loadAnalytics();
+                    closeMenuAndRefocus();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  <RefreshCw
+                    size={14}
+                    aria-hidden="true"
+                    className={loading ? "animate-spin" : ""}
+                  />
+                  Refresh data
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ERROR */}
@@ -416,37 +649,6 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       )}
 
       {/* LOADING */}
-
-
-      <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-        {(!data.allowedSections || data.allowedSections.overview) && (
-          <button
-            type="button"
-            onClick={() => setAnalyticsTab("overview")}
-            className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
-              analyticsTab === "overview"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
-            }`}
-          >
-            Overview
-          </button>
-        )}
-
-        {(!data.allowedSections || data.allowedSections.comparison) && (
-          <button
-            type="button"
-            onClick={() => setAnalyticsTab("comparison")}
-            className={`h-8 px-4 rounded-lg text-[13px] font-semibold transition-colors ${
-              analyticsTab === "comparison"
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "text-slate-600 hover:bg-indigo-50 hover:text-indigo-700"
-            }`}
-          >
-            Year Comparison
-          </button>
-        )}
-      </div>
 
       {loading ? (
         <div className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
@@ -871,7 +1073,8 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             <ChartCard
               title="Source-wise Conversion"
-              subtitle="Compare conversion rates across lead acquisition channels."
+              subtitle="Conversion rate across lead acquisition channels."
+              badge={`${data.sourceConversion.length} channels`}
             >
               {data
                 .sourceConversion
@@ -980,9 +1183,20 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                         0,
                       ]}
                       maxBarSize={
-                        42
+                        46
                       }
-                    />
+                    >
+                      <LabelList
+                        dataKey="conversion"
+                        position="top"
+                        formatter={(value) => `${value}%`}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fill: "#334155",
+                        }}
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
@@ -997,13 +1211,23 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             <ChartCard
               title="Lead Stage Distribution"
-              subtitle="Understand how leads are distributed across the CRM pipeline."
+              subtitle="How leads spread across the CRM pipeline."
+              badge={`${totalStageLeads} leads`}
             >
               {data
                 .leadsByStage
                 .length >
               0 ? (
                 <div className="grid md:grid-cols-[1fr_180px] items-center gap-2">
+                  <div className="relative">
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-[26px] font-bold leading-none tracking-tight text-slate-950 tabular-nums">
+                      {totalStageLeads}
+                    </span>
+                    <span className="mt-1 text-[11px] font-medium text-slate-400">
+                      total leads
+                    </span>
+                  </div>
                   <ResponsiveContainer
                     width="100%"
                     height={
@@ -1062,6 +1286,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+                  </div>
 
                   <div className="space-y-3">
                     {data.leadsByStage.map(
@@ -1121,19 +1346,31 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             <ChartCard
               title="Monthly Activity"
-              subtitle="Lead generation and admission activity over time."
+              subtitle="Lead generation and admissions over time."
+              legend={
+                <ChartLegend
+                  items={[
+                    { label: "Leads", color: "#6366f1" },
+                    { label: "Admissions", color: "#10b981" },
+                  ]}
+                />
+              }
             >
               {data
                 .monthlyActivity
                 .length >
               0 ? (
+                <div
+                  role="img"
+                  aria-label={`Monthly activity area chart of leads and admissions over ${data.monthlyActivity.length} months.`}
+                >
                 <ResponsiveContainer
                   width="100%"
                   height={
                     280
                   }
                 >
-                  <LineChart
+                  <AreaChart
                     data={
                       data
                         .monthlyActivity
@@ -1149,6 +1386,17 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                         0,
                     }}
                   >
+                    <defs>
+                      <linearGradient id="activityLeads" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.22} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                      <linearGradient id="activityAdmissions" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.18} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+
                     <CartesianGrid
                       strokeDasharray="3 3"
                       vertical={
@@ -1201,43 +1449,30 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       }}
                     />
 
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="leads"
                       name="Leads"
                       stroke="#6366f1"
-                      strokeWidth={
-                        2.5
-                      }
-                      dot={{
-                        r:
-                          3,
-                      }}
-                      activeDot={{
-                        r:
-                          5,
-                      }}
+                      strokeWidth={2.5}
+                      fill="url(#activityLeads)"
+                      dot={false}
+                      activeDot={{ r: 5 }}
                     />
 
-                    <Line
+                    <Area
                       type="monotone"
                       dataKey="admissions"
                       name="Admissions"
                       stroke="#10b981"
-                      strokeWidth={
-                        2.5
-                      }
-                      dot={{
-                        r:
-                          3,
-                      }}
-                      activeDot={{
-                        r:
-                          5,
-                      }}
+                      strokeWidth={2.5}
+                      fill="url(#activityAdmissions)"
+                      dot={false}
+                      activeDot={{ r: 5 }}
                     />
-                  </LineChart>
+                  </AreaChart>
                 </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
                   No monthly activity
@@ -1250,12 +1485,24 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
             <ChartCard
               title="Employee Performance"
-              subtitle="Compare lead ownership and admissions by employee."
+              subtitle="Lead ownership and admissions by employee."
+              legend={
+                <ChartLegend
+                  items={[
+                    { label: "Leads", color: "#cbd5e1" },
+                    { label: "Admissions", color: "#10b981" },
+                  ]}
+                />
+              }
             >
               {data
                 .employeePerformance
                 .length >
               0 ? (
+                <div
+                  role="img"
+                  aria-label={`Employee performance bar chart comparing leads and admissions across ${data.employeePerformance.length} employees.`}
+                >
                 <ResponsiveContainer
                   width="100%"
                   height={
@@ -1362,6 +1609,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     />
                   </BarChart>
                 </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
                   No employee
@@ -1374,70 +1622,114 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
           {/* CAMPAIGNS */}
 
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <BarChart3
-                    size={15}
-                    className="text-indigo-600"
-                  />
+            <div className="px-5 py-4 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <BarChart3
+                  size={15}
+                  className="text-indigo-600"
+                  aria-hidden="true"
+                />
 
-                  <h3 className="text-[15px] font-bold text-slate-900">
-                    Top Campaigns
-                  </h3>
-                </div>
+                <h3 className="text-[15px] font-bold text-slate-900">
+                  All Campaigns
+                </h3>
 
-                <p className="text-[13px] text-slate-500 mt-1">
-                  Campaigns ranked by
-                  lead and admission
-                  performance.
-                </p>
+                <span
+                  aria-live="polite"
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-500"
+                >
+                  {sortedCampaigns.length} shown
+                </span>
               </div>
 
-              <div className="text-[13px] text-slate-500">
-                {
-                  data
-                    .topCampaigns
-                    .length
-                }{" "}
-                campaigns
+              <p className="text-[13px] text-slate-500 mt-1">
+                Ranked by lead and admission performance &middot; click a header to sort.
+              </p>
+
+              {/* Controls: wide search (left) + Sort (far right) */}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <div className="relative flex-1">
+                  <Search
+                    size={15}
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="search"
+                    value={campaignQuery}
+                    onChange={(event) => setCampaignQuery(event.target.value)}
+                    aria-label="Search campaigns"
+                    placeholder="Search campaign name..."
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                </div>
+
+                <div className="sm:ml-auto flex items-center gap-2">
+                  <label
+                    htmlFor="campaign-sort"
+                    className="text-[12px] font-semibold text-slate-500"
+                  >
+                    Sort
+                  </label>
+                  <select
+                    id="campaign-sort"
+                    value={campaignSort.key}
+                    onChange={(event) => {
+                      const key = event.target.value;
+                      setCampaignSort({
+                        key,
+                        dir: key === "name" ? "asc" : "desc",
+                      });
+                    }}
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-[13px] font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-400"
+                  >
+                    {campaignSortOptions.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-[15px]">
-                <thead className="bg-slate-50/80">
+              <table className="w-full text-[13px]">
+                <thead className="border-b border-slate-200 bg-slate-50/95">
                   <tr>
-                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
-                      Campaign
+                    <th
+                      scope="col"
+                      className="px-3 py-2.5 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
+                    >
+                      #
                     </th>
 
-                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
-                      Leads
-                    </th>
-
-                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
-                      Admissions
-                    </th>
-
-                    <th className="px-5 py-3 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500">
-                      Conversion
-                    </th>
+                    <SortHeader label="Campaign" columnKey="name" />
+                    <SortHeader label="Leads" columnKey="leads" />
+                    <SortHeader label="Admissions" columnKey="admissions" />
+                    <SortHeader label="Conversion" columnKey="conversion" />
                   </tr>
                 </thead>
 
-                <tbody>
-                  {data.topCampaigns.map(
+                <tbody className="divide-y divide-slate-100">
+                  {sortedCampaigns.map(
                     (
-                      campaign
+                      campaign,
+                      index
                     ) => (
                       <tr
                         key={
                           campaign.campaign
                         }
-                        className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors"
+                        className="group transition-colors hover:bg-slate-50/80"
                       >
-                        <td className="px-5 py-3.5">
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[12px] font-bold text-indigo-600 tabular-nums">
+                            {index + 1}
+                          </span>
+                        </td>
+
+                        <td className="px-3 py-2.5">
                           <div className="font-semibold text-slate-900">
                             {
                               campaign.campaign
@@ -1445,19 +1737,19 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                           </div>
                         </td>
 
-                        <td className="px-5 py-3.5 text-slate-700 tabular-nums">
+                        <td className="px-3 py-2.5 text-slate-700 tabular-nums">
                           {
                             campaign.leads
                           }
                         </td>
 
-                        <td className="px-5 py-3.5 font-semibold text-emerald-700 tabular-nums">
+                        <td className="px-3 py-2.5 font-semibold text-emerald-700 tabular-nums">
                           {
                             campaign.admissions
                           }
                         </td>
 
-                        <td className="px-5 py-3.5">
+                        <td className="px-3 py-2.5">
                           <div className="inline-flex items-center gap-2">
                             <div className="w-20 h-1.5 rounded-full bg-slate-100 overflow-hidden">
                               <div
@@ -1487,14 +1779,10 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     )
                   )}
 
-                  {!data
-                    .topCampaigns
-                    .length && (
+                  {!campaignRows.length && (
                     <tr>
                       <td
-                        colSpan={
-                          4
-                        }
+                        colSpan={5}
                         className="px-5 py-12 text-center text-[15px] text-slate-500"
                       >
                         No campaign data
@@ -1502,9 +1790,31 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       </td>
                     </tr>
                   )}
+
+                  {campaignRows.length > 0 && !sortedCampaigns.length && (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="px-5 py-12 text-center text-[15px] text-slate-500"
+                      >
+                        No campaigns match &ldquo;{campaignQuery.trim()}&rdquo;.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
+
+            {sortedCampaigns.length > 0 && (
+              <div className="px-5 py-3 border-t border-slate-200 bg-slate-50/60 flex items-center justify-between gap-3 text-[13px]">
+                <span className="text-slate-500">
+                  {sortedCampaigns.length} of {campaignRows.length} campaigns
+                </span>
+                <span className="font-semibold text-slate-600 tabular-nums">
+                  &Sigma; {campaignTotals.leads} leads &middot; {campaignTotals.admissions} admissions
+                </span>
+              </div>
+            )}
           </div>
             </>
           )}
