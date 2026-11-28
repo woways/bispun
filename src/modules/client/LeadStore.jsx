@@ -5089,18 +5089,6 @@ export default function LeadStore({
               </span>
             </button>
 
-            {customFields.length > 0 && (
-              <button
-                type="button"
-                onClick={() => toggleCustomFields(lead.id)}
-                title={customFieldsOpen ? "Hide custom fields" : "Show custom fields"}
-                aria-expanded={customFieldsOpen}
-                className="inline-flex h-7 flex-shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-1.5 text-[11px] font-semibold text-slate-500 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
-              >
-                {customFieldsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                {customFields.length}
-              </button>
-            )}
           </div>
         </td>
       );
@@ -5885,7 +5873,8 @@ export default function LeadStore({
                   setSub(event.target.value)
                 }
                 aria-label="Lead type"
-                className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2 pr-9 text-[13px] font-semibold text-slate-700 focus:outline-none"
+                style={{ WebkitAppearance: "none", MozAppearance: "none", appearance: "none", backgroundImage: "none" }}
+                className="h-full min-w-0 flex-1 appearance-none bg-transparent bg-none pl-2 pr-9 text-[13px] font-semibold text-slate-700 focus:outline-none"
               >
                 {leadTypeOptions.map((type) => (
                   <option
@@ -6906,35 +6895,6 @@ export default function LeadStore({
                           </td>
                         </tr>
 
-                        {customFieldsOpen && (
-                          <tr className="bg-slate-50/70">
-                            <td
-                              colSpan={visibleIndividualColumnCount}
-                              className="px-4 py-3"
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="mr-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
-                                  Custom fields
-                                </span>
-
-                                {customFields.map((field) => (
-                                  <span
-                                    key={field.id || field.key || field.name}
-                                    title={`${field.name}: ${field.value || "—"}`}
-                                    className="inline-flex max-w-[280px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] text-slate-600"
-                                  >
-                                    <span className="font-semibold text-slate-700">
-                                      {field.name}:
-                                    </span>
-                                    <span className="truncate whitespace-nowrap">
-                                      {field.value || "—"}
-                                    </span>
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
                       </Fragment>
                     );
                   })
