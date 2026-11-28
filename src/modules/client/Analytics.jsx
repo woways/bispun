@@ -738,7 +738,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               >
                 <p
                   id="analytics-keymetrics-label"
-                  className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400"
+                  className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400"
                 >
                   Key Metrics
                 </p>
@@ -1792,7 +1792,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     onChange={(event) => setCampaignQuery(event.target.value)}
                     aria-label="Search campaigns"
                     placeholder="Search campaign name..."
-                    className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[13px] text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-[14px] text-slate-700 placeholder:text-slate-400 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                   />
                 </div>
 
