@@ -155,7 +155,7 @@ const SETTINGS_V2_CSS = `
 .st-v2 .phead h2{ font-size:18px; font-weight:700; }
 .st-v2 .phead p{ font-size:13px; color:var(--ink-2); margin-top:3px; max-width:66ch; }
 .st-v2 .btn,.st-v2 .ghost,.st-v2 .mini{ display:inline-flex; align-items:center; gap:8px; border-radius:11px; font-size:13px; font-weight:600; transition:.15s; text-decoration:none; }
-.st-v2 .btn{ background:var(--accent); color:var(--on-accent); border:1px solid transparent; padding:9px 15px; box-shadow:0 10px 22px -12px var(--accent); }
+.st-v2 .btn{ background:var(--accent); color:var(--on-accent); border:1px solid transparent; padding:9px 15px; box-shadow:var(--sh-sm); }
 .st-v2 .btn:hover{ background:var(--accent-ink); color:#fff; }
 .st-v2 .ghost{ background:var(--surface); color:var(--ink-2); border:1px solid var(--line); padding:9px 14px; }
 .st-v2 .ghost:hover{ border-color:var(--accent); color:var(--accent-ink); }
@@ -184,7 +184,7 @@ const SETTINGS_V2_CSS = `
 /* Company */
 .st-v2 .hero{ border-radius:var(--r); padding:20px; border:1px solid var(--line); background:radial-gradient(120% 140% at 0% 0%,var(--accent-weak),transparent 55%),var(--surface); display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
 .st-v2 .hero-l{ display:flex; align-items:center; gap:15px; min-width:0; }
-.st-v2 .hlogo{ width:56px; height:56px; border-radius:16px; overflow:hidden; background:linear-gradient(145deg,var(--accent),var(--accent-2)); color:#fff; display:grid; place-items:center; font-family:var(--display); font-weight:700; font-size:18px; flex:none; box-shadow:0 12px 26px -12px var(--accent); }
+.st-v2 .hlogo{ width:56px; height:56px; border-radius:16px; overflow:hidden; background:linear-gradient(145deg,var(--accent),var(--accent-2)); color:#fff; display:grid; place-items:center; font-family:var(--display); font-weight:700; font-size:18px; flex:none; box-shadow:var(--sh-sm); }
 .st-v2 .hlogo img{ width:100%; height:100%; object-fit:cover; }
 .st-v2 .hnm{ font-family:var(--display); font-size:18px; font-weight:700; }
 .st-v2 .hurl{ font-size:12.5px; color:var(--ink-2); display:inline-flex; align-items:center; gap:6px; margin-top:4px; }
@@ -212,9 +212,8 @@ const SETTINGS_V2_CSS = `
 .st-v2 .ta:focus{ border-color:var(--accent); background:var(--surface); box-shadow:0 0 0 3px var(--accent-weak); }
 /* Integrations */
 .st-v2 .intg-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-.st-v2 .icard{ position:relative; overflow:hidden; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); box-shadow:var(--sh-sm); display:flex; flex-direction:column; transition:.18s; }
-.st-v2 .icard:hover{ box-shadow:var(--sh-md); }
-.st-v2 .icard .wash{ position:absolute; inset:0 0 auto; height:92px; opacity:.5; pointer-events:none; }
+.st-v2 .icard{ position:relative; overflow:hidden; border:1px solid var(--line); border-radius:var(--r); background:var(--surface); box-shadow:var(--sh-sm); display:flex; flex-direction:column; }
+.st-v2 .icard .wash{ display:none; }
 .st-v2 .icard-in{ position:relative; padding:18px; display:flex; flex-direction:column; gap:14px; flex:1; }
 .st-v2 .icard-top{ display:flex; align-items:flex-start; gap:13px; }
 .st-v2 .ilogo{ width:52px; height:52px; border-radius:14px; display:grid; place-items:center; flex:none; background:var(--surface); border:1px solid var(--line); box-shadow:var(--sh-sm); }
@@ -3439,6 +3438,7 @@ export default function SettingsView({
                     ["users", "Users", users.length, Users],
                     ["departments", "Departments", organization.departments.length, Building],
                     ["roles", "Roles", organization.roles.length, KeyRound],
+                    ["access", "Access", organization.levels.length, ShieldCheck],
                   ].map(([key, label, count, Icon]) => {
                     const active = usersManagementTab === key;
 
@@ -3948,7 +3948,7 @@ export default function SettingsView({
                 );
               })()}
 
-              {false && usersManagementTab === "access" && (
+              {usersManagementTab === "access" && (
                 <AccessTab
                   key={organization.levels.map((l) => l.id).join(",")}
                   levels={organization.levels}
@@ -4257,7 +4257,7 @@ export default function SettingsView({
                   entirely client-side by the notificationPrefs store and must be
                   usable immediately (it syncs to the server when that endpoint
                   exists). Not tied to any admin permission. */}
-              <div className="rounded-xl bg-slate-50 p-5 space-y-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
@@ -4421,7 +4421,7 @@ export default function SettingsView({
                 </div>
               ) : (
                 <>
-                  <div className="rounded-xl bg-slate-50 p-5">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5">
                     <div className="mb-3 flex items-center gap-2.5">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Send size={15} aria-hidden="true" />
@@ -4538,7 +4538,7 @@ export default function SettingsView({
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-slate-50 p-5">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5">
                     <div className="mb-3 flex items-center gap-2.5">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Bell size={15} aria-hidden="true" />
@@ -4623,7 +4623,7 @@ export default function SettingsView({
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-slate-50 p-5">
+                  <div className="rounded-xl border border-slate-200 bg-white p-5">
                     <div className="mb-3 flex items-center gap-2.5">
                       <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Volume2 size={15} aria-hidden="true" />
