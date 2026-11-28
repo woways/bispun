@@ -404,7 +404,7 @@ function Field({
           aria-describedby={note ? noteId : undefined}
           className={`w-full h-10 ${
             Icon ? "pl-9 pr-3" : "px-3"
-          } border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 ${
+          } border border-slate-200 rounded-lg text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500 ${
             mono ? "font-mono" : ""
           }`}
         />
@@ -434,7 +434,7 @@ function SubdomainPill({ value }) {
         className="flex-shrink-0 text-slate-400"
       />
 
-      <span className="truncate font-mono text-[12px] text-slate-700">
+      <span className="truncate font-mono text-[13px] text-slate-700">
         {shown}
       </span>
 
@@ -514,7 +514,7 @@ function StorageUsageCard() {
             <Layers size={17} aria-hidden="true" />
           </span>
           <div>
-            <h3 className="text-[15px] font-bold text-slate-900">Storage</h3>
+            <h3 className="text-[13px] font-bold text-slate-900">Storage</h3>
             <p className="mt-0.5 text-[12.5px] text-slate-500">
               Images and documents stored for this workspace.
             </p>
@@ -547,7 +547,7 @@ function StorageUsageCard() {
             />
           </div>
           <p
-            className={`mt-2 text-[12px] ${near ? "font-semibold text-rose-600" : "text-slate-500"}`}
+            className={`mt-2 text-[13px] ${near ? "font-semibold text-rose-600" : "text-slate-500"}`}
           >
             {pct}% used
             {near
@@ -576,7 +576,7 @@ function PlaceholderPanel({
           {title}
         </h3>
 
-        <p className="mt-2 text-[15px] leading-relaxed text-slate-500">
+        <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
           {description}
         </p>
 
@@ -2784,7 +2784,7 @@ export default function SettingsView({
             Settings
           </h1>
 
-          <p className="mt-1 text-[15px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             Manage company profile,
             branding, access,
             lead configuration and
@@ -3320,7 +3320,7 @@ export default function SettingsView({
                                 </div>
 
                                 <div className="mt-4 border-t border-slate-100 pt-4">
-                                  <div className="text-[12px] font-semibold text-slate-800">
+                                  <div className="text-[13px] font-semibold text-slate-800">
                                     Exact HEX
                                   </div>
                                   <div className="mt-2 flex items-center gap-2">
@@ -3416,7 +3416,7 @@ export default function SettingsView({
             "users" && (
             <div className="p-6 space-y-5">
               <div>
-                <h3 className="text-[15px] font-bold text-slate-900">
+                <h3 className="text-[13px] font-bold text-slate-900">
                   Users & Roles
                 </h3>
 
@@ -3530,7 +3530,7 @@ export default function SettingsView({
                       <div className="text-[14px] font-bold text-slate-900">
                         Team Members
                       </div>
-                      <div className="mt-0.5 text-[12px] text-slate-500">
+                      <div className="mt-0.5 text-[13px] text-slate-500">
                         {filteredUsers.length} of {users.length} users
                       </div>
                     </div>
@@ -3561,7 +3561,7 @@ export default function SettingsView({
                   </div>
 
                   {usersLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-16 text-[15px] text-slate-500">
+                    <div className="flex items-center justify-center gap-2 py-16 text-[13px] text-slate-500">
                       <Loader2 size={16} className="animate-spin" />
                       Loading users...
                     </div>
@@ -3571,19 +3571,19 @@ export default function SettingsView({
                         <table className="w-full text-[13px]">
                           <thead className="border-b border-slate-200 bg-slate-50">
                             <tr>
-                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Employee ID</th>
-                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">User</th>
-                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</th>
-                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
-                              <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
-                              <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
+                              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Employee ID</th>
+                              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">User</th>
+                              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Role</th>
+                              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Department</th>
+                              <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Status</th>
+                              <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Actions</th>
                             </tr>
                           </thead>
 
                           <tbody className="divide-y divide-slate-100">
                             {filteredUsers.map((user) => (
                               <tr key={user.id} className="hover:bg-slate-50/70">
-                                <td className="whitespace-nowrap px-4 py-3 font-mono text-[12px] font-semibold text-indigo-700">
+                                <td className="whitespace-nowrap px-4 py-3 font-mono text-[13px] font-semibold text-indigo-700">
                                   {user.employeeId || "—"}
                                 </td>
 
@@ -3652,7 +3652,7 @@ export default function SettingsView({
                               <tr>
                                 <td
                                   colSpan={6}
-                                  className="py-12 text-center text-[15px] text-slate-500"
+                                  className="py-12 text-center text-[13px] text-slate-500"
                                 >
                                   No users found.
                                 </td>
@@ -3673,7 +3673,7 @@ export default function SettingsView({
                       <div className="text-[14px] font-bold text-slate-900">
                         Departments
                       </div>
-                      <div className="mt-0.5 text-[12px] text-slate-500">
+                      <div className="mt-0.5 text-[13px] text-slate-500">
                         Organize users by team or business function.
                       </div>
                     </div>
@@ -3698,15 +3698,15 @@ export default function SettingsView({
                           <div key={department.id} className="flex flex-col gap-2.5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <div className="truncate text-[15px] font-bold text-slate-900">{department.name}</div>
+                                <div className="truncate text-[13px] font-bold text-slate-900">{department.name}</div>
                                 <div className="mt-0.5 font-mono text-[11px] text-slate-400">{department.code}</div>
                               </div>
                               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><Building size={18} aria-hidden="true" /></span>
                             </div>
                             {department.description && <div className="text-[12.5px] leading-relaxed text-slate-500">{department.description}</div>}
-                            <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px] text-slate-500">
+                            <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[13px] text-slate-500">
                               <span className="inline-flex items-center gap-2">
-                                {department.system && <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">Default</span>}
+                                {department.system && <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-600">Default</span>}
                                 {memberCount} {memberCount === 1 ? "member" : "members"}
                               </span>
                               {!department.system && currentUser?.role === "CLIENT_ADMIN" && (
@@ -3733,7 +3733,7 @@ export default function SettingsView({
                       <div className="text-[14px] font-bold text-slate-900">
                         Custom Roles
                       </div>
-                      <div className="mt-0.5 text-[12px] text-slate-500">
+                      <div className="mt-0.5 text-[13px] text-slate-500">
                         Create reusable permission templates for your team.
                       </div>
                     </div>
@@ -3768,7 +3768,7 @@ export default function SettingsView({
                                   <span className="text-[13px] font-semibold text-slate-800">
                                     {role.name}
                                   </span>
-                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">
+                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500">
                                     {role.code}
                                   </span>
                                 </div>
@@ -3798,7 +3798,7 @@ export default function SettingsView({
                           <div className="text-[13px] font-semibold text-slate-500">
                             No custom roles yet
                           </div>
-                          <div className="mt-1 text-[12px] text-slate-400">
+                          <div className="mt-1 text-[13px] text-slate-400">
                             Add a role when you need reusable access rules.
                           </div>
                         </div>
@@ -3824,7 +3824,7 @@ export default function SettingsView({
 
                   <div>
                     <h3 className="text-[14px] font-bold text-slate-900">Team templates</h3>
-                    <div className="mt-0.5 text-[12px] text-slate-500">Applying one creates any missing levels and sets their permissions. Existing levels and users are never deleted.</div>
+                    <div className="mt-0.5 text-[13px] text-slate-500">Applying one creates any missing levels and sets their permissions. Existing levels and users are never deleted.</div>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -3882,7 +3882,7 @@ export default function SettingsView({
                   </div>
 
                   {currentUser?.role !== "CLIENT_ADMIN" && (
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] text-slate-500">Only a Client Admin can apply templates.</div>
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-[13px] text-slate-500">Only a Client Admin can apply templates.</div>
                   )}
                 </div>
               )}
@@ -3895,7 +3895,7 @@ export default function SettingsView({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <div className="text-[14px] font-bold text-slate-900">Levels</div>
-                        <div className="mt-0.5 text-[12px] text-slate-500">
+                        <div className="mt-0.5 text-[13px] text-slate-500">
                           Define organizational access levels, create custom levels and control their order.
                         </div>
                       </div>
@@ -3914,21 +3914,21 @@ export default function SettingsView({
                           const scopeLbl = admin ? "Everyone" : (SCOPES.find((s) => s[0] === item.permissions?.scope)?.[1] || "Only themselves");
                           return (
                             <div key={item.id} className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row sm:items-center">
-                              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[15px] font-extrabold text-indigo-600">L{item.rank}</span>
+                              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[13px] font-extrabold text-indigo-600">L{item.rank}</span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[15px] font-bold text-slate-900">{item.name}</span>
-                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-500">{item.code}</span>
-                                  {admin && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">Protected</span>}
-                                  {item.system && !admin && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">Default</span>}
-                                  {item.active === false && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">Inactive</span>}
+                                  <span className="text-[13px] font-bold text-slate-900">{item.name}</span>
+                                  <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-500">{item.code}</span>
+                                  {admin && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">Protected</span>}
+                                  {item.system && !admin && <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700">Default</span>}
+                                  {item.active === false && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">Inactive</span>}
                                 </div>
-                                <div className="mt-1 text-[12px] text-slate-500">Scope: {scopeLbl} · {memberCount} user{memberCount === 1 ? "" : "s"}</div>
+                                <div className="mt-1 text-[13px] text-slate-500">Scope: {scopeLbl} · {memberCount} user{memberCount === 1 ? "" : "s"}</div>
                               </div>
                               {currentUser?.role === "CLIENT_ADMIN" && (
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                  <button type="button" onClick={openCreateUser} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Plus size={13} aria-hidden="true" /> Add user</button>
-                                  <button type="button" onClick={() => setUsersManagementTab("access")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><KeyRound size={13} aria-hidden="true" /> Edit access</button>
+                                  <button type="button" onClick={openCreateUser} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Plus size={13} aria-hidden="true" /> Add user</button>
+                                  <button type="button" onClick={() => setUsersManagementTab("access")} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[13px] font-semibold text-slate-700 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><KeyRound size={13} aria-hidden="true" /> Edit access</button>
                                   <button type="button" onClick={() => moveLevel(item.id, -1)} disabled={item.rank <= 1} aria-label={`Move ${item.name} up`} title="Move level up" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-30">↑</button>
                                   <button type="button" onClick={() => moveLevel(item.id, 1)} disabled={item.rank >= items.length} aria-label={`Move ${item.name} down`} title="Move level down" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-30">↓</button>
                                   <button type="button" onClick={() => openEditOrganizationModal(type, item)} aria-label={`Edit ${item.name}`} title="Edit level" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"><Pencil size={13} aria-hidden="true" /></button>
@@ -3967,7 +3967,7 @@ export default function SettingsView({
             <div className="p-6 space-y-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h3 className="text-[15px] font-bold text-slate-900">
+                  <h3 className="text-[13px] font-bold text-slate-900">
                     Lead Sources
                   </h3>
 
@@ -4017,7 +4017,7 @@ export default function SettingsView({
               )}
 
               {sourcesLoading ? (
-                <div className="py-16 flex items-center justify-center gap-2 text-[15px] text-slate-500">
+                <div className="py-16 flex items-center justify-center gap-2 text-[13px] text-slate-500">
                   <Loader2
                     size={16}
                     className="animate-spin"
@@ -4030,22 +4030,22 @@ export default function SettingsView({
                     <table className="w-full text-[13px]">
                       <thead className="border-b border-slate-200">
                         <tr>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Order
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Source
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Key
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Active
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Forms
                           </th>
-                          <th className="px-3 py-2.5 text-right text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Actions
                           </th>
                         </tr>
@@ -4081,7 +4081,7 @@ export default function SettingsView({
                                 </div>
 
                                 {source.system && (
-                                  <span className="inline-flex mt-1.5 rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wide">
+                                  <span className="inline-flex mt-1.5 rounded-full bg-slate-100 text-slate-600 px-2 py-0.5 text-[13px] font-semibold uppercase tracking-wide">
                                     Default
                                   </span>
                                 )}
@@ -4186,7 +4186,7 @@ export default function SettingsView({
                           <tr>
                             <td
                               colSpan={6}
-                              className="py-12 text-center text-[15px] text-slate-500"
+                              className="py-12 text-center text-[13px] text-slate-500"
                             >
                               No lead sources configured.
                             </td>
@@ -4211,7 +4211,7 @@ export default function SettingsView({
             <div className="p-6 space-y-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h3 className="text-[15px] font-bold text-slate-900">
+                  <h3 className="text-[13px] font-bold text-slate-900">
                     Notification Preferences
                   </h3>
 
@@ -4265,7 +4265,7 @@ export default function SettingsView({
                     <div>
                       <div
                         id="notif-sound-label"
-                        className="text-[15px] font-semibold text-slate-900"
+                        className="text-[13px] font-semibold text-slate-900"
                       >
                         Notification sound
                       </div>
@@ -4344,7 +4344,7 @@ export default function SettingsView({
                     Notification tone
                   </legend>
 
-                  <p className="mt-0.5 mb-3 text-[12px] text-slate-400">
+                  <p className="mt-0.5 mb-3 text-[13px] text-slate-400">
                     Choose the sound for workspace alerts, then preview each one.
                   </p>
 
@@ -4410,7 +4410,7 @@ export default function SettingsView({
               </div>
 
               {notificationPreferencesLoading ? (
-                <div className="py-16 flex items-center justify-center gap-2 text-[15px] text-slate-500">
+                <div className="py-16 flex items-center justify-center gap-2 text-[13px] text-slate-500">
                   <Loader2
                     size={16}
                     className="animate-spin"
@@ -4426,7 +4426,7 @@ export default function SettingsView({
                       </span>
                       <div>
                         <div className="text-[14px] font-bold text-slate-900">Delivery Channels</div>
-                        <div className="text-[12px] text-slate-500">Where this user receives alerts.</div>
+                        <div className="text-[13px] text-slate-500">Where this user receives alerts.</div>
                       </div>
                     </div>
 
@@ -4490,7 +4490,7 @@ export default function SettingsView({
                                 </div>
 
                                 <div>
-                                  <div className="text-[15px] font-semibold text-slate-900">
+                                  <div className="text-[13px] font-semibold text-slate-900">
                                     {item.label}
                                   </div>
 
@@ -4543,7 +4543,7 @@ export default function SettingsView({
                       </span>
                       <div>
                         <div className="text-[14px] font-bold text-slate-900">Notification Categories</div>
-                        <div className="text-[12px] text-slate-500">Choose which updates you want to receive.</div>
+                        <div className="text-[13px] text-slate-500">Choose which updates you want to receive.</div>
                       </div>
                     </div>
 
@@ -4628,14 +4628,14 @@ export default function SettingsView({
                       </span>
                       <div>
                         <div className="text-[14px] font-bold text-slate-900">Notification Sound</div>
-                        <div className="text-[12px] text-slate-500">Play a tone when a new alert arrives.</div>
+                        <div className="text-[13px] text-slate-500">Play a tone when a new alert arrives.</div>
                       </div>
                     </div>
 
                     <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
                       <div className="p-4 flex items-center justify-between gap-4">
                         <div>
-                          <div className="text-[15px] font-semibold text-slate-900">Enable sound</div>
+                          <div className="text-[13px] font-semibold text-slate-900">Enable sound</div>
                           <div className="text-[13px] text-slate-500 mt-1">Turn notification sounds on or off for this account.</div>
                         </div>
                         <PermissionSwitch
@@ -4707,7 +4707,7 @@ export default function SettingsView({
             <div className="p-6 space-y-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h3 className="text-[15px] font-bold text-slate-900">
+                  <h3 className="text-[13px] font-bold text-slate-900">
                     Activity Log
                   </h3>
 
@@ -4767,7 +4767,7 @@ export default function SettingsView({
                       }
                     }}
                     placeholder="Search actor, email or activity..."
-                    className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                    className="w-full h-9 pl-9 pr-3 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                   />
                 </div>
 
@@ -4823,7 +4823,7 @@ export default function SettingsView({
               </div>
 
               {auditLogsLoading ? (
-                <div className="py-16 flex items-center justify-center gap-2 text-[15px] text-slate-500">
+                <div className="py-16 flex items-center justify-center gap-2 text-[13px] text-slate-500">
                   <Loader2
                     size={16}
                     className="animate-spin"
@@ -4836,16 +4836,16 @@ export default function SettingsView({
                     <table className="w-full text-[13px]">
                       <thead className="border-b border-slate-200">
                         <tr>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Date & Time
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             User
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Action
                           </th>
-                          <th className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                          <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                             Activity
                           </th>
                         </tr>
@@ -4910,7 +4910,7 @@ export default function SettingsView({
                           <tr>
                             <td
                               colSpan={4}
-                              className="py-14 text-center text-[15px] text-slate-500"
+                              className="py-14 text-center text-[13px] text-slate-500"
                             >
                               {auditSearch.trim() || auditEntityFilter
                                 ? "No activity matches your search or selected filter."
@@ -5260,25 +5260,25 @@ export default function SettingsView({
           {(headingId) => (
             <>
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-              <div><div id={headingId} className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[12px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
+              <div><div id={headingId} className="text-[17px] font-bold text-slate-950">{editingOrganizationItem ? "Edit" : "Add"} {organizationModal === "department" ? "Department" : organizationModal === "designation" ? "Designation" : organizationModal === "level" ? "Level" : "Role"}</div><div className="mt-1 text-[13px] text-slate-500">Configure this organization item without changing unrelated access.</div></div>
               <button type="button" aria-label="Close" onClick={() => setOrganizationModal(null)} className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"><X size={16}/></button>
             </div>
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div><label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Name *</label><input value={organizationForm.name} onChange={(e)=>setOrganizationForm(c=>({...c,name:e.target.value}))} className="w-full h-10 px-3 rounded-lg border border-slate-200" placeholder={organizationModal === "department" ? "Technology" : organizationModal === "designation" ? "Senior Counsellor" : organizationModal === "level" ? "Level 2" : "Team Lead"}/></div>
-                <div><label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Code *</label><input value={organizationForm.code} onChange={(e)=>setOrganizationForm(c=>({...c,code:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,4)}))} className="w-full h-10 px-3 rounded-lg border border-slate-200 font-mono" placeholder={organizationModal === "department" ? "TEC" : "TLD"}/></div>
+                <div><label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Name *</label><input value={organizationForm.name} onChange={(e)=>setOrganizationForm(c=>({...c,name:e.target.value}))} className="w-full h-10 px-3 rounded-lg border border-slate-200" placeholder={organizationModal === "department" ? "Technology" : organizationModal === "designation" ? "Senior Counsellor" : organizationModal === "level" ? "Level 2" : "Team Lead"}/></div>
+                <div><label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Code *</label><input value={organizationForm.code} onChange={(e)=>setOrganizationForm(c=>({...c,code:e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0,4)}))} className="w-full h-10 px-3 rounded-lg border border-slate-200 font-mono" placeholder={organizationModal === "department" ? "TEC" : "TLD"}/></div>
               </div>
-              <div><label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Description</label><textarea rows={2} value={organizationForm.description} onChange={(e)=>setOrganizationForm(c=>({...c,description:e.target.value}))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px]" placeholder="Optional description"/></div>
-              {organizationModal === "level" && <div><label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Hierarchy rank</label><input type="number" min="1" value={organizationForm.rank} onChange={(e)=>setOrganizationForm(c=>({...c,rank:Math.max(1,Number(e.target.value)||1)}))} className="w-full h-10 px-3 rounded-lg border border-slate-200"/></div>}
-              {editingOrganizationItem && !editingOrganizationItem.system && <label className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5"><span className="text-[12px] font-semibold text-slate-700">Active</span><input type="checkbox" checked={organizationForm.active} onChange={(e)=>setOrganizationForm(c=>({...c,active:e.target.checked}))}/></label>}
-              {organizationModal === "role" && <div><label className="block text-[12px] font-semibold text-slate-600 mb-1.5">Base access level</label><select value={organizationForm.baseRole} onChange={(e)=>setOrganizationForm(c=>({...c,baseRole:e.target.value}))} className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white"><option value="EMPLOYEE">Employee</option><option value="MANAGER">Manager</option></select></div>}
-              {(organizationModal === "department" || organizationModal === "role") && <div><div className="text-[12px] font-bold text-slate-700">Default permissions</div><div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div><label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Description</label><textarea rows={2} value={organizationForm.description} onChange={(e)=>setOrganizationForm(c=>({...c,description:e.target.value}))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-[13px]" placeholder="Optional description"/></div>
+              {organizationModal === "level" && <div><label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Hierarchy rank</label><input type="number" min="1" value={organizationForm.rank} onChange={(e)=>setOrganizationForm(c=>({...c,rank:Math.max(1,Number(e.target.value)||1)}))} className="w-full h-10 px-3 rounded-lg border border-slate-200"/></div>}
+              {editingOrganizationItem && !editingOrganizationItem.system && <label className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5"><span className="text-[13px] font-semibold text-slate-700">Active</span><input type="checkbox" checked={organizationForm.active} onChange={(e)=>setOrganizationForm(c=>({...c,active:e.target.checked}))}/></label>}
+              {organizationModal === "role" && <div><label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Base access level</label><select value={organizationForm.baseRole} onChange={(e)=>setOrganizationForm(c=>({...c,baseRole:e.target.value}))} className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-white"><option value="EMPLOYEE">Employee</option><option value="MANAGER">Manager</option></select></div>}
+              {(organizationModal === "department" || organizationModal === "role") && <div><div className="text-[13px] font-bold text-slate-700">Default permissions</div><div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {[
                   ["canManageUsers","Manage Users"],["canManageSettings","Manage Settings"],["canManageBilling","Manage Billing"],["canViewAnalytics","View Analytics"],["canManageAdmissions","Manage Admissions"],["canManageRevenue","Manage Revenue"],["canManageLeads","Manage Leads"],["canManageSupport","Manage Support"],["canViewTeamTargets","View Team Targets"],
-                ].map(([key,label])=><label key={key} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"><span className="text-[12px] text-slate-700">{label}</span><input type="checkbox" checked={organizationForm.permissions[key]} onChange={(e)=>setOrganizationForm(c=>({...c,permissions:{...c.permissions,[key]:e.target.checked}}))}/></label>)}
+                ].map(([key,label])=><label key={key} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2"><span className="text-[13px] text-slate-700">{label}</span><input type="checkbox" checked={organizationForm.permissions[key]} onChange={(e)=>setOrganizationForm(c=>({...c,permissions:{...c.permissions,[key]:e.target.checked}}))}/></label>)}
               </div></div>}
             </div>
-            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-4"><button type="button" onClick={()=>{setOrganizationModal(null);setEditingOrganizationItem(null);}} className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-[12px] font-semibold">Cancel</button><button type="button" disabled={organizationSaving || !organizationForm.name.trim() || !organizationForm.code.trim()} onClick={saveOrganizationItem} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12px] font-semibold disabled:opacity-50">{organizationSaving ? "Saving..." : editingOrganizationItem ? "Save Changes" : "Create"}</button></div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-5 py-4"><button type="button" onClick={()=>{setOrganizationModal(null);setEditingOrganizationItem(null);}} className="h-9 px-4 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold">Cancel</button><button type="button" disabled={organizationSaving || !organizationForm.name.trim() || !organizationForm.code.trim()} onClick={saveOrganizationItem} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[13px] font-semibold disabled:opacity-50">{organizationSaving ? "Saving..." : editingOrganizationItem ? "Save Changes" : "Create"}</button></div>
             </>
           )}
         </A11yDialog>
@@ -5359,7 +5359,7 @@ export default function SettingsView({
                             event.target.value
                           )
                         }
-                        className={`w-full h-10 px-3 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                        className={`w-full h-10 px-3 border rounded-lg text-[13px] focus:outline-none focus:ring-2 ${
                           userFormErrors[key]
                             ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
                             : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
@@ -5367,7 +5367,7 @@ export default function SettingsView({
                       />
 
                       {userFormErrors[key] && (
-                        <p className="mt-1 text-[12px] text-rose-600">
+                        <p className="mt-1 text-[13px] text-rose-600">
                           {userFormErrors[key]}
                         </p>
                       )}
@@ -5382,7 +5382,7 @@ export default function SettingsView({
 
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Level</label>
-                  <select value={userForm.levelId || ""} onChange={(event) => setUserLevel(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[15px]">
+                  <select value={userForm.levelId || ""} onChange={(event) => setUserLevel(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[13px]">
                     <option value="">— Select level —</option>
                     {organization.levels.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} · Rank {item.rank}</option>)}
                   </select>
@@ -5406,7 +5406,7 @@ export default function SettingsView({
                     disabled={organizationLoading}
                     value={userForm.department}
                     onChange={(event) => setUserDepartment(event.target.value)}
-                    className={`w-full h-10 px-3 border rounded-lg bg-white text-[15px] disabled:bg-slate-50 disabled:text-slate-500 ${
+                    className={`w-full h-10 px-3 border rounded-lg bg-white text-[13px] disabled:bg-slate-50 disabled:text-slate-500 ${
                       userFormErrors.department
                         ? "border-rose-300 focus:ring-2 focus:ring-rose-100 focus:border-rose-400"
                         : "border-slate-200"
@@ -5418,7 +5418,7 @@ export default function SettingsView({
                     {organization.departments.filter((department) => department.active !== false || department.name === userForm.department).map((department) => <option key={department.id} value={department.name}>{department.name} ({department.code})</option>)}
                   </select>
                   {!organizationLoading && organization.departments.length === 0 && !userFormErrors.department && (
-                    <div className="mt-1 text-[12px] text-amber-600">
+                    <div className="mt-1 text-[13px] text-amber-600">
                       <p id="add-user-department-empty" role="status">
                         No departments loaded. Add one in the Departments tab, or retry.
                       </p>
@@ -5435,7 +5435,7 @@ export default function SettingsView({
                     </div>
                   )}
                   {userFormErrors.department && (
-                    <p id="add-user-department-error" className="mt-1 text-[12px] text-rose-600" role="alert">
+                    <p id="add-user-department-error" className="mt-1 text-[13px] text-rose-600" role="alert">
                       {userFormErrors.department}
                     </p>
                   )}
@@ -5465,7 +5465,7 @@ export default function SettingsView({
                             event.target.value
                           )
                         }
-                        className={`w-full h-10 px-3 pr-10 border rounded-lg text-[15px] focus:outline-none focus:ring-2 ${
+                        className={`w-full h-10 px-3 pr-10 border rounded-lg text-[13px] focus:outline-none focus:ring-2 ${
                           userFormErrors.password
                             ? "border-rose-300 focus:ring-rose-100 focus:border-rose-400"
                             : "border-slate-200 focus:ring-indigo-100 focus:border-indigo-400"
@@ -5482,7 +5482,7 @@ export default function SettingsView({
                     </div>
 
                     {userFormErrors.password && (
-                      <p className="mt-1 text-[12px] text-rose-600">
+                      <p className="mt-1 text-[13px] text-rose-600">
                         {userFormErrors.password}
                       </p>
                     )}
@@ -5505,7 +5505,7 @@ export default function SettingsView({
                         event.target.value
                       )
                     }
-                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                    className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] bg-white"
                   >
                     <option value="CLIENT_ADMIN">
                       Client Admin
@@ -5541,7 +5541,7 @@ export default function SettingsView({
                           managerId: event.target.value,
                         }))
                       }
-                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white"
+                      className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] bg-white"
                     >
                       <option value="">— Select a manager —</option>
                       {users
@@ -5554,7 +5554,7 @@ export default function SettingsView({
                         ))}
                     </select>
                     {users.filter((u) => u.role === "MANAGER" && u.active).length === 0 && (
-                      <p className="mt-1 text-[12px] text-amber-600">
+                      <p className="mt-1 text-[13px] text-amber-600">
                         No managers yet — create a Manager first, then assign employees to them.
                       </p>
                     )}
@@ -5566,7 +5566,7 @@ export default function SettingsView({
                 <div className="text-[13px] font-semibold text-slate-700">
                   Permissions
                 </div>
-                <p className="mt-1 text-[12px] leading-5 text-slate-500">
+                <p className="mt-1 text-[13px] leading-5 text-slate-500">
                   Defaults follow the selected role. Choosing a department does not automatically grant extra access.
                 </p>
 
@@ -5622,7 +5622,7 @@ export default function SettingsView({
                   <div className="text-[13px] font-semibold text-slate-700">
                     Page access (Dashboard, Admissions, Finance, Insights)
                   </div>
-                  <p className="mt-1 mb-2 text-[12px] leading-5 text-slate-500">
+                  <p className="mt-1 mb-2 text-[13px] leading-5 text-slate-500">
                     Expand Dashboard to choose individual widgets, or turn other pages on and grant specific
                     streams, colleges, branches or sections. New colleges appear
                     here automatically.
@@ -5758,7 +5758,7 @@ export default function SettingsView({
                       event.target.value
                     )
                   }
-                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                 />
               </div>
 
@@ -5870,7 +5870,7 @@ export default function SettingsView({
                     )
                   }
                   placeholder="Referral"
-                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                 />
               </div>
 
@@ -5899,7 +5899,7 @@ export default function SettingsView({
                       })
                     )
                   }
-                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] font-mono focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                 />
               </div>
 
@@ -5924,7 +5924,7 @@ export default function SettingsView({
                       })
                     )
                   }
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                 />
               </div>
 
@@ -5951,7 +5951,7 @@ export default function SettingsView({
                       })
                     )
                   }
-                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
                 />
               </div>
 

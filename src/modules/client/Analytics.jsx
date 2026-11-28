@@ -140,7 +140,7 @@ function AnalyticsMetric({
             <span className="shrink-0 text-[18px] sm:text-[22px] leading-tight font-bold tracking-tight text-slate-950 tabular-nums">
               {value}
             </span>
-            <span className="truncate text-[12px] sm:text-[13px] font-semibold text-slate-700">
+            <span className="truncate text-[13px] sm:text-[13px] font-semibold text-slate-700">
               {label}
             </span>
           </div>
@@ -171,7 +171,7 @@ function ChartCard({
     <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-[15px] font-bold text-slate-900">
+          <h3 className="text-[13px] font-bold text-slate-900">
             {title}
           </h3>
 
@@ -206,7 +206,7 @@ function ChartLegend({ items }) {
       {items.map((item) => (
         <span
           key={item.label}
-          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-slate-600"
+          className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-600"
         >
           <span
             aria-hidden="true"
@@ -460,7 +460,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
     if (change === null) {
       return (
-        <span className="text-[12px] font-semibold text-slate-500">
+        <span className="text-[13px] font-semibold text-slate-500">
           New vs zero in {comparisonYear}
         </span>
       );
@@ -468,7 +468,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
     return (
       <span
-        className={`inline-flex items-center gap-1 text-[12px] font-semibold ${
+        className={`inline-flex items-center gap-1 text-[13px] font-semibold ${
           positive
             ? "text-emerald-700"
             : negative
@@ -663,7 +663,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
             Analytics
           </h1>
 
-          <p className="mt-1 text-[15px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             Monitor lead performance,
             source conversion,
             admissions, campaigns and
@@ -738,7 +738,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
               >
                 <p
                   id="analytics-keymetrics-label"
-                  className="px-2.5 pt-1 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400"
+                  className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400"
                 >
                   Key Metrics
                 </p>
@@ -756,10 +756,10 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       </span>
 
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] font-semibold text-slate-500">
+                        <span className="block truncate text-[13px] font-semibold text-slate-500">
                           {metric.label}
                         </span>
-                        <span className="block text-[15px] font-bold tabular-nums text-slate-950">
+                        <span className="block text-[13px] font-bold tabular-nums text-slate-950">
                           {metric.value}
                         </span>
                       </span>
@@ -827,7 +827,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       {/* ERROR */}
 
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 border border-rose-200 bg-rose-50 rounded-lg text-[15px] text-rose-700">
+        <div className="flex items-center gap-2 px-3 py-2 border border-rose-200 bg-rose-50 rounded-lg text-[13px] text-rose-700">
           <AlertCircle
             size={15}
           />
@@ -839,7 +839,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
       {/* LOADING */}
 
       {loading ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[13px] text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
           <Loader2
             size={17}
             className="animate-spin"
@@ -864,7 +864,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     </div>
 
                     <div>
-                      <h2 className="text-[15px] font-bold text-slate-900">
+                      <h2 className="text-[13px] font-bold text-slate-900">
                         Year Comparison
                       </h2>
                       <p className="mt-1 text-[13px] text-slate-500">
@@ -906,13 +906,13 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   <table className="w-full min-w-[600px]">
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th className="w-[36%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[36%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Parameter
                         </th>
-                        <th className="w-[32%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[32%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           {primaryYear}
                         </th>
-                        <th className="w-[32%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[32%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           {comparisonYear}
                         </th>
                       </tr>
@@ -1317,7 +1317,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
+                <div className="h-[280px] flex items-center justify-center text-[13px] text-slate-500">
                   No source conversion
                   data yet.
                 </div>
@@ -1447,7 +1447,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   </div>
                 </div>
               ) : (
-                <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
+                <div className="h-[280px] flex items-center justify-center text-[13px] text-slate-500">
                   No lead stage data
                   yet.
                 </div>
@@ -1591,7 +1591,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                 </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
+                <div className="h-[280px] flex items-center justify-center text-[13px] text-slate-500">
                   No monthly activity
                   yet.
                 </div>
@@ -1728,7 +1728,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                 </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="h-[280px] flex items-center justify-center text-[15px] text-slate-500">
+                <div className="h-[280px] flex items-center justify-center text-[13px] text-slate-500">
                   No employee
                   performance data yet.
                 </div>
@@ -1749,7 +1749,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                       aria-hidden="true"
                     />
 
-                    <h3 className="text-[15px] font-bold text-slate-900">
+                    <h3 className="text-[13px] font-bold text-slate-900">
                       All Campaigns
                     </h3>
 
@@ -1799,7 +1799,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                 <div className="sm:ml-auto flex items-center gap-2">
                   <label
                     htmlFor="campaign-sort"
-                    className="text-[12px] font-semibold text-slate-500"
+                    className="text-[13px] font-semibold text-slate-500"
                   >
                     Sort
                   </label>
@@ -1826,7 +1826,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-[15px]">
+              <table className="w-full text-[13px]">
                 <thead className="border-b border-slate-200 bg-slate-50/95">
                   <tr>
                     <th scope="col" className="px-3 py-2.5 w-10">
@@ -1843,7 +1843,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
 
                     <th
                       scope="col"
-                      className="px-3 py-2.5 text-left text-[11px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
+                      className="px-3 py-2.5 text-left text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-500 whitespace-nowrap w-12"
                     >
                       #
                     </th>
@@ -1882,7 +1882,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                         </td>
 
                         <td className="px-3 py-2.5">
-                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[13px] font-bold text-indigo-600 tabular-nums">
+                          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-indigo-50 px-1.5 text-[12px] font-bold text-indigo-600 tabular-nums">
                             {index + 1}
                           </span>
                         </td>
@@ -1925,7 +1925,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                               />
                             </div>
 
-                            <span className="text-[14px] font-semibold text-slate-700 tabular-nums">
+                            <span className="text-[13px] font-semibold text-slate-700 tabular-nums">
                               {
                                 campaign.conversion
                               }
@@ -1941,7 +1941,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     <tr>
                       <td
                         colSpan={6}
-                        className="px-5 py-12 text-center text-[15px] text-slate-500"
+                        className="px-5 py-12 text-center text-[13px] text-slate-500"
                       >
                         No campaign data
                         yet.
@@ -1953,7 +1953,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     <tr>
                       <td
                         colSpan={6}
-                        className="px-5 py-12 text-center text-[15px] text-slate-500"
+                        className="px-5 py-12 text-center text-[13px] text-slate-500"
                       >
                         No campaigns match &ldquo;{campaignQuery.trim()}&rdquo;.
                       </td>

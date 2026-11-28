@@ -345,6 +345,30 @@ function formatLeadDisplayId(value) {
     : text;
 }
 
+// Lead ID cell. When the parent provides onOpenLead and the row has a real
+// leadId, render it as a button that opens that lead's full details (Lead
+// Store, focused on the record); otherwise a plain badge.
+function LeadIdBadge({ admission, onOpenLead }) {
+  const text = admission.leadDisplayId
+    ? formatLeadDisplayId(admission.leadDisplayId)
+    : "—";
+  const base =
+    "rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700";
+  if (onOpenLead && admission.leadId) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpenLead(admission.leadId)}
+        aria-label={`View lead details for ${admission.leadDisplayId ? text : admission.leadId}`}
+        className={`${base} hover:bg-indigo-100 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
+      >
+        {text}
+      </button>
+    );
+  }
+  return <span className={base}>{text}</span>;
+}
+
 function money(value) {
   return `₹${Number(
     value || 0
@@ -2628,6 +2652,7 @@ function AdmissionsManager({
   currentUser = null,
   initialDetail = null,
   onInitialDetailApplied,
+  onOpenLead,
 }) {
   // Admissions Done is always opened in a concrete market from the sidebar.
   // Keeping the market tied directly to the route avoids Domestic/International
@@ -3847,11 +3872,7 @@ function AdmissionsManager({
                   </td>
 
                   <td className="whitespace-nowrap px-4 py-3">
-                    <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
-                      {admission.leadDisplayId
-                        ? formatLeadDisplayId(admission.leadDisplayId)
-                        : "—"}
-                    </span>
+                    <LeadIdBadge admission={admission} onOpenLead={onOpenLead} />
                   </td>
 
                   <td className="px-4 py-3">
@@ -4815,11 +4836,7 @@ function AdmissionsManager({
                 </td>
 
                 <td className="whitespace-nowrap px-4 py-3">
-                  <span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">
-                    {admission.leadDisplayId
-                      ? formatLeadDisplayId(admission.leadDisplayId)
-                      : "—"}
-                  </span>
+                  <LeadIdBadge admission={admission} onOpenLead={onOpenLead} />
                 </td>
 
                 <td className="px-4 py-3">
@@ -5133,7 +5150,7 @@ function AdmissionsTrendChart({ rows }) {
   );
 }
 
-function AdmissionsOverall({ selectedYear = "all" }) {
+function AdmissionsOverall({ selectedYear = "all", onOpenLead }) {
   const [filter, setFilter] = useState("ALL");
   const [data, setData] = useState({ all: [], domestic: [], international: [] });
   const [loading, setLoading] = useState(true);
@@ -5372,7 +5389,7 @@ function AdmissionsOverall({ selectedYear = "all" }) {
               <tbody className="divide-y divide-slate-100">
                 {filteredRows.map((admission) => (
                   <tr key={admission.id} className="text-[13px] text-slate-700 hover:bg-slate-50/60">
-                    <td className="whitespace-nowrap px-5 py-3"><span className="rounded-lg bg-indigo-50 px-2 py-1 text-[12px] font-bold text-indigo-700">{admission.leadDisplayId ? formatLeadDisplayId(admission.leadDisplayId) : '—'}</span></td>
+                    <td className="whitespace-nowrap px-5 py-3"><LeadIdBadge admission={admission} onOpenLead={onOpenLead} /></td>
                     <td className="px-5 py-3"><div className="font-semibold text-slate-900">{admission.name || '—'}</div><div className="mt-0.5 text-xs text-slate-500">{admission.phone || '—'}</div></td>
                     <td className="px-5 py-3"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[13px] font-semibold text-slate-700">{admission.market === 'INTERNATIONAL' ? 'International' : 'Domestic'}</span></td>
                     <td className="px-5 py-3">{admission.partner?.stream?.name || '—'}</td>
@@ -5397,6 +5414,6 @@ function AdmissionsOverall({ selectedYear = "all" }) {
 }
 
 export default function Admissions(props) {
-  if (props.overviewOnly) return <AdmissionsOverall selectedYear={props.selectedYear} />;
+  if (props.overviewOnly) return <AdmissionsOverall selectedYear={props.selectedYear} onOpenLead={props.onOpenLead} />;
   return <AdmissionsManager {...props} />;
 }

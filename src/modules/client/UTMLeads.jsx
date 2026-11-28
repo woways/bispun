@@ -37,6 +37,7 @@ import {
 } from "../../components/ui";
 
 import DetailModal from "../../components/DetailModal";
+import LeadDetailsView from "../../components/lead/LeadDetailsView";
 
 import { createPortal } from "react-dom";
 
@@ -1362,6 +1363,14 @@ export default function UTMLeads({
   // DetailPage) showing ONLY that card's records, instead of an inline panel.
   // `detailTriggerRef` captures the clicked card so focus returns to it on Back.
   const [detailView, setDetailView] = useState(null);
+  // Opening a lead's full detail: close any KPI drill-down modal first, then show
+  // the shared lead view (activity, remarks, etc.).
+  const [activeLead, setActiveLead] = useState(null);
+  function openLead(lead) {
+    if (!lead?.id) return;
+    setDetailView(null);
+    setActiveLead(lead);
+  }
   const detailTriggerRef = useRef(null);
   function openDetail(key) {
     detailTriggerRef.current =
@@ -1904,9 +1913,14 @@ export default function UTMLeads({
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  <div className="text-[14px] font-semibold text-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => openLead(lead)}
+                    aria-label={`View details for ${lead.name}`}
+                    className="rounded text-left text-[14px] font-semibold text-slate-800 transition hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                  >
                     {lead.name}
-                  </div>
+                  </button>
                   <div className="mt-0.5 text-[12px] text-slate-500">
                     {lead.phone || lead.email || "—"}
                   </div>
@@ -2031,6 +2045,18 @@ export default function UTMLeads({
       };
     })() : null;
 
+  if (activeLead) {
+    return (
+      <LeadDetailsView
+        lead={activeLead}
+        onBack={() => setActiveLead(null)}
+        onLeadChange={(updated) =>
+          setActiveLead((cur) => (cur ? { ...cur, ...updated } : cur))
+        }
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <DetailModal
@@ -2059,7 +2085,7 @@ export default function UTMLeads({
             UTM Leads
           </h1>
 
-          <p className="mt-1 text-[15px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             Generate links, save influencer links, review UTM leads and analyse performance.
           </p>
         </div>
@@ -2604,9 +2630,14 @@ export default function UTMLeads({
                 </td>
 
                 <td className="px-4 py-3">
-                  <div className="text-[13px] font-semibold text-slate-900">
+                  <button
+                    type="button"
+                    onClick={() => openLead(lead)}
+                    aria-label={`View details for ${lead.name}`}
+                    className="rounded text-left text-[13px] font-semibold text-slate-900 transition hover:text-indigo-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+                  >
                     {lead.name}
-                  </div>
+                  </button>
 
                   <div className="mt-0.5 text-[12px] text-slate-500">
                     <PhoneAction

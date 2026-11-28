@@ -222,7 +222,7 @@ function Field({
             event.target.value
           )
         }
-        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+        className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
       />
     </div>
   );
@@ -453,7 +453,7 @@ function ExpenseModal({
         >
           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
             {error && (
-              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-3 py-2 text-[15px]">
+              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded-xl px-3 py-2 text-[13px]">
                 {error}
               </div>
             )}
@@ -461,7 +461,7 @@ function ExpenseModal({
             <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
               <div className="flex items-center gap-2 mb-4">
                 <Receipt size={15} aria-hidden="true" className="text-indigo-600" />
-                <div className="text-[15px] font-bold text-slate-900">
+                <div className="text-[13px] font-bold text-slate-900">
                   Expense Details
                 </div>
               </div>
@@ -546,7 +546,7 @@ function ExpenseModal({
                       )
                     }
                     placeholder="Why this expense was incurred..."
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
                   />
                 </div>
               </div>
@@ -555,7 +555,7 @@ function ExpenseModal({
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-center gap-2 mb-4">
                 <CreditCard size={15} aria-hidden="true" className="text-indigo-600" />
-                <div className="text-[15px] font-bold text-slate-900">
+                <div className="text-[13px] font-bold text-slate-900">
                   Vendor & Payment
                 </div>
               </div>
@@ -622,7 +622,7 @@ function ExpenseModal({
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <FileText size={15} aria-hidden="true" className="text-indigo-600" />
-                <div className="text-[15px] font-bold text-slate-900">
+                <div className="text-[13px] font-bold text-slate-900">
                   Receipt / Invoice / Proof
                 </div>
               </div>
@@ -654,7 +654,7 @@ function ExpenseModal({
                           className="mx-auto text-indigo-600 animate-spin motion-reduce:animate-none"
                         />
 
-                        <div className="mt-3 text-[15px] font-semibold text-slate-800">
+                        <div className="mt-3 text-[13px] font-semibold text-slate-800">
                           Uploading proof...
                         </div>
                       </>
@@ -664,7 +664,7 @@ function ExpenseModal({
                           <Upload size={19} aria-hidden="true" />
                         </div>
 
-                        <div className="mt-3 text-[15px] font-semibold text-slate-800">
+                        <div className="mt-3 text-[13px] font-semibold text-slate-800">
                           Choose receipt or invoice
                         </div>
 
@@ -836,7 +836,7 @@ function ExpenseDetails({
                 key={label}
                 className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
               >
-                <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-slate-500">
+                <div className="text-[13px] font-bold uppercase tracking-[0.08em] text-slate-500">
                   {label}
                 </div>
 
@@ -852,7 +852,7 @@ function ExpenseDetails({
               Description
             </div>
 
-            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-[15px] text-slate-600 leading-6">
+            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3 text-[13px] text-slate-600 leading-6">
               {expense.description || "No description provided."}
             </div>
           </div>
@@ -1068,7 +1068,7 @@ function IncentiveModal({
         <form onSubmit={submit} className="flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
             {error && (
-              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded p-2 text-[15px]">
+              <div role="alert" className="bg-rose-50 text-rose-700 border border-rose-200 rounded p-2 text-[13px]">
                 {error}
               </div>
             )}
@@ -1091,7 +1091,7 @@ function IncentiveModal({
                       event.target.value
                     )
                   }
-                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[15px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+                  className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
                 >
                   <option value="">
                     Select an employee…
@@ -1185,7 +1185,7 @@ function IncentiveModal({
                     event.target.value
                   )
                 }
-                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[15px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-colors"
               />
             </div>
           </div>
@@ -1481,7 +1481,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
             <div className="mt-1 text-[24px] font-extrabold tracking-tight text-rose-700">
               {money(summary.atRiskAmount)}
             </div>
-            <div className="mt-1 text-[12px] text-rose-600/80">
+            <div className="mt-1 text-[13px] text-rose-600/80">
               {Number(summary.atRiskAdmissions || 0).toLocaleString("en-IN")} admission{Number(summary.atRiskAdmissions || 0) === 1 ? "" : "s"} need collection attention
             </div>
           </div>
@@ -1498,7 +1498,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[13px] font-bold text-slate-900">{title}</div>
-                  <div className="mt-1 text-[12px] leading-5 text-slate-500">{subtitle}</div>
+                  <div className="mt-1 text-[13px] leading-5 text-slate-500">{subtitle}</div>
                 </div>
                 <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border ${toneClass[tone]}`}>
                   <Icon size={16} aria-hidden="true" />
@@ -1513,7 +1513,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
                 {data.amount !== undefined ? (
                   <div className="text-right">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Value</div>
-                    <div className="mt-1 text-[15px] font-bold text-slate-800">{money(data.amount)}</div>
+                    <div className="mt-1 text-[13px] font-bold text-slate-800">{money(data.amount)}</div>
                   </div>
                 ) : null}
               </div>
@@ -1536,7 +1536,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5">
                 <div>
                   <h3 className="text-[14px] font-bold text-slate-900">{title}</h3>
-                  <p className="mt-0.5 text-[12px] text-slate-500">Top priority cases</p>
+                  <p className="mt-0.5 text-[13px] text-slate-500">Top priority cases</p>
                 </div>
                 <button
                   type="button"
@@ -1580,7 +1580,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
                   ))}
                 </div>
               ) : (
-                <div className="px-4 py-8 text-center text-[12px] text-slate-500">
+                <div className="px-4 py-8 text-center text-[13px] text-slate-500">
                   No cases in this category.
                 </div>
               )}
@@ -1589,7 +1589,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
                 <button
                   type="button"
                   onClick={() => openRisk({ key, title, subtitle, data })}
-                  className="mt-auto flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-2.5 text-[12px] font-bold text-indigo-600 hover:bg-indigo-50"
+                  className="mt-auto flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-2.5 text-[13px] font-bold text-indigo-600 hover:bg-indigo-50"
                 >
                   View all {totalCount.toLocaleString("en-IN")} cases
                   <ArrowUpRight size={13} />
@@ -1600,7 +1600,7 @@ function LeakageRadarView({ radar, onOpenDetail }) {
         })}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[12px] leading-5 text-slate-500">
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-[13px] leading-5 text-slate-500">
         “Overdue” currently means pending for {safeRadar.rules?.overdueCollectionDays || 30}+ days, and “stuck” means Buffer revenue pending for {safeRadar.rules?.stuckRevenueDays || 60}+ days. If you later add an explicit fee due-date field, the radar can switch to that exact due date.
       </div>
     </div>
@@ -2282,7 +2282,7 @@ export default function Revenue({
             Revenue
           </h1>
 
-          <p className="mt-1 text-[15px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             Monitor collections, outstanding revenue, approved costs, incentives and operating profit.
           </p>
         </div>
@@ -2303,14 +2303,14 @@ export default function Revenue({
       </div>
 
       {error && (
-        <div role="alert" className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-[15px]">
+        <div role="alert" className="flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 rounded-lg text-[13px]">
           <AlertCircle size={15} aria-hidden="true" />
           {error}
         </div>
       )}
 
       {loading ? (
-        <div role="status" aria-live="polite" className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[15px] text-slate-500">
+        <div role="status" aria-live="polite" className="bg-white border border-slate-200 rounded-xl p-14 flex items-center justify-center gap-2 text-[13px] text-slate-500">
           <Loader2
             size={16}
             aria-hidden="true"
@@ -2447,7 +2447,7 @@ export default function Revenue({
             "overview" && (
             <div className="grid lg:grid-cols-3 gap-4">
               <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <h2 className="font-semibold text-[15px] text-slate-900 mb-1">
+                <h2 className="font-semibold text-[13px] text-slate-900 mb-1">
                   Monthly Revenue
                 </h2>
 
@@ -2557,7 +2557,7 @@ export default function Revenue({
               </div>
 
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
-                <h2 className="font-semibold text-[15px] text-slate-900 mb-1">
+                <h2 className="font-semibold text-[13px] text-slate-900 mb-1">
                   Breakdown
                 </h2>
 
@@ -2565,7 +2565,7 @@ export default function Revenue({
                   Current financial position
                 </div>
 
-                <div className="space-y-3 text-[15px]">
+                <div className="space-y-3 text-[13px]">
                   <Row
                     label="Received"
                     value={money(
@@ -2644,7 +2644,7 @@ export default function Revenue({
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
                   <h3 className="text-[13px] font-bold text-slate-900">
                     Expense Claims
-                    <span className="ml-2 text-[12px] font-semibold text-slate-400">
+                    <span className="ml-2 text-[13px] font-semibold text-slate-400">
                       {filteredExpenses.length} shown
                     </span>
                   </h3>
@@ -2722,28 +2722,28 @@ export default function Revenue({
                     </caption>
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Expense
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Category
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Vendor
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Amount
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Date
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Proof
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Status
                         </th>
-                        <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Actions
                         </th>
                       </tr>
@@ -2921,7 +2921,7 @@ export default function Revenue({
                               <Receipt size={18} aria-hidden="true" />
                             </div>
 
-                            <div className="mt-3 text-[15px] font-semibold text-slate-700">
+                            <div className="mt-3 text-[13px] font-semibold text-slate-700">
                               No expenses found
                             </div>
 
@@ -2970,22 +2970,22 @@ export default function Revenue({
                   </caption>
                   <thead className="bg-slate-50/80">
                     <tr>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Employee
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Title
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Amount
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Date
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Status
                       </th>
-                      <th scope="col" className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      <th scope="col" className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                         Actions
                       </th>
                     </tr>

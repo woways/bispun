@@ -102,7 +102,6 @@ import { hydrateFromServer as hydrateNotifSoundPrefs } from "./lib/notificationP
 
 import CalendarModal from "./modules/client/CalendarModal";
 import QuickCreateDrawer from "./components/QuickCreateDrawer";
-import QuickAddPopover from "./components/QuickAddPopover";
 
 // Route-level client modules are code-split (React.lazy) so the authenticated
 // shell (header + bottom nav) paints immediately and each module's JS downloads
@@ -694,6 +693,17 @@ export default function ClientPortal({
     setModule("lead-store");
   }
 
+  // Clicking a lead row inside any KPI drill-down drawer closes the drawer and
+  // opens that lead's full detail (Lead Store, focused on the record). Shared by
+  // every KPI card since they all render through the same kpiModal rows.
+  function openKpiLead(leadId) {
+    const id = String(leadId || "").trim();
+    if (!id) return;
+    setKpiModal(null);
+    setKpiSelectedIds([]);
+    openLeadDetail(id);
+  }
+
   // Shell-level KPI drill-down popup. Dashboard & Analytics KPI cards open this
   // modal OVER the current page (no navigation), so Close returns the user to
   // exactly where they were — matching every other card's popup. Records come
@@ -866,9 +876,16 @@ export default function ClientPortal({
   const kpiModalRows =
     kpiModal && !kpiModal.loading && !kpiModal.error
       ? kpiItems.map((item) => (
-          <tr key={item.id}>
+          <tr
+            key={item.id}
+            onClick={() => openKpiLead(item.id)}
+            className="cursor-pointer transition hover:bg-indigo-50/60"
+          >
             {kpiAssignable ? (
-              <td className="px-4 py-3">
+              <td
+                className="px-4 py-3"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <input
                   type="checkbox"
                   aria-label={`Select ${item.primary || "lead"}`}
@@ -885,8 +902,18 @@ export default function ClientPortal({
               </td>
             ) : null}
             <td className="px-4 py-3 text-slate-500">{item.leadDisplayId || "—"}</td>
-            <td className="px-4 py-3 font-semibold text-slate-800">
-              {item.primary || "—"}
+            <td className="px-4 py-3">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openKpiLead(item.id);
+                }}
+                aria-label={`View details for ${item.primary || "lead"}`}
+                className="rounded text-left font-semibold text-indigo-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+              >
+                {item.primary || "—"}
+              </button>
             </td>
             <td className="px-4 py-3 text-slate-600">{item.phone || "—"}</td>
             <td className="px-4 py-3 text-slate-600">{item.email || "—"}</td>
@@ -1719,13 +1746,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   }
 
   const [calendarOpen, setCalendarOpen] = useState(false);
-  // Header "+" opens a compact quick-add popover; its "Additional details"
-  // opens the full QuickCreateDrawer (right side), already in its detailed form
-  // and seeded with whatever was typed via quickCreateInitial.
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
-  const quickAddAnchorRef = useRef(null);
+  // Header "+" opens the full QuickCreateDrawer (right side) directly.
   const [quickCreateOpen, setQuickCreateOpen] = useState(false);
-  const [quickCreateInitial, setQuickCreateInitial] = useState(null);
   // Bumped whenever a task/meeting is created from the header "+", so the
   // dashboard re-fetches its calendar and task list and shows the new item.
   const [calendarRefreshToken, setCalendarRefreshToken] = useState(0);
@@ -4498,7 +4520,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         );
 
       case "admissions":
-        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly currentUser={user} initialDetail={admissionsInitialDetail} onInitialDetailApplied={() => setAdmissionsInitialDetail(null)} />;
+        return <Admissions selectedYear={selectedYear} market="ALL" overviewOnly currentUser={user} onOpenLead={openLeadDetail} initialDetail={admissionsInitialDetail} onInitialDetailApplied={() => setAdmissionsInitialDetail(null)} />;
 
       case "domestic-walkins":
         return renderAdmissionsMarketWorkspace({
@@ -4533,6 +4555,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               selectedYear={selectedYear}
               market="DOMESTIC"
               currentUser={user}
+              onOpenLead={openLeadDetail}
             />
           ),
         });
@@ -4570,6 +4593,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               selectedYear={selectedYear}
               market="INTERNATIONAL"
               currentUser={user}
+              onOpenLead={openLeadDetail}
             />
           ),
         });
@@ -5079,13 +5103,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
             <button
               type="button"
-              onClick={(e) => {
-                quickAddAnchorRef.current = e.currentTarget;
-                setQuickAddOpen(true);
-              }}
+              onClick={() => setQuickCreateOpen(true)}
               aria-label="Quick create"
               aria-haspopup="dialog"
-              aria-expanded={quickAddOpen}
+              aria-expanded={quickCreateOpen}
               className="w-11 h-11 rounded-lg text-slate-600 flex items-center justify-center hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:bg-slate-100 focus-visible:text-slate-950"
             >
               <Plus size={19} aria-hidden="true" />
@@ -5907,25 +5928,23 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                                             )
                                           );
                                         }}
-                                        className={`relative mt-1 w-full min-h-9 rounded-lg px-2.5 py-2 flex items-center gap-2.5 text-left transition-colors ${
+                                        className={`relative w-full min-h-9 rounded-xl px-3 py-2 flex items-center gap-3 text-left transition-colors ${
                                           sectionActive
-                                            ? "bg-white/[0.05] text-white"
+                                            ? "bg-white/[0.06] text-white lg:bg-transparent"
                                             : "text-slate-400 hover:text-white"
                                         }`}
                                       >
-                                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center">
-                                          <SectionIcon
-                                            size={18}
-                                            strokeWidth={2}
-                                            className={
-                                              sectionActive
-                                                ? "text-indigo-300"
-                                                : "text-slate-500"
-                                            }
-                                          />
-                                        </span>
+                                        <SectionIcon
+                                          size={16}
+                                          strokeWidth={2}
+                                          className={`flex-shrink-0 ${
+                                            sectionActive
+                                              ? "text-indigo-300"
+                                              : ""
+                                          }`}
+                                        />
 
-                                        <span className="flex-1 text-[12px] font-semibold">
+                                        <span className="flex-1 text-[13px] font-medium">
                                           {section.label}
                                         </span>
                                       </button>
@@ -6107,17 +6126,14 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 {/* QUICK CREATE */}
                 <button
                   type="button"
-                  onClick={(e) => {
-                    quickAddAnchorRef.current = e.currentTarget;
-                    setQuickAddOpen(true);
-                  }}
+                  onClick={() => setQuickCreateOpen(true)}
                   className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
                   aria-label="Quick create"
                   aria-haspopup="dialog"
-                  aria-expanded={quickAddOpen}
+                  aria-expanded={quickCreateOpen}
                   title="Create task or meeting"
                 >
-                  <Plus size={19} />
+                  <Plus size={19} aria-hidden="true" />
                 </button>
 
                 {/* CALENDAR */}
@@ -7120,24 +7136,9 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         onFocusConsumed={() => setCalendarFocusEventId(null)}
       />
 
-      <QuickAddPopover
-        open={quickAddOpen}
-        anchorRef={quickAddAnchorRef}
-        onClose={() => setQuickAddOpen(false)}
-        onOpenFull={(initial) => {
-          setQuickCreateInitial(initial);
-          setQuickCreateOpen(true);
-        }}
-        onCreated={() => setCalendarRefreshToken((n) => n + 1)}
-      />
-
       <QuickCreateDrawer
         open={quickCreateOpen}
-        initial={quickCreateInitial}
-        onClose={() => {
-          setQuickCreateOpen(false);
-          setQuickCreateInitial(null);
-        }}
+        onClose={() => setQuickCreateOpen(false)}
         onCreated={() => setCalendarRefreshToken((n) => n + 1)}
       />
 

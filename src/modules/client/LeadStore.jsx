@@ -5708,7 +5708,7 @@ export default function LeadStore({
             Lead Store
           </h1>
 
-          <p className="mt-1 text-[15px] text-slate-500">
+          <p className="mt-1 text-[13px] text-slate-500">
             Import, validate, assign and track external lead datasets in one place.
           </p>
         </div>
@@ -5796,7 +5796,7 @@ export default function LeadStore({
                 aria-label="Imports and datasets"
                 className="absolute right-0 z-[60] mt-1.5 w-[300px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.18)]"
               >
-                <div className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                <div className="px-2.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                   Imports &amp; datasets
                 </div>
 
@@ -5808,7 +5808,7 @@ export default function LeadStore({
                     count: datasets.length,
                     noun: "batches",
                     Icon: Database,
-                    tone: "bg-indigo-50 text-indigo-600",
+                    tone: "bg-indigo-50 text-indigo-600 border-indigo-100",
                   },
                   {
                     key: "imported",
@@ -5817,7 +5817,7 @@ export default function LeadStore({
                     count: importedLeads,
                     noun: "leads",
                     Icon: Users,
-                    tone: "bg-indigo-50 text-indigo-600",
+                    tone: "bg-indigo-50 text-indigo-600 border-indigo-100",
                   },
                   {
                     key: "duplicates",
@@ -5826,7 +5826,7 @@ export default function LeadStore({
                     count: duplicatesSkipped,
                     noun: "duplicates",
                     Icon: Layers3,
-                    tone: "bg-amber-50 text-amber-600",
+                    tone: "bg-amber-50 text-amber-600 border-amber-100",
                   },
                   {
                     key: "converted",
@@ -5835,7 +5835,7 @@ export default function LeadStore({
                     count: totalConverted,
                     noun: "leads",
                     Icon: UserCheck,
-                    tone: "bg-emerald-50 text-emerald-600",
+                    tone: "bg-emerald-50 text-emerald-600 border-emerald-100",
                   },
                 ].map((item) => (
                   <button
@@ -5846,26 +5846,28 @@ export default function LeadStore({
                       openDetail(item.key);
                     }}
                     aria-label={`${item.label}, ${item.count.toLocaleString("en-IN")} ${item.noun}, open`}
-                    className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left hover:bg-indigo-50/70 focus-visible:bg-indigo-50/70 focus-visible:outline-none"
                   >
                     <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${item.tone}`}
                       aria-hidden="true"
                     >
-                      <item.Icon size={16} />
+                      <item.Icon size={15} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-semibold text-slate-800">
+                      <span className="block truncate text-[13px] font-semibold text-slate-500">
                         {item.label}
+                      </span>
+                      <span className="block text-[13px] font-bold tabular-nums text-slate-950">
+                        {item.count.toLocaleString("en-IN")}
                       </span>
                       <span className="block truncate text-[11px] text-slate-400">
                         {item.sub}
                       </span>
                     </span>
-                    <span className="text-[16px] font-bold tabular-nums text-slate-900" aria-hidden="true">
-                      {item.count.toLocaleString("en-IN")}
+                    <span className="shrink-0 text-slate-400" aria-hidden="true">
+                      &rarr;
                     </span>
-                    <ChevronRight size={15} className="shrink-0 text-slate-300" aria-hidden="true" />
                   </button>
                 ))}
               </div>

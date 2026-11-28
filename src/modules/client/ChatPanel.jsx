@@ -2799,7 +2799,7 @@ export default function ChatPanel({
                   </ul>
                 )}
 
-                <div className="flex min-h-[46px] items-end gap-1 rounded-[9px] border border-neutral-400 bg-white p-1.5 transition focus-within:border-indigo-400">
+                <div className="flex min-h-[40px] items-end gap-1 rounded-[9px] border border-neutral-400 bg-white p-1 transition focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-100">
                   <div className="relative">
                     <button type="button" onClick={() => setEmojiOpen((o) => !o)} className="flex h-11 w-11 items-center justify-center rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 lg:h-9 lg:w-9" aria-label="Emoji" aria-haspopup="true" aria-expanded={emojiOpen}><Smile size={17} /></button>
                     {emojiOpen && (
@@ -2939,7 +2939,7 @@ export default function ChatPanel({
                       rows={1}
                       aria-label="Message"
                       placeholder="Type a message..."
-                      className="max-h-28 min-h-[40px] w-full resize-none bg-transparent px-2 py-2 text-[16px] font-medium text-slate-800 outline-none placeholder:text-slate-500 lg:min-h-[36px] lg:text-[14px] lg:placeholder:text-slate-400"
+                      className="max-h-28 min-h-[34px] w-full resize-none bg-transparent px-2 py-1.5 text-[16px] font-medium text-slate-800 outline-none placeholder:text-slate-500 lg:min-h-[30px] lg:text-[14px] lg:placeholder:text-slate-400"
                     />
                   </div>
                   <button type="button" onClick={sendMessage} disabled={sending || attachments.some((a) => a.uploading) || (!draft.trim() && !attachments.some((a) => a.url && !a.error))} className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 disabled:opacity-40 lg:h-9 lg:w-9" aria-label="Send">
@@ -2987,11 +2987,11 @@ export default function ChatPanel({
                   src={conversationIllustration}
                   alt=""
                   aria-hidden="true"
-                  className="mb-6 h-auto w-[min(350px,70vw)] max-w-full max-[640px]:w-[220px]"
+                  className="mb-3 h-auto w-[min(350px,70vw)] max-w-full max-[640px]:w-[220px]"
                 />
-                <h2 className="text-[21px] font-bold text-slate-800 max-[640px]:text-[18px]">Select a conversation</h2>
-                <div className="mt-2.5 text-[14px] text-slate-600">Choose a chat from the left to start messaging.</div>
-                <div className="mt-3.5 text-[11px] text-slate-600">Stay connected with your team.</div>
+                <h2 className="text-[21px] font-bold leading-tight text-slate-800 max-[640px]:text-[18px]">Select a conversation</h2>
+                <div className="mt-1 text-[14px] leading-snug text-slate-600">Choose a chat from the left to start messaging.</div>
+                <div className="mt-1.5 text-[11px] leading-snug text-slate-500">Stay connected with your team.</div>
               </div>
             </div>
           )}

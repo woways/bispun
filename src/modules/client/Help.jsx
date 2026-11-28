@@ -1852,7 +1852,7 @@ export default function Help({
                   aria-label="Support ticket types"
                   className="absolute right-0 z-[60] mt-1.5 w-[320px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_18px_44px_rgba(15,23,42,0.18)]"
                 >
-                  <div className="px-2.5 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                  <div className="px-2.5 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                     Create a ticket
                   </div>
 
@@ -2224,7 +2224,7 @@ export default function Help({
           </div>
 
           {/* Desktop (sm+): LeadStore-style Excel grid — horizontal scroll,
-              sticky select + frozen Ticket column + sticky Actions. Mobile keeps
+              sticky select + sticky Actions (Ticket column scrolls normally). Mobile keeps
               the stacked card list below. Same data + states. */}
           <div className="hidden sm:block">
             <div
@@ -2256,7 +2256,7 @@ export default function Help({
 
                     <th
                       scope="col"
-                      className="sticky left-10 z-[25] min-w-[120px] border-r-2 border-slate-900 bg-slate-50 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500 shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)]"
+                      className="min-w-[120px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500"
                     >
                       Ticket
                     </th>
@@ -2323,7 +2323,7 @@ export default function Help({
                             />
                           </td>
 
-                          <td className={`sticky left-10 z-[15] min-w-[120px] border-r-2 border-slate-900 px-3 py-2.5 font-mono font-medium text-slate-700 whitespace-nowrap transition-colors shadow-[2px_0_5px_-2px_rgba(15,23,42,0.18)] ${stickyBg}`}>
+                          <td className="min-w-[120px] border-r border-slate-100 px-3 py-2.5 font-mono font-medium text-slate-700 whitespace-nowrap">
                             {ticket.ticketNumber}
                           </td>
 

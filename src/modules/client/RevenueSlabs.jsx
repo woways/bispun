@@ -119,9 +119,9 @@ function EditSlabsModal({
       <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-[0_24px_70px_rgba(15,23,42,0.28)]">
         <div className="flex items-start justify-between border-b border-slate-100 px-5 py-4">
           <div>
-            <div className="text-[15px] font-bold text-slate-900">{title}</div>
+            <div className="text-[13px] font-bold text-slate-900">{title}</div>
             {subtitle ? (
-              <div className="mt-0.5 text-[12px] text-slate-500">{subtitle}</div>
+              <div className="mt-0.5 text-[13px] text-slate-500">{subtitle}</div>
             ) : null}
           </div>
           <button
@@ -191,14 +191,14 @@ function EditSlabsModal({
             <button
               type="button"
               onClick={addRow}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
             >
               <Plus size={14} /> Add slab
             </button>
           </div>
 
           {error ? (
-            <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-[12px] font-medium text-rose-700">
+            <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-[13px] font-medium text-rose-700">
               {error}
             </div>
           ) : null}
@@ -296,7 +296,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
         <button
           type="button"
           onClick={load}
-          className="mt-3 inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-[12px] font-semibold text-rose-700 hover:bg-rose-100"
+          className="mt-3 inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-[13px] font-semibold text-rose-700 hover:bg-rose-100"
         >
           <RefreshCw size={13} /> Retry
         </button>
@@ -312,7 +312,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
           <div className="text-[13px] font-bold text-slate-900">
             College Revenue
           </div>
-          <div className="text-[12px] text-slate-500">
+          <div className="text-[13px] text-slate-500">
             Admissions multiplied by the applicable slab rate.
           </div>
         </div>
@@ -320,7 +320,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
         <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
           <table className="w-full border-collapse text-[13px]">
             <thead>
-              <tr className="border-b border-slate-100 text-[10px] uppercase tracking-[0.08em] text-slate-500">
+              <tr className="border-b border-slate-100 text-[11px] uppercase tracking-[0.08em] text-slate-500">
                 <th className="px-3 py-2 text-left font-semibold">College</th>
                 <th className="px-3 py-2 text-right font-semibold">Total Adm.</th>
                 <th className="px-3 py-2 text-right font-semibold">In Bucket</th>
@@ -409,7 +409,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
                             slabs: college.slabs,
                           })
                         }
-                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+                        className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                       >
                         <Pencil size={13} /> Edit Slabs
                       </button>
@@ -462,15 +462,15 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
           <div className="text-[13px] font-bold text-slate-900">
             Employee Incentives
           </div>
-          <div className="text-[12px] text-slate-500">
+          <div className="text-[13px] text-slate-500">
             Each employee's admissions multiplied by their slab rate.
           </div>
         </div>
         <div className="rounded-lg bg-indigo-50 px-3 py-1.5 text-right">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-500">
             Total incentives
           </div>
-          <div className="text-[15px] font-bold text-indigo-700">
+          <div className="text-[13px] font-bold text-indigo-700">
             {money(totals.totalIncentives)}
           </div>
         </div>
@@ -479,7 +479,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
       <div className="overflow-x-auto native:[-webkit-overflow-scrolling:touch] native:overscroll-x-contain">
         <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr className="border-b border-slate-100 text-[10px] uppercase tracking-[0.08em] text-slate-500">
+            <tr className="border-b border-slate-100 text-[11px] uppercase tracking-[0.08em] text-slate-500">
               <th className="px-3 py-2 text-left font-semibold">Employee</th>
               <th className="px-3 py-2 text-right font-semibold">Admissions</th>
               <th className="px-3 py-2 text-center font-semibold">Slab</th>
@@ -542,7 +542,7 @@ export default function RevenueSlabs({ selectedYear = "all", view = "college" })
                           slabs: employee.slabs,
                         })
                       }
-                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-3 text-[13px] font-semibold text-slate-600 hover:bg-slate-50"
                     >
                       <Pencil size={13} /> Edit Slabs
                     </button>

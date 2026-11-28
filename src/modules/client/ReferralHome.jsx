@@ -161,51 +161,7 @@ export default function ReferralHome({ currentUser, code, rewardProgram }) {
         {copiedMsg}
       </span>
 
-      {/* SUMMARY TILES */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total earned</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:h-8 native:w-8" aria-hidden="true">
-              <Award size={18} strokeWidth={2} />
-            </span>
-          </div>
-          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(earned)}</div>
-          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">
-            From {successful} successful referral{successful === 1 ? "" : "s"}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Awaiting credit</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 native:h-8 native:w-8" aria-hidden="true">
-              <Clock3 size={18} strokeWidth={2} />
-            </span>
-          </div>
-          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(pendingCredit)}</div>
-          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Expected in {expect.min}–{expect.max} days</div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Credited to you</span>
-            <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 native:h-8 native:w-8" aria-hidden="true">
-              <CheckCircle2 size={18} strokeWidth={2} />
-            </span>
-          </div>
-          <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{money(credited)}</div>
-          <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">
-            {creditedHistory.length} payment{creditedHistory.length === 1 ? "" : "s"} received
-          </div>
-        </div>
-      </div>
-
-      {/* STAGE SWITCHER (Tabs) */}
-      <p className="flex items-center gap-2 px-1 text-[12.5px] text-slate-500">
-        <ChevronRight size={15} className="text-brand-600" aria-hidden="true" />
-        Tap a stage to open its details.
-      </p>
+      {/* STAGE SWITCHER (Tabs) — top content block */}
       <div role="tablist" aria-label="Referral stages" onKeyDown={onTabKeyDown} className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         {STAGES.map((s) => {
           const Icon = s.icon;

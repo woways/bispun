@@ -21,6 +21,7 @@ import {
 
 import { apiRequest } from "../../lib/api";
 import { buildReferralSignupUrl } from "../../lib/referralLink";
+import LeadDetailsView from "../../components/lead/LeadDetailsView";
 
 const STAGE_LABELS = {
   NEW: "New",
@@ -64,6 +65,17 @@ export default function MyReferrals({ currentUser }) {
   const [tagging, setTagging] = useState("");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [activeLead, setActiveLead] = useState(null);
+  const listRef = useRef(null);
+
+  // Clicking a KPI card drills into the referrals behind that number: it sets the
+  // matching list filter and scrolls the referral table into view.
+  function drillToFilter(key) {
+    setFilter(key);
+    window.requestAnimationFrame(() => {
+      listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   const copyTimer = useRef(0);
   const tagBtnRef = useRef(null);
@@ -264,6 +276,20 @@ export default function MyReferrals({ currentUser }) {
   //   )}
   // ────────────────────────────────────────────────────────────────────────────
 
+  // Lead detail drill-in: clicking a referral opens the same shared lead view
+  // used across the portal (activity, remarks, etc.), with a back button.
+  if (activeLead) {
+    return (
+      <LeadDetailsView
+        lead={activeLead}
+        onBack={() => setActiveLead(null)}
+        onLeadChange={(updated) =>
+          setActiveLead((cur) => (cur ? { ...cur, ...updated } : cur))
+        }
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       {/* Always-mounted live region for clipboard feedback. */}
@@ -302,7 +328,12 @@ export default function MyReferrals({ currentUser }) {
 
       {/* SUMMARY TILES */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 native:grid-cols-3 native:gap-2">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
+        <button
+          type="button"
+          onClick={() => drillToFilter("all")}
+          aria-label={`Total referrals: ${stats.total}. Show all referrals.`}
+          className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 native:p-3"
+        >
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Total referrals</span>
             <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 native:h-8 native:w-8" aria-hidden="true">
@@ -311,9 +342,14 @@ export default function MyReferrals({ currentUser }) {
           </div>
           <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.total}</div>
           <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">{convRate}% reached Admitted</div>
-        </div>
+        </button>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
+        <button
+          type="button"
+          onClick={() => drillToFilter("progress")}
+          aria-label={`In progress: ${stats.inProgress}. Show referrals still in progress.`}
+          className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 native:p-3"
+        >
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">In progress</span>
             <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-amber-50 text-amber-600 native:h-8 native:w-8" aria-hidden="true">
@@ -322,9 +358,14 @@ export default function MyReferrals({ currentUser }) {
           </div>
           <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.inProgress}</div>
           <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Still moving through stages</div>
-        </div>
+        </button>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm native:p-3">
+        <button
+          type="button"
+          onClick={() => drillToFilter("admitted")}
+          aria-label={`Admitted: ${stats.admitted}. Show admitted referrals.`}
+          className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-300 hover:shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 native:p-3"
+        >
           <div className="flex items-center justify-between gap-2">
             <span className="text-[12px] font-medium text-slate-500 native:text-[11px] native:leading-tight">Admitted</span>
             <span className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-600 native:h-8 native:w-8" aria-hidden="true">
@@ -333,7 +374,7 @@ export default function MyReferrals({ currentUser }) {
           </div>
           <div className="mt-2.5 text-[26px] font-bold leading-none tabular-nums text-slate-900 native:text-[20px]">{stats.admitted}</div>
           <div className="mt-1.5 text-[12px] text-slate-500 native:mt-1 native:text-[10px] native:leading-tight">Reached the final stage</div>
-        </div>
+        </button>
       </div>
 
       {/* SHARE + QR */}
@@ -418,7 +459,7 @@ export default function MyReferrals({ currentUser }) {
       </div>
 
       {/* YOUR REFERRALS */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div ref={listRef} className="scroll-mt-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -543,12 +584,17 @@ export default function MyReferrals({ currentUser }) {
                   return (
                     <tr key={r.id} className="group transition-colors hover:bg-slate-50/80">
                       <th scope="row" className="px-4 py-3 text-left font-normal">
-                        <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => setActiveLead(r.lead)}
+                          aria-label={`View details for ${r.lead.name}`}
+                          className="flex items-center gap-2.5 rounded-lg text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                        >
                           <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-[11px] font-semibold text-brand-700">
                             {initialsOf(r.lead.name)}
                           </span>
-                          <span className="font-semibold text-slate-900">{r.lead.name}</span>
-                        </div>
+                          <span className="font-semibold text-slate-900 group-hover:text-brand-700 group-hover:underline">{r.lead.name}</span>
+                        </button>
                       </th>
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">{r.lead.phone || "—"}</td>
                       <td className="px-4 py-3 text-slate-600">{r.lead.course || "—"}</td>
