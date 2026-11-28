@@ -875,7 +875,7 @@ function MetricCard({
       <div className="mt-1.5 text-[12px] leading-5 text-slate-500">
         {detail}
         {onClick ? (
-          <span className="ml-1 font-semibold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          <span className="ml-1 font-semibold text-indigo-600">
             View details
           </span>
         ) : null}
@@ -939,7 +939,7 @@ function KpiStat({
         ) : null}
 
         <span
-          className="text-[11px] font-semibold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          className="text-[11px] font-semibold text-indigo-600"
           aria-hidden="true"
         >
           View details

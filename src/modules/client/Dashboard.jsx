@@ -198,7 +198,7 @@ function MetricCard({
         </div>
       ) : null}
       {onClick ? (
-        <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100 group-focus-visible:opacity-100">
+        <div className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600">
           View details
           <ArrowUpRight size={12} aria-hidden="true" />
         </div>
