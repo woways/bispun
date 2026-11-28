@@ -46,6 +46,7 @@ import {
   PhoneCall,
   Sparkles,
   ArrowRight,
+  Star,
 } from "lucide-react";
 
 import {
@@ -212,7 +213,7 @@ const SETTINGS_V2_CSS = `
 /* Integrations */
 .st-v2 .intg-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .st-v2 .icard{ position:relative; overflow:hidden; border:1px solid var(--line); border-radius:var(--r-lg); background:var(--surface); box-shadow:var(--sh-sm); display:flex; flex-direction:column; transition:.18s; }
-.st-v2 .icard:hover{ box-shadow:var(--sh-md); transform:translateY(-2px); }
+.st-v2 .icard:hover{ box-shadow:var(--sh-md); }
 .st-v2 .icard .wash{ position:absolute; inset:0 0 auto; height:92px; opacity:.5; pointer-events:none; }
 .st-v2 .icard-in{ position:relative; padding:18px; display:flex; flex-direction:column; gap:14px; flex:1; }
 .st-v2 .icard-top{ display:flex; align-items:flex-start; gap:13px; }
@@ -2954,6 +2955,8 @@ export default function SettingsView({
                   </div>
                 </div>
 
+                <StorageUsageCard />
+
                 {/* PROFILE */}
                 <div className="card">
                   <div className="ch bd">
@@ -3404,8 +3407,6 @@ export default function SettingsView({
                 </div>
               </div>
 
-<StorageUsageCard />
-
               <AccountDeletionSection />
             </div>
           )}
@@ -3434,11 +3435,9 @@ export default function SettingsView({
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
                   {[
-                    ["templates", "Templates", TEAM_TEMPLATES.length, Sparkles],
+                    ["templates", "Templates", TEAM_TEMPLATES.length, Star],
                     ["users", "Users", users.length, Users],
                     ["departments", "Departments", organization.departments.length, Building],
-                    ["levels", "Levels", organization.levels.length, Layers],
-                    ["access", "Access", organization.levels.length, ShieldCheck],
                     ["roles", "Roles", organization.roles.length, KeyRound],
                   ].map(([key, label, count, Icon]) => {
                     const active = usersManagementTab === key;
@@ -3815,7 +3814,7 @@ export default function SettingsView({
               {usersManagementTab === "templates" && (
                 <div className="space-y-5">
                   <p className="flex items-center gap-2 text-[13px] text-slate-500">
-                    <Sparkles size={16} aria-hidden="true" className="shrink-0 text-indigo-600" />
+                    <Star size={16} aria-hidden="true" className="shrink-0 text-indigo-600" />
                     Pick a template — it creates your levels and their access. Then add people and assign a level.
                   </p>
 
@@ -3891,7 +3890,7 @@ export default function SettingsView({
                 </div>
               )}
 
-              {usersManagementTab === "levels" && (() => {
+              {false && usersManagementTab === "levels" && (() => {
                 const items = [...organization.levels].sort((a, b) => (a.rank || 0) - (b.rank || 0));
                 const type = "level";
                 return (
@@ -3950,7 +3949,7 @@ export default function SettingsView({
                 );
               })()}
 
-              {usersManagementTab === "access" && (
+              {false && usersManagementTab === "access" && (
                 <AccessTab
                   key={organization.levels.map((l) => l.id).join(",")}
                   levels={organization.levels}
@@ -4262,7 +4261,7 @@ export default function SettingsView({
               <div className="rounded-xl bg-slate-50 p-5 space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
                       <Bell size={16} />
                     </div>
 
@@ -4425,11 +4424,11 @@ export default function SettingsView({
                 <>
                   <div className="rounded-xl bg-slate-50 p-5">
                     <div className="mb-3 flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Send size={15} aria-hidden="true" />
                       </span>
                       <div>
-                        <div className="text-[14px] font-bold text-slate-900">Delivery Channels</div>
+                        <div className="text-[13px] font-bold text-slate-900">Delivery Channels</div>
                         <div className="text-[13px] text-slate-500">Where this user receives alerts.</div>
                       </div>
                     </div>
@@ -4487,7 +4486,7 @@ export default function SettingsView({
                               className="p-4 flex items-center justify-between gap-4"
                             >
                               <div className="flex items-start gap-3">
-                                <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
+                                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center">
                                   <Icon
                                     size={16}
                                   />
@@ -4542,11 +4541,11 @@ export default function SettingsView({
 
                   <div className="rounded-xl bg-slate-50 p-5">
                     <div className="mb-3 flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Bell size={15} aria-hidden="true" />
                       </span>
                       <div>
-                        <div className="text-[14px] font-bold text-slate-900">Notification Categories</div>
+                        <div className="text-[13px] font-bold text-slate-900">Notification Categories</div>
                         <div className="text-[13px] text-slate-500">Choose which updates you want to receive.</div>
                       </div>
                     </div>
@@ -4588,7 +4587,7 @@ export default function SettingsView({
                             key={key}
                             className={`rounded-xl border p-4 flex items-start gap-3 cursor-pointer transition-colors ${
                               notificationPreferences[key]
-                                ? "border-indigo-200 bg-indigo-50/50"
+                                ? "border-slate-200 bg-slate-50/70"
                                 : "border-slate-200 hover:bg-slate-50/70"
                             }`}
                           >
@@ -4627,11 +4626,11 @@ export default function SettingsView({
 
                   <div className="rounded-xl bg-slate-50 p-5">
                     <div className="mb-3 flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-100 bg-indigo-50 text-indigo-600">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
                         <Volume2 size={15} aria-hidden="true" />
                       </span>
                       <div>
-                        <div className="text-[14px] font-bold text-slate-900">Notification Sound</div>
+                        <div className="text-[13px] font-bold text-slate-900">Notification Sound</div>
                         <div className="text-[13px] text-slate-500">Play a tone when a new alert arrives.</div>
                       </div>
                     </div>
@@ -4949,7 +4948,7 @@ export default function SettingsView({
                 <div
                   role="status"
                   className="infonote"
-                  style={{ borderColor: "var(--accent-weak)", background: "var(--accent-weak)", color: "var(--accent-ink)", fontWeight: 600 }}
+                  style={{ fontWeight: 600 }}
                 >
                   {googleNotice}
                 </div>
