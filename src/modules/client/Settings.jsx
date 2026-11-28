@@ -3506,7 +3506,7 @@ export default function SettingsView({
                     {[
                       { label: "Total users", value: users.length, Icon: Users, tint: "bg-brand-50 text-brand-600" },
                       { label: "Active", value: users.filter((member) => member.active).length, Icon: Check, tint: "bg-emerald-50 text-emerald-600" },
-                      { label: "Levels", value: organization.levels.length, Icon: Layers, tint: "bg-indigo-50 text-indigo-600" },
+                      { label: "Roles", value: organization.roles.length, Icon: KeyRound, tint: "bg-indigo-50 text-indigo-600" },
                       { label: "Departments", value: organization.departments.length, Icon: Building, tint: "bg-amber-50 text-amber-600" },
                     ].map((kpi) => (
                       <div
@@ -3593,7 +3593,6 @@ export default function SettingsView({
                                   <div className="mt-0.5 text-[13px] text-slate-500">
                                     {user.email}
                                   </div>
-                                  {user.levelName && <div className="mt-1 text-[13px] text-slate-400">{user.levelName}</div>}
                                 </td>
 
                                 <td className="px-4 py-3">
@@ -5304,7 +5303,7 @@ export default function SettingsView({
                 </div>
 
                 <div className="text-[13px] text-slate-500 mt-1">
-                  Configure account details, role and permissions.
+                  Configure account details, department and role.
                 </div>
               </div>
 
@@ -5381,14 +5380,6 @@ export default function SettingsView({
                 <div>
                   <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Employee ID</label>
                   <input readOnly value={editingUser ? (userForm.employeeId || "") : "Generated automatically after creation"} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-slate-50 text-[13px] font-mono text-slate-600" />
-                </div>
-
-                <div>
-                  <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">Level</label>
-                  <select value={userForm.levelId || ""} onChange={(event) => setUserLevel(event.target.value)} className="w-full h-10 px-3 border border-slate-200 rounded-lg bg-white text-[13px]">
-                    <option value="">— Select level —</option>
-                    {organization.levels.filter((item) => item.active !== false).map((item) => <option key={item.id} value={item.id}>{item.name} · Rank {item.rank}</option>)}
-                  </select>
                 </div>
 
                 <div>
@@ -5531,10 +5522,10 @@ export default function SettingsView({
                   </select>
                 </div>
 
-                {userForm.role === "EMPLOYEE" && (
+                {userForm.role !== "CLIENT_ADMIN" && (
                   <div>
                     <label className="block text-[13px] font-semibold text-slate-600 mb-1.5">
-                      Reports to (Manager)
+                      Reports To
                     </label>
                     <select
                       value={userForm.managerId || ""}
@@ -5546,9 +5537,9 @@ export default function SettingsView({
                       }
                       className="w-full h-10 px-3 border border-slate-200 rounded-lg text-[13px] bg-white"
                     >
-                      <option value="">— Select a manager —</option>
+                      <option value="">— Select manager —</option>
                       {users
-                        .filter((u) => u.role === "MANAGER" && u.active)
+                        .filter((u) => (u.role === "CLIENT_ADMIN" || u.role === "MANAGER") && u.active && u.id !== editingUser?.id)
                         .map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.name}
@@ -5556,99 +5547,14 @@ export default function SettingsView({
                           </option>
                         ))}
                     </select>
-                    {users.filter((u) => u.role === "MANAGER" && u.active).length === 0 && (
-                      <p className="mt-1 text-[13px] text-amber-600">
-                        No managers yet — create a Manager first, then assign employees to them.
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
 
-              <div>
-                <div className="text-[13px] font-semibold text-slate-700">
-                  Permissions
-                </div>
-                <p className="mt-1 text-[13px] leading-5 text-slate-500">
-                  Defaults follow the selected role. Choosing a department does not automatically grant extra access.
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-[13px] text-slate-500">
+                  Permissions are managed through templates. Select a template in the Templates tab to configure access for all roles at once.
                 </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
-                  {[
-                    ["canManageUsers", "Manage Users"],
-                    ["canManageSettings", "Manage Settings"],
-                    ["canManageBilling", "Manage Billing"],
-                    ["canManageLeads", "Manage Leads"],
-                    ["canManageSupport", "Manage Support"],
-                    ["canViewTeamTargets", "View Team Targets"],
-                  ].map(
-                    ([
-                      key,
-                      label,
-                    ]) => (
-                      <label
-                        key={key}
-                        className="flex items-center justify-between border border-slate-200 rounded-lg px-3 py-2.5"
-                      >
-                        <span className="text-[13px] text-slate-700">
-                          {label}
-                        </span>
-
-                        <PermissionSwitch
-                          label={label}
-                          checked={userForm.permissions[key]}
-                          disabled={
-                            userForm.role ===
-                            "CLIENT_ADMIN"
-                          }
-                          onChange={(checked) => {
-                            setUserPermissionOverrideChanged(true);
-                            setUserForm(
-                              (
-                                current
-                              ) => ({
-                                ...current,
-                                permissions: {
-                                  ...current.permissions,
-                                  [key]: checked,
-                                },
-                              })
-                            );
-                          }}
-                        />
-                      </label>
-                    )
-                  )}
-                </div>
-
-                <div className="mt-4">
-                  <div className="text-[13px] font-semibold text-slate-700">
-                    Page access (Dashboard, Admissions, Finance, Insights)
-                  </div>
-                  <p className="mt-1 mb-2 text-[13px] leading-5 text-slate-500">
-                    Expand Dashboard to choose individual widgets, or turn other pages on and grant specific
-                    streams, colleges, branches or sections. New colleges appear
-                    here automatically.
-                  </p>
-                  <PermissionTree
-                    pageAccess={userForm.pageAccess}
-                    onPageAccess={(next) =>
-                      { setUserPermissionOverrideChanged(true); setUserForm((current) => ({ ...current, pageAccess: next })); }
-                    }
-                    permissions={userForm.permissions}
-                    onPermissions={(key, value) => {
-                      setUserPermissionOverrideChanged(true);
-                      setUserForm((current) => ({
-                        ...current,
-                        permissions: { ...current.permissions, [key]: value },
-                      }));
-                    }}
-                    tree={permissionTree}
-                    actorPageAccess={actorPageAccess}
-                    isAdminTarget={userForm.role === "CLIENT_ADMIN"}
-                    loading={permissionTreeLoading}
-                  />
-                </div>
               </div>
 
               {editingUser && (
