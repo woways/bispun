@@ -52,6 +52,9 @@ import {
   Rocket,
   UserRound,
   ShieldCheck,
+  Star,
+  Zap,
+  FileText,
   SlidersHorizontal,
   MonitorSmartphone,
   Camera,
@@ -6421,28 +6424,51 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
       )}
 
       {billingOpen && (
-        <div className="fixed inset-0 z-[95] bg-slate-950/55 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="w-full max-w-5xl max-h-[94vh] sm:max-h-[90vh] bg-white border border-slate-200 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="text-base font-bold text-slate-950">
+        <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[95] flex justify-end bg-slate-950/35 backdrop-blur-[1px]">
+          <div role="dialog" aria-modal="true" aria-label="Billing & Subscription" className="flex h-full w-full max-w-6xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none">
+            <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="text-[22px] font-bold tracking-[-0.02em] text-slate-950">
                   Billing & Subscription
                 </div>
 
-                <div className="text-xs text-slate-500 mt-1">
+                <div className="text-[13px] text-slate-500 mt-1">
                   Review plans, billing cycles and upgrade options for {company.name}.
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setBillingOpen(false)
-                }
-                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
-              >
-                <X size={16} />
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setOrderHistoryOpen(true)}
+                  className="group hidden sm:flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-left transition-all hover:border-indigo-300 hover:bg-white hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+                >
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
+                    <FileText size={17} strokeWidth={2} aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2">
+                      <span className="text-[13px] font-bold text-slate-900">Order History</span>
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[11px] font-bold text-white">
+                        {(billingData.payments?.length || 0).toLocaleString("en-IN")}
+                      </span>
+                    </span>
+                    <span className="block text-[12px] text-slate-500">Invoices &amp; past purchases</span>
+                  </span>
+                  <ChevronRight size={16} className="ml-1 text-slate-400 group-hover:text-indigo-600 transition-colors" aria-hidden="true" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBillingOpen(false)
+                  }
+                  aria-label="Close billing"
+                  className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 overflow-y-auto space-y-5">
@@ -6509,152 +6535,109 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
               ) : (
                 <>
-                  {/* ORDER HISTORY — sits above Current Subscription */}
-                  <button
-                    type="button"
-                    onClick={() => setOrderHistoryOpen(true)}
-                    className="group w-full text-left bg-white border border-slate-200 rounded-xl p-4 flex items-center justify-between gap-4 transition-all hover:border-indigo-300 hover:shadow-[0_8px_24px_rgba(15,23,42,0.05)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                        <CalendarClock size={18} />
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-slate-900">
-                          Order History
-                        </div>
-                        <div className="text-[12px] text-slate-500 mt-0.5">
-                          Previous purchases, invoices &amp; order details
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-600">
-                        {(billingData.payments?.length || 0).toLocaleString("en-IN")} order
-                        {(billingData.payments?.length || 0) === 1 ? "" : "s"}
-                      </span>
-                      <ChevronRight
-                        size={16}
-                        className="text-slate-400 group-hover:text-indigo-600 transition-colors"
-                      />
-                    </div>
-                  </button>
-
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <div className="text-[12px] uppercase tracking-wider font-semibold text-slate-400">
-                        Current Subscription
-                      </div>
-
-                      <div className="text-sm font-bold text-slate-900 mt-1">
-                        {billingData.subscription
-                          ?.plan?.name ||
-                          "No active subscription"}
-                      </div>
-
-                      {billingData.subscription && (
-                        <>
-                          {billingData.subscription.plan?.maxUsers != null && (
-                            <div className="text-xs font-semibold text-slate-500 mt-1">
-                              {billingData.subscription.plan.maxUsers === 1
-                                ? "1 user included"
-                                : `${billingData.subscription.plan.maxUsers} users included`}
+                  {/* CURRENT PLAN BANNER */}
+                  {billingData.subscription ? (
+                    (() => {
+                      const sub = billingData.subscription;
+                      const statusRaw = String(sub.status || "").toUpperCase();
+                      const statusTone =
+                        statusRaw === "ACTIVE"
+                          ? "text-emerald-600 bg-emerald-500"
+                          : statusRaw === "PAST_DUE"
+                          ? "text-amber-600 bg-amber-500"
+                          : "text-rose-600 bg-rose-500";
+                      const paidAmount = Number(
+                        sub.finalAmount || sub.amount || sub.plan?.yearlyPrice || 0
+                      );
+                      const renewsOn = sub.renewalDate
+                        ? new Date(sub.renewalDate).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "—";
+                      return (
+                        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 pl-1">
+                          <span className="absolute inset-y-0 left-0 w-1 rounded-l-2xl bg-brand-600" aria-hidden="true" />
+                          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+                                <Star size={22} strokeWidth={2} aria-hidden="true" />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[16px] font-bold text-slate-900">
+                                    {sub.plan?.name || "Current plan"}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide">
+                                    <span className={`h-1.5 w-1.5 rounded-full ${statusTone.split(" ")[1]}`} aria-hidden="true" />
+                                    <span className={statusTone.split(" ")[0]}>{sub.status}</span>
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 text-[13px] text-slate-500">
+                                  <span className="font-semibold text-slate-700">
+                                    ₹{paidAmount.toLocaleString("en-IN")}/year
+                                  </span>{" "}
+                                  · Annual · Manual renewal
+                                </div>
+                              </div>
                             </div>
-                          )}
-                          <div className="text-xs text-slate-500 mt-1">
-                            Annual · Manual renewal · Due{" "}
-                            {billingData.subscription.renewalDate
-                              ? new Date(
-                                  billingData.subscription.renewalDate
-                                ).toLocaleDateString(
-                                  "en-IN",
-                                  {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  }
-                                )
-                              : "—"}
-                          </div>
-                          <div className="text-[11px] text-slate-400 mt-1">
-                            Reminders: 30 days, 7 days and on expiry · 7-day grace period
-                          </div>
-                        </>
-                      )}
 
-                      {billingData.subscription &&
-                        Number(
-                          billingData.subscription
-                            .discountAmount || 0
-                        ) > 0 && (
-                          <div className="mt-2 text-xs text-slate-600">
-                            <span className="text-slate-400 line-through">
-                              ₹
-                              {Number(
-                                billingData.subscription
-                                  .listPrice || 0
-                              ).toLocaleString("en-IN")}
-                            </span>{" "}
-                            <span className="text-rose-600 font-medium">
-                              (− ₹
-                              {Number(
-                                billingData.subscription
-                                  .discountAmount || 0
-                              ).toLocaleString("en-IN")}
-                              )
-                            </span>{" "}
-                            <span className="font-bold text-slate-900">
-                              You pay ₹
-                              {Number(
-                                billingData.subscription
-                                  .finalAmount ||
-                                  billingData.subscription
-                                    .amount ||
-                                  0
-                              ).toLocaleString("en-IN")}
-                            </span>
+                            <div className="grid grid-cols-3 gap-5 sm:gap-7 sm:text-right">
+                              <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Renews on</div>
+                                <div className="mt-1 text-[13px] font-bold text-slate-800">{renewsOn}</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Reminders</div>
+                                <div className="mt-1 text-[13px] font-bold text-slate-800">30d · 7d · On expiry</div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Grace period</div>
+                                <div className="mt-1 text-[13px] font-bold text-slate-800">7 days</div>
+                              </div>
+                            </div>
                           </div>
-                        )}
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[13px] font-semibold text-slate-600">
+                      No active subscription
                     </div>
-
-                    {billingData.subscription && (
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500">
-                          Status
-                        </div>
-                        <div className="text-sm font-bold text-indigo-600 mt-0.5">
-                          {billingData.subscription.status}
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   <div>
-                    <div className="rounded-2xl border border-slate-200 bg-[#f8f9fb] px-4 py-5 sm:px-6 sm:py-6">
-                    <div className="mx-auto max-w-2xl text-center">
-                      <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">
-                        Pricing Plans
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">
+                          Pricing Plans
+                        </div>
+
+                        <h2 className="mt-1.5 text-[24px] font-bold tracking-[-0.035em] text-slate-950">
+                          Choose the right plan for your business
+                        </h2>
+
+                        <p className="mt-1 text-[13px] leading-5 text-slate-500">
+                          Compare annual plans and upgrade without changing your existing CRM data.
+                        </p>
                       </div>
 
-                      <h2 className="mt-1.5 text-[24px] font-bold tracking-[-0.035em] text-slate-950 sm:text-[28px]">
-                        Choose the right plan for your business
-                      </h2>
-
-                      <p className="mt-2 text-xs leading-5 text-slate-500">
-                        Compare annual plans and upgrade without changing your existing CRM data.
-                      </p>
-
-                      <div className="mt-5 flex justify-center">
-                        <div className="inline-flex items-center rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-bold text-brand-700">
-                          Annual billing
-                        </div>
+                      <div className="inline-flex items-center rounded-xl border border-brand-200 bg-white px-4 py-2 text-[13px] font-bold text-brand-700 shadow-sm">
+                        Annual billing
                       </div>
                     </div>
 
-                    <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                      {billingData.plans.map((billingPlan) => {
+                    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 items-stretch">
+                      {billingData.plans.map((billingPlan, planIndex) => {
                         const isCurrent =
                           billingData.subscription?.plan?.key === billingPlan.key;
+
+                        const currentPlanIndex = billingData.plans.findIndex(
+                          (p) => p.key === billingData.subscription?.plan?.key
+                        );
+                        const isUpgrade =
+                          currentPlanIndex >= 0 && planIndex > currentPlanIndex;
 
                         const currentRenewalDate =
                           billingData.subscription?.renewalDate
@@ -6784,190 +6767,243 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         const features =
                           featureMap[planKey] || [];
 
+                        const planTagMap = {
+                          startup: "2 Users",
+                          basic: "Teams",
+                          pro: "Teams",
+                          advanced: "Enterprise",
+                        };
+                        const planTag = planTagMap[planKey] || "Plan";
+                        const monthlyEquivalent =
+                          yearlyAvailable && selectedPrice > 0
+                            ? Math.round(selectedPrice / 12)
+                            : 0;
+
                         return (
                           <div
                             key={billingPlan.id}
-                            className={`relative flex h-full flex-col overflow-hidden rounded-[22px] border transition-all duration-300 ${
+                            className={`relative flex h-full flex-col rounded-2xl border p-5 transition-all duration-300 ${
                               isPopular
-                                ? "border-brand-400 bg-brand-900 text-white shadow-brand-lg"
-                                : "border-slate-300 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] ring-1 ring-inset ring-slate-100 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
+                                ? "border-brand-700 bg-brand-900 text-white shadow-[0_18px_44px_rgba(49,46,129,0.35)]"
+                                : "border-slate-200 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
                             }`}
                           >
                             {isPopular && (
-                              <div className="flex items-center justify-center border-b border-brand-300/20 bg-brand-800/70 px-4 py-2.5">
-                                <span className="rounded-full bg-brand-700/70 px-3 py-1 text-[12px] font-black uppercase tracking-[0.08em] text-brand-50 ring-1 ring-inset ring-brand-300/40">
-                                  Most Popular
-                                </span>
-                              </div>
+                              <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-amber-400 px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-amber-950 shadow-sm">
+                                <Star size={11} strokeWidth={2.5} aria-hidden="true" /> Most Popular
+                              </span>
                             )}
 
-                            <div className="flex flex-1 flex-col p-5 sm:p-6">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
-                                  <div
-                                    className={`text-[12px] font-black uppercase tracking-[0.12em] ${
-                                      isPopular
-                                        ? "text-brand-200"
-                                        : "text-slate-400"
-                                    }`}
-                                  >
-                                    {billingPlan.name}
-                                  </div>
-
-                                  <div
-                                    className={`mt-3 text-[14px] font-semibold leading-5 ${
-                                      isPopular
-                                        ? "text-white"
-                                        : "text-slate-900"
-                                    }`}
-                                  >
-                                    {description}
-                                  </div>
-                                </div>
-
-                                {isCurrent && (
-                                  <span
-                                    className={`rounded-full px-2.5 py-1 text-[13px] font-bold uppercase tracking-wide ${
-                                      isPopular
-                                        ? "bg-brand-800/70 text-white ring-1 ring-inset ring-brand-300/30"
-                                        : "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"
-                                    }`}
-                                  >
-                                    Current
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="mt-6">
-                                {isPlanOfferActive && yearlyAvailable && (
-                                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <span className="text-[15px] font-semibold text-brand-200 line-through decoration-2">
-                                      ₹{listPrice.toLocaleString("en-IN")}/year
-                                    </span>
-                                    <span className="rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-emerald-300 ring-1 ring-inset ring-emerald-300/30">
-                                      ~{offerDiscountPercent}% OFF
-                                    </span>
-                                  </div>
-                                )}
-
-                                <div className="flex items-end gap-1.5">
-                                  <div
-                                    className={`text-[32px] font-black tracking-[-0.05em] ${
-                                      isPopular
-                                        ? "text-white"
-                                        : "text-slate-950"
-                                    }`}
-                                  >
-                                    ₹{selectedPrice.toLocaleString("en-IN")}
-                                  </div>
-
-                                  <div
-                                    className={`pb-1.5 text-[13px] font-medium ${
-                                      isPopular
-                                        ? "text-brand-100"
-                                        : "text-slate-400"
-                                    }`}
-                                  >
-                                    /year
-                                  </div>
-                                </div>
-
-                                {isPlanOfferActive && yearlyAvailable && offerValidUntil && (
-                                  <div className="mt-1.5 text-[11px] font-semibold text-brand-200">
-                                    Offer valid till {offerValidUntil}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div
-                                className={`my-5 h-px ${
-                                  isPopular
-                                    ? "bg-brand-700"
-                                    : "bg-slate-100"
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`text-[13px] font-black uppercase tracking-[0.1em] ${
+                                  isPopular ? "text-white" : "text-slate-800"
                                 }`}
-                              />
+                              >
+                                {billingPlan.name}
+                              </span>
 
-                              <div className="space-y-3">
-                                {features.map((feature) => (
-                                  <div
-                                    key={feature}
-                                    className={`flex items-start gap-2.5 text-xs leading-5 ${
-                                      isPopular
-                                        ? "text-brand-100"
-                                        : "text-slate-600"
+                              {isCurrent ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                    isPopular
+                                      ? "bg-white/15 text-white ring-1 ring-inset ring-white/25"
+                                      : "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"
+                                  }`}
+                                >
+                                  <CheckCircle2 size={11} strokeWidth={2.5} aria-hidden="true" /> Current
+                                </span>
+                              ) : (
+                                <span
+                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                    isPopular
+                                      ? "bg-white/15 text-white"
+                                      : "bg-slate-100 text-slate-500"
+                                  }`}
+                                >
+                                  {planTag}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-4">
+                              {isPlanOfferActive && yearlyAvailable && (
+                                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                                  <span
+                                    className={`text-[14px] font-semibold line-through ${
+                                      isPopular ? "text-brand-200" : "text-slate-400"
                                     }`}
                                   >
-                                    <CheckCircle2
-                                      size={14}
-                                      className={`mt-0.5 flex-shrink-0 ${
-                                        isPopular
-                                          ? "text-brand-200"
-                                          : "text-brand-600"
-                                      }`}
+                                    ₹{listPrice.toLocaleString("en-IN")}
+                                  </span>
+                                  <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.06em] text-emerald-500">
+                                    ~{offerDiscountPercent}% OFF
+                                  </span>
+                                </div>
+                              )}
+
+                              <div className="flex items-end gap-1">
+                                <span
+                                  className={`text-[32px] font-black leading-none tracking-[-0.04em] ${
+                                    isPopular ? "text-white" : "text-slate-950"
+                                  }`}
+                                >
+                                  {yearlyAvailable
+                                    ? `₹${selectedPrice.toLocaleString("en-IN")}`
+                                    : "—"}
+                                </span>
+                                <span
+                                  className={`pb-1 text-[13px] font-medium ${
+                                    isPopular ? "text-brand-100" : "text-slate-400"
+                                  }`}
+                                >
+                                  /year
+                                </span>
+                              </div>
+
+                              {yearlyAvailable && monthlyEquivalent > 0 && (
+                                <div
+                                  className={`mt-1 text-[12px] ${
+                                    isPopular ? "text-brand-200" : "text-slate-400"
+                                  }`}
+                                >
+                                  ≈ ₹{monthlyEquivalent.toLocaleString("en-IN")} / month
+                                </div>
+                              )}
+
+                              {isPlanOfferActive && yearlyAvailable && offerValidUntil && (
+                                <div
+                                  className={`mt-1 text-[11px] font-semibold ${
+                                    isPopular ? "text-brand-200" : "text-brand-600"
+                                  }`}
+                                >
+                                  Offer valid till {offerValidUntil}
+                                </div>
+                              )}
+                            </div>
+
+                            <div
+                              className={`my-4 h-px ${
+                                isPopular ? "bg-white/15" : "bg-slate-100"
+                              }`}
+                            />
+
+                            <div className="space-y-2.5">
+                              {features.map((feature) => (
+                                <div
+                                  key={feature}
+                                  className={`flex items-start gap-2.5 text-[13px] leading-5 ${
+                                    isPopular ? "text-brand-50" : "text-slate-700"
+                                  }`}
+                                >
+                                  <CheckCircle2
+                                    size={15}
+                                    className={`mt-0.5 flex-shrink-0 ${
+                                      isPopular ? "text-brand-200" : "text-brand-600"
+                                    }`}
+                                    aria-hidden="true"
+                                  />
+                                  <span>{feature}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div
+                              className={`mt-auto rounded-xl p-3 text-[12px] leading-5 ${
+                                isPopular ? "bg-white/10 text-brand-100" : "bg-slate-50 text-slate-500"
+                              }`}
+                              style={{ marginTop: "auto" }}
+                            >
+                              {description}
+                            </div>
+
+                            <div className="mt-4">
+                              {isCurrent && !renewalWindowOpen ? (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className={`h-11 w-full rounded-xl text-[13px] font-bold ${
+                                    isPopular
+                                      ? "bg-white text-brand-700"
+                                      : "bg-slate-100 text-slate-500"
+                                  }`}
+                                >
+                                  Current Plan
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={
+                                    Boolean(paymentProcessing) ||
+                                    !yearlyAvailable
+                                  }
+                                  onClick={() =>
+                                    startSubscriptionPayment(
+                                      billingPlan.key
+                                    )
+                                  }
+                                  className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all disabled:opacity-50 ${
+                                    isPopular
+                                      ? "bg-white text-brand-700 hover:bg-brand-50"
+                                      : isUpgrade
+                                      ? "bg-brand-600 text-white hover:bg-brand-700"
+                                      : "border border-brand-200 bg-white text-brand-700 hover:bg-brand-50"
+                                  }`}
+                                >
+                                  {paymentProcessing ===
+                                    `${billingPlan.key}:YEARLY` && (
+                                    <Loader2
+                                      size={13}
+                                      className="animate-spin"
                                     />
-                                    <span>{feature}</span>
-                                  </div>
-                                ))}
-                              </div>
+                                  )}
 
-                              <div className="mt-auto pt-7">
-                                {isCurrent && !renewalWindowOpen ? (
-                                  <button
-                                    type="button"
-                                    disabled
-                                    className={`h-11 w-full rounded-xl text-xs font-bold ${
-                                      isPopular
-                                        ? "bg-white text-brand-700"
-                                        : "bg-slate-100 text-slate-500"
-                                    }`}
-                                  >
-                                    Current Plan
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    disabled={
-                                      Boolean(paymentProcessing) ||
-                                      !yearlyAvailable
-                                    }
-                                    onClick={() =>
-                                      startSubscriptionPayment(
-                                        billingPlan.key
-                                      )
-                                    }
-                                    className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 ${
-                                      isPopular
-                                        ? "bg-white text-brand-700 hover:bg-brand-50"
-                                        : "bg-brand-600 text-white hover:bg-brand-700"
-                                    }`}
-                                  >
-                                    {paymentProcessing ===
-                                      `${billingPlan.key}:YEARLY` && (
-                                      <Loader2
-                                        size={13}
-                                        className="animate-spin"
-                                      />
-                                    )}
-
-                                    {!yearlyAvailable
-                                      ? "Annual plan unavailable"
-                                      : isCurrent
-                                      ? `Renew ${billingPlan.name}`
-                                      : `Switch to ${billingPlan.name}`}
-                                  </button>
-                                )}
-                              </div>
+                                  {!yearlyAvailable
+                                    ? "Annual plan unavailable"
+                                    : isCurrent
+                                    ? `Renew ${billingPlan.name}`
+                                    : isUpgrade
+                                    ? `Upgrade to ${billingPlan.name}`
+                                    : `Switch to ${billingPlan.name}`}
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    <div className="mx-auto mt-5 max-w-2xl text-center text-[12px] leading-5 text-slate-500">
-                      Your existing CRM records remain unchanged when you renew or switch plans. New plan capabilities become available after successful payment verification.
-                    </div>
                   </div>
 
+                  {/* REASSURANCE STRIP */}
+                  <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-3">
+                    <div className="flex items-start gap-3">
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
+                        <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[13px] font-bold text-slate-900">Your data stays intact</div>
+                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">CRM records remain unchanged on renew or switch</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
+                        <Zap size={17} strokeWidth={2} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[13px] font-bold text-slate-900">Instant activation</div>
+                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">New features unlock after payment verification</div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
+                        <Lock size={17} strokeWidth={2} aria-hidden="true" />
+                      </span>
+                      <div>
+                        <div className="text-[13px] font-bold text-slate-900">Secure payments</div>
+                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">Invoices available in Order History</div>
+                      </div>
+                    </div>
                   </div>
                 </>
               )}
@@ -7098,7 +7134,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
               <button
                 type="button"
                 onClick={() => setOrderHistoryOpen(false)}
-                className="h-8 rounded-lg bg-slate-900 px-3.5 text-[12px] font-bold text-white hover:bg-slate-800"
+                className="h-8 rounded-lg bg-brand-600 px-3.5 text-[12px] font-bold text-white hover:bg-brand-700"
               >
                 Close
               </button>

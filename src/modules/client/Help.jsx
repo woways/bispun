@@ -2256,27 +2256,27 @@ export default function Help({
 
                     <th
                       scope="col"
-                      className="min-w-[120px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500"
+                      className="min-w-[120px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500"
                     >
                       Ticket
                     </th>
 
-                    <th scope="col" className="min-w-[260px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[260px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Title
                     </th>
-                    <th scope="col" className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[160px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Type
                     </th>
-                    <th scope="col" className="min-w-[150px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[150px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Department
                     </th>
-                    <th scope="col" className="min-w-[110px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[110px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Priority
                     </th>
-                    <th scope="col" className="min-w-[140px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[140px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Status
                     </th>
-                    <th scope="col" className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
+                    <th scope="col" className="min-w-[160px] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-slate-500">
                       Created
                     </th>
 
@@ -2323,11 +2323,11 @@ export default function Help({
                             />
                           </td>
 
-                          <td className="min-w-[120px] border-r border-slate-100 px-3 py-2.5 font-mono font-medium text-slate-700 whitespace-nowrap">
+                          <td className="min-w-[120px] px-3 py-2.5 font-mono font-medium text-slate-700 whitespace-nowrap">
                             {ticket.ticketNumber}
                           </td>
 
-                          <td className="min-w-[260px] border-r border-slate-100 px-3 py-2.5">
+                          <td className="min-w-[260px] px-3 py-2.5">
                             <div className="font-semibold text-slate-900">
                               {ticket.title}
                             </div>
@@ -2336,31 +2336,31 @@ export default function Help({
                             </div>
                           </td>
 
-                          <td className="min-w-[160px] border-r border-slate-100 px-3 py-2.5">
+                          <td className="min-w-[160px] px-3 py-2.5">
                             <Badge tone="slate">
                               {ticket.typeLabel}
                             </Badge>
                           </td>
 
-                          <td className="min-w-[150px] border-r border-slate-100 px-3 py-2.5 text-slate-600">
+                          <td className="min-w-[150px] px-3 py-2.5 text-slate-600">
                             {ticket.type === "CALL_TO_RM"
                               ? "Relationship Manager"
                               : ticket.department || "—"}
                           </td>
 
-                          <td className="min-w-[110px] border-r border-slate-100 px-3 py-2.5">
+                          <td className="min-w-[110px] px-3 py-2.5">
                             <Badge tone={priorityTone(ticket.priority)}>
                               {ticket.priorityLabel}
                             </Badge>
                           </td>
 
-                          <td className="min-w-[140px] border-r border-slate-100 px-3 py-2.5">
+                          <td className="min-w-[140px] px-3 py-2.5">
                             <Badge tone={ticketStatusTone(ticket.status)}>
                               {ticket.statusLabel}
                             </Badge>
                           </td>
 
-                          <td className="min-w-[160px] border-r border-slate-100 px-3 py-2.5 text-slate-500 whitespace-nowrap tabular-nums">
+                          <td className="min-w-[160px] px-3 py-2.5 text-slate-500 whitespace-nowrap tabular-nums">
                             {formatDate(ticket.createdAt)}
                           </td>
 
