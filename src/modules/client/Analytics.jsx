@@ -906,13 +906,13 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   <table className="w-full min-w-[600px]">
                     <thead className="bg-slate-50/80">
                       <tr>
-                        <th className="w-[36%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[36%] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           Parameter
                         </th>
-                        <th className="w-[32%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[32%] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           {primaryYear}
                         </th>
-                        <th className="w-[32%] px-4 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <th className="w-[32%] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                           {comparisonYear}
                         </th>
                       </tr>
