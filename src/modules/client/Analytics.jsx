@@ -1895,13 +1895,13 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                           </div>
                         </td>
 
-                        <td className="px-3 py-2.5 text-slate-700 tabular-nums">
+                        <td className="px-3 py-2.5 text-[13px] text-slate-600 tabular-nums">
                           {
                             campaign.leads
                           }
                         </td>
 
-                        <td className="px-3 py-2.5 font-semibold text-emerald-700 tabular-nums">
+                        <td className="px-3 py-2.5 text-[13px] font-semibold text-emerald-600 tabular-nums">
                           {
                             campaign.admissions
                           }
@@ -1925,7 +1925,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                               />
                             </div>
 
-                            <span className="text-[13px] font-semibold text-slate-700 tabular-nums">
+                            <span className="text-[13px] font-semibold text-slate-600 tabular-nums">
                               {
                                 campaign.conversion
                               }
@@ -1970,7 +1970,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                   aria-atomic="true"
                   className="text-slate-500"
                 >
-                  <span className="font-semibold text-slate-700 tabular-nums">
+                  <span className="text-[13px] font-semibold text-slate-600 tabular-nums">
                     {selectedCampaigns.size} selected
                   </span>
                   <span className="text-slate-400">
@@ -1978,7 +1978,7 @@ export default function Analytics({ selectedYear = "all", onDrill = null }) {
                     &middot; {sortedCampaigns.length} of {campaignRows.length} campaigns
                   </span>
                 </span>
-                <span className="font-semibold text-slate-600 tabular-nums">
+                <span className="text-[13px] font-semibold text-slate-600 tabular-nums">
                   &Sigma; {campaignTotals.leads} leads &middot; {campaignTotals.admissions} admissions
                 </span>
               </div>
