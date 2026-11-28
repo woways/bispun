@@ -285,7 +285,7 @@ export default function GoalsAndTargetsAll({ onBack }) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by ID, name or department"
-            className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-9 text-xs font-medium text-slate-700 outline-none focus:border-brand-400 focus:bg-white"
+            className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-9 text-[14px] text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
           />
           {search && (
             <button type="button" onClick={() => setSearch("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={14} /></button>

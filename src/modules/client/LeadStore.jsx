@@ -1743,25 +1743,8 @@ function IndividualLeadModal({
               </select>
             </Field>
 
-            {customFieldsLoading ? (
-              <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-[13px] text-slate-500 inline-flex items-center gap-2">
-                <Loader2
-                  size={14}
-                  className="animate-spin"
-                />
-                Loading custom fields...
-              </div>
-            ) : customFields.length ? (
+            {false && customFields.length ? (
               <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                <div className="mb-4">
-                  <div className="text-[15px] font-bold text-slate-900">
-                    Custom Fields
-                  </div>
-                  <div className="mt-1 text-[13px] text-slate-500">
-                    Fields configured in Settings → Custom Fields.
-                  </div>
-                </div>
-
                 <div className="grid md:grid-cols-2 gap-4">
                   {customFields.map((field) => {
                     const value =
@@ -4066,6 +4049,21 @@ export default function LeadStore({
       [currentTypeLeads]
     );
 
+  // Dataset name per lead (used by search + Dataset column). Declared before
+  // the filter memo below, which references it — a const used earlier would hit
+  // the temporal dead zone and crash the whole screen on render.
+  const datasetNameById = useMemo(() => {
+    const map = {};
+    datasets.forEach((dataset) => {
+      map[dataset.id] =
+        dataset.name ||
+        dataset.sourceName ||
+        dataset.sourceFileName ||
+        "Dataset";
+    });
+    return map;
+  }, [datasets]);
+
   const filteredIndividualLeads =
     useMemo(
       () => {
@@ -4112,6 +4110,7 @@ export default function LeadStore({
                     lead.leadStatus,
                     lead.stage,
                     lead.temperature,
+                    lead.datasetName || datasetNameById[lead.datasetId],
                   ]
                     .filter(Boolean)
                     .some(
@@ -4211,6 +4210,7 @@ export default function LeadStore({
         dashboardLeadFilter,
         leadStoreMetricFilter,
         selectedAssigneeName,
+        datasetNameById,
       ]
     );
 
@@ -4448,21 +4448,6 @@ export default function LeadStore({
       setSortDir("asc");
     }
   }
-
-  // Dataset name per lead (for the Dataset column + its sort). Declared before
-  // the sort memo below, which references it — a const used earlier would hit
-  // the temporal dead zone and crash the whole screen on render.
-  const datasetNameById = useMemo(() => {
-    const map = {};
-    datasets.forEach((dataset) => {
-      map[dataset.id] =
-        dataset.name ||
-        dataset.sourceName ||
-        dataset.sourceFileName ||
-        "Dataset";
-    });
-    return map;
-  }, [datasets]);
 
   // Sort the FULL filtered set before pagination so sort spans all pages.
   const sortedIndividualLeads = useMemo(() => {
@@ -5900,21 +5885,21 @@ export default function LeadStore({
                   setSub(event.target.value)
                 }
                 aria-label="Lead type"
-                className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2 pr-8 text-[13px] font-semibold text-slate-700 focus:outline-none"
+                className="h-full min-w-0 flex-1 appearance-none bg-transparent pl-2 pr-9 text-[13px] font-semibold text-slate-700 focus:outline-none"
               >
                 {leadTypeOptions.map((type) => (
                   <option
                     key={type.key}
                     value={type.key}
                   >
-                    {type.label} ({type.count})
+                    {type.label}
                   </option>
                 ))}
               </select>
 
               <ChevronDown
                 size={14}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
               />
             </label>
 
@@ -5930,7 +5915,7 @@ export default function LeadStore({
                   setSearch(event.target.value)
                 }
                 aria-label="Search leads"
-                placeholder="Search lead ID, name, phone, email or course..."
+                placeholder="Search lead ID, name, phone, email, course or dataset..."
                 className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-[14px] focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 native:h-10"
               />
             </div>

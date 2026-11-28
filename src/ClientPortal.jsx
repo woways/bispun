@@ -3481,7 +3481,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                         className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all disabled:opacity-50 ${isPopular ? "bg-white text-brand-700 hover:bg-brand-50" : isUpgrade ? "bg-brand-600 text-white hover:bg-brand-700" : "border border-brand-200 bg-white text-brand-700 hover:bg-brand-50"}`}
                       >
                         {paymentProcessing === `${billingPlan.key}:YEARLY` && <Loader2 size={13} className="animate-spin" />}
-                        {!yearlyAvailable ? "Annual plan unavailable" : isCurrent ? `Renew ${billingPlan.name}` : isUpgrade ? `Upgrade to ${billingPlan.name}` : `Switch to ${billingPlan.name}`}
+                        {!yearlyAvailable ? "Annual plan unavailable" : isCurrent ? `Renew ${billingPlan.name}` : planKey === "advanced" ? "Contact Sales Team" : isUpgrade ? `Upgrade to ${billingPlan.name}` : `Switch to ${billingPlan.name}`}
                       </button>
                     )}
                   </div>
@@ -6723,7 +6723,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
       {orderHistoryOpen && (
         <div
-          className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[3px] flex items-end justify-center p-0 sm:items-center sm:p-4"
+          className="fixed inset-0 z-[120] bg-slate-950/55 backdrop-blur-[3px] flex justify-end"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setOrderHistoryOpen(false);
           }}
@@ -6732,7 +6732,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             role="dialog"
             aria-modal="true"
             aria-label="Order History"
-            className="flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-w-2xl sm:rounded-2xl"
+            className="flex h-full w-full max-w-lg flex-col overflow-hidden bg-white shadow-2xl animate-in slide-in-from-right duration-200"
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div>
