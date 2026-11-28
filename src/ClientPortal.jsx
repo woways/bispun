@@ -3670,13 +3670,11 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </p>
         </div>
 
-        <section className="relative overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.05)]">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-indigo-50 via-indigo-50/40 to-transparent" />
-          <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.12),transparent_70%)]" />
-          <div className="relative px-5 py-6 sm:px-7">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+        <section className="rounded-xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="relative flex-shrink-0">
-                <div className="flex h-[92px] w-[92px] items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-2xl font-bold text-white shadow-[0_10px_24px_rgba(79,70,229,0.28)] ring-4 ring-white">
+                <div className="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-indigo-700 text-xl font-bold text-white shadow-[0_4px_14px_rgba(79,70,229,0.2)]">
                   {profilePhoto ? (
                     <img
                       src={profilePhoto}
@@ -3691,7 +3689,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 <button
                   type="button"
                   onClick={() => profilePhotoInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-white shadow-md transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                  className="absolute -bottom-0.5 -right-0.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-indigo-600 text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                   aria-label="Change profile photo"
                 >
                   <Camera size={14} />
@@ -3731,8 +3729,8 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
           </div>
         </section>
 
-        <section className="rounded-[18px] border border-slate-200 bg-white shadow-[0_5px_18px_rgba(15,23,42,0.04)]">
-          <div className="grid grid-cols-2 gap-1.5 border-b border-slate-100 p-2 sm:grid-cols-4 sm:gap-2 sm:p-3">
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex border-b border-slate-200 px-1">
             {tabs.map((tab) => {
               const TabIcon = tab.icon;
               const active = profileTab === tab.key;
@@ -3743,22 +3741,17 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                   type="button"
                   onClick={() => setProfileTab(tab.key)}
                   aria-pressed={active}
-                  className={`group relative flex items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-[12px] font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 sm:text-xs ${
+                  className={`relative flex items-center gap-1.5 px-4 py-3 text-[13px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
                     active
-                      ? "bg-indigo-600 text-white shadow-[0_6px_16px_rgba(79,70,229,0.22)]"
-                      : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+                      ? "text-indigo-600"
+                      : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
-                  <span
-                    className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors ${
-                      active
-                        ? "bg-white/20 text-white"
-                        : "bg-slate-100 text-slate-500 group-hover:bg-white"
-                    }`}
-                  >
-                    <TabIcon size={15} />
-                  </span>
+                  <TabIcon size={15} />
                   {tab.label}
+                  {active && (
+                    <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-t bg-indigo-600" />
+                  )}
                 </button>
               );
             })}
@@ -3768,7 +3761,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
             <div className="grid gap-5 p-5 lg:grid-cols-[1.45fr_0.75fr] lg:p-6">
               <form
                 onSubmit={saveProfile}
-                className="rounded-2xl border border-slate-200 p-5"
               >
                 <div>
                   <h3 className="text-[15px] font-bold text-slate-900">
@@ -3862,23 +3854,13 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
               </form>
 
-              <div className="space-y-5">
-                <div className="rounded-2xl border border-slate-200 p-5">
-                  <h3 className="text-[15px] font-bold text-slate-900">
-                    Quick Actions
-                  </h3>
-
-                  <div className="mt-4 space-y-2">
-
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5">
-                  <div className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500">
+              <div className="space-y-4">
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Profile Preview
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-xs font-bold text-white">
+                    <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-indigo-600 text-xs font-bold text-white">
                       {profilePhoto ? (
                         <img
                           src={profilePhoto}
@@ -3890,12 +3872,35 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                       )}
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-[15px] font-bold text-slate-900">
+                      <div className="truncate text-[13px] font-bold text-slate-900">
                         {displayName}
                       </div>
                       <div className="truncate text-[13px] text-slate-500">
                         {displayEmail}
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl bg-slate-50 p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Account Info
+                  </div>
+                  <div className="mt-3 space-y-2.5 text-[13px]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Company</span>
+                      <span className="font-semibold text-slate-900">{companyDisplayName}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Role</span>
+                      <span className="font-semibold text-slate-900">{formatRole(user.role)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Status</span>
+                      <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Active
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3905,7 +3910,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
           {profileTab === "security" && (
             <div className="grid gap-5 p-5 lg:grid-cols-2 lg:p-6">
-              <div className="rounded-2xl border border-slate-200 p-5">
+              <div className="rounded-xl bg-slate-50 p-5">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
                     <ShieldCheck size={18} />
@@ -3930,7 +3935,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 p-5">
+              <div className="rounded-xl bg-slate-50 p-5">
                 <div className="text-[13px] font-bold text-slate-900">
                   Account Access
                 </div>
@@ -3963,7 +3968,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
 
               <div className="grid gap-4 md:grid-cols-2">
                 {/* APPEARANCE */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl bg-slate-50 p-5">
                   <div className="flex items-start gap-3">
                     <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                       <Sun size={18} />
@@ -4006,7 +4011,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
 
                 {/* DASHBOARD VIEW */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl bg-slate-50 p-5">
                   <div className="flex items-start gap-3">
                     <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                       <SlidersHorizontal size={18} />
@@ -4071,7 +4076,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
 
                 {/* DASHBOARD ELEMENTS */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl bg-slate-50 p-5">
                   <div className="flex items-start gap-3">
                     <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                       <CalendarClock size={18} />
@@ -4139,7 +4144,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
 
                 {/* DATE & TIME */}
-                <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="rounded-xl bg-slate-50 p-5">
                   <div className="flex items-start gap-3">
                     <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
                       <CalendarClock size={18} />
@@ -4198,7 +4203,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3.5">
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3.5">
                 <div>
                   <div className="text-[13px] font-bold text-slate-800">
                     Personal UI preferences
