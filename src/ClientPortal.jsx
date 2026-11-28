@@ -465,6 +465,7 @@ const PAGE_META = {
   help: { label: "Help & Support" },
   settings: { label: "Settings" },
   profile: { label: "My Profile" },
+  billing: { label: "Billing & Subscription" },
 };
 
 const CLIENT_MODULE_KEYS = new Set(Object.keys(PAGE_META));
@@ -2742,7 +2743,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     }
 
     setProfileMenuOpen(false);
-    setBillingOpen(true);
+    setModule("billing");
     await loadBillingData();
   }
 
@@ -3314,6 +3315,294 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
     } finally {
       setProfileHistoryClearing(false);
     }
+  }
+
+  function renderBillingContent() {
+    return (
+      <>
+        {billingData.subscription ? (
+          (() => {
+            const sub = billingData.subscription;
+            const statusRaw = String(sub.status || "").toUpperCase();
+            const statusTone =
+              statusRaw === "ACTIVE"
+                ? "text-emerald-600 bg-emerald-500"
+                : statusRaw === "PAST_DUE"
+                ? "text-amber-600 bg-amber-500"
+                : "text-rose-600 bg-rose-500";
+            const paidAmount = Number(sub.finalAmount || sub.amount || sub.plan?.yearlyPrice || 0);
+            const renewsOn = sub.renewalDate
+              ? new Date(sub.renewalDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+              : "—";
+            return (
+              <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 pl-1">
+                <span className="absolute inset-y-0 left-0 w-1 rounded-l-2xl bg-brand-600" aria-hidden="true" />
+                <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+                      <Star size={22} strokeWidth={2} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[16px] font-bold text-slate-900">{sub.plan?.name || "Current plan"}</span>
+                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide">
+                          <span className={`h-1.5 w-1.5 rounded-full ${statusTone.split(" ")[1]}`} aria-hidden="true" />
+                          <span className={statusTone.split(" ")[0]}>{sub.status}</span>
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[13px] text-slate-500">
+                        <span className="font-semibold text-slate-700">₹{paidAmount.toLocaleString("en-IN")}/year</span>{" "}· Annual · Manual renewal
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-5 sm:gap-7 sm:text-right">
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Renews on</div>
+                      <div className="mt-1 text-[13px] font-bold text-slate-800">{renewsOn}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Reminders</div>
+                      <div className="mt-1 text-[13px] font-bold text-slate-800">30d · 7d · On expiry</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Grace period</div>
+                      <div className="mt-1 text-[13px] font-bold text-slate-800">7 days</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[13px] font-semibold text-slate-600">
+            No active subscription
+          </div>
+        )}
+
+        <div>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">Pricing Plans</div>
+              <h2 className="mt-1.5 text-[24px] font-bold tracking-[-0.035em] text-slate-950">Choose the right plan for your business</h2>
+              <p className="mt-1 text-[13px] leading-5 text-slate-500">Compare annual plans and upgrade without changing your existing CRM data.</p>
+            </div>
+            <div className="inline-flex items-center rounded-xl border border-brand-200 bg-white px-4 py-2 text-[13px] font-bold text-brand-700 shadow-sm">Annual billing</div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 items-stretch">
+            {billingData.plans.map((billingPlan, planIndex) => {
+              const isCurrent = billingData.subscription?.plan?.key === billingPlan.key;
+              const currentPlanIndex = billingData.plans.findIndex((p) => p.key === billingData.subscription?.plan?.key);
+              const isUpgrade = currentPlanIndex >= 0 && planIndex > currentPlanIndex;
+              const currentRenewalDate = billingData.subscription?.renewalDate ? new Date(billingData.subscription.renewalDate) : null;
+              const renewalWindowOpen = isCurrent && (["PAST_DUE", "EXPIRED"].includes(String(billingData.subscription?.status || "").toUpperCase()) || (currentRenewalDate && !Number.isNaN(currentRenewalDate.getTime()) && currentRenewalDate.getTime() - Date.now() <= 30 * 24 * 60 * 60 * 1000));
+              const isPopular = String(billingPlan.key || "").toLowerCase() === "pro";
+              const yearlyAvailable = billingPlan.yearlyPrice !== null && billingPlan.yearlyPrice !== undefined;
+              const planKey = String(billingPlan.key || "").toLowerCase();
+              const pricing = billingPlan.breakdown || {};
+              const isPlanOfferActive = Boolean(pricing.offerActive);
+              const listPrice = yearlyAvailable ? Number(pricing.listPrice ?? billingPlan.yearlyPrice ?? 0) : 0;
+              const selectedPrice = yearlyAvailable ? Number(pricing.subtotal ?? billingPlan.yearlyPrice ?? 0) : 0;
+              const offerDiscountPercent = isPlanOfferActive && listPrice > 0 ? Math.round((Number(pricing.discount || 0) / listPrice) * 100) : 0;
+              const offerValidUntil = isPlanOfferActive && billingPlan.offerEndsAt ? new Date(billingPlan.offerEndsAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : null;
+              const planDescriptions = { startup: "Essential CRM tools for a small 2-person team getting started.", basic: "Essential CRM tools for teams getting started.", pro: "Built for growing consultancies that need more operational control.", advanced: "Complete CRM flexibility for larger and more complex operations." };
+              const featureMap = {
+                startup: ["Up to 2 users", "Dashboard & core analytics", "UTM Leads & Lead Store", "Admissions management", "Revenue tracking", "In-app notifications", "Standard support"],
+                basic: ["Dashboard & core analytics", "UTM Leads & Lead Store", "Admissions management", "Revenue tracking", "In-app notifications", "Standard support"],
+                pro: ["Everything in Basic", "Walk-ins module", "Counselling module", "Advanced analytics", "Expanded team workflows", "Priority support"],
+                advanced: ["Everything in Pro", "Advanced customization access", "White-label capabilities", "Premium operational controls", "Customization request support", "Priority assistance"],
+              };
+              const description = planDescriptions[planKey] || billingPlan.tagline || "Flexible CRM tools for your business.";
+              const features = featureMap[planKey] || [];
+              const planTagMap = { startup: "2 Users", basic: "Teams", pro: "Teams", advanced: "Enterprise" };
+              const planTag = planTagMap[planKey] || "Plan";
+              const monthlyEquivalent = yearlyAvailable && selectedPrice > 0 ? Math.round(selectedPrice / 12) : 0;
+
+              return (
+                <div
+                  key={billingPlan.id}
+                  className={`relative flex h-full flex-col rounded-2xl border p-5 transition-all duration-300 ${
+                    isPopular
+                      ? "border-brand-700 bg-brand-900 text-white shadow-[0_18px_44px_rgba(49,46,129,0.35)]"
+                      : "border-slate-200 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
+                  }`}
+                >
+                  {isPopular && (
+                    <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-amber-400 px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-amber-950 shadow-sm">
+                      <Star size={11} strokeWidth={2.5} aria-hidden="true" /> Most Popular
+                    </span>
+                  )}
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-[13px] font-black uppercase tracking-[0.1em] ${isPopular ? "text-white" : "text-slate-800"}`}>{billingPlan.name}</span>
+                    {isCurrent ? (
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${isPopular ? "bg-white/15 text-white ring-1 ring-inset ring-white/25" : "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"}`}>
+                        <CheckCircle2 size={11} strokeWidth={2.5} aria-hidden="true" /> Current
+                      </span>
+                    ) : (
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${isPopular ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{planTag}</span>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    {isPlanOfferActive && yearlyAvailable && (
+                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                        <span className={`text-[14px] font-semibold line-through ${isPopular ? "text-brand-200" : "text-slate-400"}`}>₹{listPrice.toLocaleString("en-IN")}</span>
+                        <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.06em] text-emerald-500">~{offerDiscountPercent}% OFF</span>
+                      </div>
+                    )}
+                    <div className="flex items-end gap-1">
+                      <span className={`text-[32px] font-black leading-none tracking-[-0.04em] ${isPopular ? "text-white" : "text-slate-950"}`}>{yearlyAvailable ? `₹${selectedPrice.toLocaleString("en-IN")}` : "—"}</span>
+                      <span className={`pb-1 text-[13px] font-medium ${isPopular ? "text-brand-100" : "text-slate-400"}`}>/year</span>
+                    </div>
+                    {yearlyAvailable && monthlyEquivalent > 0 && (
+                      <div className={`mt-1 text-[12px] ${isPopular ? "text-brand-200" : "text-slate-400"}`}>≈ ₹{monthlyEquivalent.toLocaleString("en-IN")} / month</div>
+                    )}
+                    {isPlanOfferActive && yearlyAvailable && offerValidUntil && (
+                      <div className={`mt-1 text-[11px] font-semibold ${isPopular ? "text-brand-200" : "text-brand-600"}`}>Offer valid till {offerValidUntil}</div>
+                    )}
+                  </div>
+                  <div className={`my-4 h-px ${isPopular ? "bg-white/15" : "bg-slate-100"}`} />
+                  <div className="space-y-2.5">
+                    {features.map((feature) => (
+                      <div key={feature} className={`flex items-start gap-2.5 text-[13px] leading-5 ${isPopular ? "text-brand-50" : "text-slate-700"}`}>
+                        <CheckCircle2 size={15} className={`mt-0.5 flex-shrink-0 ${isPopular ? "text-brand-200" : "text-brand-600"}`} aria-hidden="true" />
+                        <span>{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={`mt-auto rounded-xl p-3 text-[12px] leading-5 ${isPopular ? "bg-white/10 text-brand-100" : "bg-slate-50 text-slate-500"}`} style={{ marginTop: "auto" }}>{description}</div>
+                  <div className="mt-4">
+                    {isCurrent && !renewalWindowOpen ? (
+                      <button type="button" disabled className={`h-11 w-full rounded-xl text-[13px] font-bold ${isPopular ? "bg-white text-brand-700" : "bg-slate-100 text-slate-500"}`}>Current Plan</button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={Boolean(paymentProcessing) || !yearlyAvailable}
+                        onClick={() => startSubscriptionPayment(billingPlan.key)}
+                        className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all disabled:opacity-50 ${isPopular ? "bg-white text-brand-700 hover:bg-brand-50" : isUpgrade ? "bg-brand-600 text-white hover:bg-brand-700" : "border border-brand-200 bg-white text-brand-700 hover:bg-brand-50"}`}
+                      >
+                        {paymentProcessing === `${billingPlan.key}:YEARLY` && <Loader2 size={13} className="animate-spin" />}
+                        {!yearlyAvailable ? "Annual plan unavailable" : isCurrent ? `Renew ${billingPlan.name}` : isUpgrade ? `Upgrade to ${billingPlan.name}` : `Switch to ${billingPlan.name}`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200"><ShieldCheck size={17} strokeWidth={2} aria-hidden="true" /></span>
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">Your data stays intact</div>
+              <div className="mt-0.5 text-[12px] leading-5 text-slate-500">CRM records remain unchanged on renew or switch</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200"><Zap size={17} strokeWidth={2} aria-hidden="true" /></span>
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">Instant activation</div>
+              <div className="mt-0.5 text-[12px] leading-5 text-slate-500">New features unlock after payment verification</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200"><Lock size={17} strokeWidth={2} aria-hidden="true" /></span>
+            <div>
+              <div className="text-[13px] font-bold text-slate-900">Secure payments</div>
+              <div className="mt-0.5 text-[12px] leading-5 text-slate-500">Invoices available in Order History</div>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderBilling() {
+    if (!billingData.subscription && !billingLoading && !billingError) loadBillingData();
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-[26px] font-bold tracking-[-0.02em] text-slate-950">
+              Billing & Subscription
+            </h1>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Review plans, billing cycles and upgrade options for {company.name}.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setOrderHistoryOpen(true)}
+            className="group hidden sm:flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-left transition-all hover:border-indigo-300 hover:bg-white hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
+          >
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
+              <FileText size={17} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="min-w-0">
+              <span className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-slate-900">Order History</span>
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[11px] font-bold text-white">
+                  {(billingData.payments?.length || 0).toLocaleString("en-IN")}
+                </span>
+              </span>
+              <span className="block text-[12px] text-slate-500">Invoices &amp; past purchases</span>
+            </span>
+            <ChevronRight size={16} className="ml-1 text-slate-400 group-hover:text-indigo-600 transition-colors" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="space-y-5">
+          {billingError && (
+            <div className="flex items-start gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              {billingError}
+            </div>
+          )}
+
+          {billingData.subscription &&
+            ["PAST_DUE", "EXPIRED"].includes(
+              String(billingData.subscription.status || "").toUpperCase()
+            ) && (
+              <div
+                className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${
+                  String(billingData.subscription.status).toUpperCase() === "EXPIRED"
+                    ? "border-rose-200 bg-rose-50 text-rose-700"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }`}
+              >
+                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <div className="font-bold">
+                    {String(billingData.subscription.status).toUpperCase() === "EXPIRED"
+                      ? "Annual subscription expired"
+                      : "Annual renewal is past due"}
+                  </div>
+                  <div className="mt-1 leading-5">
+                    {String(billingData.subscription.status).toUpperCase() === "EXPIRED"
+                      ? "CRM access is restricted until the annual plan is renewed."
+                      : `You are in the 7-day grace period. Renew by ${
+                          billingData.subscription.graceEndsAt
+                            ? new Date(billingData.subscription.graceEndsAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+                            : "the grace-period end date"
+                        } to avoid interruption.`}
+                  </div>
+                </div>
+              </div>
+            )}
+
+          {billingLoading ? (
+            <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-500">
+              <Loader2 size={16} className="animate-spin" />
+              Loading subscription...
+            </div>
+          ) : (
+            renderBillingContent()
+          )}
+        </div>
+      </div>
+    );
   }
 
   function renderProfile() {
@@ -4412,6 +4701,10 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
   function renderModuleContent(moduleKey = module) {
     if (moduleKey === "profile") {
       return renderProfile();
+    }
+
+    if (moduleKey === "billing") {
+      return renderBilling();
     }
 
     if (moduleKey === "chats") {
@@ -6359,7 +6652,7 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
         </div>
       </div>
 
-      {subscriptionAccessRestricted && !billingOpen && (
+      {subscriptionAccessRestricted && module !== "billing" && (
         <div className="fixed inset-0 z-[90] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
@@ -6418,595 +6711,6 @@ const [accountActionsOpen, setAccountActionsOpen] = useState(false);
                 )}
                 Sign out
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {billingOpen && (
-        <div className="fixed inset-0 lg:left-[var(--sidebar-w,252px)] z-[95] flex justify-end bg-slate-950/35 backdrop-blur-[1px]">
-          <div role="dialog" aria-modal="true" aria-label="Billing & Subscription" className="flex h-full w-full max-w-6xl flex-col overflow-hidden border-l border-slate-200 bg-white shadow-2xl animate-[drawerSlideIn_0.25s_ease-out] motion-reduce:animate-none">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-[22px] font-bold tracking-[-0.02em] text-slate-950">
-                  Billing & Subscription
-                </div>
-
-                <div className="text-[13px] text-slate-500 mt-1">
-                  Review plans, billing cycles and upgrade options for {company.name}.
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setOrderHistoryOpen(true)}
-                  className="group hidden sm:flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-2.5 text-left transition-all hover:border-indigo-300 hover:bg-white hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60"
-                >
-                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
-                    <FileText size={17} strokeWidth={2} aria-hidden="true" />
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2">
-                      <span className="text-[13px] font-bold text-slate-900">Order History</span>
-                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-indigo-600 px-1.5 text-[11px] font-bold text-white">
-                        {(billingData.payments?.length || 0).toLocaleString("en-IN")}
-                      </span>
-                    </span>
-                    <span className="block text-[12px] text-slate-500">Invoices &amp; past purchases</span>
-                  </span>
-                  <ChevronRight size={16} className="ml-1 text-slate-400 group-hover:text-indigo-600 transition-colors" aria-hidden="true" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setBillingOpen(false)
-                  }
-                  aria-label="Close billing"
-                  className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-500"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-5 overflow-y-auto space-y-5">
-              {billingError && (
-                <div className="flex items-start gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">
-                  <AlertCircle
-                    size={14}
-                    className="mt-0.5 flex-shrink-0"
-                  />
-                  {billingError}
-                </div>
-              )}
-
-              {billingData.subscription &&
-                ["PAST_DUE", "EXPIRED"].includes(
-                  String(billingData.subscription.status || "").toUpperCase()
-                ) && (
-                  <div
-                    className={`flex items-start gap-2 rounded-lg border p-3 text-xs ${
-                      String(billingData.subscription.status).toUpperCase() ===
-                      "EXPIRED"
-                        ? "border-rose-200 bg-rose-50 text-rose-700"
-                        : "border-amber-200 bg-amber-50 text-amber-800"
-                    }`}
-                  >
-                    <AlertCircle
-                      size={14}
-                      className="mt-0.5 flex-shrink-0"
-                    />
-                    <div>
-                      <div className="font-bold">
-                        {String(billingData.subscription.status).toUpperCase() ===
-                        "EXPIRED"
-                          ? "Annual subscription expired"
-                          : "Annual renewal is past due"}
-                      </div>
-                      <div className="mt-1 leading-5">
-                        {String(billingData.subscription.status).toUpperCase() ===
-                        "EXPIRED"
-                          ? "CRM access is restricted until the annual plan is renewed."
-                          : `You are in the 7-day grace period. Renew by ${
-                              billingData.subscription.graceEndsAt
-                                ? new Date(
-                                    billingData.subscription.graceEndsAt
-                                  ).toLocaleDateString("en-IN", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  })
-                                : "the grace-period end date"
-                            } to avoid interruption.`}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              {billingLoading ? (
-                <div className="py-16 flex items-center justify-center gap-2 text-sm text-slate-500">
-                  <Loader2
-                    size={16}
-                    className="animate-spin"
-                  />
-                  Loading subscription...
-                </div>
-              ) : (
-                <>
-                  {/* CURRENT PLAN BANNER */}
-                  {billingData.subscription ? (
-                    (() => {
-                      const sub = billingData.subscription;
-                      const statusRaw = String(sub.status || "").toUpperCase();
-                      const statusTone =
-                        statusRaw === "ACTIVE"
-                          ? "text-emerald-600 bg-emerald-500"
-                          : statusRaw === "PAST_DUE"
-                          ? "text-amber-600 bg-amber-500"
-                          : "text-rose-600 bg-rose-500";
-                      const paidAmount = Number(
-                        sub.finalAmount || sub.amount || sub.plan?.yearlyPrice || 0
-                      );
-                      const renewsOn = sub.renewalDate
-                        ? new Date(sub.renewalDate).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "—";
-                      return (
-                        <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 pl-1">
-                          <span className="absolute inset-y-0 left-0 w-1 rounded-l-2xl bg-brand-600" aria-hidden="true" />
-                          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:pl-5">
-                            <div className="flex items-center gap-3.5 min-w-0">
-                              <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
-                                <Star size={22} strokeWidth={2} aria-hidden="true" />
-                              </span>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-[16px] font-bold text-slate-900">
-                                    {sub.plan?.name || "Current plan"}
-                                  </span>
-                                  <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide">
-                                    <span className={`h-1.5 w-1.5 rounded-full ${statusTone.split(" ")[1]}`} aria-hidden="true" />
-                                    <span className={statusTone.split(" ")[0]}>{sub.status}</span>
-                                  </span>
-                                </div>
-                                <div className="mt-0.5 text-[13px] text-slate-500">
-                                  <span className="font-semibold text-slate-700">
-                                    ₹{paidAmount.toLocaleString("en-IN")}/year
-                                  </span>{" "}
-                                  · Annual · Manual renewal
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-5 sm:gap-7 sm:text-right">
-                              <div>
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Renews on</div>
-                                <div className="mt-1 text-[13px] font-bold text-slate-800">{renewsOn}</div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Reminders</div>
-                                <div className="mt-1 text-[13px] font-bold text-slate-800">30d · 7d · On expiry</div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Grace period</div>
-                                <div className="mt-1 text-[13px] font-bold text-slate-800">7 days</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4 text-[13px] font-semibold text-slate-600">
-                      No active subscription
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-brand-600">
-                          Pricing Plans
-                        </div>
-
-                        <h2 className="mt-1.5 text-[24px] font-bold tracking-[-0.035em] text-slate-950">
-                          Choose the right plan for your business
-                        </h2>
-
-                        <p className="mt-1 text-[13px] leading-5 text-slate-500">
-                          Compare annual plans and upgrade without changing your existing CRM data.
-                        </p>
-                      </div>
-
-                      <div className="inline-flex items-center rounded-xl border border-brand-200 bg-white px-4 py-2 text-[13px] font-bold text-brand-700 shadow-sm">
-                        Annual billing
-                      </div>
-                    </div>
-
-                    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 items-stretch">
-                      {billingData.plans.map((billingPlan, planIndex) => {
-                        const isCurrent =
-                          billingData.subscription?.plan?.key === billingPlan.key;
-
-                        const currentPlanIndex = billingData.plans.findIndex(
-                          (p) => p.key === billingData.subscription?.plan?.key
-                        );
-                        const isUpgrade =
-                          currentPlanIndex >= 0 && planIndex > currentPlanIndex;
-
-                        const currentRenewalDate =
-                          billingData.subscription?.renewalDate
-                            ? new Date(
-                                billingData.subscription.renewalDate
-                              )
-                            : null;
-
-                        const renewalWindowOpen =
-                          isCurrent &&
-                          (
-                            ["PAST_DUE", "EXPIRED"].includes(
-                              String(
-                                billingData.subscription?.status ||
-                                  ""
-                              ).toUpperCase()
-                            ) ||
-                            (currentRenewalDate &&
-                              !Number.isNaN(
-                                currentRenewalDate.getTime()
-                              ) &&
-                              currentRenewalDate.getTime() -
-                                Date.now() <=
-                                30 * 24 * 60 * 60 * 1000)
-                          );
-
-                        const isPopular =
-                          String(billingPlan.key || "").toLowerCase() === "pro";
-
-                        const yearlyAvailable =
-                          billingPlan.yearlyPrice !== null &&
-                          billingPlan.yearlyPrice !== undefined;
-
-                        const planKey =
-                          String(billingPlan.key || "").toLowerCase();
-
-                        const pricing =
-                          billingPlan.breakdown || {};
-                        const isPlanOfferActive =
-                          Boolean(pricing.offerActive);
-                        const listPrice = yearlyAvailable
-                          ? Number(
-                              pricing.listPrice ??
-                                billingPlan.yearlyPrice ??
-                                0
-                            )
-                          : 0;
-                        const selectedPrice = yearlyAvailable
-                          ? Number(
-                              pricing.subtotal ??
-                                billingPlan.yearlyPrice ??
-                                0
-                            )
-                          : 0;
-                        const offerDiscountPercent =
-                          isPlanOfferActive && listPrice > 0
-                            ? Math.round(
-                                (Number(pricing.discount || 0) /
-                                  listPrice) *
-                                  100
-                              )
-                            : 0;
-                        const offerValidUntil =
-                          isPlanOfferActive && billingPlan.offerEndsAt
-                            ? new Date(
-                                billingPlan.offerEndsAt
-                              ).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                                timeZone: "Asia/Kolkata",
-                              })
-                            : null;
-
-                        const planDescriptions = {
-                          startup:
-                            "Essential CRM tools for a small 2-person team getting started.",
-                          basic:
-                            "Essential CRM tools for teams getting started.",
-                          pro:
-                            "Built for growing consultancies that need more operational control.",
-                          advanced:
-                            "Complete CRM flexibility for larger and more complex operations.",
-                        };
-
-                        const featureMap = {
-                          startup: [
-                            "Up to 2 users",
-                            "Dashboard & core analytics",
-                            "UTM Leads & Lead Store",
-                            "Admissions management",
-                            "Revenue tracking",
-                            "In-app notifications",
-                            "Standard support",
-                          ],
-                          basic: [
-                            "Dashboard & core analytics",
-                            "UTM Leads & Lead Store",
-                            "Admissions management",
-                            "Revenue tracking",
-                            "In-app notifications",
-                            "Standard support",
-                          ],
-                          pro: [
-                            "Everything in Basic",
-                            "Walk-ins module",
-                            "Counselling module",
-                            "Advanced analytics",
-                            "Expanded team workflows",
-                            "Priority support",
-                          ],
-                          advanced: [
-                            "Everything in Pro",
-                            "Advanced customization access",
-                            "White-label capabilities",
-                            "Premium operational controls",
-                            "Customization request support",
-                            "Priority assistance",
-                          ],
-                        };
-
-                        const description =
-                          planDescriptions[planKey] ||
-                          billingPlan.tagline ||
-                          "Flexible CRM tools for your business.";
-
-                        const features =
-                          featureMap[planKey] || [];
-
-                        const planTagMap = {
-                          startup: "2 Users",
-                          basic: "Teams",
-                          pro: "Teams",
-                          advanced: "Enterprise",
-                        };
-                        const planTag = planTagMap[planKey] || "Plan";
-                        const monthlyEquivalent =
-                          yearlyAvailable && selectedPrice > 0
-                            ? Math.round(selectedPrice / 12)
-                            : 0;
-
-                        return (
-                          <div
-                            key={billingPlan.id}
-                            className={`relative flex h-full flex-col rounded-2xl border p-5 transition-all duration-300 ${
-                              isPopular
-                                ? "border-brand-700 bg-brand-900 text-white shadow-[0_18px_44px_rgba(49,46,129,0.35)]"
-                                : "border-slate-200 bg-white text-slate-950 shadow-[0_8px_24px_rgba(15,23,42,0.05)] hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_34px_rgba(15,23,42,0.08)]"
-                            }`}
-                          >
-                            {isPopular && (
-                              <span className="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-amber-400 px-3 py-1 text-[11px] font-black uppercase tracking-[0.08em] text-amber-950 shadow-sm">
-                                <Star size={11} strokeWidth={2.5} aria-hidden="true" /> Most Popular
-                              </span>
-                            )}
-
-                            <div className="flex items-center justify-between gap-2">
-                              <span
-                                className={`text-[13px] font-black uppercase tracking-[0.1em] ${
-                                  isPopular ? "text-white" : "text-slate-800"
-                                }`}
-                              >
-                                {billingPlan.name}
-                              </span>
-
-                              {isCurrent ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                    isPopular
-                                      ? "bg-white/15 text-white ring-1 ring-inset ring-white/25"
-                                      : "bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100"
-                                  }`}
-                                >
-                                  <CheckCircle2 size={11} strokeWidth={2.5} aria-hidden="true" /> Current
-                                </span>
-                              ) : (
-                                <span
-                                  className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                    isPopular
-                                      ? "bg-white/15 text-white"
-                                      : "bg-slate-100 text-slate-500"
-                                  }`}
-                                >
-                                  {planTag}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="mt-4">
-                              {isPlanOfferActive && yearlyAvailable && (
-                                <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                                  <span
-                                    className={`text-[14px] font-semibold line-through ${
-                                      isPopular ? "text-brand-200" : "text-slate-400"
-                                    }`}
-                                  >
-                                    ₹{listPrice.toLocaleString("en-IN")}
-                                  </span>
-                                  <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.06em] text-emerald-500">
-                                    ~{offerDiscountPercent}% OFF
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="flex items-end gap-1">
-                                <span
-                                  className={`text-[32px] font-black leading-none tracking-[-0.04em] ${
-                                    isPopular ? "text-white" : "text-slate-950"
-                                  }`}
-                                >
-                                  {yearlyAvailable
-                                    ? `₹${selectedPrice.toLocaleString("en-IN")}`
-                                    : "—"}
-                                </span>
-                                <span
-                                  className={`pb-1 text-[13px] font-medium ${
-                                    isPopular ? "text-brand-100" : "text-slate-400"
-                                  }`}
-                                >
-                                  /year
-                                </span>
-                              </div>
-
-                              {yearlyAvailable && monthlyEquivalent > 0 && (
-                                <div
-                                  className={`mt-1 text-[12px] ${
-                                    isPopular ? "text-brand-200" : "text-slate-400"
-                                  }`}
-                                >
-                                  ≈ ₹{monthlyEquivalent.toLocaleString("en-IN")} / month
-                                </div>
-                              )}
-
-                              {isPlanOfferActive && yearlyAvailable && offerValidUntil && (
-                                <div
-                                  className={`mt-1 text-[11px] font-semibold ${
-                                    isPopular ? "text-brand-200" : "text-brand-600"
-                                  }`}
-                                >
-                                  Offer valid till {offerValidUntil}
-                                </div>
-                              )}
-                            </div>
-
-                            <div
-                              className={`my-4 h-px ${
-                                isPopular ? "bg-white/15" : "bg-slate-100"
-                              }`}
-                            />
-
-                            <div className="space-y-2.5">
-                              {features.map((feature) => (
-                                <div
-                                  key={feature}
-                                  className={`flex items-start gap-2.5 text-[13px] leading-5 ${
-                                    isPopular ? "text-brand-50" : "text-slate-700"
-                                  }`}
-                                >
-                                  <CheckCircle2
-                                    size={15}
-                                    className={`mt-0.5 flex-shrink-0 ${
-                                      isPopular ? "text-brand-200" : "text-brand-600"
-                                    }`}
-                                    aria-hidden="true"
-                                  />
-                                  <span>{feature}</span>
-                                </div>
-                              ))}
-                            </div>
-
-                            <div
-                              className={`mt-auto rounded-xl p-3 text-[12px] leading-5 ${
-                                isPopular ? "bg-white/10 text-brand-100" : "bg-slate-50 text-slate-500"
-                              }`}
-                              style={{ marginTop: "auto" }}
-                            >
-                              {description}
-                            </div>
-
-                            <div className="mt-4">
-                              {isCurrent && !renewalWindowOpen ? (
-                                <button
-                                  type="button"
-                                  disabled
-                                  className={`h-11 w-full rounded-xl text-[13px] font-bold ${
-                                    isPopular
-                                      ? "bg-white text-brand-700"
-                                      : "bg-slate-100 text-slate-500"
-                                  }`}
-                                >
-                                  Current Plan
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={
-                                    Boolean(paymentProcessing) ||
-                                    !yearlyAvailable
-                                  }
-                                  onClick={() =>
-                                    startSubscriptionPayment(
-                                      billingPlan.key
-                                    )
-                                  }
-                                  className={`inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[13px] font-bold transition-all disabled:opacity-50 ${
-                                    isPopular
-                                      ? "bg-white text-brand-700 hover:bg-brand-50"
-                                      : isUpgrade
-                                      ? "bg-brand-600 text-white hover:bg-brand-700"
-                                      : "border border-brand-200 bg-white text-brand-700 hover:bg-brand-50"
-                                  }`}
-                                >
-                                  {paymentProcessing ===
-                                    `${billingPlan.key}:YEARLY` && (
-                                    <Loader2
-                                      size={13}
-                                      className="animate-spin"
-                                    />
-                                  )}
-
-                                  {!yearlyAvailable
-                                    ? "Annual plan unavailable"
-                                    : isCurrent
-                                    ? `Renew ${billingPlan.name}`
-                                    : isUpgrade
-                                    ? `Upgrade to ${billingPlan.name}`
-                                    : `Switch to ${billingPlan.name}`}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                  </div>
-
-                  {/* REASSURANCE STRIP */}
-                  <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-5 sm:grid-cols-3">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
-                        <ShieldCheck size={17} strokeWidth={2} aria-hidden="true" />
-                      </span>
-                      <div>
-                        <div className="text-[13px] font-bold text-slate-900">Your data stays intact</div>
-                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">CRM records remain unchanged on renew or switch</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
-                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
-                        <Zap size={17} strokeWidth={2} aria-hidden="true" />
-                      </span>
-                      <div>
-                        <div className="text-[13px] font-bold text-slate-900">Instant activation</div>
-                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">New features unlock after payment verification</div>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3 sm:border-l sm:border-slate-200 sm:pl-5">
-                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 ring-1 ring-inset ring-slate-200">
-                        <Lock size={17} strokeWidth={2} aria-hidden="true" />
-                      </span>
-                      <div>
-                        <div className="text-[13px] font-bold text-slate-900">Secure payments</div>
-                        <div className="mt-0.5 text-[12px] leading-5 text-slate-500">Invoices available in Order History</div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
